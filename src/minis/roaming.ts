@@ -100,6 +100,85 @@ export interface Engine {
     brain_caps(): number;
     /** Every connection into a neuron of the brain on show, by its number in the picture: three f32 each, from, weight, what it passed. */
     brain_reads(neuron: number): number;
+    /** Drops a box at (x, y), from where it falls; 1 if it did. */
+    show_drop_box(x: number, y: number): number;
+    /** Sets the world's conditions (`Conditions`): the ground's grip, bounce and softness, gravity, the wind and the light. */
+    show_conditions(grip: number, bounce: number, soft: number, gravity: number, wind: number, light: number): void;
+    /** Switches the world changing by itself on (1) or off (0). */
+    show_changing(on: number): void;
+    /** The world as the creature meets it, eleven f32 (`worldNow` reads them). */
+    show_world(): number;
+    /** Room of exactly `length` f64 for the running numbers of a learner an older page kept. */
+    running_room_of(length: number): number;
+}
+
+/**
+ * The world's conditions as the engine takes them (walker/src/generalist/changes.rs): the ground's grip as a
+ * share of the creature's own, how much it bounces, how soft it is, gravity in g, the wind in metres a
+ * second squared (from behind more than 0), and the light from night (0) to day (1).
+ */
+export interface Conditions {
+    grip: number;
+    bounce: number;
+    soft: number;
+    gravity: number;
+    wind: number;
+    light: number;
+}
+
+/** The world as it always was, where every control rests. */
+export const REST_CONDITIONS: Conditions = { grip: 1, bounce: 0, soft: 0, gravity: 1, wind: 0, light: 1 };
+
+/** The kinds of ground a visitor chooses, each with what it does to the conditions. Firm is the rest. */
+export type Ground = "firm" | "ice" | "sticky" | "bouncy" | "soft";
+export const GROUNDS: { ground: Ground; text: string; conditions: Pick<Conditions, "grip" | "bounce" | "soft"> }[] = [
+    { ground: "firm", text: "firm", conditions: { grip: 1, bounce: 0, soft: 0 } },
+    { ground: "ice", text: "ice", conditions: { grip: 0.06, bounce: 0, soft: 0 } },
+    { ground: "sticky", text: "sticky", conditions: { grip: 2.5, bounce: 0, soft: 0 } },
+    { ground: "bouncy", text: "bouncy", conditions: { grip: 1, bounce: 0.75, soft: 0 } },
+    { ground: "soft", text: "soft", conditions: { grip: 1, bounce: 0, soft: 1 } },
+];
+
+/** The light a visitor chooses: day (the rest), dusk or night. */
+export const LIGHTS: { light: number; text: string }[] = [
+    { light: 1, text: "day" },
+    { light: 0.45, text: "dusk" },
+    { light: 0, text: "night" },
+];
+
+/** The ground nearest these conditions, for showing a world that changed by itself: the strongest of its slipperiness, stickiness, bounce and softness, or firm if none is much. */
+export function groundOf(conditions: Conditions): Ground {
+    const how: [Ground, number][] = [
+        ["ice", (1 - conditions.grip) / 0.94],
+        ["sticky", (conditions.grip - 1) / 1.5],
+        ["bouncy", conditions.bounce / 0.75],
+        ["soft", conditions.soft],
+    ];
+    const [ground, most] = how.reduce((best, each) => (each[1] > best[1] ? each : best));
+    return most > 0.3 ? ground : "firm";
+}
+
+/** The light choice nearest a light. */
+export const lightOf = (light: number): number => LIGHTS.reduce((best, each) => (Math.abs(each.light - light) < Math.abs(best.light - light) ? each : best)).light;
+
+/** The world as the creature meets it, from `show_world`: its conditions now, the seconds since it last changed, what it hears ahead and behind, its surprise and the level of surprise it is used to. */
+export interface WorldNow {
+    conditions: Conditions;
+    since: number;
+    heard: [number, number];
+    surprise: number;
+    usual: number;
+}
+
+export function worldNow(numbers: ArrayLike<number>): WorldNow {
+    const at = (k: number, otherwise: number) => (k < numbers.length ? numbers[k]! : otherwise);
+    return {
+        conditions: { grip: at(0, 1), bounce: at(1, 0), soft: at(2, 0), gravity: at(3, 1), wind: at(4, 0), light: at(5, 1) },
+        since: at(6, 0),
+        heard: [at(7, 0), at(8, 0)],
+        surprise: at(9, 0),
+        usual: at(10, 0),
+    };
 }
 
 /** A brain's shape as the page holds it: how many memory neurons, rhythms and moods, and how many others each reads. All 0 is the plain network of two layers. */
@@ -294,15 +373,17 @@ export function fromLink(get: (name: string) => string | null, otherwise: Recipe
  * Where each part of what a practised creature senses is, for a body of so many legs (walker/README.md,
  * "What it senses"): sixteen rays of six numbers, the body's angle, spin and speed, each joint's angle and
  * speed, each foot down, the rhythm, the hop, its energy and whether it just ate, where its eye looks, then
- * touch: the body's pressure, each foot's, held, and the jolt across and up.
+ * touch: the body's pressure, each foot's, held, and the jolt across and up; then what it senses of a
+ * changing world: a landing heard ahead and behind, the light, and its surprise.
  */
-export function senseLayout(legs: number): { rays: number; feet: number; energy: number; ate: number; gaze: number; touch: number; footPressed: number; held: number; jolt: number; length: number } {
+export function senseLayout(legs: number): { rays: number; feet: number; energy: number; ate: number; gaze: number; touch: number; footPressed: number; held: number; jolt: number; heard: number; light: number; surprise: number; length: number } {
     const rays = 0;
     const body = 16 * 6;
     const feet = body + 4 + 4 * legs;
     const energy = feet + legs + 4;
     const touch = energy + 3;
-    return { rays, feet, energy, ate: energy + 1, gaze: energy + 2, touch, footPressed: touch + 1, held: touch + 1 + legs, jolt: touch + 2 + legs, length: touch + 4 + legs };
+    const heard = touch + 4 + legs;
+    return { rays, feet, energy, ate: energy + 1, gaze: energy + 2, touch, footPressed: touch + 1, held: touch + 1 + legs, jolt: touch + 2 + legs, heard, light: heard + 2, surprise: heard + 3, length: heard + 4 };
 }
 
 /** What each ray can see, as the engine numbers them. */

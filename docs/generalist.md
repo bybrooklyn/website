@@ -9,7 +9,7 @@ doing things, all written from scratch in that engine. An article about it is pl
 
 - `walker/src/generalist/`: the engine side, behind the crate's `generalist` feature. `walker/README.md`,
   section "The generalist", is the full reference, with every measurement.
-- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 451 KiB with SIMD.
+- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 494 KiB with SIMD.
 - `src/minis/generalist.ts`: the page's scene; `src/minis/roaming.ts`: what the page and its workers share;
   `src/scripts/generalist-worker.ts` (evolution) and `src/scripts/generalist-practice.ts` (practice).
 - `src/content/minis/generalist.mdx`: the mini's words. It is marked `draft: true`.
@@ -68,6 +68,18 @@ doing things, all written from scratch in that engine. An article about it is pl
   sliders (memory up to 128, rhythm up to 16, connections 4 to 32) reshape it keeping what was learned. The
   brain is drawn by kind, and a press on a neuron shows all it listens to. `walker/README.md`, "The brain
   that was discussed", has every number.
+- **A world that changes while it lives** (15 November 2026, stage 4 of the plan): the ground's grip
+  (from ice to sticky, as a share of the creature's own), how it bounces and how soft it is (feet sink into
+  it, `physics::World::give`), gravity, a wind (a push along the way) and the light are conditions of the
+  world (`changes.rs`); in practice they change by stretches as a setting has it, and boxes and food are
+  dropped near the creature. At night it sees a quarter as far. It hears a box or food land, ahead of it or
+  behind, fainter with distance. A predictor of what it will see next (`expect.rs`, 50 weights shared by the
+  rays) is learned beside the policy; its surprise is a sense and, above what it is used to, a small reward.
+  The teacher (`teacher.rs`) breeds eight world settings toward runs it comes through half the time. On the
+  page the folded controls set the ground, gravity, the wind and the light (each resting where the world
+  always was), let the world change by itself (off unless switched on), and choose whether a tap drops food
+  or a box; the changes are drawn, the brain's thickened lines count from the last change, and its surprise
+  is a trace. `walker/README.md`, "A world that changes while it lives", has every number.
 - **Measures**: a gait measure that says whether a run counts as walking, printed three ways (in the
   held-out worlds as a whole, which is the test; on open ground in them; on level ground); a comparison of evolution and
   practice on the same compute (practice goes three to six times as far through unseen worlds for about
@@ -149,6 +161,30 @@ not to be claimed: hard 2D parkour was reported open in 2021; training walkers i
 well-trodden.
 
 ## Open
+
+- **Stage 4, for her to say** (15 November 2026). Whether practice keeps the teacher or settings drawn evenly:
+  for two legs, on the same steps, neither learned faster or went further; for four legs settings drawn
+  evenly went further and steadier (30.7 ± 3.7 m against 21.9 ± 11.8, one taught seed of four standing still,
+  28.3 m without it). The teacher is the default (`Way::of`, `Changing::Taught`) because the plan asks for it
+  and it shows worlds asking more as the creature can do more; `Changing::Even` is one word away, and the
+  view here is that four legs at least would do better with it. Whether surprise should be paid 3 a unit
+  rather than 1: two legs went further (15.6 m against 13.2) and looked as much, but bounded more. What the teacher scores by: coming through a run
+  (lasting its time without falling or stalling), at which two legs succeed about a quarter of the time in
+  any setting, so its settings drift more than they are chosen. The wind's strength: a wind from ahead at
+  4 m/s² stops two legs and most fall (0.7 to 0.8 of runs), so it may be too strong for the page's slider
+  at 6. Whether surprise should be paid at all: paid at 1 a unit it is a small share of the reward; at 0
+  (a sense only) and at 3 the eye and the distance are in `walker/README.md`. The page's changing world
+  (`page::CHANGING`, some of everything every eight seconds or so) and whether the controls of the world
+  should be remembered between visits (they are not: the page opens on the world at rest).
+- **Stage 4, still open.** It never turns for food it heard land behind it, though it hears it (0.4 loud)
+  and has the memory to keep it. It does not look up when night falls or the wind rises; it looks at a box
+  that just landed ahead about a quarter of the time (three seeds in four; a tenth before). The plastic
+  connections are not shown to adapt better than a plain network or a creature that never practised
+  changes. A teacher's settings are not kept with the learner: a learner taken back starts its teacher again.
+- **The page text, after stage 4,** would need to say: that the ground, gravity, a wind and the light can be
+  changed while it walks, under "as it lives" in the controls, and the world let change by itself; that at
+  night it sees only what its own eye reaches; that it hears things land; that a tap can drop a box; and that
+  the brain shows a trace of its surprise and the connections changed since the world last changed.
 
 - **Stage 3, for her to say** (14 November 2026). The page's brain (32 memory neurons, 4 rhythms, 4 moods,
   16 reads each) and the caps (128, 16, 32 reads), set by speed in the browser. Four legs paying for a run
@@ -236,6 +272,8 @@ cd walker && cargo run --release --example touched -- legs=2 seed=1 steps=200000
 cd walker && cargo run --release --example compare -- legs=2 memory=32 rhythm=4 mood=4 reads=16 save=keep/pool   # practice with a pool, keeping the learner
 cd walker && cargo run --release --example watch -- kept=keep/pool-20000000 legs=2   # through the page's show: one life, food behind and ahead, the ground going slippery
 cd walker && cargo run --release --example brain_cost -- updates=20   # practice's speed for each size of brain
+cd walker && cargo run --release --example compare -- legs=2 difficulty=0.2 amounts=0.6,0.4,0.4,0.4 memory=32 rhythm=4 mood=4 reads=16 changing=1 save=keep/even   # practice in worlds drawn evenly (2 the teacher's, 0 still), measured still and changing
+cd walker && cargo run --release --example adapt -- kept=keep/even-20000000 legs=2   # the world changed at ten seconds into 200 held-out worlds: pace kept, recovery, falls
 ```
 
 ## Known weak spots
@@ -254,6 +292,6 @@ cd walker && cargo run --release --example brain_cost -- updates=20   # practice
   rhythms are neurons the rest may read or ignore, and memory is learned back through time.
 - Practising with a pool is slower per step in the browser: the page's brain practises at about 63
   percent of the plain network's speed, the largest the sliders allow at about a quarter.
-- The engine is 451 KiB with SIMD, nearer the 512 KiB limit than it was (331 KiB before the pool).
+- The engine is 494 KiB with SIMD, 18 KiB under the 512 KiB limit (451 before stage 4, 331 before the pool).
 - Centred actions and a curriculum are in the code and unused, and so are the trial knobs of the gait work
   (shorter hips, costs on spin, bobbing, joint speed and torque, easing, the top pace's other values).

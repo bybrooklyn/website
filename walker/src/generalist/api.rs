@@ -181,6 +181,35 @@ pub extern "C" fn show_drop_food(x: f32, y: f32) -> u32 {
     page().map_or(0, |page| u32::from(page.show_drop_food(Vec2::new(x, y))))
 }
 
+/// Drops a box at (x, y), in metres from the start, from where it falls. Returns 1 if it did (not
+/// with more than forty things in the world).
+#[unsafe(no_mangle)]
+pub extern "C" fn show_drop_box(x: f32, y: f32) -> u32 {
+    page().map_or(0, |page| u32::from(page.show_drop_box(Vec2::new(x, y))))
+}
+
+/// Sets the world's conditions as the visitor's controls have them (walker/src/generalist/changes.rs):
+/// the ground's grip as a share of the creature's own (1 as it always was, 0.06 ice, 2.5 sticky), how
+/// much it bounces (0 to 0.75), how soft it is (0 to 1), gravity in g (0.5 to 1.6), the wind in metres a
+/// second squared (from behind more than 0, at most 6 either way), and the light (0 night to 1 day).
+#[unsafe(no_mangle)]
+pub extern "C" fn show_conditions(grip: f32, bounce: f32, soft: f32, gravity: f32, wind: f32, light: f32) {
+    if let Some(page) = page() {
+        page.show_conditions(super::changes::Conditions { grip, bounce, soft, gravity, wind, light });
+    }
+}
+
+/// Switches the visitor's changing world on (1) or off (0): on, the world changes by itself now and
+/// then and things are dropped near the creature.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_changing(on: u32) {
+    if let Some(page) = page() {
+        page.show_changing(on != 0);
+    }
+}
+
+list!(show_world, |page| page.world());
+
 /// What a press at (x, y) would take hold of: 0 nothing, 1 the creature, 2 a thing that moves (a box,
 /// a moving platform, a see-saw's plank). For the pointer to show what can be taken hold of.
 #[unsafe(no_mangle)]
@@ -452,12 +481,18 @@ pub extern "C" fn practice_running() -> *const f64 {
 
 /// Room for a learner's state (or a policy's weights alone, `weights` 1), to write a kept or sent
 /// learner into before `practice_load` or `policy_load`: of the form written into `form_room` first,
-/// or of the brain practice is to have here if none is (`form_room(0)` forgets one written).
+/// or of the brain practice is to have here if none is (`form_room(0)` forgets one written). With
+/// `weights` 2 or more, room of exactly that many, for a learner kept by an older page (stage 3's, which
+/// senses less and is grown on loading).
 #[unsafe(no_mangle)]
 pub extern "C" fn state_room(weights: u32) -> *mut f32 {
     let Some(page) = page() else { return core::ptr::null_mut() };
     let (state, _) = page.rooms();
-    let length = if weights != 0 { (state - super::ppo::KEPT_AFTER) / 3 } else { state };
+    let length = match weights {
+        0 => state,
+        1 => (state - super::ppo::KEPT_AFTER) / 3,
+        given => (given as usize).min(1 << 22),
+    };
     page.state_room.clear();
     page.state_room.resize(length, 0.0);
     *LENGTH.get() = length;
@@ -472,6 +507,16 @@ pub extern "C" fn running_room() -> *mut f64 {
     page.running_room.clear();
     page.running_room.resize(running, 0.0);
     *LENGTH.get() = running;
+    page.running_room.as_mut_ptr()
+}
+
+/// Room for the running numbers of a learner kept by an older page, of exactly `length` (f64).
+#[unsafe(no_mangle)]
+pub extern "C" fn running_room_of(length: u32) -> *mut f64 {
+    let Some(page) = page() else { return core::ptr::null_mut() };
+    page.running_room.clear();
+    page.running_room.resize((length as usize).min(1 << 16), 0.0);
+    *LENGTH.get() = page.running_room.len();
     page.running_room.as_mut_ptr()
 }
 

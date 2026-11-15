@@ -109,6 +109,9 @@ pub struct Body {
     pub gaze: f32,
     /// Its energy, for a body that eats (`needs`).
     pub needs: Option<super::needs::Needs>,
+    /// Whether it senses a changing world (`changes::SENSES`, after touch): what it hears land on either
+    /// side, the light, and its surprise.
+    pub hears: bool,
 }
 
 impl Body {
@@ -120,7 +123,7 @@ impl Body {
         let creature = Creature::build(world, Description { legs, carry: false, leap: false })?;
         let hopping = Hopping::of(legs);
         world.bodies[creature.torso as usize].inverse_inertia /= hopping.steadiness;
-        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, clock: true, touch: false, gazing: false, gaze: super::eyes::GAZE_REST, needs: None })
+        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, clock: true, touch: false, gazing: false, gaze: super::eyes::GAZE_REST, needs: None, hears: false })
     }
 
     pub fn legs(&self) -> usize {
@@ -220,9 +223,10 @@ impl Body {
     /// up; each joint's angle and speed; each foot on something or not; the rhythm's sine and
     /// cosine; and whether it is hopping and whether it can hop. Then, for a body that eats, its
     /// energy and whether it has just eaten; for one that turns its eye, where it looks. Then, if it
-    /// feels touch, what `touch::feel` writes after these.
+    /// feels touch, what `touch::feel` writes after these; then, if it hears, what it senses of a
+    /// changing world (`changes::SENSES`).
     pub fn feelings(&self) -> usize {
-        self.inner() + if self.touch { super::touch::felt(self.legs()) } else { 0 }
+        self.inner() + if self.touch { super::touch::felt(self.legs()) } else { 0 } + if self.hears { super::changes::SENSES } else { 0 }
     }
 
     /// What `feel` writes: all it feels but touch.

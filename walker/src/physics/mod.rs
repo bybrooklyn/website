@@ -260,6 +260,8 @@ struct Stiffness {
     soft: Soft,
     hard: Soft,
     hinge: Soft,
+    /// How stiff soft ground is (`World::give`), worked out only while the ground gives.
+    yielding: Soft,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -285,7 +287,16 @@ pub struct World {
     pub clock: f32,
     /// A hand holding a body, if one is (`Hand`).
     pub hand: Option<Hand>,
+    /// How soft the ground is, from 0 (firm, as it always was) to 1 (as soft as it gets): things sink
+    /// into it up to `GIVE` times this before it pushes back, and it pushes back more gently
+    /// (`YIELD` of its stiffness at the softest). Floating platforms and bodies stay firm.
+    pub give: f32,
 }
+
+/// How far a body sinks into the softest ground, in metres, and how much of firm ground's stiffness the
+/// softest keeps.
+pub const GIVE: f32 = 0.07;
+const YIELD: f32 = 0.2;
 
 impl World {
     pub fn new() -> World {
@@ -313,6 +324,7 @@ impl World {
         self.steps = other.steps;
         self.clock = other.clock;
         self.hand = other.hand;
+        self.give = other.give;
     }
 
     pub fn add_body(&mut self, body: Body) -> u32 {
@@ -625,7 +637,11 @@ impl World {
         // contacts as stiff as a quarter of the substep rate allows, hinges twice as stiff, and
         // contacts against what never moves stiffer too, since only one side gives
         let contact_hertz = (0.25 * inverse_h).min(30.0);
-        self.stiffness = Stiffness { h, inverse_h, soft: Soft::new(contact_hertz, 10.0, h), hard: Soft::new(2.0 * contact_hertz, 10.0, h), hinge: Soft::new(2.0 * contact_hertz, 2.0, h) };
+        self.stiffness = Stiffness { h, inverse_h, soft: Soft::new(contact_hertz, 10.0, h), hard: Soft::new(2.0 * contact_hertz, 10.0, h), hinge: Soft::new(2.0 * contact_hertz, 2.0, h), yielding: Soft::default() };
+        if self.give > 0.0 {
+            let give = clamp(self.give, 0.0, 1.0);
+            self.stiffness.yielding = Soft::new(2.0 * contact_hertz * (1.0 - (1.0 - YIELD) * give), 1.0, h);
+        }
         let bodies = &mut self.bodies;
         for contact in &mut self.contacts {
             contact::prepare(bodies, contact);
@@ -726,11 +742,18 @@ impl World {
     }
 
     fn solve_contacts(&mut self, push: bool) {
-        let Stiffness { inverse_h, soft, hard, .. } = self.stiffness;
+        let Stiffness { inverse_h, soft, hard, yielding, .. } = self.stiffness;
         let bodies = &mut self.bodies;
         for contact in &mut self.contacts {
             let fixed = contact.b == GROUND || !bodies[contact.a as usize].moves() || !bodies[contact.b as usize].moves();
-            contact::solve(bodies, contact, if fixed { hard } else { soft }, inverse_h, push);
+            let stiffness = if contact.give != 0.0 {
+                yielding
+            } else if fixed {
+                hard
+            } else {
+                soft
+            };
+            contact::solve(bodies, contact, stiffness, inverse_h, push);
         }
     }
 
@@ -794,7 +817,10 @@ impl World {
                 }
                 let manifold = collide_within(&self.placed[a], slab, reach_a);
                 if manifold.count > 0 {
-                    let contact = contact::begin(&self.bodies, a as u32, GROUND, index as u32, &manifold);
+                    let mut contact = contact::begin(&self.bodies, a as u32, GROUND, index as u32, &manifold);
+                    if self.give > 0.0 {
+                        contact.give = GIVE * clamp(self.give, 0.0, 1.0);
+                    }
                     self.keep_contact(contact);
                 }
             }

@@ -25,7 +25,9 @@ use super::pool::{Pool, Shape};
 use crate::learn::Random;
 use crate::math::{clamp, exp, ln, sin_cos, sqrt};
 
+mod foresee;
 mod recurrent;
+pub use foresee::Foreseeing;
 pub use recurrent::Shown;
 use recurrent::Recurrent;
 
@@ -95,6 +97,10 @@ pub struct Settings {
     pub window: usize,
     /// Whether the pool's memory reads are plastic (`Pool::plastic`): a trial's switch.
     pub plastic: bool,
+    /// Whether a creature that senses a changing world has a predictor of what it will see next
+    /// (`foreseeing`), and what a unit of its surprise above the usual is worth as a reason to look.
+    pub foresee: bool,
+    pub wonder: f32,
 }
 
 impl Default for Settings {
@@ -121,6 +127,8 @@ impl Default for Settings {
             shape: Shape::PLAIN,
             window: 16,
             plastic: true,
+            foresee: true,
+            wonder: 1.0,
         }
     }
 }
@@ -271,6 +279,9 @@ pub struct Learner {
     blame_value: Vec<f32>,
     /// The pool and everything practice with it needs, for a shape that has one.
     recurrent: Option<alloc::boxed::Box<Recurrent>>,
+    /// The predictor of what its creatures will see next, and everything it needs, for a learner that
+    /// has one (`foreseeing`).
+    pub foresee: Option<alloc::boxed::Box<Foreseeing>>,
     pub updates: u32,
     /// Steps of the physics its task had taken by its last update, kept with it so that what is
     /// brought in by steps (`Practice::ramp`) goes on from where it was when it is taken back.
@@ -336,6 +347,7 @@ impl Learner {
         let works = |batch: usize| [trunk.work(batch), head.work(batch), if s.shared && !pooled { Work::empty() } else { value_trunk.as_ref().unwrap_or(&trunk).work(batch) }, value_head.work(batch)];
         Learner {
             recurrent,
+            foresee: None,
             settings,
             senses,
             actions,
@@ -445,6 +457,7 @@ impl Learner {
             for row in self.now.chunks_exact(s) {
                 self.rollout_sensed.add(row);
             }
+            self.foresee_keep();
             let mut input = core::mem::take(&mut self.now);
             self.rescale(&mut input);
             self.seen[t * n * s..(t + 1) * n * s].copy_from_slice(&input);
@@ -467,7 +480,9 @@ impl Learner {
             }
             self.now = input;
             self.taken[t * n * a..(t + 1) * n * a].copy_from_slice(&self.actions_now);
+            self.foresee_before(t);
             task.step(&self.actions_now, &mut self.now, &mut self.step_rewards, &mut self.step_ends, &mut self.last);
+            self.foresee_after(t);
             self.decisions += n as u64;
             if self.step_ends.contains(&CUT) {
                 let mut last = core::mem::take(&mut self.last);
@@ -670,6 +685,7 @@ impl Learner {
         self.batch_in = input;
         self.weights = w;
         self.grads = grads;
+        self.foresee_gradient(which, self.settings.minibatches.min(self.samples()));
     }
 
     /// Applies a gradient (this learner's own, or the average of every worker's), shortened if too
@@ -731,6 +747,19 @@ impl Learner {
     /// The policy's action for what one creature senses, without drawing: the middle of each curve,
     /// kept within -1 to 1.
     pub fn act(&mut self, senses: &[f32], into: &mut [f32]) {
+        if self.foresee.is_some() {
+            // its surprise written into what it senses, and, once it has chosen, its guess of what comes next
+            let mut raw = senses[..self.senses].to_vec();
+            self.foresee_meet(&mut raw);
+            self.act_chosen(&raw, into);
+            self.foresee_guess(&raw, into);
+        } else {
+            self.act_chosen(senses, into);
+        }
+    }
+
+    /// `act`, its surprise (if it has a predictor) already written into what it senses.
+    fn act_chosen(&mut self, senses: &[f32], into: &mut [f32]) {
         if self.recurrent.is_some() {
             self.act_recurrent(senses, into);
             return;
@@ -818,18 +847,37 @@ impl Learner {
 
     /// Acts for one of several creatures, each with its pool's state kept by the caller in `state`
     /// (empty for a creature not yet begun, which starts afresh); for a plain learner, as `act`.
+    /// With a predictor, its expectation is kept in the state too, after the pool's.
     pub fn act_as(&mut self, state: &mut Vec<f32>, senses: &[f32], into: &mut [f32]) {
-        if let Some(r) = &mut self.recurrent {
-            if state.len() != r.show_state.len() {
-                state.resize(r.show_state.len(), 0.0);
-                r.pool.fresh(state);
+        let pooled = self.recurrent.as_ref().map_or(0, |r| r.show_state.len());
+        let kept = self.foresee_kept();
+        if state.len() != pooled + kept {
+            state.clear();
+            state.resize(pooled + kept, 0.0);
+            if let Some(r) = &self.recurrent {
+                r.pool.fresh(&mut state[..pooled]);
             }
-            core::mem::swap(&mut r.show_state, state);
+            if kept > 0 {
+                super::expect::Expecting::default().write(&mut state[pooled..]);
+            }
         }
-        self.act(senses, into);
+        let mut pool_state = state.split_off(pooled);
+        core::mem::swap(&mut pool_state, state);
+        // `state` is now the expectation's part, and `pool_state` the pool's
         if let Some(r) = &mut self.recurrent {
-            core::mem::swap(&mut r.show_state, state);
+            core::mem::swap(&mut r.show_state, &mut pool_state);
         }
+        let shown = self.foresee.as_mut().map(|f| core::mem::replace(&mut f.show, super::expect::Expecting::read(state)));
+        self.act(senses, into);
+        if let Some(f) = &mut self.foresee {
+            f.show.write(state);
+            f.show = shown.unwrap_or_default();
+        }
+        if let Some(r) = &mut self.recurrent {
+            core::mem::swap(&mut r.show_state, &mut pool_state);
+        }
+        pool_state.append(state);
+        *state = pool_state;
     }
 
     /// What the creature on show sensed at its last decision, rescaled, as the policy took it.
@@ -844,6 +892,9 @@ impl Learner {
 
     /// The creature on show starts a run: its pool afresh.
     pub fn forget_show(&mut self) {
+        if let Some(f) = &mut self.foresee {
+            f.show = super::expect::Expecting::default();
+        }
         if let Some(r) = &mut self.recurrent {
             let mut state = core::mem::take(&mut r.show_state);
             r.pool.fresh(&mut state);
@@ -958,6 +1009,16 @@ impl Learner {
             }
         }
         learner.adam.restart_at(self.adam.steps);
+        // the predictor of what it will see, as it was
+        if let Some(f) = &self.foresee {
+            learner = learner.foreseeing(f.look, f.wonder);
+            if let Some(g) = &learner.foresee {
+                let (to, from, length) = (g.at, f.at, super::expect::WEIGHTS);
+                learner.weights[to..to + length].copy_from_slice(&self.weights[from..from + length]);
+                learner.adam.mean[to..to + length].copy_from_slice(&self.adam.mean[from..from + length]);
+                learner.adam.square[to..to + length].copy_from_slice(&self.adam.square[from..from + length]);
+            }
+        }
         learner.updates = self.updates;
         learner.practised = self.practised;
         learner.decisions = self.decisions;

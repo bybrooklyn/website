@@ -27,8 +27,10 @@ fn mix(hash: &mut u64, values: &[f32]) {
 /// The fingerprint of a small learner's state after two updates, which the page's engine must give.
 /// It changed when practice's creatures began to feel touch (`touch`), which made the brain's input
 /// larger, and to practise with a visitor; and again when they began to want things (stage 2: energy
-/// and food, an eye they turn, curiosity), which gave them three senses and an action more.
-pub const FINGERPRINT: u64 = 0xb66b_94ff_b5e3_f67c;
+/// and food, an eye they turn, curiosity), which gave them three senses and an action more; and again when
+/// their world began to change while they live (stage 4: the teacher's worlds, hearing, the light, and a
+/// predictor of what they will see, whose surprise is a sense and a little of a reward).
+pub const FINGERPRINT: u64 = 0x7043_a58b_13f7_2539;
 /// What it was before stage 2, which practice with needs, the eye and curiosity switched off still gives.
 const BEFORE_WANTS: u64 = 0x6cf0_f880_cc3f_bf10;
 
@@ -38,8 +40,8 @@ fn fingerprint() -> u64 {
 
 /// The fingerprint of the same with the brain the page practises with (stage 3: a pool of memory, rhythm
 /// and mood neurons beside the plain ones, `page::BRAIN`), which the page's engine must give too. The
-/// plain network's, above, is unchanged by it.
-pub const POOL_FINGERPRINT: u64 = 0x0bb9_a9c8_29d2_868a;
+/// plain network's, above, is unchanged by it. It changed with stage 4 as the plain network's did.
+pub const POOL_FINGERPRINT: u64 = 0x0d78_462a_dd91_3867;
 
 fn fingerprint_of(way: Way) -> u64 {
     fingerprint_with(way, Settings::default())
@@ -55,9 +57,25 @@ fn fingerprint_with(way: Way, settings: Settings) -> u64 {
     hash
 }
 
+/// The way practice was before stage 4: a world that does not change, and nothing sensed of one.
+fn before_changes(legs: u32) -> Way {
+    Way { hears: false, changing: super::practice::Changing::Still, ..Way::of(legs) }
+}
+
+/// What it was at stage 3, which practice with nothing of a changing world still gives: the plain network
+/// and the page's brain.
+const BEFORE_CHANGES: u64 = 0xb66b_94ff_b5e3_f67c;
+const POOL_BEFORE_CHANGES: u64 = 0x0bb9_a9c8_29d2_868a;
+
+#[test]
+fn with_its_world_still_and_nothing_sensed_of_a_changing_one_it_practises_as_it_did_at_stage_3_to_the_bit() {
+    assert_eq!(fingerprint_of(before_changes(2)), BEFORE_CHANGES);
+    assert_eq!(fingerprint_with(before_changes(2), Settings { shape: super::page::BRAIN, ..Settings::default() }), POOL_BEFORE_CHANGES);
+}
+
 #[test]
 fn with_its_wants_switched_off_it_practises_as_it_did_before_them_to_the_bit() {
-    let mut way = Way::of(2);
+    let mut way = before_changes(2);
     (way.needs, way.gaze, way.appear) = (false, false, 0.0);
     (way.shaping.comfort, way.shaping.place, way.shaping.sight) = (0.0, 0.0, 0.0);
     assert_eq!(fingerprint_of(way), BEFORE_WANTS);
@@ -91,9 +109,11 @@ fn the_same_seed_practises_the_same_way_to_the_bit() {
 
 #[test]
 fn a_learner_kept_and_taken_back_goes_on_as_if_never_stopped() {
-    // a short ramp, so the costs are still coming in when the learner is kept
+    // a short ramp, so the costs are still coming in when the learner is kept; and worlds that change by
+    // settings drawn for each run, since the teacher's settings are no part of what is kept (taken back,
+    // it starts again from settings that ask little)
     let settings = Settings { steps: 16, ..Settings::default() };
-    let way = Way { ramp: 2_000, ..Way::of(2) };
+    let way = Way { ramp: 2_000, changing: super::practice::Changing::Even, ..Way::of(2) };
     let mut whole = Practice::new(recipe(0.3), way, settings, 4, 2, 2).unwrap();
     let mut broken = Practice::new(recipe(0.3), way, settings, 4, 2, 2).unwrap();
     whole.update();
@@ -102,7 +122,7 @@ fn a_learner_kept_and_taken_back_goes_on_as_if_never_stopped() {
     assert!(broken.worlds.steps > 0 && broken.worlds.steps < way.ramp, "kept partway up the ramp");
     // everything kept is forgotten, as a new page's learner has it: fresh weights and running numbers,
     // no updates and no steps practised (its worlds and its draws go on, being no part of what is kept)
-    let fresh = Learner::new(settings, broken.learner.senses, broken.learner.actions, 4, 9);
+    let fresh = super::practice::foreseeing(Learner::new(settings, broken.learner.senses, broken.learner.actions, 4, 9), &way);
     assert!(broken.load(&fresh.state(), &fresh.running()));
     assert_eq!(broken.worlds.steps, 0);
     // then taken back
@@ -116,7 +136,7 @@ fn a_learner_kept_and_taken_back_goes_on_as_if_never_stopped() {
     let bits = |practice: &Practice| practice.learner.state().iter().map(|x| x.to_bits()).collect::<Vec<u32>>();
     assert_eq!(bits(&broken), bits(&whole), "the next update is the unbroken run's, to the bit");
     // a list that does not fit is turned away, and so is a state kept before the steps were kept with it
-    let mut taken = Learner::new(settings, broken.learner.senses, broken.learner.actions, 4, 2);
+    let mut taken = super::practice::foreseeing(Learner::new(settings, broken.learner.senses, broken.learner.actions, 4, 2), &way);
     assert!(!taken.load(&state[1..], &running));
     assert!(!taken.load(&state[..state.len() - 2], &running));
     let mut halfway = state.clone();
@@ -323,7 +343,8 @@ fn the_feelings_a_mood_reads_first_are_its_energy_and_its_touch() {
         let mut worlds = super::practice::Worlds::new(recipe, Way::of(legs), 2, 3).unwrap();
         let senses = worlds.senses();
         let feelings = super::practice::feelings(legs, senses);
-        assert_eq!(feelings.len(), 6);
+        // and, sensing a changing world, its surprise, the light and what it hears either side
+        assert_eq!(feelings.len(), 10);
         let mut sensed = alloc::vec![0.0; 2 * senses];
         worlds.observe(&mut sensed);
         let energy = worlds.runs[0].body.needs.as_ref().unwrap().energy;

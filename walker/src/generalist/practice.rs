@@ -20,8 +20,10 @@ use super::envs::{End, Run};
 use super::gait::{Gait, Watch};
 use super::land::Land;
 use super::ppo::{CUT, GOING, Learner, OVER, Settings, Task};
+use super::changes::{Changes, Setting};
 use super::recipe::Recipe;
 use super::tally::{Tally, Wants};
+use super::teacher::Teacher;
 use crate::physics::{STEP, World};
 
 /// What is added to a run's own reward while practising.
@@ -286,6 +288,21 @@ pub struct Way {
     /// `SLIPPERY` at a moment drawn from 5 to 20 seconds in. A world that changes while it lives, for
     /// connections that change during a run to have something to adapt to.
     pub slip: f32,
+    /// Whether it senses a changing world (`Body::hears`: what it hears land, the light, its surprise),
+    /// and how its practice worlds change while it lives (`changes`, stage 4).
+    pub hears: bool,
+    pub changing: Changing,
+}
+
+/// How a practice world changes while the creature lives in it (`changes`): not at all; by a setting
+/// drawn evenly at random for each run; by a setting the teacher breeds (`teacher`); or always by the
+/// one setting given (as held-out worlds are measured when they change).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Changing {
+    Still,
+    Even,
+    Taught,
+    Fixed(Setting),
 }
 
 impl Way {
@@ -296,6 +313,7 @@ impl Way {
         body.strength = self.strength;
         body.clock = self.clock;
         body.touch = self.touch;
+        body.hears = self.hears;
     }
 
     /// Dresses a run's body (`dress`) and sets its hips' reach forward, if this way changes it; gives
@@ -385,18 +403,51 @@ impl Way {
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0, needs: true, gaze: true, play: PLAY, appear: APPEAR, energy: -1.0, slip: 0.0 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0, needs: true, gaze: true, play: PLAY, appear: APPEAR, energy: -1.0, slip: 0.0, hears: true, changing: Changing::Taught }
     }
 }
 
 /// Where what a creature feels of its needs and its touch are among its senses (walker/README.md, "What
 /// it senses"): its energy, touch on its body, being held, the jolt across and up, and having just eaten.
 /// A brain's moods read these first (`pool`). Any not among `senses` are left out.
+/// Then, for a creature that senses a changing world, its surprise, the light, and what it hears ahead
+/// of it and behind it.
 pub fn feelings(legs: u32, senses: usize) -> Vec<usize> {
     let legs = legs as usize;
     let energy = super::eyes::RAYS * 6 + 4 + 4 * legs + legs + 4;
     let touch = energy + 3;
-    [energy, touch, touch + 1 + legs, touch + 2 + legs, touch + 3 + legs, energy + 1].into_iter().filter(|&k| k < senses).collect()
+    let world = touch + super::touch::felt(legs);
+    [energy, touch, touch + 1 + legs, touch + 2 + legs, touch + 3 + legs, energy + 1, world + 3, world + 2, world, world + 1].into_iter().filter(|&k| k < senses).collect()
+}
+
+/// Where the predictor of what it will see next finds what it needs among the senses and actions of a
+/// creature of this way (`expect::Foresight`): only one that turns its eye, eats, feels touch and senses a
+/// changing world has a place for its surprise.
+pub fn foresight(way: &Way, senses: usize, actions: usize) -> Option<super::expect::Foresight> {
+    if !(way.gaze && way.needs && way.touch && way.hears) {
+        return None;
+    }
+    let legs = way.legs as usize;
+    let energy = super::eyes::RAYS * 6 + 4 + 4 * legs + legs + 4;
+    let surprise = energy + 3 + super::touch::felt(legs) + 3;
+    (surprise < senses && actions >= 2).then_some(super::expect::Foresight { gaze: energy + 2, speed: super::eyes::RAYS * 6 + 2, surprise, turn: actions - 2, skip: way.skip })
+}
+
+/// A learner given a predictor of what it will see next, if its settings ask for one and its way has a
+/// place for its surprise (`foresight`).
+pub fn foreseeing(learner: Learner, way: &Way) -> Learner {
+    match foresight(way, learner.senses, learner.actions) {
+        Some(look) if learner.settings.foresee => {
+            let wonder = learner.settings.wonder;
+            learner.foreseeing(look, wonder)
+        }
+        _ => learner,
+    }
+}
+
+/// A learner of the form given (`Learner::of_form`), with a predictor if its way and settings ask for one.
+pub fn learner_of_form(way: &Way, settings: Settings, form: &[f32], senses: usize, actions: usize, count: usize, seed: u64) -> Option<Learner> {
+    Learner::of_form(settings, form, senses, actions, count, seed).map(|learner| foreseeing(learner, way))
 }
 
 /// How far a world is made when a run starts, in metres; the stage makes more as the creature goes.
@@ -472,6 +523,10 @@ pub struct Worlds {
     pub open_watches: Option<Vec<Watch>>,
     /// What each creature wanted and did about it, when measuring (`Tally`).
     pub tallies: Option<Vec<Tally>>,
+    /// The teacher breeding the settings its worlds change by, for a way taught (`Changing::Taught`),
+    /// and which of its settings each creature's run is in.
+    pub teacher: Option<Teacher>,
+    pub taught: Vec<usize>,
 }
 
 impl Worlds {
@@ -481,6 +536,15 @@ impl Worlds {
         let mut worlds = Worlds::alone(recipe, way, &seeds)?;
         worlds.renew = true;
         worlds.stream = stream;
+        if way.changing == Changing::Taught {
+            let mut teacher = Teacher::new(stream as u64);
+            for (i, &seed) in seeds.iter().enumerate() {
+                let which = teacher.draw();
+                worlds.taught[i] = which;
+                worlds.runs[i] = make(recipe, way, seed, Some(teacher.setting(which)))?;
+            }
+            worlds.teacher = Some(teacher);
+        }
         for (run, &seed) in worlds.runs.iter_mut().zip(&seeds) {
             visit(run, way, seed);
         }
@@ -490,10 +554,10 @@ impl Worlds {
 
     /// One creature in each world of these seeds, each stopping when its run ends.
     pub fn alone(recipe: Recipe, way: Way, seeds: &[u32]) -> Option<Worlds> {
-        let runs = seeds.iter().map(|&seed| make(recipe, way, seed)).collect::<Option<Vec<Run>>>()?;
+        let runs = seeds.iter().map(|&seed| make(recipe, way, seed, None)).collect::<Option<Vec<Run>>>()?;
         let (senses, actions) = (runs.first()?.senses(), runs.first()?.body.actions());
         let count = runs.len();
-        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, open_watches: None, tallies: None, runs })
+        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, open_watches: None, tallies: None, teacher: None, taught: vec![0; count], runs })
     }
 
     /// Whether creature i is still going (only a creature alone can stop).
@@ -583,7 +647,13 @@ impl Worlds {
                         }
                         self.made[i] += 1;
                         let seed = practice_seed(self.stream, i as u32, self.made[i]);
-                        if let Some(mut fresh) = make(self.recipe, self.way, seed) {
+                        // the teacher hears how the run went, and chooses the next one's world
+                        let taught = self.teacher.as_mut().map(|teacher| {
+                            teacher.tell(self.taught[i], self.runs[i].judge.end == End::Time);
+                            self.taught[i] = teacher.draw();
+                            teacher.setting(self.taught[i])
+                        });
+                        if let Some(mut fresh) = make(self.recipe, self.way, seed, taught) {
                             visit(&mut fresh, self.way, seed);
                             self.runs[i] = fresh;
                         }
@@ -602,9 +672,22 @@ fn visit(run: &mut Run, way: Way, seed: u32) {
     }
 }
 
-fn make(recipe: Recipe, way: Way, seed: u32) -> Option<Run> {
-    let mut run = Run::new(Rc::new(Land::new(Recipe { seed, ..recipe }, FIRST_MADE)), way.legs, way.seconds)?;
+/// A creature at the start of a fresh world of the recipe's kind with this seed, its world changing as
+/// its way has it (by the teacher's setting `taught`, for a way taught), its land as rough as that setting
+/// asks.
+fn make(recipe: Recipe, way: Way, seed: u32, taught: Option<Setting>) -> Option<Run> {
+    let setting = match way.changing {
+        Changing::Still => None,
+        Changing::Even => Some(Setting::drawn(&mut crate::learn::Random::new(seed as u64 ^ 0x6576_656e_0000_0000))),
+        Changing::Fixed(setting) => Some(setting),
+        Changing::Taught => Some(taught.unwrap_or(Setting::STILL)),
+    };
+    let difficulty = setting.map_or(recipe.difficulty, |setting| setting.difficulty(recipe.difficulty));
+    let mut run = Run::new(Rc::new(Land::new(Recipe { seed, difficulty, ..recipe }, FIRST_MADE)), way.legs, way.seconds)?;
     way.dress_run(&mut run, seed);
+    if let Some(setting) = setting {
+        run.changes = Some(Changes::of(setting, seed));
+    }
     Some(run)
 }
 
@@ -680,8 +763,11 @@ impl Measured {
 
 /// `evaluate`, with how it moved as well as how far.
 /// A creature that eats starts each with `MEASURED_ENERGY`, and none is at play.
+/// Held-out worlds do not change unless the way given changes them always by one setting
+/// (`Changing::Fixed`), as `Practice::measure_changing` asks.
 pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usize, &[f32], &mut [f32])) -> Measured {
-    let way = Way { energy: if way.energy < 0.0 { MEASURED_ENERGY } else { way.energy }, play: 0.0, ..way };
+    let changing = if matches!(way.changing, Changing::Fixed(_)) { way.changing } else { Changing::Still };
+    let way = Way { energy: if way.energy < 0.0 { MEASURED_ENERGY } else { way.energy }, play: 0.0, changing, ..way };
     let Some(mut worlds) = Worlds::alone(recipe, way, seeds) else { return Measured::default() };
     worlds.watches = Some(vec![Watch::default(); seeds.len()]);
     worlds.open_watches = Some(vec![Watch::default(); seeds.len()]);
@@ -741,7 +827,8 @@ impl Practice {
     /// learner's first weights from `seed`, its worlds' seeds from `stream`.
     pub fn new(recipe: Recipe, way: Way, settings: Settings, count: usize, seed: u64, stream: u32) -> Option<Practice> {
         let mut worlds = Worlds::new(recipe, way, count, stream)?;
-        let mut learner = Learner::with(settings, worlds.senses, worlds.actions, count, seed, &feelings(way.legs, worlds.senses), None);
+        let learner = Learner::with(settings, worlds.senses, worlds.actions, count, seed, &feelings(way.legs, worlds.senses), None);
+        let mut learner = foreseeing(learner, &way);
         learner.begin(&mut worlds);
         Some(Practice { learner, worlds, recipe, curriculum: None, shaping: way.shaping })
     }
@@ -808,9 +895,18 @@ impl Practice {
 
     /// `evaluate`, with how it moved as well as how far.
     pub fn measure(&mut self, seeds: &[u32]) -> Measured {
+        self.measure_with(self.worlds.way, seeds)
+    }
+
+    /// The same in worlds that change as `Setting::TEST` has them, each seeded by its world.
+    pub fn measure_changing(&mut self, seeds: &[u32]) -> Measured {
+        self.measure_with(Way { changing: Changing::Fixed(Setting::TEST), ..self.worlds.way }, seeds)
+    }
+
+    fn measure_with(&mut self, way: Way, seeds: &[u32]) -> Measured {
         let learner = &mut self.learner;
         // each creature its own pool, from a fresh start
         let mut states: Vec<Vec<f32>> = vec![Vec::new(); seeds.len()];
-        measure(self.recipe, self.worlds.way, seeds, |i, senses, actions| learner.act_as(&mut states[i], senses, actions))
+        measure(self.recipe, way, seeds, |i, senses, actions| learner.act_as(&mut states[i], senses, actions))
     }
 }

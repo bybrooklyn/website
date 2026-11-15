@@ -40,6 +40,14 @@
 //! (`<path>.state`, `<path>.running` and, for a brain with a pool, `<path>.form`, one number to a line)
 //! instead of practising, and `save=<path>` keeps the learner at each mark as `<path>-<mark>.*`.
 //!
+//! A changing world (stage 4, walker/README.md "A world that changes while it lives"): `hears=0` for a
+//! creature that senses nothing of one, `changing=` 0 for practice worlds that do not change, 1 for
+//! settings drawn evenly for each run, 2 for the teacher's (as `Way::of` has it), `foresee=0` for no
+//! predictor of what it will see and `wonder=` for what its surprise above the usual pays. Each mark then
+//! prints a `world` line: how far it gets through the same held-out worlds changing as
+//! `changes::Setting::TEST` has them, its eye on things there, and for the teacher what its settings
+//! ask on average and the share of runs the creature comes through.
+//!
 //! For the transfer measurement, `easy=0.1 switch=10000000` has practice spend its first ten million
 //! steps in worlds of difficulty 0.1 and the rest in worlds of the difficulty asked, while it is
 //! measured all along in held-out worlds of the difficulty asked:
@@ -51,7 +59,7 @@ use std::time::Instant;
 use walker::brain::Brain;
 use walker::generalist::evolve::Evolution;
 use walker::generalist::ppo::Settings;
-use walker::generalist::practice::{Measured, Practice, Shaping, Way, held_out, measure};
+use walker::generalist::practice::{Changing, Measured, Practice, Shaping, Way, held_out, measure};
 use walker::generalist::recipe::Recipe;
 
 const MARKS: [u64; 8] = [1_000_000, 2_000_000, 5_000_000, 10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000];
@@ -207,6 +215,10 @@ fn main() {
                 "window" => settings.window = value as usize,
                 "plastic" => settings.plastic = on,
                 "slip" => way.slip = value,
+                "hears" => way.hears = on,
+                "changing" => way.changing = [Changing::Still, Changing::Even, Changing::Taught][value as usize],
+                "foresee" => settings.foresee = on,
+                "wonder" => settings.wonder = value,
                 _ => panic!("no setting called {name}"),
             }
         }
@@ -231,6 +243,7 @@ fn main() {
             let measured = practice.measure(&seeds);
             also("open", practice.worlds.steps, &measured, measured.open_gait);
             say(practice.worlds.steps, measured, own);
+            world(&mut practice, &seeds, &method, legs, difficulty, seed);
             practice.recipe = Recipe { amounts: [0.0; 4], ..recipe };
             let measured = practice.measure(&seeds);
             also("flat", practice.worlds.steps, &measured, measured.gait);
@@ -247,6 +260,7 @@ fn main() {
             let measured = practice.measure(&seeds);
             also("open", practice.worlds.steps, &measured, measured.open_gait);
             say(practice.worlds.steps, measured, own);
+            world(&mut practice, &seeds, &method, legs, difficulty, seed);
             if let Some(path) = &save {
                 keep(&practice.learner, &format!("{path}-{mark}"));
             }
@@ -260,6 +274,24 @@ fn main() {
             }
         }
     }
+}
+
+/// The `world` line: how far it gets through the held-out worlds changing by `Setting::TEST`, its eye on
+/// things there, against chance; the teacher's standing; and its predictor's surprise and pay over the
+/// last rollout, a look.
+fn world(practice: &mut Practice, seeds: &[u32], method: &str, legs: u32, difficulty: f32, seed: u64) {
+    let changing = practice.measure_changing(seeds);
+    let (amount, share) = practice.worlds.teacher.as_ref().map_or((0.0, 0.0), |teacher| teacher.standing());
+    let (surprised, paid, missed) = practice.learner.foresee.as_ref().map_or((0.0, 0.0, 0.0), |f| (f.surprised / f.looks.max(1) as f32, f.paid / f.looks.max(1) as f32, f.missed));
+    println!(
+        "{method}-world {legs} {difficulty} {seed} {} changing={:.2} air={:.3} food={:.2} on={:.3} chance={:.3} taught={amount:.3} through={share:.2} surprise={surprised:.4} paid={paid:.5} missed={missed:.4}",
+        practice.worlds.steps,
+        changing.mean(),
+        changing.idle_air,
+        changing.wants.food,
+        changing.wants.on,
+        changing.wants.chance
+    );
 }
 
 /// Writes a learner as the page keeps one, one number to a line: `<path>.form`, `.state` and `.running`.

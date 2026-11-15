@@ -187,6 +187,12 @@ pub struct Into {
 
 /// Every connection into neuron `n` of a learner with a pool on show, as it last thought.
 pub fn into(learner: &Learner, n: usize) -> Vec<Into> {
+    into_since(learner, n, None)
+}
+
+/// The same, a plastic connection's change counted since the pool's state was `since` (when the world
+/// last changed, on the page), rather than over the whole run.
+pub fn into_since(learner: &Learner, n: usize, since: Option<&[f32]>) -> Vec<Into> {
     let kinds = Kinds::of(learner);
     let Some((shown, state)) = learner.shown() else { return Vec::new() };
     let Some(pool) = learner.pool() else { return Vec::new() };
@@ -218,7 +224,10 @@ pub fn into(learner: &Learner, n: usize) -> Vec<Into> {
         if shown.before.len() == pool.shape.state() {
             pool.give(&shown.before, &mut before);
         }
-        let pool_weights = &w[w.len() - pool.weights()..];
+        // the pool's weights come after the spreads (and before a predictor's, if it has one)
+        let pool_at = learner.at[4] + learner.actions;
+        let pool_weights = &w[pool_at..pool_at + pool.weights()];
+        let since = since.filter(|since| since.len() == state.len());
         for r in 0..k {
             let code = pool.reads[p * k + r];
             let i = (code & 0xffff) as usize;
@@ -228,7 +237,8 @@ pub fn into(learner: &Learner, n: usize) -> Vec<Into> {
                 _ => before.get(pool.place(code) - s - h).copied().unwrap_or(0.0),
             };
             let weight = pool.read_weight(pool_weights, state, p, r);
-            add(kinds.source(code, s), weight, weight * value, pool.changed(pool_weights, state, p, r));
+            let changed = pool.changed(pool_weights, state, p, r) - since.map_or(0.0, |since| pool.changed(pool_weights, since, p, r));
+            add(kinds.source(code, s), weight, weight * value, changed);
         }
     } else if n < kinds.acts() {
         let j = n - kinds.second_plain();
@@ -267,7 +277,10 @@ pub fn into(learner: &Learner, n: usize) -> Vec<Into> {
 /// after what it senses, the three connections into it passing the most just then (for the second plain
 /// layer, the three from the pool), three numbers each:
 /// where from (-1 for none), what it passed, and how much its weight has changed in this run.
-pub fn pool_picture(learner: &Learner, senses: &[f32], out: &mut Vec<f32>) {
+///
+/// With `since` (the pool's state when the world last changed), a plastic connection's change is counted
+/// from then.
+pub fn pool_picture(learner: &Learner, senses: &[f32], since: Option<&[f32]>, out: &mut Vec<f32>) {
     let kinds = Kinds::of(learner);
     out.clear();
     let Some((shown, state)) = learner.shown() else { return };
@@ -309,7 +322,7 @@ pub fn pool_picture(learner: &Learner, senses: &[f32], out: &mut Vec<f32>) {
         out.push(moved);
     }
     for n in kinds.first_plain()..kinds.count() {
-        let mut list = into(learner, n);
+        let mut list = into_since(learner, n, since);
         // the second plain layer reads the first densely, and drawn those lines would bury the pool between
         // them: what it takes from the pool is drawn instead, so the picture shows the pool feeding what it does
         if n >= kinds.second_plain() && n < kinds.acts() {

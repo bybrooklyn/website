@@ -1550,6 +1550,264 @@ crouch with a leg stretched back, standing at the first gap rather than trying i
 behind, and an eye that looked at things at two minutes and went back to looking at its feet by ten. The
 brain is readable at 168 neurons; at 264 the pool's lines into the second plain layer crowd the right half.
 
+### A world that changes while it lives
+
+Stage 4 of the plan, 15 November 2026. Stage 3 left three things to try first: make a changing world part of
+everyday practice rather than a test done afterwards, give the creature a reason to look, and a teacher that
+keeps its worlds at the edge of what it can do. Each is built, and each was measured; not each did what was
+hoped. Nothing cruel is done to it: the world changes around it.
+
+**What can change** (`src/generalist/changes.rs`). Six conditions of a run's world, each with a rest, the
+world as it always was:
+
+| condition | what it is | rest, and its range | how it is put into the world |
+|---|---|---|---|
+| grip | a share of the grip its parts have of their own (feet 1, body and thighs 0.6) | 1; ice 0.06, sticky 2.5 | each part's friction, which the ground's contacts take (`physics::contact`) |
+| bounce | restitution | 0; up to 0.75 | each part's restitution, the larger of a contact's two |
+| soft | how far feet sink and how gently the ground pushes back | 0; up to 1 (7 cm, a fifth of the stiffness) | `physics::World::give`, new: firm ground is the same to the bit, the Walker's included |
+| gravity | in g | 1; 0.5 to 1.6 | the world's gravity |
+| wind | a push along the way on everything that moves, metres a second squared, from behind more than 0 | 0; up to 6 either way | the world's gravity across; the body feels it as a lean in its jolt (`touch::jolt`) |
+| light | from night to day | 1; down to 0 | at night it sees a quarter as far (`changes::sight`): 1.5 m against 6, never blind |
+
+In practice they change by stretches (`Changes::before_step`, from a `Setting`): every few seconds one
+condition, chosen by how much each may change, moves to a new value as far from its rest as its amount
+allows, or back to its rest (a quarter of changes), and stays there; the ground changes at once, the light in
+about two seconds, the wind in one, gravity in half of one. And things are dropped near it: a box (seven in
+ten in front of it) or a piece of food, from 1.2 m up and 1.2 to 3 m away. A `Setting` is nine numbers from 0
+to 1: how much each condition may change, how often a change comes (every 14 s down to every 3), how often
+something is dropped (every 30 s down to 4, or never), and how rough its land is beside the kind asked for
+(0.5 as asked, ±0.2 of difficulty).
+
+**What it senses of it.** Four numbers more, after touch (`Body::hears`): a landing heard ahead of it and
+behind it, the light, and its surprise. A box or a piece of food that lands is heard from the side it is on,
+as loud as `2 / (1 + distance)` (food 0.6 of a box), fading by 4 percent a step, about a second. Two legs
+now sense 127 numbers and four legs 139. The moods read surprise and the light among the first, after
+energy and touch (`practice::feelings`).
+
+**A reason to look** (`src/generalist/expect.rs`, `ppo/foresee.rs`). A predictor of what it will see next,
+inside its brain: for each of the sixteen rays, from what that ray and its two neighbours see now, how far its
+eye is about to turn (from the action just chosen), where it looks, how fast its body goes and where in the fan
+the ray is, it guesses how near the ray will meet something at the next decision and whether that will be
+food. One small network serves every ray, 9 inputs, 4 hidden neurons and 2 outputs: 50 weights, the last of
+the learner's, so they are kept, sent, averaged between workers and taken back with the rest. It learns by its
+own squared misses in the same steps as the policy, over the decisions of each rollout whose next look was in
+the same run (its gradient is held to nudging, and on a steady scene its surprise falls to under a third,
+`expect_tests`). Its surprise, the mean over the rays of its squared misses, is written into what the
+creature senses; and what is above the level it is used to is paid, 1 a unit (`Settings::wonder`). That level
+rises 30 percent of the way to a greater surprise each decision and falls 2 percent toward a lesser, so
+surprise it cannot learn away pays once and then hardly anything: staring at noise, the first second pays and
+then less than a twentieth of its surprise a look; looking away and back, the level is still raised a second
+later. It is not trained ahead and nothing of it is shipped.
+
+**The teacher** (`src/generalist/teacher.rs`), after ACCEL (Parker-Holder and others, 2022): eight settings,
+each practice run in one of them drawn evenly; told when a run ends whether the creature came through it
+(lasted its time without falling or stalling); scored `4 p (1 - p)` on the share `p` of its last 32 runs it
+came through, so a setting always come through and one never come through both score nothing, with a little
+more for the harder of two too easy and the easier of two too hard; every 64 runs, the two lowest replaced by
+changed copies of better ones. It starts from settings that ask little (every number up to 0.3). Each worker
+on the page has its own. Its settings are not kept with the learner.
+
+Every term now, and what kind of thing it is:
+
+| | what | kind |
+|---|---|---|
+| grip, bounce, softness of the ground; gravity; wind; light | new | conditions of its world, changing by stretches in practice, set by the visitor on the page |
+| boxes and food dropped near it | new | things in its world |
+| heard ahead, heard behind | new | senses |
+| light | new | a sense |
+| surprise | new | a sense, which only its brain can write |
+| the predictor's 50 weights | new | part of its brain, learned by its own misses |
+| surprise above the usual, 1 a unit | new | a want (a reason to look), bounded |
+| the teacher's settings | new | how practice chooses its worlds, neither paid nor sensed |
+| everything of stages 1 to 3 | as before | as "The brain that was discussed" lists them |
+
+**Tested** (`changes_tests`, `expect_tests`, `practice_tests`, `page_tests`, `src/minis/generalist.test.ts`):
+a world at its rest changes nothing, to the bit; on ice a creature in the wind slides more than three times as
+far, on bouncy ground its feet are thrown up, on soft ground it stands lower, the wind pushes; a world changing
+by itself keeps every condition within its limits, changes as often as asked, drops things, and does the same
+every time; at night it sees no further than its sight; a landing is heard from its side, louder the nearer,
+fading; the teacher's settings come to ask about what a simulated creature can do, coming through about half
+its runs; the predictor's gradient and its learning; a learner with it keeps it; a learner kept at stage 3 is
+taken up by the page and grown, acting as it did to within 1e-5; and with nothing of a changing world switched
+on, practice gives stage 3's fingerprints to the bit, the plain network's and the page's brain's. The new
+fingerprints are in `practice_tests` and the page's engine gives them too.
+
+**The trials.** Natively, `examples/compare.rs` with `hears=`, `changing=` (0 still, 1 even, 2 the teacher),
+`foresee=` and `wonder=`; worlds of the page's kind ("meadow": 20 of 100 hard, ground 60, the rest 40), two
+legs with the page's brain (32 memory, 4 rhythm, 4 mood, 16 reads) unless said, 20 million steps, seeds 1 to
+4, four at a time on four cores of the Ryzen 7 9700X with other work going on. Each mark is measured in the
+sixteen held-out worlds as they always were ("still") and changing as `Setting::TEST` has them (every amount
+0.6, a change every 8.5 s or so and a drop every 17), each starting with energy 0.7; the mean and spread over
+the seeds:
+
+| two legs | 1 M | 2 M | 5 M | 10 M | 20 M, still | 20 M, changing | air | eye on / chance |
+|---|---|---|---|---|---|---|---|---|
+| as stage 3 practised: a still world, nothing sensed of a changing one | 7.3 ± 0.5 m | 9.5 ± 1.1 m | 12.6 ± 1.8 m | 13.0 ± 1.2 m | 13.3 ± 3.0 m | 12.7 ± 2.7 m | 0.11 | 0.11 / 0.06 |
+| **the teacher's worlds (kept)** | 5.9 ± 1.9 m | 10.0 ± 2.3 m | 12.2 ± 0.7 m | 12.1 ± 0.8 m | **13.2 ± 1.8 m** | **12.6 ± 1.9 m** | 0.11 | **0.16 / 0.06** |
+| worlds drawn evenly | 6.3 ± 1.2 m | 10.9 ± 0.7 m | 12.7 ± 2.1 m | 12.2 ± 2.0 m | 13.2 ± 2.4 m | 13.0 ± 2.9 m | 0.12 | 0.18 / 0.05 |
+| the teacher's, no plastic connections | 6.7 ± 1.5 m | 7.7 ± 3.6 m | 13.4 ± 1.7 m | 14.0 ± 2.5 m | 13.8 ± 1.9 m | 13.1 ± 1.7 m | 0.08 | 0.12 / 0.05 |
+| the teacher's, the plain network | 6.0 ± 1.5 m | 8.0 ± 0.7 m | 10.6 ± 0.7 m | 12.0 ± 2.4 m | 11.2 ± 1.6 m | 10.8 ± 1.3 m | 0.05 | 0.18 / 0.05 |
+| the teacher's, no predictor (hearing and light still sensed) | 5.9 ± 0.9 m | 9.9 ± 2.0 m | 11.8 ± 2.5 m | 12.8 ± 3.8 m | 12.7 ± 3.5 m | 12.4 ± 3.4 m | 0.11 | 0.12 / 0.06 |
+| the teacher's, surprise not paid (a sense only) | 5.5 ± 0.8 m | 10.5 ± 1.0 m | 11.8 ± 2.1 m | 11.7 ± 4.1 m | 12.3 ± 3.3 m | 12.8 ± 3.7 m | 0.11 | 0.09 / 0.05 |
+| the teacher's, surprise paid 3 a unit | 5.9 ± 0.8 m | 9.7 ± 1.5 m | 13.7 ± 1.6 m | 14.3 ± 1.9 m | 15.6 ± 2.9 m | 15.3 ± 3.0 m | 0.15 | 0.18 / 0.05 |
+
+| four legs | 1 M | 2 M | 5 M | 10 M | 20 M, still | 20 M, changing | air | eye on / chance |
+|---|---|---|---|---|---|---|---|---|
+| as stage 3 practised (its numbers again, to the bit) | 3.2 ± 2.7 m | 11.4 ± 6.9 m | 17.6 ± 10.0 m | 23.1 ± 10.6 m | 27.2 ± 9.2 m | 26.3 ± 8.5 m | 0.13 | 0.13 / 0.05 |
+| **the teacher's worlds (kept)** | 6.8 ± 3.9 m | 14.0 ± 7.8 m | 19.2 ± 10.4 m | 20.6 ± 12.0 m | **21.9 ± 11.8 m** | **20.5 ± 10.3 m** | 0.16 | **0.18 / 0.06** |
+| worlds drawn evenly | 5.8 ± 3.7 m | 18.7 ± 1.6 m | 30.3 ± 1.6 m | 31.1 ± 1.2 m | 30.7 ± 3.7 m | 31.0 ± 4.2 m | 0.18 | 0.14 / 0.06 |
+
+(The four-legged teacher's 21.9 m is three seeds at 22 to 34 m and one that learned to stand where it
+started, 2.7 m; without it, 28.3 m.)
+
+What that says, plainly:
+
+- **Practising in a changing world costs nothing measurable.** Two legs go as far through still worlds
+  practised in the teacher's changing ones as practised in a still one, and every learner loses only a few
+  percent when the held-out worlds change (the changes of `Setting::TEST` are survivable; what costs is a
+  fall, as before).
+- **Its eye looks at things more, and paying for surprise is why.** On the nearest thing worth looking at
+  0.16 of the time against chance 0.06 (stage 3's way 0.11, one seed of four well above chance); with the
+  predictor's surprise a sense but not paid, 0.09, and with no predictor 0.12; paid 3 a unit, 0.18. So the
+  bounded pay for surprise is what turns the eye to things; the plain network looks as much (0.18). Paid 3,
+  two legs also went further (15.6 m against 13.2), eating a little more, but left the ground with nothing to
+  clear more (0.15 against 0.11); that was measured, not chosen, and is left for her.
+- **The teacher did not help.** On the same steps, worlds drawn evenly learned as fast for two legs (faster
+  at 2 million: 10.9 against 10.0 m) and ended as far (13.2 m each); for four legs they learned faster and
+  steadier and went further (30.7 ± 3.7 m against 21.9 ± 11.8), and with the teacher one seed of four stood
+  still. Two legs come through about a quarter of their runs in
+  any of its settings (they fall, as two legs do), so its scores are low and close and its settings drift
+  under mutation more than they are chosen: from asking 0.15 at the start to 0.39 on average at 20 million
+  steps, coming through 0.25 of runs. A teacher needs a score that tells settings apart at the creature's
+  level; coming through a run is too coarse for two legs.
+
+**Adapting, measured properly** (`examples/adapt.rs`). Each learner at 20 million steps walks 200 held-out
+worlds of the page's kind as practice measures it; ten seconds in, each run is copied ten times, and in nine
+the world changes at once and stays changed: ice, sticky, bouncy, soft, gravity 1.6, gravity 0.5, a wind of 4
+from ahead, from behind, night. Every copy goes on to twenty seconds with its brain as it was. Counted are the
+worlds in which the unchanged copy was still going at twenty seconds (31 to 79 a learner); "kept" is how far
+the changed copies went over how far the unchanged ones did, pooled over the nine changes, in the first five
+seconds after the change and the next five; "while up" the same over only the changed copies still going at
+twenty seconds; recovery is the second over the first; "fell" the share of changed copies whose run ended.
+Two legs, seeds 1 to 4:
+
+| two legs, practised in | kept, first 5 s | next 5 s | recovery | while up, first / next | recovery while up | fell |
+|---|---|---|---|---|---|---|
+| the teacher's worlds, plastic connections (kept) | 0.79 ± 0.04 | 0.56 ± 0.06 | 0.70 ± 0.05 | 0.84 / 0.82 | 0.98 ± 0.06 | 0.39 ± 0.05 |
+| the teacher's worlds, no plastic connections | 0.77 ± 0.03 | 0.43 ± 0.04 | 0.55 ± 0.05 | 0.83 / 0.76 | 0.92 ± 0.09 | 0.50 ± 0.10 |
+| the teacher's worlds, the plain network | 0.81 ± 0.10 | 0.55 ± 0.04 | 0.68 ± 0.03 | 0.88 / 0.93 | 1.05 ± 0.08 | 0.41 ± 0.09 |
+| worlds drawn evenly, plastic | 0.80 ± 0.04 | 0.58 ± 0.10 | 0.72 ± 0.11 | 0.87 / 0.87 | 1.01 ± 0.08 | 0.41 ± 0.13 |
+| a still world, as stage 3 (never practised a change) | 0.77 ± 0.10 | 0.58 ± 0.13 | 0.77 ± 0.18 | 0.91 / 0.97 | 1.07 ± 0.14 | 0.48 ± 0.12 |
+
+By change, for the kept learner (pace kept in the first five seconds and the next, and the share that fell):
+ice 0.70 / 0.49, fell 0.42; sticky 0.91 / 0.77, 0.14; bouncy 0.98 / 0.82, 0.15; soft 0.71 / 0.38, 0.42;
+gravity 1.6 0.68 / 0.53, 0.18; gravity 0.5 1.07 / 1.25, 0.35; a wind from ahead -0.10 / -0.09, 0.77 (it is
+pushed back); from behind 1.42 / 0.24, 0.85 (it is pushed on and falls); night 0.78 / 0.63, 0.26.
+
+Four legs, the same way (seeds 1 to 4; the teacher's seed that stood still is left out, with one world
+counted): practised in the teacher's worlds they kept 0.77 of their pace in the first five seconds and 0.57
+in the next, 0.93 while up, and fell after 0.33 of changes; in worlds drawn evenly 0.81, 0.60, 0.90, falling
+0.28; as stage 3 practised them, never meeting a change, 0.82, 0.62, 0.95, falling 0.24. Surprise paid 3 or
+not at all changed two legs' recovery little (0.91 and 0.88 while up, falling 0.44 each).
+
+**The claim, dropped.** The narrow claim was that a brain whose connections change during a run recovers
+faster from a change it has practised meeting. Against the same pool with its plastic connections held at
+nothing, practised the same way, it does a little better: it falls after a change less often (0.39 against
+0.50 of changed runs) and keeps more of its pace in the second five seconds (0.56 against 0.43), and while up
+it holds its pace (0.98 against 0.92). But the spread over seeds covers most of that, and the plain network,
+with no memory at all, recovers as well (1.05 while up, falling 0.41), and so does a creature that never
+practised a change (1.07, falling 0.48). Nothing recovers in the sense of finding its pace again: once up,
+every brain goes on at about the pace the change first left it. So the claim is not earned. What was tried:
+changing worlds in every practice run, by the teacher's settings and drawn evenly; plasticity on and off;
+memory on and off; 20 million steps, four seeds, 200 worlds each. What is left to try: a rule that reads a
+reward or surprise signal (neuromodulated plasticity), which stage 5's brain that grows connections might
+carry; and changes long enough within a run that the second half of a run pays for what the first half
+learned.
+
+**Food behind it, a box that landed, night and wind** (`examples/watch.rs`, through the page's own show in the
+sixteen held-out worlds, as stage 3's): with hearing, it hears food land 1.5 m behind it (0.40 loud on
+average) and still never turns for it (turned back 0 to 0.06 of drops, eaten behind 0 to 0.06); it eats food
+dropped ahead 0.29 of the time. A box dropped 1.5 m ahead: its eye is on it 0.24 ± 0.13 of the second and a
+half after (three seeds of four 0.27 to 0.34, one 0.02), against chance 0.07 and 0.11 for stage 3's way (one
+seed of four 0.31, three 0.04 to 0.05). Night falling: its surprise rises (0.011 to 0.022 a look) and its gaze
+does not go up (on average 3 degrees lower after); a wind from ahead: no change in where it looks.
+
+**What it costs.** Natively, practice with the page's brain on one core goes 66,700 steps a second against
+70,600 as stage 3 had it, and the plain network 106,000 against 117,000 (`brain_cost.rs before=1`): the
+predictor, the senses and the changing world cost 5 to 9 percent. The module is 494 KiB with SIMD and 477
+without (451 and 435 before), 18 KiB under the 512 KiB limit; the teacher first put its settings in order with
+the standard library's sort, which cost 9 KiB, and now does it by insertion. The Walker's module carries soft
+ground without using it (131 KiB), and its results are the same to the bit.
+
+**The strict walking test.** At 20 million steps two learners of 44 walk by it in the held-out worlds as a
+whole: one plain network in the teacher's worlds (seed 1, on open ground too) and one pool with no predictor
+(seed 4, 7.8 m); none of the kept way's seeds does. It was measured, not tuned for.
+
+**In the page.** The drafts build served locally, the mini opened fresh in headless Chromium as a visitor
+finds it ("meadow", 20 of 100 hard, normal effort), browser and all held to four cores (`taskset`), as stage
+3's trial with more (`page-trial.ts`, kept with the trials): sampled four times a second and photographed;
+at two minutes and at ten left alone, food dropped ahead and behind, a box carried and dropped, lifted and
+set down; then, through the page's own controls, the ground made ice, sticky, bouncy and soft, gravity 1.6
+and 0.5, a wind of 5 from ahead and night, each for six seconds and back; a box dropped with a tap; and the
+world let change by itself for twenty seconds, then "as it was". The page practised in three workers at
+163,000 to 170,000 steps a second for two legs (stage 3: 160,000 to 180,000) and 145,000 to 148,000 for four
+(135,000 to 155,000). No error in the page's console.
+
+| two legs | energy (lowest) | resting | its eye on the nearest thing | mood |
+|---|---|---|---|---|
+| first minute | 0.58 (0.12) | 0.13 | 0.24 | 0.25 |
+| first two minutes | 0.38 (0.10) | 0.25 | 0.41 | 0.26 |
+| at 2 min: alone / food ahead / food behind / a box dropped | 0.18 / 0.18 / 0.14 / 0.14 | 0.32 / 0.33 / 0.18 / 0.67 | 0.68 / 0.76 / 0.64 / 0.78 | 0.35 / 0.30 / 0.24 / 0.28 |
+| two to ten minutes | 0.31 (0.07) | 0.36 | 0.43 | 0.29 |
+| at 10 min: alone / food ahead / food behind / a box dropped | 0.49 / 0.45 / 0.27 / 0.12 | 0 / 0 / 0 / 0.06 | 0.21 / 0.00 / 0.24 / 0.00 | 0.30 / 0.23 / 0.39 / 0.30 |
+| at 2 and 10 min, a box tapped down 1.5 m ahead | | 0.45 / 1.00 | 0.45 / 0.82 | |
+
+Four legs: energy 0.61 in the first minute and 0.49 from two minutes to ten, almost never resting, its eye on
+the nearest thing 0.51 in the first minute, 0.40 over two minutes and 0.33 after; 30 m through "meadow" in the
+first minute, 72 m by two minutes, 84 m by ten.
+
+Through the controls, each change watched three seconds before, three after and three more (pace in metres a
+second; a run that ended and started again shows as a large backward pace, left out here):
+
+| | two legs at 2 min | two legs at 10 min | four legs at 2 min | four legs at 10 min |
+|---|---|---|---|---|
+| ice | 0.42, then -0.08, 0.00 (it stops) | standing before and after | 1.83, then 1.48, 0.74 | 2.42, 1.22 after |
+| sticky | standing, then 0.21 | standing | 0.47, then 1.00, 1.64 | 2.20, then 2.06, 1.99 |
+| bouncy | standing, then 0.35 | standing | 2.31, then it fell, 2.74 | standing, then 1.37, 3.03 |
+| soft | 0.99, then a fall, 1.07 | 0.91, then 0.70, a fall | 2.42, then 0.01, -0.05 (it stops) | 1.92, a fall, 2.54 |
+| gravity 1.6 | 0.97, then 0.25, 0.00 | 0.79, then 0.72, 0.66 | 1.02, then 0.39, 0.08 | 3.05, then 2.17, 2.32 |
+| gravity 0.5 | standing, then 0.41 | 0.67, then 0.35, 0.01 | 0.74, then 0.93, a fall | 0.77, then 3.06, 3.30 |
+| a wind of 5 from ahead | 0.93, then 0.11, blown over | standing, pushed back | 2.41, then 0.36, blown over | 2.98, then 0.90, blown over |
+| night | 0.56, then 0.10, 0.05; surprise 0.028 to 0.097 | surprise 0.037 to 0.152 | 1.94, then 2.55, 2.64; surprise 0.027 to 0.059 | 2.69, then 2.14, 2.18; surprise 0.024 to 0.057 |
+
+The learners the page kept at a minute and a half and at nine and a half minutes are with the trials
+(`page2/kept-*`, `page4/kept-*`).
+
+What a visitor sees, plainly. **The newborn** crouches and shuffles as stage 3's did, its eye line flicking,
+and crosses to the first gap at 12 m within the first minute; its eye is on the nearest thing about a quarter
+of the time. **At two minutes** it goes forward in the same deep crouch and stops at the gap to rest; food
+dropped ahead it looks down at and eats; food dropped behind it hears (the sound marks in its senses open on
+the left) and does not turn for; a box dropped or tapped down in front of it, it looks at (0.45 to 0.78 of
+the time) and stops. On ice it stops dead and stands; on soft ground its feet sink
+and it stumbles; in a wind from ahead it leans, is pushed back and falls; at night the world goes dark but for
+its own fan of sight, its surprise trace jumps, and it slows to a stand. **At ten minutes** it rests less,
+gets further before the gap, and under heavier gravity keeps going at most of its pace; its eye looks at a box
+tapped down in front of it 0.82 of the time; the world changing by itself, it mostly stands and rests (0.74 of
+the twenty seconds), dropped boxes around it. Its surprise rises at a change of the ground, at a wind
+and most at night (two to four times), and settles again. (The photographs were taken with the controls open,
+which push the brain's picture down out of the photograph; its surprise is read from the engine. A
+photograph with them folded, four seconds after night fell at 45 seconds of practice (`smoke/brain-at-night`),
+shows a few connections into memory neurons drawn thick, changed since night fell, the surprise trace in its
+corner, and the eye's far cells dark.) **Four legs** gallop
+through most changes, faster in light gravity and on sticky ground, stopped by soft ground at two minutes and
+blown over by a wind from ahead; they pay their eye little attention to a box landing (0.09 to 0.31).
+
+Honestly, then: the world's changes are things a visitor does and sees, and the creature is seen to meet them:
+to stop on ice, sink in sand, be blown over, slow in the dark, look at a box landing and be surprised. What
+still looks like a machine: it never turns for food it heard fall behind it, it does not look up when night
+falls, it meets most changes by standing still rather than finding a new way to move, and its pace does not
+come back within a change. The plastic connections are drawn changing, but they do not measurably help.
+
 ### Practice in the browser
 
 On the page, "how it learns" chooses evolution or "by practice", and the page opens on practice: a
@@ -1736,7 +1994,7 @@ creature and its learning per module instance. A function that gives a list give
   `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
   `rays_length()`.
 
-The module is 451 KiB with SIMD, 435 KiB without (331 and 326 before the pool, 320 and 310 before it wanted things, 304 and 296 before touch and the hand, 299 and 291 before two legs were asked for a pace,
+The module is 494 KiB with SIMD, 477 KiB without (451 and 435 before a changing world, 331 and 326 before the pool, 320 and 310 before it wanted things, 304 and 296 before touch and the hand, 299 and 291 before two legs were asked for a pace,
 with the costs on landing and leaning; 295 and 287 before the posture terms for two legs,
 which cost 2.8 KiB, and the bonus for taking turns, 1.2 KiB; the gait measures are left out of it; the Walker's is 131 KiB, the physics alone
 37 KiB; what the generalist added to the Walker's own module is 1.3 KiB of physics it does not use,
@@ -1749,7 +2007,13 @@ few numbers) are described where they are, in `src/generalist/api.rs`. Since the
 rhythm, mood, reads)` sets the brain practice is to have, within `brain_caps()`; a learner's form
 (`practice_form()`) is written into `form_room(length)` before its state, and `practice_load` takes it up
 into the brain asked for; `brain_picture` gives a brain with a pool by kind, starting with -1
-(`mind::pool_picture`), and `brain_reads(n)` every connection into neuron `n`. `src/minis/generalist.test.ts` holds it to the native engine's
+(`mind::pool_picture`), and `brain_reads(n)` every connection into neuron `n`. Since a changing world
+(stage 4): `show_conditions(grip, bounce, soft, gravity, wind, light)` sets the world's conditions
+(`changes::Conditions`), `show_changing(on)` lets it change by itself (`page::CHANGING`), `show_drop_box(x, y)`
+drops a box, `show_world()` gives eleven f32 (the conditions now, the seconds since it last changed, what the
+creature hears ahead and behind, its surprise and the level it is used to), `state_room(n)` with `n` of 2 or
+more and `running_room_of(n)` make rooms of an older learner's own lengths, which `practice_load` and
+`policy_load` grow (`Learner::grown`). `src/minis/generalist.test.ts` holds it to the native engine's
 fingerprint of three creatures' 600 steps and three generations of evolution, to the bit, with SIMD
 and without.
 

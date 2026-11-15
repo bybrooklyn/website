@@ -2,22 +2,26 @@
 //! page's kind of world with 32 creatures on one core, and this prints the steps of the physics a second
 //! and the share of the time its network took (the rest is the world).
 //!
+//! With `before=1`, as stage 3 practised: a world that does not change, nothing sensed of one, and no
+//! predictor of what it will see.
+//!
 //!     cargo run --release --example brain_cost -- updates=40 legs=2 most=8
 
 use std::time::Instant;
 
 use walker::generalist::pool::Shape;
 use walker::generalist::ppo::Settings;
-use walker::generalist::practice::{Practice, Way};
+use walker::generalist::practice::{Changing, Practice, Way};
 use walker::generalist::recipe::Recipe;
 
 fn main() {
-    let (mut updates, mut legs, mut most) = (40usize, 2u32, usize::MAX);
+    let (mut updates, mut legs, mut most, mut before) = (40usize, 2u32, usize::MAX, false);
     for arg in std::env::args().skip(1) {
         match arg.split_once('=') {
             Some(("updates", v)) => updates = v.parse().unwrap(),
             Some(("legs", v)) => legs = v.parse().unwrap(),
             Some(("most", v)) => most = v.parse().unwrap(),
+            Some(("before", v)) => before = v == "1",
             _ => {}
         }
     }
@@ -26,7 +30,8 @@ fn main() {
     for &(memory, rhythm, mood, reads) in shapes.iter().take(most) {
         let shape = Shape { memory, rhythm, mood, reads };
         let settings = Settings { shape, ..Settings::default() };
-        let mut practice = Practice::new(recipe, Way::of(legs), settings, 32, 1, 1).unwrap();
+        let way = if before { Way { hears: false, changing: Changing::Still, ..Way::of(legs) } } else { Way::of(legs) };
+        let mut practice = Practice::new(recipe, way, settings, 32, 1, 1).unwrap();
         practice.update();
         let began = Instant::now();
         let before = practice.worlds.steps;
