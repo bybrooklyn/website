@@ -72,6 +72,9 @@ for (let a = 97; a <= 122; a++)
     for (let b = 97; b <= 122; b++)
         COSTS[(a - 97) * 26 + b - 97] = a === b ? 0 : (VOWELS.has(a) && VOWELS.has(b)) || NEIGHBOURS.get(a)?.has(b) ? 0.6 : SOUNDS.has(String.fromCharCode(a, b)) ? 0.7 : 1;
 
+/** What it costs to write two letters the wrong way round. */
+const SWAPPED = 0.5;
+
 /** What it costs to write one letter for another. */
 function swapCost(a: number, b: number): number {
     if (a === b) return 0;
@@ -188,7 +191,8 @@ export function readDictionary(text: string): Dictionary {
                 if (added < best) best = added;
                 const changed = previous[j - 1]! + (a === b ? 0 : swapCost(a, b));
                 if (changed < best) best = changed;
-                if (j > 1 && a === target[j - 2] && earlier === b && before[j - 2]! + 0.6 < best) best = before[j - 2]! + 0.6;
+                // two letters swapped, the commonest slip of typing, costs less than a key beside the right one: "teh" is "the" before "ten"
+                if (j > 1 && a === target[j - 2] && earlier === b && before[j - 2]! + SWAPPED < best) best = before[j - 2]! + SWAPPED;
                 current[j] = best;
                 if (best < low) low = best;
             }

@@ -85,6 +85,11 @@ test("the right word is in the first three suggestions for at least nine in ten 
     expect(words.suggest("alot", "us")).toContain("a lot");
 });
 
+test("two letters swapped come before a key beside the right one", () => {
+    // "ten" is one neighboring key from "teh", and "want" from "waht"; the swap is the likelier slip
+    for (const [wrong, meant] of [["teh", "the"], ["waht", "what"], ["thier", "their"], ["hte", "the"], ["fo", "of"]] as const) expect(words.suggest(wrong, "us")[0]).toBe(meant);
+});
+
 test("a word is looked up in microseconds and suggestions come in milliseconds", () => {
     const sample = ["house", "Colour", "running", "dog's", "NASA", "well-known", "recieve"];
     let start = performance.now();
