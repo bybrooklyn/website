@@ -12,7 +12,13 @@
 // rays can be drawn, faint, so a visitor sees what it sees. A press takes hold of it, by its body or a leg,
 // or of a box, a moving platform or a see-saw, with the engine's hand (walker/src/generalist/touch.rs): a
 // spring to the pointer with a cap on its force, so what is held hangs and swings and a heavy thing lags;
-// the keyboard has the same hand. A tap on nothing drops a piece of food there.
+// the keyboard has the same hand. A tap on nothing drops a piece of food there, or a box.
+//
+// Its world changes while it lives (stage 4): the visitor sets the ground (firm, ice, sticky, bouncy, soft),
+// gravity, a wind and the light, each resting where the world always was, and may let the world change by
+// itself, which it never does unless switched on. Ice looks like ice, a wind shows as streaks, and at night
+// the world is dark but for what the creature's own eye reaches. The brain's picture draws the plastic
+// connections that have changed since the world last changed, and a small trace of its surprise.
 //
 // The world is on the left and a column on the right: the controls folded at its top, then the brain,
 // what it senses and its energy, drawn live, then a chart of how far it gets, in the panel style the
@@ -21,10 +27,10 @@
 import { el, type Mote, type Scene } from "../mote/stage";
 import type { Kept, Order as PracticeOrder, Report as PracticeReport } from "../scripts/generalist-practice";
 import type { Order, Report } from "../scripts/generalist-worker";
-import { BRAIN, DEFAULT_RECIPE, DEFAULT_SHAPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, SHAPE_CAPS, anotherSeed, brainColumns, brainKinds, counted, engineAddress, engineRecipe, fromLink, lasted, linkParts, list, neurons, practiceWorkers, senseLayout, start as startEngine, valid, validShape, write, write64, type BrainKinds, type Engine, type Kind, type Recipe, type Shape } from "./roaming";
+import { BRAIN, DEFAULT_RECIPE, DEFAULT_SHAPE, GROUNDS, KINDS, LEGS, LIGHTS, POPULATION, REST_CONDITIONS, SECONDS, SEEN, SHAPE_CAPS, anotherSeed, brainColumns, brainKinds, counted, engineAddress, engineRecipe, fromLink, groundOf, lasted, lightOf, linkParts, list, neurons, practiceWorkers, senseLayout, start as startEngine, valid, validShape, worldNow, write, write64, type BrainKinds, type Conditions, type Engine, type Ground, type Kind, type Recipe, type Shape, type WorldNow } from "./roaming";
 import { EFFORTS, machine, tenths, workersFor, type Effort } from "./walking";
 
-export const label = "A little creature with legs, seen from the side, learning from nothing to find its way and its food in a world made from a seed. A line from its eye shows where it looks, and faint lines what it sees; its body glows with the energy it has. It and the boxes and platforms can be picked up and moved: with the pointer, or with Space to take hold and the arrows to move the hand. A tap on nothing drops food there.";
+export const label = "A little creature with legs, seen from the side, learning from nothing to find its way and its food in a world made from a seed. A line from its eye shows where it looks, and faint lines what it sees; its body glows with the energy it has. It and the boxes and platforms can be picked up and moved: with the pointer, or with Space to take hold and the arrows to move the hand. A tap on nothing drops food there, or a box. The ground, gravity, a wind and the light can be changed while it walks.";
 
 /** How long the creature rests where its run ended before starting again, in seconds. */
 const REST = 1;
@@ -36,6 +42,13 @@ const KEY_STEP = 0.25;
 const TAP = 6;
 /** Below this energy its muscles weaken (walker/src/generalist/needs.rs, `TIRED`). */
 const TIRED = 0.4;
+/** How many frames of its surprise the brain's trace shows. */
+const TRACED = 150;
+/** The colors of a changed world, from the site's accents (src/data/theme.ts): ice, sticky ground, bouncy ground, soft ground. */
+const ICE = "oklch(0.78 0.12 250)";
+const STICKY = "oklch(0.55 0.11 80)";
+const BOUNCY = "oklch(0.78 0.15 350)";
+const SAND = "oklch(0.84 0.13 80)";
 
 /** How the creature learns: by evolution, the best of many tries kept and varied, or by practice (PPO, in walker/src/generalist/ppo.rs). */
 type How = "evolution" | "practice";
@@ -124,6 +137,19 @@ export default function generalist(m: Mote): Scene {
     let tellKept: ((found: boolean) => void) | undefined;
     /** A few words for a screen reader, said by the live line in the column. */
     let speak = (_words: string) => {};
+    /** The world's conditions as the visitor set them (none of it kept between visits, so the page opens on the world at rest), whether it changes by itself, what a tap on nothing drops, the world as the creature last met it, and its surprise over the last few seconds. */
+    let conditions: Conditions = { ...REST_CONDITIONS };
+    let changing = false;
+    let drops: "food" | "box" = "food";
+    let world: WorldNow = worldNow([]);
+    const surprises: number[] = [];
+    /** Puts the world's conditions and whether it changes by itself into the engine, as after it is made again. */
+    const putWorld = () => {
+        if (!engine) return;
+        const c = conditions;
+        engine.show_conditions(c.grip, c.bounce, c.soft, c.gravity, c.wind, c.light);
+        engine.show_changing(changing ? 1 : 0);
+    };
 
     let engine: Engine | undefined;
     let worker: Worker | undefined;
@@ -186,6 +212,7 @@ export default function generalist(m: Mote): Scene {
         const brainSeed = (Math.random() * 2 ** 32) >>> 0;
         if (engine) {
             engine.create(recipe.legs, seed, difficulty, ...amounts, POPULATION, BRAIN.hidden, BRAIN.layers, BRAIN.memory, SECONDS, brainSeed);
+            putWorld();
             [ground, blocks, hazards, reached] = [[], [], [], 0];
             extend(20);
             angles = list(engine, engine.ray_angles());
@@ -369,6 +396,8 @@ export default function generalist(m: Mote): Scene {
     let drawChart = () => {};
     let drawSenses = () => {};
     let drawEnergy = () => {};
+    /** Brings the controls of the world to it as it is, when it changes by itself. */
+    let keepWorld = () => {};
     /** The tick the brain was last drawn at; none yet. */
     let brainAt = -1;
     if (!m.preview) {
@@ -537,7 +566,7 @@ export default function generalist(m: Mote): Scene {
         // the brain, drawn live from the first second, so a visitor watches it grow as it learns
         const brainPicture = el("canvas", { class: "walker-brain-picture generalist-brain" });
         brainPicture.setAttribute("role", "img");
-        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its plain neurons in a column either side of its pool, and what it does on the right. In the pool, small squares are memory neurons filled as full as what they hold, rings with a dot going round are rhythms, and bars under them are moods, which turn groups of the plain neurons up or down. Lines are the connections passing the most, thicker where a connection has changed in this run. Pressing a neuron shows everything it listens to.");
+        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its plain neurons in a column either side of its pool, and what it does on the right. In the pool, small squares are memory neurons filled as full as what they hold, rings with a dot going round are rhythms, and bars under them are moods, which turn groups of the plain neurons up or down. Lines are the connections passing the most, thicker where a connection has changed since the world last changed. A small trace in the corner is its surprise: how wrong its guess of what it would see was. Pressing a neuron shows everything it listens to.");
         /** Where each neuron of a brain with a pool is drawn, by kind, kept until its counts or the canvas change. */
         let placed: { key: string; at: [number, number][] } = { key: "", at: [] };
         const placeKinds = (kinds: BrainKinds, wide: number, high: number) => {
@@ -768,6 +797,7 @@ export default function generalist(m: Mote): Scene {
             if (kinds) {
                 drawKinds(ctx, kinds, wide, high);
                 words();
+                drawSurprise(ctx, wide);
                 return;
             }
             placed = { key: "", at: [] };
@@ -837,6 +867,32 @@ export default function generalist(m: Mote): Scene {
             const moves = lit.length - 1;
             if (needs.energy >= 0 && lit[moves]!.length >= 2) ringEye(ctx, ...place(moves, lit[moves]!.length - 2), accent);
             words();
+            drawSurprise(ctx, wide);
+        };
+
+        /** Its surprise over the last few seconds, a small trace in the brain's top corner: how wrong its guess of what it would see was, with the level it is used to under it. Nothing for a brain with no predictor. */
+        const drawSurprise = (ctx: CanvasRenderingContext2D, wide: number) => {
+            if (surprises.length < 2 || !surprises.some((value) => value > 0)) return;
+            const [left, right, top, bottom] = [wide * 0.74, wide - 8, 6, 24];
+            const most = Math.max(0.05, ...surprises);
+            const at = (k: number, value: number): [number, number] => [left + ((right - left) * k) / (TRACED - 1), bottom - ((bottom - top) * Math.min(value, most)) / most];
+            const start = TRACED - surprises.length;
+            ctx.globalAlpha = 0.25;
+            ctx.fillStyle = m.color("--muted");
+            ctx.fillRect(left, bottom - ((bottom - top) * Math.min(world.usual, most)) / most, right - left, 1);
+            ctx.globalAlpha = 0.9;
+            ctx.strokeStyle = m.color("--accent");
+            ctx.lineWidth = 1.2;
+            ctx.lineJoin = "round";
+            ctx.beginPath();
+            surprises.forEach((value, k) => (k === 0 ? ctx.moveTo(...at(start + k, value)) : ctx.lineTo(...at(start + k, value))));
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = m.color("--muted");
+            ctx.font = `11px ${code}`;
+            ctx.textBaseline = "top";
+            ctx.textAlign = "right";
+            ctx.fillText("surprise", left - 4, top - 1);
         };
 
         // how far it gets, against how long it has practised (or, by evolution, the generations), drawn as it learns
@@ -899,7 +955,7 @@ export default function generalist(m: Mote): Scene {
         // what it senses, drawn live: each ray of its eye, then touch on its body and feet, held, and the jolt
         const sensesPicture = el("canvas", { class: "walker-brain-picture generalist-senses" });
         sensesPicture.setAttribute("role", "img");
-        sensesPicture.setAttribute("aria-label", "What the creature senses now: a cell for each ray of its eye, from low to high, lit by how near what it meets is, food marked with a dot; then how hard things press on its body and each foot, whether it is held, and the push its body feels.");
+        sensesPicture.setAttribute("aria-label", "What the creature senses now: a cell for each ray of its eye, from low to high, lit by how near what it meets is, food marked with a dot; then how hard things press on its body and each foot, whether it is held, what it hears land behind it and ahead of it, and the push its body feels.");
         drawSenses = () => {
             if (!engine) return;
             const ctx = sensesPicture.getContext("2d");
@@ -913,7 +969,8 @@ export default function generalist(m: Mote): Scene {
             const legs = engine.legs_length();
             const layout = senseLayout(legs);
             const [accent, muted, ink] = [m.color("--accent"), m.color("--muted"), m.color("--ink")];
-            const practised = sensed.length === layout.length;
+            // a creature kept before it heard senses touch last, and is drawn as far as that
+            const practised = sensed.length === layout.length || sensed.length === layout.heard;
             // the eye: sixteen cells, the lowest ray on the left; the middle ones, where it looks, a little taller
             const [left, right] = [8, wide - 8];
             const cell = (right - left) / 16;
@@ -960,6 +1017,27 @@ export default function generalist(m: Mote): Scene {
                 ctx.fillStyle = accent;
                 ctx.fill();
             }
+            // what it hears land: a sound mark behind it (left) and ahead (right), opening out as loud as it is
+            if (sensed.length >= layout.length) {
+                const middle = base - most / 2;
+                [sensed[layout.heard + 1] ?? 0, sensed[layout.heard] ?? 0].forEach((loud, side) => {
+                    const x = heldX + 24 + side * 16;
+                    const way = side === 0 ? -1 : 1;
+                    ctx.fillStyle = muted;
+                    ctx.beginPath();
+                    ctx.arc(x, middle, 1.8, 0, Math.PI * 2);
+                    ctx.fill();
+                    for (let ring = 1; ring <= 3; ring++) {
+                        ctx.globalAlpha = Math.min(1, 0.15 + loud * 1.5 - (ring - 1) * 0.3);
+                        ctx.strokeStyle = loud > 0.05 ? accent : muted;
+                        ctx.lineWidth = 1.2;
+                        ctx.beginPath();
+                        ctx.arc(x, middle, 2 + ring * 2.5, way > 0 ? -0.8 : Math.PI - 0.8, way > 0 ? 0.8 : Math.PI + 0.8);
+                        ctx.stroke();
+                    }
+                    ctx.globalAlpha = 1;
+                });
+            }
             const [jx, jy] = [sensed[layout.jolt] ?? 0, sensed[layout.jolt + 1] ?? 0];
             const [cx, cy] = [right - 22, base - most / 2];
             ctx.fillStyle = muted;
@@ -986,6 +1064,7 @@ export default function generalist(m: Mote): Scene {
         const energyPicture = el("canvas", { class: "walker-brain-picture generalist-energy" });
         energyPicture.setAttribute("role", "img");
         energyPicture.setAttribute("aria-label", "How much energy the creature has, as a bar: it runs down as it moves, comes back as it eats and, slowly, as it rests.");
+        keepWorld = () => syncWorld();
         drawEnergy = () => {
             const ctx = energyPicture.getContext("2d");
             const [wide, high] = [energyPicture.clientWidth, energyPicture.clientHeight];
@@ -1023,6 +1102,61 @@ export default function generalist(m: Mote): Scene {
             m.wake();
         } });
 
+        // the world as it lives: the ground, gravity, a wind and the light, each resting where the world always
+        // was; whether it changes by itself; and what a tap on nothing drops
+        let syncWorld = () => {};
+        const setConditions = (change: Partial<Conditions>, words?: string) => {
+            conditions = { ...conditions, ...change };
+            putWorld();
+            if (words) speak(words);
+            m.wake();
+        };
+        const groundChoice = choices<Ground>("ground", "the ground", GROUNDS.map(({ ground, text }) => ({ value: ground, text })), () => groundOf(conditions), (chosen) => {
+            const found = GROUNDS.find((each) => each.ground === chosen)!;
+            setConditions(found.conditions, `The ground is ${found.text} now.`);
+        });
+        /** A slider with a mark where it rests, saying its value in plain words, that changes the world as it moves. */
+        const resting = (name: string, words: string, least: number, most: number, step: number, rest: number, value: () => number, say: (value: number) => string, set: (value: number) => void) => {
+            const marks = el("datalist", { id: `generalist-${name}-rest` }, el("option", { value: String(rest) }));
+            const range = el("input", { type: "range", min: String(least), max: String(most), step: String(step), value: String(value()) });
+            range.setAttribute("aria-label", words);
+            range.setAttribute("list", marks.id);
+            const shownValue = el("output", { class: "walker-far", textContent: say(value()) });
+            range.addEventListener("input", () => {
+                shownValue.textContent = say(Number(range.value));
+                set(Number(range.value));
+            });
+            return { range, shownValue, say, holder: el("span", { class: "walker-range" }, range, shownValue, marks) };
+        };
+        const gravity = resting("gravity", "gravity", 50, 160, 5, 100, () => Math.round(conditions.gravity * 100), (value) => (value === 100 ? "as always" : `${(value / 100).toFixed(2)} g`), (value) => setConditions({ gravity: value / 100 }));
+        const wind = resting("wind", "wind, from ahead to from behind", -6, 6, 1, 0, () => Math.round(conditions.wind), (value) => (value === 0 ? "none" : value < 0 ? `${-value} ahead` : `${value} behind`), (value) => setConditions({ wind: value }));
+        const lightChoice = choices<number>("light", "the light", LIGHTS.map(({ light, text }) => ({ value: light, text })), () => lightOf(conditions.light), (chosen) => setConditions({ light: chosen }, chosen === 1 ? "Day." : chosen === 0 ? "Night: it sees only what is near." : "Dusk."));
+        const byItself = el("input", { type: "checkbox", checked: changing, onchange: () => {
+            changing = byItself.checked;
+            putWorld();
+            speak(changing ? "The world changes by itself now and then, and things are dropped near it." : "The world stays as it is.");
+            m.wake();
+        } });
+        const asItWas = el("button", { type: "button", textContent: "as it was", onclick: () => {
+            [changing, byItself.checked] = [false, false];
+            setConditions({ ...REST_CONDITIONS }, "The world as it always was.");
+            syncWorld();
+        } });
+        const dropChoice = choices<"food" | "box">("drops", "what a tap drops", [{ value: "food", text: "food" }, { value: "box", text: "a box" }], () => drops, (chosen) => (drops = chosen));
+        /** The controls brought to the world as it is, when it has changed by itself. */
+        syncWorld = () => {
+            const now = changing ? world.conditions : conditions;
+            if (changing) conditions = { ...now };
+            const check = (set: HTMLElement, value: string) => set.querySelectorAll("input").forEach((input) => (input.checked = input.value === value));
+            check(groundChoice, groundOf(now));
+            check(lightChoice, String(lightOf(now.light)));
+            for (const [slider, value] of [[gravity, Math.round(now.gravity * 20) * 5], [wind, Math.round(now.wind)]] as const) {
+                if (document.activeElement === slider.range) continue;
+                slider.range.value = String(value);
+                slider.shownValue.textContent = slider.say(value);
+            }
+        };
+
         // the controls fold away at the top of the column, so the brain, the senses and the energy come first
         const controls = opening(
             "generalist-controls",
@@ -1032,6 +1166,13 @@ export default function generalist(m: Mote): Scene {
             ...kinds.flat(),
             ...row("legs", legs),
             ...row("eyes", el("label", {}, rays, "show what it sees")),
+            group("as it lives"),
+            ...row("ground", groundChoice),
+            ...row("gravity", gravity.holder),
+            ...row("wind", wind.holder),
+            ...row("light", lightChoice),
+            ...row("changes", el("label", {}, byItself, "by itself"), asItWas),
+            ...row("a tap drops", dropChoice),
             group("learning"),
             ...row("how it learns", hows),
             explain,
@@ -1117,6 +1258,7 @@ export default function generalist(m: Mote): Scene {
         ctx.lineWidth = 2;
         ctx.lineCap = "round";
         ctx.stroke(edge);
+        drawGround(fill, left, right);
         // the floating platforms
         for (let i = 0; i < blocks.length; i += 4) {
             const [x1, y1, x2, y2] = [blocks[i]!, blocks[i + 1]!, blocks[i + 2]!, blocks[i + 3]!];
@@ -1171,6 +1313,151 @@ export default function generalist(m: Mote): Scene {
             ctx.globalAlpha = 1;
             if (x % 5 === 0 && sy + 14 < m.height - 12 && sx > 16 && sx < m.width - 16) ctx.fillText(x === 0 ? "start" : `${x} m`, sx, sy + 14);
         }
+    };
+
+    /** How much of each kind of changed ground the world has now, from 0 to 1: ice, sticky, bouncy and soft. */
+    const groundLooks = () => {
+        const c = world.conditions;
+        const clamp = (v: number) => Math.max(0, Math.min(1, v));
+        return { ice: clamp((1 - c.grip) / 0.94), sticky: clamp((c.grip - 1) / 1.5), bouncy: clamp(c.bounce / 0.75), soft: clamp(c.soft) };
+    };
+
+    /**
+     * The ground as it is now, over the plain ground already drawn: ice pale and glossy with a bright line
+     * along it, sticky ground dark with drips under its edge, bouncy ground with a springing line, and soft
+     * ground speckled like sand, its edge a little lumpy.
+     */
+    const drawGround = (fill: Path2D, left: number, right: number) => {
+        const { ctx } = m;
+        const { ice, sticky, bouncy, soft } = groundLooks();
+        if (ice + sticky + bouncy + soft < 0.02) return;
+        const surface = (each: (ax: number, ay: number, bx: number, by: number) => void) => {
+            for (let i = 0; i < ground.length; i += 4) {
+                const [x1, y1, x2, y2] = [ground[i]!, ground[i + 1]!, ground[i + 2]!, ground[i + 3]!];
+                if (x1 === x2 || !seen(left, right, x1, x2)) continue;
+                each(...toScreen(x1, y1), ...toScreen(x2, y2));
+            }
+        };
+        if (ice > 0) {
+            ctx.globalAlpha = 0.45 * ice;
+            ctx.fillStyle = ICE;
+            ctx.fill(fill);
+            ctx.globalAlpha = 0.8 * ice;
+            ctx.strokeStyle = m.color("--ink");
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            surface((ax, ay, bx, by) => {
+                // a shine a little under the surface, broken into glints
+                for (let t = 0; t < 1; t += 0.25) {
+                    ctx.moveTo(ax + (bx - ax) * t + 4, ay + (by - ay) * t + 4);
+                    ctx.lineTo(ax + (bx - ax) * (t + 0.15) + 4, ay + (by - ay) * (t + 0.15) + 4);
+                }
+            });
+            ctx.stroke();
+        }
+        if (sticky > 0) {
+            ctx.globalAlpha = 0.55 * sticky;
+            ctx.fillStyle = STICKY;
+            ctx.fill(fill);
+            ctx.globalAlpha = 0.9 * sticky;
+            ctx.beginPath();
+            surface((ax, ay, bx, by) => {
+                const count = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / (0.35 * scale)));
+                for (let k = 0; k < count; k++) {
+                    const t = (k + 0.5) / count;
+                    const [x, y] = [ax + (bx - ax) * t, ay + (by - ay) * t];
+                    const long = (0.04 + 0.03 * ((k * 7) % 3)) * scale;
+                    ctx.moveTo(x + 3, y);
+                    ctx.arc(x, y + long, 3, 0, Math.PI);
+                    ctx.lineTo(x - 3, y);
+                }
+            });
+            ctx.fill();
+        }
+        if (bouncy > 0) {
+            ctx.globalAlpha = bouncy;
+            ctx.strokeStyle = BOUNCY;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            surface((ax, ay, bx, by) => {
+                const length = Math.hypot(bx - ax, by - ay);
+                const steps = Math.max(2, Math.round(length / 3));
+                for (let k = 0; k <= steps; k++) {
+                    const t = k / steps;
+                    const wave = Math.sin(t * length * 0.25 + m.time * 6) * 0.025 * scale * bouncy;
+                    const [x, y] = [ax + (bx - ax) * t, ay + (by - ay) * t + 3 + wave];
+                    if (k === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+        }
+        if (soft > 0) {
+            ctx.globalAlpha = 0.7 * soft;
+            ctx.fillStyle = SAND;
+            surface((ax, ay, bx, by) => {
+                const length = Math.hypot(bx - ax, by - ay);
+                const count = Math.round((length / scale) * 26);
+                for (let k = 0; k < count; k++) {
+                    // speckles in a band under the surface, the same each frame
+                    const t = ((k * 0.618034) % 1 + 1) % 1;
+                    const depth = (((k * 0.414214) % 1) * 0.12 + 0.01) * scale;
+                    ctx.fillRect(ax + (bx - ax) * t, ay + (by - ay) * t + depth, 1.5, 1.5);
+                }
+            });
+        }
+        ctx.globalAlpha = 1;
+    };
+
+    /** A wind, as streaks blowing across the picture, more and quicker the stronger it is. */
+    const drawWind = () => {
+        const strength = world.conditions.wind;
+        if (Math.abs(strength) < 0.3) return;
+        const { ctx } = m;
+        const count = Math.round(Math.abs(strength) * 5);
+        const way = Math.sign(strength);
+        ctx.strokeStyle = m.color("--muted");
+        ctx.lineWidth = 1;
+        for (let k = 0; k < count; k++) {
+            const lane = ((k * 0.618034) % 1) * horizon() * 1.1;
+            const speed = (0.6 + ((k * 0.381966) % 1)) * Math.abs(strength) * 0.35 * scale;
+            const long = (0.3 + 0.1 * Math.abs(strength)) * scale;
+            const span = m.width + 2 * long;
+            const x = (((k * 137 + way * m.time * speed) % span) + span) % span - long;
+            ctx.globalAlpha = 0.18 + 0.04 * Math.abs(strength);
+            ctx.beginPath();
+            ctx.moveTo(x, lane);
+            ctx.lineTo(x + way * long, lane);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    };
+
+    /** Night: the world dark but for what the creature's own eye reaches, its rays lit as far as it sees. */
+    const drawNight = (engine: Engine) => {
+        const dark = 1 - world.conditions.light;
+        if (dark < 0.02) return;
+        const { ctx } = m;
+        const rays = list(engine, engine.show_rays());
+        const sight = list(engine, engine.ray_angles());
+        const [ex, ey] = toScreen(rays[0]!, rays[1]!);
+        const view = new Path2D();
+        view.moveTo(ex, ey);
+        for (let k = 0; k < sight.length; k++) {
+            const distance = rays[2 + 2 * k]!;
+            view.lineTo(ex + Math.cos(sight[k]!) * distance * scale, ey - Math.sin(sight[k]!) * distance * scale);
+        }
+        view.closePath();
+        const shade = new Path2D();
+        shade.rect(0, 0, m.width, m.height);
+        shade.addPath(view);
+        ctx.globalAlpha = 0.82 * dark;
+        ctx.fillStyle = m.color("--ground");
+        ctx.fill(shade, "evenodd");
+        ctx.globalAlpha = 0.07 * dark;
+        ctx.fillStyle = m.color("--accent");
+        ctx.fill(view);
+        ctx.globalAlpha = 1;
     };
 
     /** The boxes, moving platforms and see-saws made near the creature. */
@@ -1493,6 +1780,10 @@ export default function generalist(m: Mote): Scene {
             {
                 const [energy = -1, vigour = 1, ate = 0, resting = 0, gaze = -0.52, eaten = 0] = list(engine, engine.show_needs());
                 needs = { energy, vigour, ate, resting, gaze, eaten };
+                world = worldNow(list(engine, engine.show_world()));
+                surprises.push(world.surprise);
+                if (surprises.length > TRACED) surprises.shift();
+                if (changing && ticks % 30 === 0) keepWorld();
             }
             // at the end of its run the creature rests a moment, then starts again, with a better brain if there is one
             if (shown && engine.show_over() && !holding) {
@@ -1544,7 +1835,10 @@ export default function generalist(m: Mote): Scene {
         release(x, y) {
             letGo();
             // a tap that took hold of nothing drops a piece of food where it was
-            if (engine && pressedAt && !pressedAt.took && Math.hypot(x - pressedAt.x, y - pressedAt.y) < TAP && engine.show_drop_food(...toWorld(x, y))) speak("A piece of food, dropped.");
+            if (engine && pressedAt && !pressedAt.took && Math.hypot(x - pressedAt.x, y - pressedAt.y) < TAP) {
+                if (drops === "box" && engine.show_drop_box(...toWorld(x, y))) speak("A box, dropped.");
+                else if (drops === "food" && engine.show_drop_food(...toWorld(x, y))) speak("A piece of food, dropped.");
+            }
             pressedAt = undefined;
             if (engine) m.canvas.style.cursor = engine.show_under(...toWorld(x, y)) ? "grab" : "";
         },
@@ -1579,6 +1873,8 @@ export default function generalist(m: Mote): Scene {
             drawFlag();
             drawThings(engine);
             drawFood(engine);
+            drawWind();
+            drawNight(engine);
             if (showRays && (shown || holding === 1)) drawRays(engine);
             if (needs.energy >= 0 && (shown || holding === 1)) drawGaze(engine);
             drawCreature(engine);

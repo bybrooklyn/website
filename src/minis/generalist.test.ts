@@ -5,7 +5,7 @@
 // creatures for a learner work. And what roaming.ts is held to: seeds and links.
 
 import { expect, test } from "bun:test";
-import { DEFAULT_RECIPE, DEFAULT_SHAPE, KINDS, SHAPE_CAPS, anotherSeed, brainColumns, brainKinds, counted, engineRecipe, fromLink, lasted, linkParts, neurons, practiceWorkers, seedNumber, senseLayout, valid, validShape, type Engine } from "./roaming";
+import { DEFAULT_RECIPE, DEFAULT_SHAPE, GROUNDS, KINDS, LIGHTS, REST_CONDITIONS, SHAPE_CAPS, anotherSeed, brainColumns, brainKinds, counted, engineRecipe, fromLink, groundOf, lasted, lightOf, linkParts, neurons, practiceWorkers, seedNumber, senseLayout, valid, validShape, worldNow, type Engine } from "./roaming";
 
 const path = new URL("../../public/wasm/generalist.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/generalist-scalar.wasm", import.meta.url);
@@ -138,9 +138,9 @@ test("many creatures step together, as fast as this runtime goes", async () => {
     console.log(`64 creatures stepped ${Math.round(steps / seconds)} times a second in the page's engine, here`);
 });
 
-/** The native engine's fingerprints of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs): with the brain the page practises with, a pool beside the plain neurons, and with the plain network alone. */
-const POOL_FINGERPRINT = 0x0bb9a9c829d2868an;
-const PRACTICE_FINGERPRINT = 0xb66b94ffb5e3f67cn;
+/** The native engine's fingerprints of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs): with the brain the page practises with, a pool beside the plain neurons, and with the plain network alone, both in a world that changes while it lives (stage 4). */
+const POOL_FINGERPRINT = 0x0d78462add913867n;
+const PRACTICE_FINGERPRINT = 0x7043a58b13f72539n;
 
 test("practice in the page's engine learns to the bit as natively, with a pool and without, with SIMD and without", async () => {
     for (const each of [path, scalarPath]) {
@@ -190,6 +190,71 @@ test("a learner sent with its form goes on in a brain of another shape, and a pl
     const capsAt = other.brain_caps();
     const caps = Array.from(new Float32Array(other.memory.buffer, capsAt, other.length()));
     expect(caps).toEqual([SHAPE_CAPS.memory, SHAPE_CAPS.rhythm, SHAPE_CAPS.fewestReads, SHAPE_CAPS.reads, DEFAULT_SHAPE.memory, DEFAULT_SHAPE.rhythm, DEFAULT_SHAPE.mood, DEFAULT_SHAPE.reads]);
+});
+
+test("rooms of an older learner's own lengths are offered for it, and a list that fits no learner is refused", async () => {
+    // a learner kept at stage 3 is taken up and grown through these rooms (walker/src/generalist/page_tests.rs holds that)
+    const engine = await load();
+    engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    const length = engine.practice_create(2, 1, 1);
+    engine.form_room(0);
+    const room = engine.state_room(1000);
+    expect(engine.length()).toBe(1000);
+    new Float32Array(engine.memory.buffer, room, 1000).fill(0.5);
+    engine.running_room_of(7);
+    expect(engine.length()).toBe(7);
+    expect(engine.practice_load()).toBe(0);
+    expect(length).toBeGreaterThan(1000);
+});
+
+test("the world's conditions are set and read back, a box can be dropped, and what the creature hears and its surprise are given", async () => {
+    const engine = await load();
+    engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    engine.practice_create(2, 1, 1);
+    const state = view(Float32Array, engine, engine.practice_state(), engine.length()).slice();
+    const running = view(Float64Array, engine, engine.practice_running(), engine.length()).slice();
+    const [stateRoom, runningRoom] = [engine.state_room(0), engine.running_room()];
+    new Float32Array(engine.memory.buffer, stateRoom, state.length).set(state);
+    new Float64Array(engine.memory.buffer, runningRoom, running.length).set(running);
+    expect(engine.policy_load()).toBe(1);
+    expect(worldNow(floats(engine, engine.show_world())).conditions).toEqual(REST_CONDITIONS);
+    engine.show_conditions(0.06, 0, 0, 1.3, -4, 0);
+    for (let i = 0; i < 240; i++) engine.show_step(1 / 60);
+    const world = worldNow(floats(engine, engine.show_world()));
+    expect(world.conditions.grip).toBeCloseTo(0.06, 5);
+    expect(world.conditions.gravity).toBeCloseTo(1.3, 2);
+    // the wind eases in over a second or so, and a run that has ended stands still, so it may not be all the way
+    expect(world.conditions.wind).toBeLessThan(-2);
+    expect(world.conditions.light).toBeLessThan(0.5);
+    expect(world.surprise).toBeGreaterThanOrEqual(0);
+    expect(groundOf(world.conditions)).toBe("ice");
+    // the conditions go on when its run starts again: a new run is not the world changing
+    engine.show_reset();
+    expect(worldNow(floats(engine, engine.show_world())).conditions.grip).toBeCloseTo(0.06, 5);
+    const [x, y] = floats(engine, engine.show_bodies());
+    const before = floats(engine, engine.show_things()).length;
+    expect(engine.show_drop_box(x! - 1.5, y! + 0.8)).toBe(1);
+    expect(floats(engine, engine.show_things()).length).toBe(before + 6);
+    for (let i = 0; i < 40; i++) engine.show_step(1 / 60);
+    expect(worldNow(floats(engine, engine.show_world())).heard[1]).toBeGreaterThan(0.1);
+    // a world changing by itself, switched on and off
+    engine.show_changing(1);
+    for (let i = 0; i < 60 * 30; i++) engine.show_step(1 / 60);
+    engine.show_changing(0);
+    expect(floats(engine, engine.show_world()).length).toBe(11);
+});
+
+test("the controls of a changing world rest where the world always was, and a changed world is shown by the nearest of them", () => {
+    expect(GROUNDS[0]!.ground).toBe("firm");
+    expect(groundOf(REST_CONDITIONS)).toBe("firm");
+    for (const { ground, conditions } of GROUNDS) expect(groundOf({ ...REST_CONDITIONS, ...conditions })).toBe(ground);
+    expect(groundOf({ ...REST_CONDITIONS, grip: 0.9 })).toBe("firm");
+    expect(LIGHTS[0]!.light).toBe(REST_CONDITIONS.light);
+    expect(lightOf(0.1)).toBe(0);
+    expect(lightOf(0.5)).toBe(0.45);
+    expect(worldNow([])).toEqual({ conditions: REST_CONDITIONS, since: 0, heard: [0, 0], surprise: 0, usual: 0 });
+    const layout = senseLayout(2);
+    expect([layout.heard, layout.light, layout.surprise, layout.length]).toEqual([layout.jolt + 2, layout.jolt + 4, layout.jolt + 5, layout.jolt + 6]);
 });
 
 test("an update shared out as the workers share it, with one worker, is the update done alone", async () => {
@@ -261,9 +326,10 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
     const policy = brainColumns(view(Float32Array, engine, engine.brain_picture(), engine.length()).slice());
     // practice's policy senses its energy, having eaten and where it looks, and feels touch: its body, two
-    // feet, being held, and the jolt across and up; and it turns its eye, an action before the hop
-    expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18 + 3 + 6, 64, 64, 6]);
-    expect(policy?.flows.map((flow) => flow.length)).toEqual([43 * 64, 64 * 64, 64 * 6]);
+    // feet, being held, and the jolt across and up; what it hears either side, the light and its surprise;
+    // and it turns its eye, an action before the hop
+    expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18 + 3 + 6 + 4, 64, 64, 6]);
+    expect(policy?.flows.map((flow) => flow.length)).toEqual([47 * 64, 64 * 64, 64 * 6]);
     expect(policy?.flows.every((flow) => flow.every(Number.isFinite) && flow.some((amount) => amount !== 0))).toBe(true);
     expect(brainColumns(new Float32Array([2, 3, 1, 0, 0]))).toBeUndefined();
     // the page's brain, with a pool, drawn by kind
@@ -282,11 +348,11 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     expect(engine.policy_load()).toBe(1);
     for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
     const kinds = brainKinds(view(Float32Array, engine, engine.brain_picture(), engine.length()).slice());
-    expect(kinds?.counts).toEqual({ senses: 43, plain: 64, memory: 32, rhythm: 4, mood: 4, actions: 6 });
+    expect(kinds?.counts).toEqual({ senses: 47, plain: 64, memory: 32, rhythm: 4, mood: 4, actions: 6 });
     expect(kinds?.lit.every(Number.isFinite)).toBe(true);
     expect(neurons(DEFAULT_SHAPE)).toBe(168);
     // a memory neuron listens to as many as it may afford, each from a neuron there is
-    const heardAt = engine.brain_reads(43 + 64);
+    const heardAt = engine.brain_reads(47 + 64);
     const heard = Array.from(new Float32Array(engine.memory.buffer, heardAt, engine.length()));
     expect(heard.length).toBe(3 * DEFAULT_SHAPE.reads);
     expect(brainKinds(new Float32Array([-1, 1, 1, 0, 0, 0, 1]))).toBeUndefined();

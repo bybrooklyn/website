@@ -110,15 +110,22 @@ function make(order: Extract<Order, { kind: "begin" }>): void {
 /** The plain network's form, for a learner kept before forms were. */
 const PLAIN_FORM = new Float32Array(4);
 
-/** Writes a kept learner into the engine's practice, of its own form, which the engine reshapes into the brain asked for. One of another length (kept by an older engine, or for another body) is refused before anything is written, so it never runs past its room. */
+/** Writes a kept learner into the engine's practice, of its own form, which the engine reshapes into the brain asked for. One of another length is written into rooms made its own length, never past them: the engine grows one an older page kept (stage 3's, which sensed less) and refuses any other. */
 function load(form: Float32Array | undefined, state: Float32Array, running: Float64Array): boolean {
     if (!engine) return false;
     const shape = form ?? PLAIN_FORM;
     write(engine, engine.form_room(shape.length), shape);
-    const stateRoom = engine.state_room(0);
-    if (engine.length() !== state.length) return false;
-    const runningRoom = engine.running_room();
-    if (engine.length() !== running.length) return false;
+    let stateRoom = engine.state_room(0);
+    let fits = engine.length() === state.length;
+    let runningRoom = engine.running_room();
+    fits &&= engine.length() === running.length;
+    if (!fits) {
+        // kept by an older page (stage 3's, which sensed less): rooms of its own lengths, and the engine grows it
+        // into what the creature senses now, or refuses it
+        if (state.length < 2 || state.length > 1 << 22 || running.length > 1 << 16) return false;
+        stateRoom = engine.state_room(state.length);
+        runningRoom = engine.running_room_of(running.length);
+    }
     write(engine, stateRoom, state);
     write64(engine, runningRoom, running);
     return engine.practice_load() === 1;
