@@ -255,4 +255,93 @@ window.result = { near, plain, far };
     expect(result.far[3]).toBe(255);
 }, 30_000);
 
+/** A scene of parts with patterns, drawn and read back: a cloth, a block of oak on it, marbles of each kind, a pane of glass, a ball of steel. */
+const patterned = (quality: "full" | "plain") => `
+import { gl } from "${here}/gl.ts";
+import { ball, block } from "${here}/solids.ts";
+const canvas = document.querySelector("canvas");
+const view = gl(canvas);
+view.size(400, 300);
+view.range = [1, 1000];
+view.quality = "${quality}";
+view.bloom = 0.5;
+view.lamp = { sun: [1, 0.8, 0.6], sky: [0.5, 0.5, 0.7], ground: [0.5, 0.4, 0.3], size: 0.05 };
+const g = canvas.getContext("webgl2");
+const read = () => {
+    view.draw();
+    const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+    g.readPixels(0, 0, canvas.width, canvas.height, g.RGBA, g.UNSIGNED_BYTE, pixels);
+    // the picture's place for a place of the scene, from the top left, as the page sees it
+    return (x, y) => [...pixels.slice(((canvas.height - 1 - y) * canvas.width + x) * 4, ((canvas.height - 1 - y) * canvas.width + x) * 4 + 4)];
+};
+const lum = (p) => 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+const cloth = view.add(block([60, 1, 60]), { color: [0.2, 0.17, 0.25], pattern: "cloth", grid: 0.2, cell: 8 });
+cloth.at = [0, -1, 0];
+// a long block of oak, its grain along x, seen from straight above
+const oak = { ...block([12, 1, 4]) };
+oak.grain = oak.points.map((p) => [p[0], p[1], p[2]]);
+const wood = view.add(oak, { color: [1, 1, 1], pattern: "wood" });
+wood.at = [0, 1, 0];
+wood.seed = 3;
+view.light([-40, 120, 30], [-60, -2, -60], [60, 20, 60], 2.3, 0.22, 0.1);
+view.look([0, 60, 0.01], [0, 0, 0], 30);
+let at = read();
+// along the grain and across it, on the block's top: how much the color changes from one pixel to the next
+const steps = (dx, dy) => { let sum = 0; for (let i = 0; i < 40; i++) sum += Math.abs(lum(at(180 + i * dx, 150 + i * dy)) - lum(at(181 + i * dx + dx, 150 + i * dy + dy))); return sum / 40; };
+const grain = { along: steps(1, 0), across: steps(0, 1), wood: at(200, 150) };
+view.remove(wood);
+// a block on the cloth, the lamp to the left above: its shadow falls to the right
+const cube = view.add(block([3, 3, 3]), { color: [1, 1, 1], pattern: "wood" });
+cube.at = [0, 3, 0];
+at = read();
+const shadow = { under: lum(at(235, 150)), open: lum(at(330, 150)), opposite: lum(at(140, 150)) };
+view.remove(cube);
+// marbles on the cloth: clear with a ribbon, opaque with a stripe, steel; and many of one shape and look, drawn together
+const round = ball(0.8, 24, 16);
+const marbleLook = { color: [1, 1, 1], pattern: "marble" };
+const marbles = [0.2, 1.3, 2.6].map((seed, i) => {
+    const one = view.add(round, marbleLook);
+    one.at = [-2 + i * 2, 0.8, 0];
+    one.seed = seed;
+    one.tints = [[0.36, 0.81, 0.98], [0.96, 0.66, 0.72], [1, 1, 1]];
+    return one;
+});
+view.look([0, 9, 0.01], [0, 0, 0], 30);
+at = read();
+// each marble's middle on the picture: its top is 8.2 from the eye, which sees 30 degrees up and down over 300 pixels
+const kinds = marbles.map((one) => at(Math.round(200 + (one.at[0] * 150) / (8.2 * Math.tan(Math.PI / 12))), 150));
+const together = view.counts;
+for (let i = 0; i < 60; i++) { const one = view.add(round, marbleLook); one.at = [-20 + (i % 10) * 4, 0.8, -20 + Math.floor(i / 10) * 4]; one.seed = i % 3 + 0.5; }
+read();
+const many = view.counts;
+window.result = { grain, shadow, kinds, together, many, patterns: view.patterns };
+`;
+
+test.skipIf(!chromium())("parts with a pattern: oak's grain runs along it, a shadow falls away from the lamp, marbles show their kind, and many of one kind are drawn at once", async () => {
+    type Result = { grain: { along: number; across: number; wood: number[] }; shadow: { under: number; open: number; opposite: number }; kinds: number[][]; together: Record<string, number>; many: Record<string, number>; patterns: boolean };
+    const full = await drawn<Result>(patterned("full"));
+    expect(full.patterns).toBe(true);
+    // oak: warm (more red than blue), and the grain runs along the block: the color changes more across it than along it
+    expect(full.grain.wood[0]!).toBeGreaterThan(full.grain.wood[2]! * 1.4);
+    expect(full.grain.across).toBeGreaterThan(full.grain.along * 1.3);
+    // the block's shadow falls on the cloth away from the lamp, and not toward it
+    expect(full.shadow.under).toBeLessThan(full.shadow.open * 0.8);
+    expect(full.shadow.under).toBeLessThan(full.shadow.opposite * 0.8);
+    // a clear marble shows what is behind it or its ribbon, an opaque one its color (here the trans flag's blue), steel is grey
+    const [clear, opaque, steel] = full.kinds;
+    expect(opaque![2]!).toBeGreaterThan(opaque![0]! * 1.3);
+    expect(Math.abs(steel![0]! - steel![2]!)).toBeLessThan(30);
+    expect(clear!.join()).not.toBe(opaque!.join());
+    // sixty more marbles of the one shape and look cost no more calls: they are drawn together
+    expect(full.many.main).toBe(full.together.main);
+    expect(full.many.shadow).toBe(full.together.shadow);
+    expect(full.many.triangles).toBeGreaterThan(full.together.triangles + 60 * 700);
+    // the plain look leaves out the map from above and the bloom, and draws the same parts
+    const plain = await drawn<Result>(patterned("plain"));
+    expect(plain.many.contact).toBe(0);
+    expect(plain.many.glow).toBe(0);
+    expect(plain.many.main).toBe(full.many.main);
+    expect(plain.shadow.under).toBeLessThan(plain.shadow.open * 0.8);
+}, 60_000);
+
 if (!chromium()) console.warn("gl.test.ts: no Chromium on this machine, so the drawing was not looked at.");

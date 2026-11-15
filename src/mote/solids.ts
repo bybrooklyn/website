@@ -13,6 +13,11 @@ export interface Mesh {
     faces: number[][];
     /** Lit as if round, with no edge showing between faces that share corners (gl.ts). */
     smooth?: boolean;
+    /**
+     * For a part drawn with a pattern (gl.ts): a place for each point in the pattern's own space, such as
+     * how far along a piece of wood and how far up and across its grain. Left out, a point's own place.
+     */
+    grain?: V3[];
 }
 
 export const upright = (): Turn => [
