@@ -163,8 +163,10 @@ export interface Table {
     pillars: Pillar[];
     /** Builds the run given, changing only the pieces that are new, gone or moved. */
     set(run: Placed[]): void;
-    /** Each hopper lets its waiting marble go; the marbles let go. */
-    letGo(): Solid[];
+    /** Each hopper lets its waiting marble go, or only those whose numbers are given; the marbles let go. */
+    letGo(only?: Set<number>): Solid[];
+    /** Where each tray catches marbles, in the world, in the run's order. */
+    trays(): Box[];
     step(dt: number): void;
     /** Takes every marble away and fills each hopper again. */
     clear(): void;
@@ -391,11 +393,11 @@ export function makeTable({ filled = true } = {}): Table {
             pillarSolids = table.pillars.map((pillar) => space.slab([pillar.x, pillar.top / 2, pillar.z], [PILLAR / 2, pillar.top / 2, PILLAR / 2], undefined, { friction: 0.5, bounce: 0.3 }));
             for (const solid of pillarSolids) heard.set(solid, { kind: "wood" });
         },
-        letGo() {
+        letGo(only) {
             const out: Solid[] = [];
             for (const piece of table.run) {
                 const hopper = built.get(piece.id)?.hopper;
-                if (!hopper?.waiting) continue;
+                if (!hopper?.waiting || (only && !only.has(piece.id))) continue;
                 if (marbles.length >= MOST) {
                     const oldest = marbles.find(table.arrived) ?? marbles[0]!;
                     marbles.splice(marbles.indexOf(oldest), 1);
@@ -458,6 +460,10 @@ export function makeTable({ filled = true } = {}): Table {
                 fill(hopper);
             }
         },
+        trays: () => table.run.flatMap((piece) => {
+            const box = built.get(piece.id)?.catches;
+            return box ? [box] : [];
+        }),
         mouths: () => table.run.flatMap((piece) => {
             const hopper = built.get(piece.id)?.hopper;
             return hopper ? [{ id: piece.id, at: hopper.wait }] : [];
