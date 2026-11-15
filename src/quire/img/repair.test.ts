@@ -42,7 +42,7 @@ test("the worker repairs a JPEG worth repairing and nothing else; with no worker
         throw new Error("no workers here");
     });
     const made = await repairer.run(jpeg, new ImageData(decoded, 256, 192));
-    expect(made?.data).toEqual(answer.data);
+    expect(Buffer.from(made!.data).equals(Buffer.from(answer.data!))).toBe(true);
 });
 
 let page: ImgPage | undefined;
