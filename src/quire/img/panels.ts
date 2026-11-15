@@ -105,7 +105,7 @@ export function nameFor(file: string | undefined, now: Date): string {
 export const factsSaid = (size: { width: number; height: number }, bytes: number, format: string) => `${size.width} × ${size.height} px · ${weightSaid(bytes)} ${format}`;
 
 /** A panel at the side that starts below the bar, with its title and a way to close it; it slides in, and closing gives the keyboard back to what opened it. */
-function sidePanel(title: string, className: string, closed?: () => void) {
+export function sidePanel(title: string, className: string, closed?: () => void) {
     const panel = make("aside", `quire-img-panel ${className}`);
     panel.setAttribute("aria-label", title);
     panel.inert = true;
@@ -373,7 +373,7 @@ export function readSaid(read: ReadSaid): string {
 }
 
 /** The strip for the tool in hand: the crop's shapes and Apply, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void }) {
+export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
     const strip = make("div", "quire-img-strip");
     strip.setAttribute("role", "toolbar");
     strip.setAttribute("aria-label", "Tool");
@@ -394,7 +394,9 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
         button.addEventListener("click", () => press(button));
         return button;
     };
-    function fill(kind: "crop" | "mark" | "read" | "none") {
+    function fill(kind: "crop" | "mark" | "read" | "grade" | "none") {
+        const grading = kind === "grade" ? hooks.grade?.() : undefined;
+        if (kind === "grade" && !grading) kind = "none";
         strip.classList.toggle("open", kind !== "none");
         strip.inert = kind === "none";
         if (kind === "crop") {
@@ -421,6 +423,15 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
                     return button;
                 }),
             );
+        } else if (grading) {
+            // what a press on the picture will do now, in a few words, and a way not to
+            const said = make("span", "quire-img-strip-said", grading.said);
+            said.setAttribute("role", "status");
+            const parts: HTMLElement[] = [said, ...(grading.controls ?? [])];
+            if (grading.cancel) parts.push(make("span", "quire-img-strip-rule"), words("Cancel", () => grading.cancel?.(), "Do not, after all (Escape)"));
+            const before = new Set([...strip.children].map((each) => each.textContent));
+            strip.replaceChildren(...parts);
+            if (!still()) for (const part of parts) if (part.textContent && !before.has(part.textContent) && part !== said) part.classList.add("grows");
         } else if (kind === "read" && hooks.read) {
             const read = hooks.read();
             const said = make("span", "quire-img-strip-said", readSaid(read));

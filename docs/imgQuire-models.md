@@ -222,6 +222,16 @@ invent text).
 
 BEN2 (219 MB, MIT) and InSPyReNet (199 MB, MIT) are the choices just over the large size.
 
+### For grading's parts (chosen, not yet tried)
+
+Grading a thing a model found is to offer two choices, quietly, as reading text does: small, SlimSAM 77 int8
+(8.9 + 4.9 MB) to press a thing and MODNet fp16 (13.0 MB) for Subject and Background; better, SAM 2.1 tiny q4
+(43.8 + 7.1 MB) and ormbg int8 (44.3 MB). The owner allowed these four repositories, and their small config
+files, to be downloaded to this machine once for trying and pinning. In the first grading slice they were not
+downloaded yet and none of them has been run on the site's ONNX Runtime 1.24.1: which run on WebGPU and on
+WebAssembly, how quickly, and their commits and digests are for the next slice. SAM 2.1's ONNX copy says no
+licence on its card (upstream `facebookresearch/sam2` is Apache-2.0); that is to be checked when it is pinned.
+
 ## 3. Upscaling and restoration
 
 Upscalers trained with a GAN invent texture that was not in the picture. Those trained for PSNR (plain

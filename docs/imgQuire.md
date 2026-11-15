@@ -35,6 +35,13 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
   `words.ts` and `read.ts`, the steps from pixels to lines and words; `dictionary.ts`, the recognizer's
   characters out of its YAML; `private.ts`, the rules for what looks private; `engine.ts`, the worker.
 - `reading.ts`: the tool as the editor offers it: the first time's dialog, the reading, what was read.
+- `grade.ts`: color grading's arithmetic, the reference the shaders follow: what a grade is, how it is kept in
+  `steps.json`, and one pixel graded. `grade-shader.ts`, the same sums in GLSL and WGSL over one packed run of
+  numbers; `fix.ts`, Auto, Balance, a picture graded on the processor, the histogram and waveform;
+  `measure.ts`, the histogram's worker; `cube.ts`, `.cube` files read and written; `masks.ts`, the parts'
+  masks drawn into layers; `looks.ts`, looks kept in this browser and the surface's Looks section.
+- `grade-panel.ts`, `grade-more.ts`, `grade-parts.ts`: the Grade surface, its deeper controls under More, and
+  its parts.
 - `panels.ts`: the export panel, the resize box and the tool's strip.
 - `editor.ts`: the frame, the session, the bar, the menus' table, the keys, copying and pictures arriving.
 - `kind.ts`: `img()`.
@@ -225,9 +232,100 @@ order, where Small reads its lines right but not in order; the photograph's sign
 three. What looks private was found on
 the screenshot (6 things) and nothing else was (`read/real.test.ts`, `reading.test.ts`).
 
+**Grading.** G, the bar's Grade (at its right end, before Facts and Export) or Image, Grade. The Grade
+surface opens where Export and Facts do, one of the three at a time, the picture gliding into the room left
+beside it (on a phone a sheet at the foot, 46 percent of the height to start, which its head drags shorter or
+taller, the picture above refitting as it goes). From the top: what is being graded ("Whole picture", or a
+part's name), a small histogram (red, green and blue as fine lines over the luminance, quiet) that follows the
+grade as it moves, pressed for a waveform and back; Auto, Balance and Reset; the six sliders Light, Contrast,
+Shadows, Highlights, Warmth and Color; More, folded (Tint, the curve, the wheels, colors on their own); Looks,
+folded; and Parts. A line at the foot says the space the picture is graded in.
+
+A slider has its zero in the middle, marked; it is dragged from wherever its track is pressed, so its thumb
+never jumps to the pointer, the whole track being the whole range (a tenth of it with Shift, in tenths);
+within two of zero it snaps to zero; a double press puts it back to zero; its number can be typed; the arrow
+keys move it by one (Shift ten), Page Up and Down by ten, Home and End to its ends, 0 to zero. While it moves
+the grade is drawn as it would be and the histogram follows; letting go (or letting go of the key) is one
+change, one undo. Moved sliders' words and numbers are in ink, the rest muted; nothing is tinted. Undo and
+redo work from the surface too.
+
+The original is seen while the backslash is held (on the picture or the surface), or while the eye button
+beside the histogram is pressed and held, for a phone. The split button (or View, Split) puts a line down the
+middle of the picture, the original to its left and the grade to its right; its grip is dragged, the line
+exactly under the pointer, and it grows in and glides when switched.
+
+Auto takes out a color cast (the average of the pixels near gray and neither near black nor white, or of all
+of them when too few are) as Warmth and Tint, and sets the levels (the darkest and lightest half percent of
+the balanced luminance) as the two ends of the curve of all three channels; each is a value to tune. Balance
+then a press on the picture: the original's pixels in a five pixel square there, made neutral by Warmth and
+Tint, in tenths.
+
+The working space and what each control does, in numbers (`grade.ts`):
+
+| Step | Where | At 100 |
+|---|---|---|
+| Warmth, Tint | linear light, gains on the picture's own primaries keeping a gray's luminance | red against blue 2 stops; green against the two 1 stop |
+| Light | linear light: stops of exposure; brightening rolls highlights off as `1 - (1 - x)^g` so nothing clips | 2 stops |
+| Contrast | encoded numbers, each channel, about middle gray (18 percent, encoded 0.461), black and white kept | slope 2 at the pivot (0.5 at -100) |
+| Shadows, Highlights | encoded numbers, a bump `p(1-p)^3` peaking at a quarter (three quarters), never turning a tone back | lift 0.2, deepen 0.1 at the peak |
+| Wheels | encoded numbers, pushed toward the puck's hue, weighted by luminance (shadows `(1-Y)^2`, highlights `Y^2`, midtones the rest) | 0.1 |
+| Curve | encoded numbers, monotone cubic (Fritsch and Carlson) through the points, baked into 1024 entries, the channel's own after all three's | |
+| Color | linear light about the luminance; above zero held back as a channel nears the edge of the range, smoothly | twice as strong, or gray at -100 |
+| A color's own | encoded numbers, colors within 30 degrees of the picked hue all, falling to none at 60, none near gray | hue 60 degrees, saturation double or gray, lightness 0.2 |
+| Look (.cube) | encoded numbers, read between the table's eight nearest entries | |
+
+sRGB and Display P3 share sRGB's curve; P3 is known by its profile's red and green primaries
+(`metadata.ts`, `spaceOf`), and differs in its primaries' luminance (0.229, 0.692, 0.079 against sRGB's 0.213,
+0.715, 0.072), which Warmth, the wheels, Color and a color's own use. A picture with no profile is sRGB; any
+other profile is graded as sRGB and the surface says so, naming the profile. Nothing is rounded to 8 bits
+between the steps: the sums are in floating point from the pixel read to the pixel written, and a graded
+picture is held in half floats between the two passes of a resize. Each step at its zero is skipped.
+
+More: Tint; the curve, in a square under four channel buttons (All, Red, Green, Blue; a channel whose curve is
+not straight in ink), a point added where the square is pressed and dragged from there, a point dragged off the
+square (an eighth past its edge) taken away when let go ("Let go to take it away" while it is off), its two ends
+never; a double press makes the channel straight. Three wheels, Shadows, Midtones, Highlights, a faint ring of
+hues round each with red to the right and turning as the arithmetic turns; the puck goes under the pointer,
+snaps to the middle within a twenty-fifth, goes back with a double press, and the arrows nudge it. Colors:
+Pick a color, then a press on the picture adds the hue there as the shift will see it (up to three), each with
+Hue, Saturation and Lightness sliders and a way to take it away; a place too near gray is refused.
+
+Looks: a grade saved under a name (Save look, a name or the document's) in this browser's own database,
+`quire-img-looks`, beside the Quires' `quire`; the looks listed newest first, each given to the grade by a press
+(the same grade on another picture) and forgotten by its bin. Read .cube reads a 3D table of 2 to 65 a side or
+a 1D one of up to 4096 into the grade, applied last (a table over 33 is kept at 33, sampled between its
+entries); a file that is not one is refused, the status saying why. Write .cube writes the grade as a 33 a side
+table. A look moves to another machine as a .cube.
+
+Parts are picked on the picture, never listed. While Grade is open each part shows on the picture: a gradient
+as its line and two ends with a line across the picture at each, any other part as one handle; the part picked
+is drawn in the accent and tinted lightly where it reaches. Gradient, then a drag across the picture from
+where the grade is whole to where it is gone, makes one; Paint makes a painted area with the brush on. A part
+picked (a handle pressed) is graded by the whole surface, and has its own few controls: Feather (none to a tenth
+of the longer side), Inside out, Brush with Size, Softness and Erase, Whole picture, and Remove part. A
+gradient's ends are dragged, and its middle moves both. Escape goes back to the whole picture, Delete takes the
+part away. A part's grade is applied after the whole picture's, blended by its mask.
+
+In the document a grade is a step: the whole picture's one `grade` step, each part a `part` step with its shape
+(a gradient's two ends, the brush's strokes as places in the original's pixels, a found mask as runs of bytes)
+and its grade, only what is away from zero kept, read back checked and bounded. Undo, redo and version history
+cover them, and the document opened again draws the same pixels (a test reopens it and compares). The grade
+is drawn by the card on the screen as each pixel is drawn, and when flattening in the pass down before
+rounding; covers are graded with what is round them, marks are not. Masks are layers of floats on the card,
+at most 1024 a side, read between their entries by hand so both ways and the reference read them alike.
+
+Measured: the same grade (every control, a 9 a side look, a part under a mask turned inside out) flattens
+through WebGL2 to the reference arithmetic's pixels, through a crop and a resize, within one, and through
+WebGPU to WebGL2's within one (`grade-shader.test.ts`). A slider dragged, each frame a new grade worked out,
+packed, sent and drawn: 2.4 ms on a 12 megapixel photograph and 2.5 to 3.6 ms at 50 megapixels, on an RTX
+3070 Ti through WebGL2 (headless Chromium on the card by ANGLE's Vulkan), held under 16 ms in the test; drawing
+with no grade costs what it did (7.5 ms a frame of the crop's drag on SwiftShader). The histogram and waveform
+of a 200 by 150 copy with every control: 18 ms, in their worker. A part's layer: a gradient 1.3 ms, with a 100
+pixel feather 25 ms, a stroke of 60 places 6 ms (on the page's thread, when the shape changes).
+
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
-single keys C, R, A, T, B, E, I and W only while the picture has the keyboard, Enter and Escape; the palette is
+single keys C, R, A, T, B, E, I, W and G only while the picture has the keyboard, Enter and Escape; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
 
 **Drawing.** WebGPU first, WebGL2 where it is missing, behind `Backend` in `draw.ts`. A picture of up to
@@ -276,8 +374,15 @@ hide 0.6 s, mark up 0.5 s. Done by hand-paced drags with pauses to photograph ea
   JPEG and PNG (and WebP, which the site uses).
 - **Drawing and arithmetic:** WebGPU first, written by hand with no libraries, with WebGL2 where WebGPU
   is missing.
-- **Wanted, to be designed:** reading and writing a picture's metadata (EXIF); colour grading of the whole
-  picture or of parts of it; a picture analysed as it arrives (what is in it, its text, its metadata) so
+- **Grading, as the owner chose it.** G opens a surface of one-press fixes, then six plain sliders, with the
+  deeper controls (curves and wheels) folded under More; a small histogram at its top that turns into a
+  waveform. Before and after both ways: the original while a key or a button is held, and a split line that can
+  be switched on and dragged. Everything in the notes is in scope: the whole picture and parts (a gradient, a
+  painted area, a thing a model found), each part graded by the same surface with the part picked on the picture,
+  feathered and turned inside out. Models for parts: press-to-select (more presses add, Alt takes away) and
+  one-press Subject and Background, from SlimSAM and MODNet (small) or SAM 2.1 tiny and ormbg (better). Looks
+  saved, given to other pictures, and read and written as `.cube` files.
+- **Wanted, to be designed:** a picture analysed as it arrives (what is in it, its text, its metadata) so
   that the right tools are offered.
 - Its working name is imgQuire, as part of a Quire suite with mdQuire.
 - **No list of steps.** There is no steps list at all. Marks and covers are picked on the picture, and
@@ -441,14 +546,35 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - The tests hold that requests carry nothing of the picture through Chromium's own record of requests,
   with Hugging Face answered from the trial copies; a visitor's real download from Hugging Face (its
   redirects to its content network) was not made here.
+- Grading: parts a model finds are not built; the Find button is not offered, and the part step reads and draws
+  a found mask (runs of bytes) already. The horizon (straightening) is not built: the drawing's pieces and every
+  place on the stage are level with the picture, and a turn needs the resampler and those places to turn too.
+  Perspective, JPEG repair and restoring detail are left for later.
+- Grading: an exported picture carries no colour profile (as before), so a graded Display P3 photograph is
+  graded correctly in P3 but read as sRGB by whatever opens the export; the screen too shows P3 numbers as sRGB.
+  Profiles other than sRGB and Display P3 (Adobe RGB, ProPhoto, a camera's) are graded as sRGB and said to be.
+  A profile's curve is not read: P3 is taken to use sRGB's, as Display P3 does.
+- Grading: a part's layer is drawn again on the page's thread whenever its shape changes, so painting with a
+  wide feather draws about 25 ms a frame; masks are at most 1024 a side, so a hard brush on a 50 megapixel
+  photograph has an edge about eight pixels soft. A .cube larger than 33 a side is kept at 33, sampled between
+  its entries, which can differ from the file by a level or two where the table bends sharply.
+- Grading: looks live in this browser only (`quire-img-looks`); they do not travel with the shelf to Drive or a
+  folder. The histogram is of a 200 wide copy, so a thin clipped highlight can be missed. With Grade open a new
+  picture opens with Grade still open, not with the crop's frame on it.
+- Grading on a phone: on the narrowest screens (under 26rem) Facts leaves the bar for View, Facts and the I key,
+  so that the other eleven tools fit; the sheet's drag and the sliders by thumb were tried only in a 390 wide
+  window with a mouse, not on a touch screen.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
 
 ## Next slices, in order
 
-1. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
-2. The cut-out ([cutout](cutout.md)).
-3. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
-4. Many at once: batches through the same steps and export.
-5. From the phone, and opening a picture from mdQuire and back.
+1. The rest of grading: parts a model finds (Find: press-to-select with SlimSAM or SAM 2.1 tiny, Subject and
+   Background with MODNet or ormbg), their models downloaded, pinned and tried on the site's ONNX Runtime, and the
+   horizon straightened as a step.
+2. The cut-out ([cutout](cutout.md)), which shares the models above.
+3. Perspective, repairing what JPEG took, and restoring detail.
+4. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
+5. Many at once: batches through the same steps and export (a look given to a batch).
+6. From the phone, and opening a picture from mdQuire and back.
