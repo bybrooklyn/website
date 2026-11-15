@@ -1850,8 +1850,8 @@ export default function marbles(m: Mote): Scene {
     const building = () => Boolean(carried || bendDrag || bending);
     /**
      * The look, full or plain. It goes plain by itself where frames come slowly: when the middle of the
-     * last two seconds' frames, while the scene moves, took longer than a fortieth of a second. Once set
-     * by the key (L), it stays as set.
+     * last two seconds' frames (at least eight), while the scene moves, took longer than a fortieth of a
+     * second. Once set by the key (L), it stays as set.
      */
     let lookByHand = false;
     let lookByItself = false;
@@ -1865,11 +1865,15 @@ export default function marbles(m: Mote): Scene {
         m.wake();
     };
     const watchFrames = (dt: number) => {
-        if (!view || lookByHand || view.quality === "plain" || dt <= 0 || dt > 0.25 || m.preview) return;
+        // (a gap of more than a second is the scene resting, or the page hidden, and is not counted)
+        if (!view || lookByHand || view.quality === "plain" || dt <= 0 || dt > 1 || m.preview) return;
         gaps.push(dt);
-        if (gaps.length > 120) gaps.shift();
-        if (gaps.length < 120) return;
-        const middle = [...gaps].sort((a, b) => a - b)[60]!;
+        let span = gaps.reduce((sum, gap) => sum + gap, 0);
+        while (gaps.length > 120 || span - gaps[0]! > 2) span -= gaps.shift()!;
+        // judged on two seconds of frames, or fewer where frames come very slowly
+        if (span < 1.9 && gaps.length < 120) return;
+        if (gaps.length < 8) return;
+        const middle = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
         if (middle > 1 / 40) {
             view.quality = "plain";
             lookByItself = true;
@@ -2501,7 +2505,8 @@ export default function marbles(m: Mote): Scene {
         draw() {
             if (!view) return;
             const started = performance.now();
-            const dt = lastFrame ? Math.min(0.05, (started - lastFrame) / 1000) : 0;
+            const gap = lastFrame ? (started - lastFrame) / 1000 : 0;
+            const dt = Math.min(0.05, gap);
             lastFrame = started;
             const { orbit: seen, degrees } = cam();
             view.range = [Math.max(2, seen.far * 0.02), seen.far + 4000];
@@ -2587,7 +2592,7 @@ export default function marbles(m: Mote): Scene {
             gridShown = reduced ? gridGoal : gridShown + (gridGoal - gridShown) * (1 - Math.exp(-dt / GRID.ease));
             if (Math.abs(gridShown - gridGoal) < 0.004) gridShown = gridGoal;
             clothLook.grid = gridShown;
-            watchFrames(dt);
+            watchFrames(gap);
             const before = performance.now();
             view.draw();
             took.draw += (performance.now() - before - took.draw) * 0.05;
