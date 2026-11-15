@@ -1,5 +1,5 @@
 // What drawing through WebGPU is held to: it flattens a picture to the same pixels as WebGL2 does,
-// to within rounding, through crops, covers, every filter, sizes up and down and turns (gl.test.ts holds
+// to within rounding, through crops, covers, every filter, sizes up and down, turns and perspectives (gl.test.ts holds
 // WebGL2 to the arithmetic itself). Headless Chromium has WebGPU only when asked for it, and loses
 // the device the moment a WebGPU canvas is shown, so its drawing on the screen is not tried here; the
 // editor draws with WebGL2 again when that happens (`lost` in draw.ts).
@@ -18,6 +18,9 @@ const looks = [
     look({ original, steps: [{ id: "s1", type: "turn", angle: 7 }] }),
     look({ original, steps: [{ id: "s1", type: "turn", angle: -11 }, { id: "s2", type: "crop", rect: { x: 40, y: 30, width: 200, height: 140 } }, { id: "s3", type: "resize", width: 97, filter: "lanczos" }, { id: "s4", type: "cover", rect: { x: 40, y: 40, width: 60, height: 30 }, color: "#10f0a0" }, { id: "s5", type: "cover", rect: { x: 120, y: 90, width: 50, height: 24 }, color: "#2040e0", angle: 11 }] }),
     look({ original, steps: [{ id: "s1", type: "turn", angle: 3.5 }, { id: "s2", type: "resize", width: 410, filter: "bilinear" }] }),
+    // straightened, as gl.test.ts has them
+    look({ original, steps: [{ id: "s1", type: "perspective", vertical: 14, horizontal: -6 }, { id: "s2", type: "cover", rect: { x: 40, y: 40, width: 60, height: 30 }, color: "#10f0a0" }, { id: "s3", type: "resize", width: 120, filter: "lanczos" }] }),
+    look({ original, steps: [{ id: "s1", type: "perspective", corners: [{ x: 30, y: 20 }, { x: 260, y: 40 }, { x: 290, y: 190 }, { x: 10, y: 170 }], ratio: 1.6 }, { id: "s2", type: "turn", angle: 2 }, { id: "s3", type: "resize", width: 380, filter: "lanczos" }] }),
 ];
 
 test("in Chromium with WebGPU, a picture flattens to the same pixels as through WebGL2, to within rounding", async () => {

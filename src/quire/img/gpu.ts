@@ -12,7 +12,7 @@ import { GRADE_WGSL } from "./grade-shader";
 const UNGRADED = "fn graded(c: vec3f, place: vec2f) -> vec3f { return c; } fn converted(c: vec3f) -> vec3f { return c; }";
 
 const SCREEN = (grading: boolean) => /* wgsl */ `
-struct Draw { to: vec4f, canvas: vec2f, fill: vec4f, toOriginal: vec4f, grade: f32, split: f32, quadA: vec4f, quadB: vec4f, quadOn: f32 };
+struct Draw { to: vec4f, canvas: vec2f, fill: vec4f, toOriginal: vec4f, grade: f32, split: f32, quadA: vec4f, quadB: vec4f, quadOn: f32, quadW: vec4f };
 @group(0) @binding(0) var<uniform> draw: Draw;
 @group(0) @binding(1) var image: texture_2d<f32>;
 @group(0) @binding(2) var soft: sampler;
@@ -20,10 +20,15 @@ struct Out { @builtin(position) at: vec4f, @location(0) place: vec2f };
 @vertex fn vertex(@builtin(vertex_index) index: u32) -> Out {
     let corners = array(vec2f(0, 0), vec2f(1, 0), vec2f(0, 1), vec2f(0, 1), vec2f(1, 0), vec2f(1, 1));
     let corner = corners[index];
-    // a rectangle, or four corners: the top left and top right in quadA, the bottom left and bottom right in quadB
+    // a rectangle, or four corners: the top left and top right in quadA, the bottom left and bottom right in quadB, each
+    // with its depth in quadW, so that a shape in perspective is drawn through its map, as gl.ts says
     var at = draw.to.xy + corner * draw.to.zw;
-    if (draw.quadOn == 1.0) { at = mix(mix(draw.quadA.xy, draw.quadA.zw, corner.x), mix(draw.quadB.xy, draw.quadB.zw, corner.x), corner.y); }
-    return Out(vec4f(at.x / draw.canvas.x * 2 - 1, 1 - at.y / draw.canvas.y * 2, 0, 1), corner);
+    var w = 1.0;
+    if (draw.quadOn == 1.0) {
+        at = mix(mix(draw.quadA.xy, draw.quadA.zw, corner.x), mix(draw.quadB.xy, draw.quadB.zw, corner.x), corner.y);
+        w = mix(mix(draw.quadW.x, draw.quadW.y, corner.x), mix(draw.quadW.z, draw.quadW.w, corner.x), corner.y);
+    }
+    return Out(vec4f(at.x / draw.canvas.x * 2 - 1, 1 - at.y / draw.canvas.y * 2, 0, 1) * w, corner);
 }
 ${grading ? GRADE_WGSL : UNGRADED}
 @fragment fn fragment(in: Out) -> @location(0) vec4f {
@@ -83,9 +88,10 @@ ${grading ? GRADE_WGSL : UNGRADED}
     return color;
 }`;
 
-// a piece of the original turned upright, as gl.ts's: a Lanczos filter of six by six at one to one
+// a piece of the original turned upright or straightened, as gl.ts's: a Lanczos filter of six by six at one to one, through
+// the map's three rows, widened where the map shrinks the picture
 const TURN = /* wgsl */ `
-struct Job { turn: vec4f, back: vec2f };
+struct Job { rowX: vec4f, rowY: vec4f, rowW: vec4f };
 @group(0) @binding(0) var<uniform> job: Job;
 @group(0) @binding(1) var source: texture_2d<f32>;
 @vertex fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
@@ -100,19 +106,25 @@ fn lanczos(given: f32) -> f32 {
     return 3.0 * sin(p) * sin(p / 3.0) / (p * p);
 }
 @fragment fn fragment(@builtin(position) position: vec4f) -> @location(0) vec4f {
-    let q = job.turn.zw + floor(position.xy) + 0.5;
-    let u = vec2f(job.turn.x * q.x + job.turn.y * q.y, -job.turn.y * q.x + job.turn.x * q.y) + job.back;
+    let q = vec3f(floor(position.xy) + 0.5, 1.0);
+    let d = dot(job.rowW.xyz, q);
+    let u = vec2f(dot(job.rowX.xyz, q), dot(job.rowY.xyz, q)) / d;
+    let sx = vec2f(job.rowX.x - u.x * job.rowW.x, job.rowX.y - u.x * job.rowW.y) / d;
+    let sy = vec2f(job.rowY.x - u.y * job.rowW.x, job.rowY.y - u.y * job.rowW.y) / d;
+    var wide = vec2f(length(sx), length(sy));
+    wide = vec2f(select(min(wide.x, 8.0), 1.0, wide.x < 1.0001), select(min(wide.y, 8.0), 1.0, wide.y < 1.0001));
     let size = vec2i(textureDimensions(source));
-    let first = floor(u) - 2.0;
-    var wx: array<f32, 6>;
-    var wy: array<f32, 6>;
-    for (var i = 0; i < 6; i++) { wx[i] = lanczos(first.x + f32(i) - u.x); wy[i] = lanczos(first.y + f32(i) - u.y); }
+    let first = floor(u - 3.0 * wide) + 1.0;
+    let countX = i32(6.0 * ceil(wide.x));
+    let countY = i32(6.0 * ceil(wide.y));
     var sum = vec4f(0);
     var total = 0.0;
-    for (var j = 0; j < 6; j++) {
-        for (var i = 0; i < 6; i++) {
+    for (var j = 0; j < countY; j++) {
+        let wy = lanczos((first.y + f32(j) - u.y) / wide.y);
+        if (wy == 0.0) { continue; }
+        for (var i = 0; i < countX; i++) {
+            let w = lanczos((first.x + f32(i) - u.x) / wide.x) * wy;
             let at = clamp(vec2i(first) + vec2i(i, j), vec2i(0), size - 1);
-            let w = wx[i] * wy[j];
             sum += w * textureLoad(source, at, 0);
             total += w;
         }
@@ -177,7 +189,7 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
     const blank = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: TEXTURE.TEXTURE_BINDING });
     let numbers = device.createBuffer({ size: SLOT * 64, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
     // the grade's three buffers, given when the grade changes: its few numbers, the packed grades and the masks
-    const gradeHead = device.createBuffer({ size: 112, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
+    const gradeHead = device.createBuffer({ size: 160, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
     let gradeData = device.createBuffer({ size: 16, usage: BUFFER.STORAGE | BUFFER.COPY_DST });
     let gradeMasks = device.createBuffer({ size: 16, usage: BUFFER.STORAGE | BUFFER.COPY_DST });
     let given: Grading | undefined;
@@ -221,11 +233,11 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
     // the draws of one pass on the screen or into a texture: images and fills, each with its slot of numbers
     const paint = (pass: GPURenderPassEncoder, into: GPURenderPipeline, list: { texture?: GPUTexture; sharp?: boolean }[], from: number) =>
         list.forEach((each, at) => {
-            pass.setBindGroup(0, device.createBindGroup({ layout: into.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: numbers, offset: (from + at) * SLOT, size: 128 } }, { binding: 1, resource: (each.texture ?? blank).createView() }, { binding: 2, resource: each.sharp ? sharp : smooth }] }));
+            pass.setBindGroup(0, device.createBindGroup({ layout: into.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: numbers, offset: (from + at) * SLOT, size: 144 } }, { binding: 1, resource: (each.texture ?? blank).createView() }, { binding: 2, resource: each.sharp ? sharp : smooth }] }));
             pass.draw(6);
         });
-    /** A shape's four corners as its numbers' last twelve: the corners and whether they are used. */
-    const corners = (quad: Quad | undefined) => [...(quad ?? [0, 0, 0, 0, 0, 0, 0, 0]), quad ? 1 : 0, 0, 0, 0];
+    /** A shape's four corners as its numbers' last sixteen: the corners, whether they are used, and their depths. */
+    const corners = (quad: Quad | undefined, depths?: [number, number, number, number]) => [...(quad ?? [0, 0, 0, 0, 0, 0, 0, 0]), quad ? 1 : 0, 0, 0, 0, ...(depths ?? [1, 1, 1, 1])];
     const scissor = (pass: GPURenderPassEncoder, rect: Rect, width: number, height: number) => {
         const x = Math.min(width, Math.max(0, Math.floor(rect.x)));
         const y = Math.min(height, Math.max(0, Math.floor(rect.y)));
@@ -260,13 +272,16 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
             if (next === given) return;
             given = next;
             if (!next) return;
-            const head = new ArrayBuffer(112);
+            const head = new ArrayBuffer(160);
             const floats = new Float32Array(head);
             const { luma, back } = next.numbers;
             floats.set([luma[0], luma[1], luma[2], 0, back[0]!, back[1]!, back[2]!, 0, back[3]!, back[4]!, back[5]!, 0, back[6]!, back[7]!, back[8]!, 0, next.masks?.width ?? 1, next.masks?.height ?? 1, next.picture.width, next.picture.height]);
             new Int32Array(head, 80, 2).set([next.packed.count, next.masks?.layers.length ?? 0]);
             floats[22] = next.convert ? 1 : 0;
             floats.set(next.turn ?? [1, 0, 0, 0], 24);
+            // with a perspective, the whole map back, a row to each four numbers, the last saying it is used
+            const map = next.back;
+            if (map) floats.set([map[0], map[1], map[2], 0, map[3], map[4], map[5], 0, map[6], map[7], map[8], 1], 28);
             device.queue.writeBuffer(gradeHead, 0, head);
             if (next.packed.data.byteLength > gradeData.size) {
                 gradeData.destroy();
@@ -290,8 +305,8 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
             const { width, height } = canvas;
             const drawn = images.filter((image) => textures.has(image.texture));
             const on = graded && given ? 1 : 0;
-            const tail = (grade: number, quad?: Quad) => [...(graded?.toOriginal ?? [0, 0, 1, 1]), grade, graded?.split ?? -1, 0, 0, ...corners(quad)];
-            const rows = [...drawn.map((image) => [image.to.x, image.to.y, image.to.width, image.to.height, width, height, 0, 0, 0, 0, 0, -1, ...tail(on, image.quad)]), ...fills.map((fill) => [fill.rect.x, fill.rect.y, fill.rect.width, fill.rect.height, width, height, 0, 0, ...fill.color, ...tail(on && fill.graded ? 1 : 0, fill.quad)])];
+            const tail = (grade: number, quad?: Quad, depths?: [number, number, number, number]) => [...(graded?.toOriginal ?? [0, 0, 1, 1]), grade, graded?.split ?? -1, 0, 0, ...corners(quad, depths)];
+            const rows = [...drawn.map((image) => [image.to.x, image.to.y, image.to.width, image.to.height, width, height, 0, 0, 0, 0, 0, -1, ...tail(on, image.quad, image.depths)]), ...fills.map((fill) => [fill.rect.x, fill.rect.y, fill.rect.width, fill.rect.height, width, height, 0, 0, ...fill.color, ...tail(on && fill.graded ? 1 : 0, fill.quad)])];
             slots(rows);
             const encoder = device.createCommandEncoder();
             const pass = encoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" }] });
@@ -348,8 +363,9 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
             }
             let turnNumbers: GPUBuffer | undefined;
             if (turned) {
-                turnNumbers = device.createBuffer({ size: 32, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
-                device.queue.writeBuffer(turnNumbers, 0, new Float32Array([turned.cos, turned.sin, turned.from[0], turned.from[1], turned.back[0], turned.back[1], 0, 0]));
+                turnNumbers = device.createBuffer({ size: 48, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
+                const m = turned.matrix;
+                device.queue.writeBuffer(turnNumbers, 0, new Float32Array([m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0]));
                 const using = half ? turnerHalf : turner;
                 const pass = encoder.beginRenderPass({ colorAttachments: [{ view: level.createView(), loadOp: "clear", storeOp: "store" }] });
                 pass.setPipeline(using);

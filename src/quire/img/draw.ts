@@ -21,6 +21,12 @@
 // six by six at one to one), before the two passes of the resize. A picture that is not turned is drawn
 // and flattened exactly as before.
 //
+// A picture whose perspective is set (perspective.ts) is drawn and flattened the same way through one map:
+// on the screen each piece's four corners go where the map puts them and the card is given each corner's
+// depth, so it draws the piece in true perspective rather than as two flat triangles; when flattening, the
+// pass that turned a piece upright follows the whole map back to the original, its filter widened where the
+// map shrinks the picture so that nothing shimmers there.
+//
 // A grade is drawn by the card too, as a few more sums in the same programs: on the screen each pixel
 // is graded as it is drawn, and when flattening it is graded in the pass down, before the result is
 // rounded to 8 bits (grade-shader.ts). The grades' numbers and the parts' masks are handed to the
@@ -33,7 +39,8 @@ import type { Filter, Look, Rect } from "./steps";
 import { pack, type Packed, type PackedGrade } from "./grade-shader";
 import { stackFor } from "./masks";
 import { isNeutral, prepare, space, type Grade, type Prepared, type Space, type SpaceNumbers } from "./grade";
-import { cornersOf, fromLevel, toLevel, turnOf, type Turn } from "./turn";
+import { backMatrix, bent, cornersOf, fromLevel, toLevel, turnOf, type Turn } from "./turn";
+import { cornerDepths, multiply, type Matrix } from "./homography";
 
 /** The card's best way on a canvas: WebGPU where the browser has it, else WebGL2 (or WebGL2 when asked, for comparing the two). */
 export async function backendFor(canvas: HTMLCanvasElement | OffscreenCanvas, only?: Backend["name"]): Promise<Backend | undefined> {
@@ -136,11 +143,12 @@ export type Texture = { width: number; height: number };
 /** Four corners on the canvas, as eight numbers: the top left, top right, bottom left and bottom right of what is drawn there. */
 export type Quad = [number, number, number, number, number, number, number, number];
 
-/** One image drawn on the screen: a texture, the rectangle of the canvas it fills (or, turned, the four corners it fills, `quad`), and whether its pixels are drawn as squares (zoomed in) or smoothed. */
+/** One image drawn on the screen: a texture, the rectangle of the canvas it fills (or, turned, the four corners it fills, `quad`, with each corner's depth when it is drawn in perspective), and whether its pixels are drawn as squares (zoomed in) or smoothed. */
 export interface Drawn {
     texture: Texture;
     to: Rect;
     quad?: Quad;
+    depths?: [number, number, number, number];
     sharp: boolean;
 }
 
@@ -160,12 +168,9 @@ export interface PieceCover {
     angle?: number;
 }
 
-/** The pass that turns a piece of the original upright, when the picture is turned: the turn's cosine and sine; where the piece's first pixel is on the level picture, less the original's middle; the original's middle less the part read's corner and half a pixel; and the size of the level piece made. */
+/** The pass that turns a piece of the original upright, when the picture is turned or straightened: the map from a pixel's middle in the level piece made to its place among the part read's pixels (each pixel's middle at a whole number), as nine numbers row by row; and the size of the level piece made. */
 export interface TurnPass {
-    cos: number;
-    sin: number;
-    from: [number, number];
-    back: [number, number];
+    matrix: Matrix;
     width: number;
     height: number;
 }
@@ -185,6 +190,8 @@ export interface Grading {
     masks?: MaskStack;
     convert?: boolean;
     turn?: [number, number, number, number];
+    /** With a perspective, the whole map from the level picture back to the original, which the masks are read through in place of `turn`. */
+    back?: Matrix;
 }
 
 /** On the screen, where a canvas pixel is in the original (`x + canvas * across`, the same down) and where the split between the original and the graded falls, in canvas pixels from the left; pixels left of it are drawn as they were. */
@@ -237,7 +244,8 @@ export interface Scene {
 export const resultPlace = (look: Look, size: { width: number; height: number }) => {
     const across = look.width / look.crop.width;
     const down = look.height / look.crop.height;
-    return { across, down, x: -look.crop.x * across, y: -look.crop.y * down, ...(look.turn ? { turn: { degrees: look.turn, x: size.width / 2, y: size.height / 2 } } : {}) };
+    const perspective = look.perspective ? turnOf(look.turn ?? 0, size, look.perspective).matrix : undefined;
+    return { across, down, x: -look.crop.x * across, y: -look.crop.y * down, ...(look.turn ? { turn: { degrees: look.turn, x: size.width / 2, y: size.height / 2 } } : {}), ...(perspective ? { perspective } : {}) };
 };
 
 /** The four corners of a rectangle in the original's pixels (turned on its own by `angle`), on the canvas, as the card takes them. */
@@ -261,6 +269,30 @@ export const quadBox = (quad: Quad): Rect => {
     const y = Math.min(...ys);
     return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
 };
+
+/** The map a turned or straightened piece is made by: from a pixel's middle in the level piece (whose corner is at `source` on the level picture) back to the original, then to the part read's own pixels, each pixel's middle at a whole number. */
+export function pieceMatrix(turn: Turn, source: Rect, read: Rect): Matrix {
+    const into: Matrix = [1, 0, source.x, 0, 1, source.y, 0, 0, 1];
+    const out: Matrix = [1, 0, -read.x - 0.5, 0, 1, -read.y - 0.5, 0, 0, 1];
+    return multiply(out, multiply(backMatrix(turn), into));
+}
+
+/** How a straightened picture's crop reads the original, taken at 81 places over it: how much wider a piece's part of the original is than the piece (the most a step across and down together moves either way), and the most a step moves at all, past which the filter is widened (at most eight). */
+export function spread(turn: Turn, crop: Rect): { wider: number; shrink: number } {
+    let wider = 1;
+    let shrink = 1;
+    for (let i = 0; i <= 8; i++)
+        for (let j = 0; j <= 8; j++) {
+            const at = { x: crop.x + (crop.width * i) / 8, y: crop.y + (crop.height * j) / 8 };
+            const a = fromLevel(at, turn);
+            const b = fromLevel({ x: at.x + 1, y: at.y }, turn);
+            const c = fromLevel({ x: at.x, y: at.y + 1 }, turn);
+            const [xx, yx, xy, yy] = [b.x - a.x, b.y - a.y, c.x - a.x, c.y - a.y];
+            wider = Math.max(wider, Math.abs(xx) + Math.abs(xy), Math.abs(yx) + Math.abs(yy));
+            shrink = Math.max(shrink, Math.hypot(xx, xy), Math.hypot(yx, yy));
+        }
+    return { wider, shrink: Math.min(8, shrink) };
+}
 
 /** The original, decoded once by the browser and kept on the card, drawn and flattened through a backend. */
 export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
@@ -310,19 +342,21 @@ export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
             drawAgain = again;
             const { look, view } = scene;
             const shown = scene.cropping ?? look.crop;
-            const turn = turnOf(look.turn ?? 0, size);
+            const turn = turnOf(look.turn ?? 0, size, look.perspective);
             // canvas pixels per pixel of the original: a resize is seen as the picture drawn larger or smaller
             const across = scene.cropping ? view.scale : (view.scale * look.width) / look.crop.width;
             const down = scene.cropping ? view.scale : (view.scale * look.height) / look.crop.height;
             const place = (rect: Rect): Rect => ({ x: view.x + (rect.x - shown.x) * across, y: view.y + (rect.y - shown.y) * down, width: rect.width * across, height: rect.height * down });
             const point = (at: { x: number; y: number }) => ({ x: view.x + (at.x - shown.x) * across, y: view.y + (at.y - shown.y) * down });
             // a part of the original on the canvas: a rectangle, or turned, four corners and the box round them
-            const onCanvas = (rect: Rect, angle?: number): { to: Rect; quad?: Quad } => {
-                if (!turn.degrees && !angle) return { to: place(rect) };
+            const onCanvas = (rect: Rect, angle?: number): { to: Rect; quad?: Quad; depths?: [number, number, number, number] } => {
+                if (!bent(turn) && !angle) return { to: place(rect) };
                 const quad = quadOn(rect, angle, turn, point);
-                return { to: quadBox(quad), quad };
+                // in perspective, each corner's depth, so that the card draws the piece through the map and not as two flat triangles
+                const depths = turn.matrix ? cornerDepths([{ x: quad[0], y: quad[1] }, { x: quad[2], y: quad[3] }, { x: quad[4], y: quad[5] }, { x: quad[6], y: quad[7] }]) : undefined;
+                return { to: quadBox(quad), quad, ...(depths ? { depths } : {}) };
             };
-            const sharp = across >= 1 - 1e-6 && !turn.degrees;
+            const sharp = across >= 1 - 1e-6 && !bent(turn);
             const images: Drawn[] = [{ texture: overview, ...onCanvas({ x: 0, y: 0, ...size }), sharp: sharp && whole === full }];
             // zoomed in beyond the smaller copy: the full-size pieces in sight, drawn over it
             if (whole !== full && across > (whole.width / size.width) * 1.05) {
@@ -363,25 +397,28 @@ export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
             backend.grading(grading);
             const stepX = look.crop.width / look.width;
             const stepY = look.crop.height / look.height;
-            const turn = turnOf(look.turn ?? 0, size);
+            const turn = turnOf(look.turn ?? 0, size, look.perspective);
             // a turned piece reads a part of the original as wide as the piece turned, so each piece is made smaller to fit the card
-            const wider = turn.degrees ? Math.abs(turn.cos) + Math.abs(turn.sin) : 1;
+            const reached = turn.matrix ? spread(turn, look.crop) : { wider: Math.abs(turn.cos) + Math.abs(turn.sin), shrink: 1 };
+            const wider = bent(turn) ? reached.wider : 1;
+            // past the filter's own reach, as many more pixels as the map shrinks the picture there
+            const margin = 4 + 3 * Math.ceil(reached.shrink - 1);
             const limit = Math.min(most, backend.most);
-            for (const piece of plan(look, turn.degrees ? Math.max(16, Math.floor((limit - 10) / wider)) : limit)) {
+            for (const piece of plan(look, bent(turn) ? Math.max(16, Math.floor((limit - 2 * margin - 2) / wider)) : limit)) {
                 // the part of the original the piece reads: its own place, or turned, the box round it in the original and a filter's reach more
                 let read = piece.source;
-                if (turn.degrees) {
+                if (bent(turn)) {
                     const corners = cornersOf(piece.source).map((corner) => fromLevel(corner, turn));
-                    const left = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.x))) - 4);
-                    const top = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.y))) - 4);
-                    const right = Math.min(size.width, Math.ceil(Math.max(...corners.map((corner) => corner.x))) + 4);
-                    const bottom = Math.min(size.height, Math.ceil(Math.max(...corners.map((corner) => corner.y))) + 4);
+                    const left = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.x))) - margin);
+                    const top = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.y))) - margin);
+                    const right = Math.min(size.width, Math.ceil(Math.max(...corners.map((corner) => corner.x))) + margin);
+                    const bottom = Math.min(size.height, Math.ceil(Math.max(...corners.map((corner) => corner.y))) + margin);
                     read = { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
                 }
                 const part = await createImageBitmap(full, read.x, read.y, read.width, read.height, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
                 const covers: PieceCover[] = look.covers.map((cover) => ({ rect: { x: cover.rect.x - read.x, y: cover.rect.y - read.y, width: cover.rect.width, height: cover.rect.height }, color: rgba(cover.color), ...(cover.angle ? { angle: cover.angle } : {}) }));
                 const graded: [number, number, number, number] | undefined = grading ? [look.crop.x + piece.out.x * stepX, look.crop.y + piece.out.y * stepY, stepX, stepY] : undefined;
-                const turned: TurnPass | undefined = turn.degrees ? { cos: turn.cos, sin: turn.sin, from: [piece.source.x - size.width / 2, piece.source.y - size.height / 2], back: [size.width / 2 - read.x - 0.5, size.height / 2 - read.y - 0.5], width: piece.source.width, height: piece.source.height } : undefined;
+                const turned: TurnPass | undefined = bent(turn) ? { matrix: pieceMatrix(turn, piece.source, read), width: piece.source.width, height: piece.source.height } : undefined;
                 const pixels = await backend.resample(part, covers, piece, graded, turned);
                 part.close();
                 for (let row = 0; row < piece.out.height; row++) result.data.set(pixels.subarray(row * piece.out.width * 4, (row + 1) * piece.out.width * 4), ((piece.out.y + row) * look.width + piece.out.x) * 4);
@@ -451,9 +488,10 @@ export function gradingFor(look: Look, name: Space, picture: { width: number; he
     if (!live.length && !convert) return undefined;
     const last = lastGrading;
     const turn = turnNumbers(look.turn ?? 0, picture);
-    if (last && last.name === name && last.convert === convert && JSON.stringify(last.grading.turn) === JSON.stringify(turn) && last.masks === masks && last.grading.picture.width === picture.width && last.grading.picture.height === picture.height && last.grades.length === live.length && last.grades.every((each, at) => each.grade === live[at]!.grade && each.id === live[at]!.id && JSON.stringify(last.layers[at]) === JSON.stringify(layers(each.id)))) return last.grading;
+    const back = look.perspective ? turnOf(look.turn ?? 0, picture, look.perspective).back : undefined;
+    if (last && last.name === name && last.convert === convert && JSON.stringify(last.grading.turn) === JSON.stringify(turn) && JSON.stringify(last.grading.back) === JSON.stringify(back) && last.masks === masks && last.grading.picture.width === picture.width && last.grading.picture.height === picture.height && last.grades.length === live.length && last.grades.every((each, at) => each.grade === live[at]!.grade && each.id === live[at]!.id && JSON.stringify(last.layers[at]) === JSON.stringify(layers(each.id)))) return last.grading;
     const list: PackedGrade[] = live.map((each) => ({ ready: prepared(each.grade, name), ...layers(each.id) }));
-    const grading: Grading = { packed: pack(list), numbers: space(name), picture, ...(masks ? { masks } : {}), ...(convert ? { convert } : {}), ...(turn ? { turn } : {}) };
+    const grading: Grading = { packed: pack(list), numbers: space(name), picture, ...(masks ? { masks } : {}), ...(convert ? { convert } : {}), ...(turn ? { turn } : {}), ...(back ? { back } : {}) };
     lastGrading = { name, convert, masks, grades: live, layers: live.map((each) => layers(each.id)), grading };
     return grading;
 }

@@ -13,6 +13,12 @@
 // outlined, and pressing a word hides it: a cover over exactly its box and a stated margin, the same
 // cover Hide makes; a drag across words hides the run, one cover a line. With no tool, a drag across
 // words selects them, to be copied as text.
+//
+// Perspective is set from the crop's tool too: the keystone dials draw the picture straightened as they are
+// dragged (`keystone`), as the horizon's dial turns it, and with the corners on (`setCornering`) the original
+// is shown as it came, with four handles to drag to the corners of something that should be a rectangle, a
+// grid inside them showing how it will be squared; each handle let go, or nudged by the arrow keys, is one
+// change.
 
 import { backendFor, gradingWith, loadPicture, type Loaded, type Scene, type View } from "./draw";
 import { maskSize, stackFor, type Stroke } from "./masks";
@@ -20,7 +26,9 @@ import type { Space } from "./grade";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
 import { allAt, drawMarks, markBox, moved, pivotOf, placeOn, type Place } from "./marks";
-import { cornersOf, fromLevel, keepInside, levelBox, fitInside, levelling, toLevel, turnOf, type Turn } from "./turn";
+import { bent, cornersOf, fromLevel, keepInside, levelBox, fitInside, levelling, toLevel, turnOf, type Turn } from "./turn";
+import { apply, convex, squareToQuad, stretch, type Matrix } from "./homography";
+import { perspectiveMap, rectCorners, type Corners, type Perspective } from "./perspective";
 import { add, change, look, setOnly, within, type Kept, type Look, type Mark, type Picture, type Point, type Rect } from "./steps";
 import { decodeRuns, type Shape } from "./masks";
 import { corners } from "./read/pixels";
@@ -108,6 +116,8 @@ export interface StageHooks {
     moved(): void;
     /** A line drawn along the horizon asks for this turn, in degrees. */
     turned?(degrees: number): void;
+    /** Corners set by hand, a handle let go or nudged: true when they were taken, false when they cannot make a rectangle. */
+    cornered?(corners: Corners): boolean;
     /** With the cut-out tool: the brush if Keep or Remove is on (its radius in the original's pixels), a stroke painted, and a press on the picture, which keeps the thing pressed. */
     cutout?: {
         brush(): { size: number; erase: boolean } | undefined;
@@ -152,10 +162,29 @@ export function uprightRect(from: Point, to: Point, turn: Turn): Rect {
     const a = toLevel(from, turn);
     const b = toLevel(to, turn);
     const middle = fromLevel({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, turn);
-    const width = Math.abs(b.x - a.x);
-    const height = Math.abs(b.y - a.y);
+    // straightened, the size is taken back by how much the map stretches the picture there
+    const scale = turn.matrix ? stretch(turn.matrix, middle) : { across: 1, down: 1 };
+    const width = Math.abs(b.x - a.x) / scale.across;
+    const height = Math.abs(b.y - a.y) / scale.down;
     return { x: middle.x - width / 2, y: middle.y - height / 2, width, height };
 }
+
+/** The steps with the picture's perspective set: the step changed, added, or taken away when it holds nothing. */
+export function setPerspective(steps: Kept[], given: Perspective): Kept[] {
+    const vertical = given.vertical || undefined;
+    const horizontal = given.horizontal || undefined;
+    const corners = given.corners && given.ratio ? { corners: given.corners, ratio: given.ratio } : {};
+    if (!vertical && !horizontal && !given.corners) return steps.filter((step) => step.type !== "perspective");
+    const made = { type: "perspective" as const, ...(vertical ? { vertical } : {}), ...(horizontal ? { horizontal } : {}), ...corners };
+    const there = steps.find((step) => step.type === "perspective");
+    return there ? steps.map((step) => (step === there ? ({ ...made, id: step.id } as Kept) : step)) : add(steps, made);
+}
+
+/** Where corners start when none were set: a rectangle a sixth of the way in from each edge. */
+export const startCorners = (size: { width: number; height: number }): Corners => rectCorners({ x: size.width / 6, y: size.height / 6, width: (size.width * 2) / 3, height: (size.height * 2) / 3 });
+
+/** The names of the four corner handles, for the keyboard and a reader of the screen. */
+export const CORNER_NAMES = ["Top left corner", "Top right corner", "Bottom right corner", "Bottom left corner"] as const;
 
 /** The upright box round some places. */
 export function boxAround(points: Point[]): Rect {
@@ -205,7 +234,16 @@ export function createStage(hooks: StageHooks) {
     splitter.setAttribute("aria-hidden", "true");
     // a checkerboard under the picture where it is clear, drawn only where the picture is
     const under = make("canvas", "quire-img-under");
-    element.append(under, canvas, over, frame, writing, splitter);
+    // the four corners set by hand, each a handle to drag or to nudge with the arrow keys
+    const cornerGrips = CORNER_NAMES.map((name, at) => {
+        const handle = make("span", "quire-img-corner");
+        handle.tabIndex = -1;
+        handle.setAttribute("role", "slider");
+        handle.setAttribute("aria-label", name);
+        handle.dataset.corner = String(at);
+        return handle;
+    });
+    element.append(under, canvas, over, frame, writing, splitter, ...cornerGrips);
 
     let loaded: Loaded | undefined;
     // the turn the dial gives while it is dragged, drawn before letting go makes it a step, and the faint grid shown while it turns
@@ -213,10 +251,16 @@ export function createStage(hooks: StageHooks) {
     // a line being drawn along the horizon, from where it started to the pointer, in the stage's own pixels
     let levelLine: { from: Point; to: Point } | undefined;
     let levelling_ = false;
+    // the keystone dials' degrees while one is dragged, drawn before letting go makes them a step
+    let keystoning: { vertical: number; horizontal: number } | undefined;
+    // setting the corners by hand: the original shown as it came, and the corners while a handle is dragged
+    let cornering = false;
+    let cornersLive: Corners | undefined;
     // a stroke of the cut-out's brush being painted
     let cutLine: Stroke | undefined;
-    // the turn last drawn from the steps, to know when it changed
+    // the turn and the straightening last drawn from the steps, to know when they changed
     let shownTurn = 0;
+    let shownPerspective = "null";
     // whether the picture's Display P3 numbers are made sRGB on the screen, the canvas having no Display P3
     let screenConverts = false;
     let blob: Blob | ImageBitmap | undefined;
@@ -251,8 +295,23 @@ export function createStage(hooks: StageHooks) {
         return found && look(found);
     };
     const cropping = () => tool === "crop";
-    /** The picture's turn: the dial's while it is being turned, else the steps'. */
-    const turnNow = (): Turn => turnOf(turning ?? shown()?.turn ?? 0, loaded?.size ?? picture()?.original ?? { width: 1, height: 1 });
+    /** The perspective step's own numbers, if the picture has one. */
+    const perspectiveStep = (): Perspective | undefined => picture()?.steps.find((step) => step.type === "perspective") as Perspective | undefined;
+    /** The picture's perspective map: the keystone dials' while one is dragged, else the steps'; none while the corners are being set, when the original is shown as it came. */
+    const perspectiveNow = (): Matrix | undefined => {
+        const found = picture();
+        if (!found || cornering) return undefined;
+        if (keystoning) return perspectiveMap({ ...perspectiveStep(), ...keystoning }, found.original);
+        return shown()?.perspective;
+    };
+    /** The picture's turn: the dial's while it is being turned, else the steps'; with its perspective; nothing while the corners are being set. */
+    const turnNow = (): Turn => {
+        const size = loaded?.size ?? picture()?.original ?? { width: 1, height: 1 };
+        if (cornering) return turnOf(0, size);
+        return turnOf(turning ?? shown()?.turn ?? 0, size, perspectiveNow());
+    };
+    /** The corners set by hand as they are now: being dragged, kept in the step, or where they start. */
+    const cornersNow = (): Corners => cornersLive ?? perspectiveStep()?.corners ?? startCorners(loaded?.size ?? picture()?.original ?? { width: 1, height: 1 });
     /** Where the level picture's pixels fall on the stage, in its own CSS pixels: the whole turned picture while cropping, the crop otherwise. */
     const levelPlace = (): { across: number; down: number; x: number; y: number } => {
         const now = shown();
@@ -267,8 +326,10 @@ export function createStage(hooks: StageHooks) {
     /** Where the original's pixels fall on the stage: the level picture's place, and the turn about the original's middle. */
     const place = (): Place => {
         const turn = turnNow();
-        return { ...levelPlace(), ...(turn.degrees ? { turn: { degrees: turn.degrees, x: turn.width / 2, y: turn.height / 2 } } : {}) };
+        return { ...levelPlace(), ...(turn.degrees ? { turn: { degrees: turn.degrees, x: turn.width / 2, y: turn.height / 2 } } : {}), ...(turn.matrix ? { perspective: turn.matrix } : {}) };
     };
+    /** The original's middle, about which a tint or a stroke is laid on a straightened picture. */
+    const middleOf = (): Point => ({ x: (loaded?.size.width ?? 0) / 2, y: (loaded?.size.height ?? 0) / 2 });
     /** A place on the stage on the level picture. */
     const toLevelAt = (at: Point): Point => {
         const where = levelPlace();
@@ -314,13 +375,17 @@ export function createStage(hooks: StageHooks) {
         const context = over.getContext("2d")!;
         context.setTransform(1, 0, 0, 1, 0, 0);
         context.clearRect(0, 0, width, height);
-        frame.classList.toggle("shown", !!now && !!loaded && cropping() && !!cropFrame);
+        frame.classList.toggle("shown", !!now && !!loaded && cropping() && !!cropFrame && !cornering);
+        for (const handle of cornerGrips) handle.classList.toggle("shown", !!now && !!loaded && cornering);
         if (!now || !loaded) return;
-        const seen = { ...(cropping() && cropFrame ? { ...now, crop: cropFrame } : now), ...(turning !== undefined ? { turn: turning } : {}) };
+        const live = perspectiveNow();
+        const { perspective: _kept, turn: _turned, ...flat } = now;
+        // setting the corners, the original as it came, whole; else as it looks, with the dials' turn and straightening while they are dragged
+        const seen: Look = cornering ? { ...flat, crop: { x: 0, y: 0, ...loaded.size } } : { ...(cropping() && cropFrame ? { ...flat, crop: cropFrame } : flat), ...((turning ?? now.turn) ? { turn: turning ?? now.turn } : {}), ...(live ? { perspective: live } : {}) };
         // the grade drawn unless the original is held in view; left of the split, the original
         // held, the original's numbers alone, made sRGB all the same where the canvas cannot show Display P3
         const grading = gradingWith(holding ? { ...seen, grades: [] } : seen, hooks.space?.() ?? "srgb", loaded.size, screenConverts);
-        const scene: Scene = { look: seen, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() ? { cropping: levelBox(turnNow()) } : {}), ...(grading ? { grading } : {}), ...(split !== undefined ? { split: split * ratio } : {}) };
+        const scene: Scene = { look: seen, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() && !cornering ? { cropping: levelBox(turnNow()) } : {}), ...(grading ? { grading } : {}), ...(split !== undefined ? { split: split * ratio } : {}) };
         if (hooks.clear?.()) {
             // the checkerboard of a transparent picture, in the room the picture fills
             const kept = levelOnStage(cropping() && cropFrame ? cropFrame : now.crop);
@@ -341,7 +406,7 @@ export function createStage(hooks: StageHooks) {
         const scaled = { ...where, across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio };
         // marks are seen in crop mode too, but cut to the frame as they will be
         context.save();
-        const kept = levelOnStage(cropping() && cropFrame ? cropFrame : now.crop);
+        const kept = levelOnStage(cornering ? seen.crop : cropping() && cropFrame ? cropFrame : now.crop);
         context.beginPath();
         context.rect(kept.x * ratio, kept.y * ratio, kept.width * ratio, kept.height * ratio);
         context.clip();
@@ -369,6 +434,7 @@ export function createStage(hooks: StageHooks) {
             const box = levelOnStage(cropFrame);
             Object.assign(frame.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
         }
+        if (cornering) drawCorners(context, ratio);
         splitter.classList.toggle("shown", split !== undefined);
         if (split !== undefined) splitter.style.left = `${split}px`;
         if (tool === "grade" && hooks.parts) drawParts(context, now, ratio);
@@ -392,7 +458,7 @@ export function createStage(hooks: StageHooks) {
         if (cutLine && cutLine.points.length >= 4) {
             const where = place();
             context.save();
-            placeOn(context, { ...where, across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio });
+            placeOn(context, { ...where, across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio }, middleOf());
             context.strokeStyle = cutLine.erase ? "rgba(255, 80, 80, 0.45)" : "rgba(120, 220, 140, 0.45)";
             context.lineWidth = cutLine.size * 2;
             context.lineCap = context.lineJoin = "round";
@@ -415,6 +481,116 @@ export function createStage(hooks: StageHooks) {
             }
         }
     }
+
+    /** The corners set by hand on the original as it came: the shape between them darkened round, its edges, and a grid of quarters inside drawn through the map from a square, which shows how it will be squared; each handle placed over its corner. */
+    function drawCorners(context: CanvasRenderingContext2D, ratio: number) {
+        const corners = cornersNow();
+        const onStage = corners.map(pointOnStage);
+        cornerGrips.forEach((handle, at) => {
+            Object.assign(handle.style, { left: `${onStage[at]!.x}px`, top: `${onStage[at]!.y}px` });
+            handle.setAttribute("aria-valuetext", `${Math.round(corners[at]!.x)}, ${Math.round(corners[at]!.y)}`);
+        });
+        const accent = getComputedStyle(element).getPropertyValue("--accent").trim() || "#b48cff";
+        const at = (point: Point) => ({ x: point.x * ratio, y: point.y * ratio });
+        const path = () => {
+            context.beginPath();
+            onStage.map(at).forEach((point, index) => (index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
+            context.closePath();
+        };
+        // what lies outside the shape dimmed, as the crop dims what is outside its frame
+        context.save();
+        context.fillStyle = "rgba(0, 0, 0, 0.45)";
+        context.beginPath();
+        const all = levelOnStage({ x: 0, y: 0, ...(loaded?.size ?? { width: 1, height: 1 }) });
+        context.rect(all.x * ratio, all.y * ratio, all.width * ratio, all.height * ratio);
+        onStage.map(at).forEach((point, index) => (index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
+        context.closePath();
+        context.fill("evenodd");
+        context.restore();
+        // the grid: the lines of a square's quarters, put where the map from the square to the corners puts them
+        const square = squareToQuad(onStage.map(at));
+        if (square) {
+            context.lineWidth = 1 * ratio;
+            context.strokeStyle = "rgba(255, 255, 255, 0.5)";
+            context.beginPath();
+            for (const t of [0.25, 0.5, 0.75]) {
+                const a = apply(square, { x: t, y: 0 });
+                const b = apply(square, { x: t, y: 1 });
+                const c = apply(square, { x: 0, y: t });
+                const d = apply(square, { x: 1, y: t });
+                context.moveTo(a.x, a.y);
+                context.lineTo(b.x, b.y);
+                context.moveTo(c.x, c.y);
+                context.lineTo(d.x, d.y);
+            }
+            context.stroke();
+        }
+        for (const [width, color] of [[3 * ratio, "rgba(0, 0, 0, 0.45)"], [1.5 * ratio, accent]] as const) {
+            context.lineWidth = width;
+            context.strokeStyle = color;
+            path();
+            context.stroke();
+        }
+    }
+    /** Moves one corner set by hand to a place in the original's pixels, kept on the picture; the corners are left as they were when the shape would bend inward. */
+    function movedCorner(corners: Corners, which: number, to: Point): Corners | undefined {
+        const size = loaded?.size ?? { width: 1, height: 1 };
+        const next = corners.map((corner, at) => (at === which ? { x: Math.round(Math.min(size.width, Math.max(0, to.x)) * 2) / 2, y: Math.round(Math.min(size.height, Math.max(0, to.y)) * 2) / 2 } : corner)) as Corners;
+        return convex(next) ? next : undefined;
+    }
+    let cornerDrag: { id: number; which: number; from: Point; start: Point } | undefined;
+    cornerGrips.forEach((handle, which) => {
+        handle.addEventListener("pointerdown", (event) => {
+            if (event.button !== 0 || !cornering) return;
+            event.preventDefault();
+            event.stopPropagation();
+            handle.focus({ preventScroll: true });
+            handle.setPointerCapture(event.pointerId);
+            cornerDrag = { id: event.pointerId, which, from: pointer(event), start: cornersNow()[which]! };
+            handle.classList.add("dragging");
+        });
+        handle.addEventListener("pointermove", (event) => {
+            if (!cornerDrag || cornerDrag.id !== event.pointerId) return;
+            // the corner moves as far as the pointer does, from wherever on the handle it was pressed, so it never jumps
+            const now = pointer(event);
+            const where = levelPlace();
+            const to = { x: cornerDrag.start.x + (now.x - cornerDrag.from.x) / where.across, y: cornerDrag.start.y + (now.y - cornerDrag.from.y) / where.down };
+            const next = movedCorner(cornersNow(), which, to);
+            if (next) cornersLive = next;
+            paint();
+        });
+        const letGo = (event: PointerEvent, keep: boolean) => {
+            if (!cornerDrag || cornerDrag.id !== event.pointerId) return;
+            cornerDrag = undefined;
+            handle.classList.remove("dragging");
+            const made = cornersLive;
+            if (keep && made && hooks.cornered?.(made) === false) hooks.say("Not a rectangle", "Those corners cannot be made a rectangle: the picture would be thrown past where it can be seen");
+            cornersLive = undefined;
+            paint();
+        };
+        handle.addEventListener("pointerup", (event) => letGo(event, true));
+        handle.addEventListener("pointercancel", (event) => letGo(event, false));
+        handle.addEventListener("keydown", (event) => {
+            // Escape on a handle stops setting the corners and gives the keyboard back to the picture
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                setCornering(false);
+                element.focus({ preventScroll: true });
+                return;
+            }
+            const step = event.shiftKey ? 10 : 1;
+            const by: Record<string, Point> = { ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 }, ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step } };
+            const move = by[event.key];
+            if (!move || event.ctrlKey || event.metaKey || event.altKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const corner = cornersNow()[which]!;
+            const next = movedCorner(cornersNow(), which, { x: corner.x + move.x, y: corner.y + move.y });
+            if (next && hooks.cornered?.(next) === false) hooks.say("Not a rectangle", "Those corners cannot be made a rectangle: the picture would be thrown past where it can be seen");
+            paint();
+        });
+    });
 
     // a part's mask, tinted, for showing where the part picked is; made once for each layer
     const tints = new WeakMap<Float32Array, OffscreenCanvas>();
@@ -458,7 +634,7 @@ export function createStage(hooks: StageHooks) {
                 context.imageSmoothingEnabled = true;
                 // the mask laid over the original, turned with the picture
                 context.save();
-                placeOn(context, { ...where, across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio });
+                placeOn(context, { ...where, across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio }, middleOf());
                 context.drawImage(tintOf(stacked.stack.layers[layer]!, size, accent), 0, 0, loaded.size.width, loaded.size.height);
                 context.restore();
             }
@@ -690,6 +866,18 @@ export function createStage(hooks: StageHooks) {
     }
 
     // ---- the view ----
+    /** Sets the corners by hand, or stops: the original shown as it came, whole, with the handles, or the picture as the steps make it. */
+    function setCornering(on: boolean) {
+        if (on === cornering) return;
+        cornering = on;
+        cornersLive = undefined;
+        element.dataset.cornering = on ? "yes" : "";
+        for (const handle of cornerGrips) handle.tabIndex = on ? 0 : -1;
+        if (!on && tool === "crop") cropFrame = shown()?.crop;
+        glideToFit();
+        paint();
+        hooks.moved();
+    }
     /** Fits what is shown (the whole original while cropping, the picture as it looks otherwise) to the room. */
     function fitView() {
         const now = shown();
@@ -734,7 +922,10 @@ export function createStage(hooks: StageHooks) {
     // ---- tools ----
     function setTool(next: Tool) {
         if (next === tool) return;
-        if (tool === "crop") cropFrame = undefined;
+        if (tool === "crop") {
+            cropFrame = undefined;
+            setCornering(false);
+        }
         if (tool === "text") keepWriting();
         const was = cropping();
         tool = next;
@@ -789,7 +980,7 @@ export function createStage(hooks: StageHooks) {
         const line = thickness(pen, found.original);
         // on a turned picture a cover or a box is upright on the screen: spanned on the level picture, kept turned back by the picture's turn
         const turn = turnNow();
-        const rect = turn.degrees ? uprightRect(from, to, turn) : spanned(from, to);
+        const rect = bent(turn) ? uprightRect(from, to, turn) : spanned(from, to);
         const angle = turn.degrees ? { angle: -turn.degrees } : {};
         if (tool === "hide") return add(found.steps, { type: "cover", rect, color: "#000000", ...angle });
         if (tool === "box") return add(found.steps, { type: "box", rect, color: pen.color, thickness: line, ...angle });
@@ -837,6 +1028,8 @@ export function createStage(hooks: StageHooks) {
             drag = { kind: "cut", from: at };
             return;
         }
+        // setting the corners, a press beside the handles moves the picture
+        if (tool === "crop" && cornering) return void (drag = { kind: "pan", from: at, view });
         if (tool === "crop" && levelling_) {
             // a line drawn along the horizon, which levels the picture when let go
             levelLine = { from: at, to: at };
@@ -1161,7 +1354,8 @@ export function createStage(hooks: StageHooks) {
         if (!by || event.ctrlKey || event.metaKey || event.altKey) return;
         event.preventDefault();
         const found = hooks.picture();
-        if (tool === "crop" && cropFrame && loaded) cropFrame = keepInside(cropFrame, dragFrame(cropFrame, "move", by, loaded.size), turnNow());
+        if (tool === "crop" && cornering) view = { ...view, x: view.x - by.x * 10, y: view.y - by.y * 10 };
+        else if (tool === "crop" && cropFrame && loaded) cropFrame = keepInside(cropFrame, dragFrame(cropFrame, "move", by, loaded.size), turnNow());
         else if (picked && found) {
             const id = picked;
             // the arrows move what is picked the way they point on the screen, whatever the picture's turn
@@ -1322,8 +1516,11 @@ export function createStage(hooks: StageHooks) {
             const was = shownTurn;
             shownTurn = shown()?.turn ?? 0;
             if (tool === "crop") cropFrame = shown()?.crop;
-            // a new turn while cropping: the turned picture and its frame glide to fit the room whole
-            if (tool === "crop" && was !== shownTurn && turning === undefined) glideToFit();
+            // a new turn or straightening while cropping: the turned picture and its frame glide to fit the room whole
+            const seenNow = JSON.stringify(shown()?.perspective ?? null);
+            const straightened = seenNow !== shownPerspective;
+            shownPerspective = seenNow;
+            if (tool === "crop" && !cornering && (was !== shownTurn || straightened) && turning === undefined && !keystoning) glideToFit();
             if (picked && !hooks.picture()?.steps.some((step) => step.id === picked)) picked = undefined;
             paint();
         },
@@ -1342,6 +1539,21 @@ export function createStage(hooks: StageHooks) {
             if (tool === "crop") glideToFit();
             paint();
         },
+        /** Draws the picture straightened by the keystone dials' degrees before letting go makes them a step; nothing to stop. The frame follows the crop they would give. */
+        keystone(dials: { vertical: number; horizontal: number } | undefined) {
+            keystoning = dials;
+            const found = picture();
+            if (found && tool === "crop") cropFrame = look({ ...found, steps: dials ? setPerspective(found.steps, { ...perspectiveStep(), ...dials }) : found.steps }).crop;
+            if (tool === "crop") glideToFit();
+            paint();
+        },
+        /** Sets the corners by hand, or stops. */
+        setCornering,
+        cornering: () => cornering,
+        /** The corners set by hand as they are now, in the original's pixels. */
+        corners: () => cornersNow(),
+        /** The corner handles, for a test or the keyboard. */
+        cornerGrips: () => cornerGrips,
         /** Whether the next drag on the picture draws a line along the horizon, which levels it when let go. */
         setLevelling(on: boolean) {
             levelling_ = on;

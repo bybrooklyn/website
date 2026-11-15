@@ -183,3 +183,24 @@ test("a cut-out step reads back from steps.json with its mask, strokes and backg
     expect(bad.dropped).toBe(1);
 });
 
+test("a perspective straightens the picture before it is turned, keeps its dials and corners in steps.json, bounded, and a file from before reads as it did", () => {
+    const straightened = look({ original, steps: [{ id: "s1", type: "perspective", vertical: 8 }] });
+    expect(straightened.perspective).toHaveLength(9);
+    expect(straightened.crop.width).toBeLessThan(1200);
+    expect(straightened.marks).toEqual([]);
+    const corners = [{ x: 100, y: 80 }, { x: 1100, y: 120 }, { x: 1150, y: 760 }, { x: 60, y: 700 }];
+    const picture = { original, steps: [{ id: "s1", type: "perspective", horizontal: -3.5, corners, ratio: 1.41 }, { id: "s2", type: "turn", angle: 2 }] as Kept[] };
+    const read = readSteps(writeSteps(picture))!;
+    expect(read.steps).toEqual(picture.steps);
+    expect(look(read).turn).toBe(2);
+    // dials and a ratio past their range are held to it; corners that are not four places are dropped; a step of nothing is no step
+    const wild = readSteps('{"quire": 1, "original": {"name": "a.png", "width": 100, "height": 100}, "steps": [{"type": "perspective", "vertical": 99, "corners": [{"x": 1, "y": 1}], "ratio": 2}, {"type": "perspective", "horizontal": 4, "corners": [{"x": 0, "y": 0}, {"x": 9, "y": 0}, {"x": 9, "y": 9}, {"x": 0, "y": 9}], "ratio": 500}, {"type": "perspective"}]}')!;
+    expect(wild.steps[0]).toEqual({ id: "s1", type: "perspective", vertical: 30 });
+    expect(wild.steps[1]).toEqual({ id: "s2", type: "perspective", horizontal: 4, corners: [{ x: 0, y: 0 }, { x: 9, y: 0 }, { x: 9, y: 9 }, { x: 0, y: 9 }], ratio: 20 });
+    expect(wild.dropped).toBe(1);
+    // a perspective that cannot be seen whole draws as none
+    const thrown = look({ original, steps: [{ id: "s1", type: "perspective", corners: [{ x: 590, y: 790 }, { x: 610, y: 790 }, { x: 1190, y: 799 }, { x: 10, y: 799 }], ratio: 1 }] as Kept[] });
+    expect(thrown.perspective).toBeUndefined();
+    expect(thrown.crop).toEqual({ x: 0, y: 0, width: 1200, height: 800 });
+});
+

@@ -149,6 +149,8 @@ const PATHS: Record<string, string> = {
     photo: '<rect x="4" y="6" width="16" height="12" rx="1"/><path d="M4 15.5 9 11l3.5 3 2.5-2 5 4"/>',
     free: '<rect x="4" y="5" width="16" height="14" rx="1" stroke-dasharray="3 2.5"/>',
     line: '<path d="M4 12h16"/>',
+    perspective: '<path d="M7.5 5h9l3.5 14H4z"/><path d="M12 5v14"/>',
+    corners: '<path d="M6 6.5 18 5l1.5 13.5h-15z" stroke-dasharray="2.5 2.5"/><circle cx="6" cy="6.5" r="1.6" fill="currentColor"/><circle cx="18" cy="5" r="1.6" fill="currentColor"/><circle cx="19.5" cy="18.5" r="1.6" fill="currentColor"/><circle cx="4.5" cy="18.5" r="1.6" fill="currentColor"/>',
 };
 
 // the six heading levels: the heading sign with its number beside it

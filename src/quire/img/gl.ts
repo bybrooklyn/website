@@ -8,7 +8,9 @@ import { grownQuad, type Backend, type Drawn, type Fill, type Grading, type Piec
 import type { Rect } from "./steps";
 import { GRADE_GLSL, ROW } from "./grade-shader";
 
-// a rectangle, or four corners (`quadOn`: the top left and top right in quadA, the bottom left and bottom right in quadB);
+// a rectangle, or four corners (`quadOn`: the top left and top right in quadA, the bottom left and bottom right in quadB),
+// each with its depth in quadW, so that a shape in perspective is drawn through its map: the card mixes what it carries
+// across a triangle as a perspective does when the position's last number is the depth;
 // `flip` is -1 when drawing into a texture, whose first row is the picture's top
 const SCREEN = `#version 300 es
 in vec2 corner;
@@ -17,12 +19,14 @@ uniform vec2 canvas;
 uniform int quadOn;
 uniform vec4 quadA;
 uniform vec4 quadB;
+uniform vec4 quadW;
 uniform float flip;
 out vec2 place;
 void main() {
     place = corner;
     vec2 at = quadOn == 1 ? mix(mix(quadA.xy, quadA.zw, corner.x), mix(quadB.xy, quadB.zw, corner.x), corner.y) : to.xy + corner * to.zw;
-    gl_Position = vec4(at.x / canvas.x * 2.0 - 1.0, flip * (1.0 - at.y / canvas.y * 2.0), 0.0, 1.0);
+    float w = quadOn == 1 ? mix(mix(quadW.x, quadW.y, corner.x), mix(quadW.z, quadW.w, corner.x), corner.y) : 1.0;
+    gl_Position = vec4(at.x / canvas.x * 2.0 - 1.0, flip * (1.0 - at.y / canvas.y * 2.0), 0.0, 1.0) * w;
 }`;
 
 // with no grade the programs are built with a `graded` that gives the color back, so that drawing without one costs what it did
@@ -108,14 +112,17 @@ void main() {
     color = found;
 }`;
 
-// a piece of the original turned upright: each pixel of the level piece reads the original about its place there, by a
-// Lanczos filter of six by six at one to one, between the edges of the part given
+// a piece of the original turned upright or straightened: each pixel of the level piece reads the original about its place
+// there, found by the map's three rows, by a Lanczos filter of six by six at one to one, between the edges of the part
+// given; where the map shrinks the picture (a step moves more than a pixel of the original) the filter is widened by as
+// much, up to eight times, so that it still takes in every pixel the step passes over
 const TURN = `#version 300 es
 precision highp float;
 precision highp int;
 uniform highp sampler2D source;
-uniform vec4 turn;
-uniform vec2 back;
+uniform vec3 rowX;
+uniform vec3 rowY;
+uniform vec3 rowW;
 out vec4 color;
 float lanczos(float given) {
     float x = abs(given);
@@ -125,20 +132,31 @@ float lanczos(float given) {
     return 3.0 * sin(p) * sin(p / 3.0) / (p * p);
 }
 void main() {
-    vec2 q = turn.zw + floor(gl_FragCoord.xy) + 0.5;
-    vec2 u = vec2(turn.x * q.x + turn.y * q.y, -turn.y * q.x + turn.x * q.y) + back;
+    vec3 q = vec3(floor(gl_FragCoord.xy) + 0.5, 1.0);
+    float d = dot(rowW, q);
+    vec2 u = vec2(dot(rowX, q), dot(rowY, q)) / d;
+    // how far the place moves in the original for a step across and a step down: the filter's width each way
+    vec2 sx = vec2(rowX.x - u.x * rowW.x, rowX.y - u.x * rowW.y) / d;
+    vec2 sy = vec2(rowY.x - u.y * rowW.x, rowY.y - u.y * rowW.y) / d;
+    vec2 wide = vec2(length(sx), length(sy));
+    wide = vec2(wide.x < 1.0001 ? 1.0 : min(wide.x, 8.0), wide.y < 1.0001 ? 1.0 : min(wide.y, 8.0));
     ivec2 size = textureSize(source, 0);
-    vec2 first = floor(u) - 2.0;
-    float wx[6];
-    float wy[6];
-    for (int i = 0; i < 6; i++) { wx[i] = lanczos(first.x + float(i) - u.x); wy[i] = lanczos(first.y + float(i) - u.y); }
+    vec2 first = floor(u - 3.0 * wide) + 1.0;
+    int countX = int(6.0 * ceil(wide.x));
+    int countY = int(6.0 * ceil(wide.y));
     vec4 sum = vec4(0.0);
     float total = 0.0;
-    for (int j = 0; j < 6; j++) for (int i = 0; i < 6; i++) {
-        ivec2 at = clamp(ivec2(first) + ivec2(i, j), ivec2(0), size - 1);
-        float w = wx[i] * wy[j];
-        sum += w * texelFetch(source, at, 0);
-        total += w;
+    for (int j = 0; j < 48; j++) {
+        if (j >= countY) break;
+        float wy = lanczos((first.y + float(j) - u.y) / wide.y);
+        if (wy == 0.0) continue;
+        for (int i = 0; i < 48; i++) {
+            if (i >= countX) break;
+            float w = lanczos((first.x + float(i) - u.x) / wide.x) * wy;
+            ivec2 at = clamp(ivec2(first) + ivec2(i, j), ivec2(0), size - 1);
+            sum += w * texelFetch(source, at, 0);
+            total += w;
+        }
     }
     color = sum / total;
 }`;
@@ -221,6 +239,10 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
         gl.uniform2f(made.at("pictureSize"), given.picture.width, given.picture.height);
         gl.uniform1i(made.at("gradeConvert"), given.convert ? 1 : 0);
         gl.uniform4f(made.at("gradeTurn"), ...(given.turn ?? [1, 0, 0, 0]));
+        const map = given.back;
+        gl.uniform3f(made.at("gradeBackX"), map?.[0] ?? 1, map?.[1] ?? 0, map?.[2] ?? 0);
+        gl.uniform3f(made.at("gradeBackY"), map?.[3] ?? 0, map?.[4] ?? 1, map?.[5] ?? 0);
+        gl.uniform4f(made.at("gradeBackW"), map?.[6] ?? 0, map?.[7] ?? 0, map?.[8] ?? 1, map ? 1 : 0);
     };
 
     // half floats can be drawn into where the card allows it, so that a graded picture is never held in 8 bits between the passes
@@ -244,12 +266,13 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
         return frame;
     };
-    /** Draws the next shape at four corners, or as its rectangle when there are none. */
-    const corners = (made: ReturnType<typeof program>, quad: Quad | undefined) => {
+    /** Draws the next shape at four corners (with their depths, in perspective), or as its rectangle when there are none. */
+    const corners = (made: ReturnType<typeof program>, quad: Quad | undefined, depths?: [number, number, number, number]) => {
         gl.uniform1i(made.at("quadOn"), quad ? 1 : 0);
         if (!quad) return;
         gl.uniform4f(made.at("quadA"), quad[0], quad[1], quad[2], quad[3]);
         gl.uniform4f(made.at("quadB"), quad[4], quad[5], quad[6], quad[7]);
+        gl.uniform4f(made.at("quadW"), ...(depths ?? [1, 1, 1, 1]));
     };
     /** Clips to a rectangle given from the top, in the window's own way of counting from the bottom when drawing to the screen. */
     const scissor = (rect: Rect, height: number, fromTop: boolean) => {
@@ -333,7 +356,7 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
                 gl.uniform1i(screen.at("grade"), graded && given ? 1 : 0);
                 gl.uniform4f(screen.at("fill"), 0, 0, 0, -1);
                 gl.uniform4f(screen.at("to"), image.to.x, image.to.y, image.to.width, image.to.height);
-                corners(screen, image.quad);
+                corners(screen, image.quad, image.depths);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
             for (const fill of fills) {
@@ -389,8 +412,10 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
                 gl.viewport(0, 0, turned.width, turned.height);
                 gl.useProgram(turning.made);
                 gl.uniform1i(turning.at("source"), 0);
-                gl.uniform4f(turning.at("turn"), turned.cos, turned.sin, turned.from[0], turned.from[1]);
-                gl.uniform2f(turning.at("back"), turned.back[0], turned.back[1]);
+                const m = turned.matrix;
+                gl.uniform3f(turning.at("rowX"), m[0], m[1], m[2]);
+                gl.uniform3f(turning.at("rowY"), m[3], m[4], m[5]);
+                gl.uniform3f(turning.at("rowW"), m[6], m[7], m[8]);
                 gl.bindTexture(gl.TEXTURE_2D, input);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }

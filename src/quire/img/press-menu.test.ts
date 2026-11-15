@@ -1,4 +1,5 @@
-// Which lines the picture's right-click menu holds: what is picked first, then copy and paste, then export;
+// Which lines the picture's right-click menu holds: what is picked first, then copy and paste, then the
+// fixes for the whole picture that can be used, then export;
 // and, in headless Chromium, the menu opened by a right-click on the empty room, on the picture and on a
 // mark, and Paste in it taking the picture on the clipboard.
 
@@ -9,7 +10,7 @@ import { pressLines } from "./press-menu";
 
 const line = (label: string, key: string, disabled = false): MenuItem => ({ label, key, disabled, run: () => {} });
 const menus = (words: boolean, picked: boolean) => [
-    { items: () => [line("Export", "export")] },
+    { items: () => [line("Export", "export"), line("Straighten lines", "straighten"), line("Repair JPEG", "repair", true)] },
     {
         items: () => [
             line("Undo", "undo"),
@@ -30,13 +31,13 @@ test("with no picture the menu is Paste and Choose a picture", () => {
     expect(said(pressLines(menus(false, false), { picture: false, picked: false }, choose))).toEqual(["Paste", "Choose a picture"]);
 });
 
-test("on the picture it is Copy and Paste, then Export under a rule; Copy text is there only when words were read", () => {
-    expect(said(pressLines(menus(false, false), { picture: true, picked: false }, choose))).toEqual(["Copy", "Paste", "-", "Export"]);
-    expect(said(pressLines(menus(true, false), { picture: true, picked: false }, choose))).toEqual(["Copy", "Copy text", "Paste", "-", "Export"]);
+test("on the picture it is Copy and Paste, the fixes that can be used under a rule, then Export under a rule; Copy text is there only when words were read", () => {
+    expect(said(pressLines(menus(false, false), { picture: true, picked: false }, choose))).toEqual(["Copy", "Paste", "-", "Straighten lines", "-", "Export"]);
+    expect(said(pressLines(menus(true, false), { picture: true, picked: false }, choose))).toEqual(["Copy", "Copy text", "Paste", "-", "Straighten lines", "-", "Export"]);
 });
 
 test("on a mark or a cover its own lines come first, with a rule under them", () => {
-    expect(said(pressLines(menus(false, true), { picture: true, picked: true }, choose))).toEqual(["Remove", "Bring forward", "Send back", "-", "Copy", "Paste", "-", "Export"]);
+    expect(said(pressLines(menus(false, true), { picture: true, picked: true }, choose))).toEqual(["Remove", "Bring forward", "Send back", "-", "Copy", "Paste", "-", "Straighten lines", "-", "Export"]);
 });
 
 test("each line is the menus' own, so it does what that line does", () => {
@@ -78,12 +79,12 @@ test("a right-click on the empty room offers Paste and Choose a picture, and Pas
     expect(await page.tab.run("(async () => { const flat = await window.app.editing().flatten(); return [flat.width, flat.height]; })()")).toEqual([300, 200]);
 }, 60_000);
 
-test("on the picture it offers Copy, Paste and Export; on a mark that mark is picked and its lines come first; Shift leaves the browser's menu", async () => {
+test("on the picture it offers Copy, Paste, Straighten lines and Export; on a mark that mark is picked and its lines come first; Shift leaves the browser's menu", async () => {
     if (!page) return;
     const at = await page.onScreen(150, 100);
     expect(await rightClick(at.x, at.y)).toBe(true);
     await page.until("document.querySelector('.quire-img-press-menu:popover-open')");
-    expect(await lines()).toEqual(["Copy", "Paste", "Export"]);
+    expect(await lines()).toEqual(["Copy", "Paste", "Straighten lines", "Export"]);
     // Escape closes the menu and gives the keyboard back to the picture
     await shut();
     expect(await page.tab.run("document.activeElement === document.querySelector('.quire-img-stage')")).toBe(true);
@@ -100,7 +101,7 @@ test("on the picture it offers Copy, Paste and Export; on a mark that mark is pi
     const edge = await page.onScreen(60, 90);
     expect(await rightClick(edge.x, edge.y)).toBe(true);
     await page.until("document.querySelector('.quire-img-press-menu:popover-open')");
-    expect(await lines()).toEqual(["Remove", "Bring forward", "Send back", "Copy", "Paste", "Export"]);
+    expect(await lines()).toEqual(["Remove", "Bring forward", "Send back", "Copy", "Paste", "Straighten lines", "Export"]);
     const boxStep = await page.tab.run<string>("window.app.editing().steps().find((step) => step.type === 'box').id");
     expect(await page.tab.run("window.app.editing().stage.picked()")).toBe(boxStep);
     // Remove from the menu takes the box away

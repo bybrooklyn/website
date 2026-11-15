@@ -103,6 +103,51 @@
 .quire-img-grip-sw { left: 0; top: 100%; cursor: nesw-resize; }
 .quire-img-grip-w { left: 0; top: 50%; cursor: ew-resize; }
 
+/* perspective's corners set by hand: a round handle on each corner, which grows in when the corners are on and
+   shrinks away when they are off, with a finger's reach round it */
+.quire-img-corner {
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+    margin: -0.5rem 0 0 -0.5rem;
+    border: 0.125rem solid var(--accent);
+    border-radius: 50%;
+    background: oklch(0 0 0 / 0.35);
+    cursor: move;
+    touch-action: none;
+    opacity: 0;
+    scale: 0.3;
+    pointer-events: none;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease);
+}
+
+.quire-img-corner.shown {
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+}
+
+.quire-img-corner::after {
+    position: absolute;
+    inset: -0.9rem;
+    border-radius: 50%;
+    content: "";
+}
+
+.quire-img-corner.dragging,
+.quire-img-corner:focus-visible {
+    outline: none;
+    background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-img-corner {
+        transition: none;
+    }
+}
+
 /* typing a line of text where the picture was pressed: the words themselves, in the mark's color */
 .quire-img-writing {
     position: absolute;
@@ -790,6 +835,23 @@
         justify-content: center;
     }
 
+    /* perspective's two dials on a row of their own, the corners, Auto and Done under them */
+    .quire-img-strip[data-kind="perspective"] {
+        width: min(calc(100% - 1.5rem), 20rem);
+        flex-wrap: wrap;
+        justify-content: center;
+        row-gap: 0.25rem;
+    }
+
+    .quire-img-strip[data-kind="perspective"] .quire-img-strip-horizon {
+        flex-basis: 100%;
+        justify-content: center;
+    }
+
+    .quire-img-strip[data-kind="perspective"] > .quire-img-strip-rule:first-of-type {
+        display: none;
+    }
+
     .quire-img-strip-horizon > .quire-img-strip-rule {
         display: none;
     }
@@ -813,6 +875,12 @@
         repeating-linear-gradient(to right, var(--muted) 0 1px, transparent 1px 0.3rem) left bottom / 100% 45% no-repeat;
     opacity: 0.7;
     transform: translateX(calc(var(--turn, 0) * -0.3rem));
+}
+
+/* a keystone dial goes 30 degrees either way, so its ruler is twice as long */
+.quire-img-dial.long .quire-img-dial-ruler {
+    width: 36rem;
+    margin-left: -18rem;
 }
 
 .quire-img-dial.dragging .quire-img-dial-ruler {
