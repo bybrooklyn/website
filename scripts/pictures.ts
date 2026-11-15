@@ -22,6 +22,7 @@ import { css } from "../src/lib/color";
 import { cells, nameSize } from "../src/lib/drawn";
 import { make } from "../src/minis/fields";
 import { nearest } from "../src/minis/flight";
+import { RUNS } from "../src/minis/runs";
 import { browser, type Browser } from "./browser";
 import { at, frontmatter, listMdx, stem, writeJson } from "./lib";
 
@@ -78,6 +79,12 @@ const shots: Record<string, { query?: string; script?: string; pours?: Pour[]; w
     comet: { query: "?seed=lumen&field=6", ...aimed("lumen", 6) },
     // learning some way into a world with everything in it, the ground and what it sees showing
     generalist: { query: "?seed=meadow&hard=50&ground=100&hazards=100&boxes=100&moving=100&off=&legs=2", wait: 20000, from: 0.72 },
+    // the lift that loops, in oak and glass under its lamp, a dozen marbles let go and gone round a while, the run fitted to the view
+    marbles: {
+        query: "?test",
+        script: `window.marbles.load(${JSON.stringify(RUNS.find((one) => one.name.includes("loops"))!.text)}); window.marbles.run(120 * 9, 0.6, 12); document.querySelector(".mini-stage canvas[tabindex]").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));`,
+        wait: 5000,
+    },
     // a wooden frame burning on the left, a trans and a lesbian flag laid whole and a rainbow poured in stripes, on a floor of stone
     sand: {
         pours: [
