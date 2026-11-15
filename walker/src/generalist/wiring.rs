@@ -58,8 +58,12 @@ impl Rule {
     /// of energy four times as ready to cut, half the places joined at birth.
     pub const FIRST: Rule = Rule { numbers: [2.2, -1.2, -3.0, 0.0, 0.0, 1.4, 0.0] };
 
-    /// The rule the page carries, found by evolution in the trials (walker/README.md, "The risky bet").
-    pub const FOUND: Rule = Rule::FIRST;
+    /// The rule the page carries, found by evolution in the trials (walker/README.md, "The risky bet"):
+    /// the mean of the best half after eight generations of eight. Traces kept 0.84 a decision, growing
+    /// over a trace of 0.14, cutting under 0.026, a little readier to change when surprised and a little
+    /// less just after eating, short of energy about three times as ready to cut, half the places joined
+    /// at birth. Seven numbers are all that is shipped of it.
+    pub const FOUND: Rule = Rule { numbers: [1.645, -1.993, -3.639, 0.198, -0.371, 1.178, 0.066] };
 
     fn sigmoid(x: f32) -> f32 {
         1.0 / (1.0 + exp(-x))
