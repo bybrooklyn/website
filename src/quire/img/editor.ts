@@ -14,7 +14,9 @@ import { copyDocument, type Store } from "../core/store";
 import { packQuire, type Parts } from "../core/quire-file";
 import { openDialog } from "../core/dialog";
 import { createHistoryPanel, snapshotParts } from "../core/versions";
-import { control, fieldForm, icon, make, ruled, type MenuItem } from "../core/ui";
+import { control, fieldForm, flowMenu, icon, make, ruled, type MenuItem } from "../core/ui";
+import type { Heading } from "../core/menu-row";
+import { pressLines } from "./press-menu";
 import { copyPicture, encodeAs, exportName, formatOf, FORMATS, readSettings, untouched, weightSaid, type Settings } from "./export";
 import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
@@ -978,7 +980,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     const tick = (on: boolean, name: string) => (on ? "tick" : name);
     const copyWay = () => local()?.getItem(KEYS.copy);
     const filterOf = (): Filter => (picture ? look(picture).filter : "lanczos");
-    frame.menus(() => [
+    const headings = (): Heading[] => [
         {
             label: "File",
             items: () =>
@@ -1127,7 +1129,43 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 { label: "Open-source notices", icon: "file", key: "notices", run: () => void window.open("/quire/codecs/NOTICES.txt", "_blank", "noopener") },
             ],
         },
-    ]);
+    ];
+    frame.menus(headings);
+
+    // ---- a right-click's menu: what is under the pointer first, then copy and paste, then export ----
+    const pressMenu = flowMenu("Picture", { className: "quire-img-press-menu" });
+    const pressAnchor = make("span", "quire-anchor");
+    pressAnchor.setAttribute("aria-hidden", "true");
+    function openPressMenu(x: number, y: number, keyboard: boolean) {
+        Object.assign(pressAnchor.style, { left: `${x}px`, top: `${y}px`, height: "0px" });
+        if (!pressAnchor.isConnected) document.body.append(pressAnchor);
+        const lines = pressLines(headings(), { picture: !!picture, picked: !!stage.picked() }, { label: "Choose a picture", icon: "image", key: "choose", run: () => chooser.click() });
+        pressMenu.open(pressAnchor, lines, keyboard);
+        // opened by the pointer, the menu still takes the keyboard (no line of it yet), so that Escape closes it and the
+        // arrows go through it, and not to the picture under it; closing gives the keyboard back to where it was
+        if (!keyboard) pressMenu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
+    }
+    /** When the menu was last opened from the keyboard, whose own menu event may follow. */
+    let pressKeyedAt = -Infinity;
+    const onPressMenu = (event: MouseEvent) => {
+        // Shift leaves the browser's own menu; a field, a button, the strip and a panel keep theirs
+        if (event.shiftKey || event.defaultPrevented || host.classList.contains("shelved")) return;
+        if (event.target instanceof Element && event.target.closest("input, textarea, button, [contenteditable=true], .quire-img-strip, .quire-img-panel, .quire-img-resize")) return;
+        event.preventDefault();
+        if (performance.now() - pressKeyedAt < 500) return;
+        stage.pickAt(event.clientX, event.clientY);
+        openPressMenu(event.clientX, event.clientY, false);
+    };
+    const onPressKey = (event: KeyboardEvent) => {
+        if (!(event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) || event.defaultPrevented) return;
+        if (event.target instanceof Element && event.target.closest("input, textarea, [contenteditable=true]")) return;
+        event.preventDefault();
+        pressKeyedAt = performance.now();
+        const place = room.getBoundingClientRect();
+        openPressMenu(place.left + place.width / 2, place.top + place.height / 2, true);
+    };
+    room.addEventListener("contextmenu", onPressMenu);
+    room.addEventListener("keydown", onPressKey);
 
     /** Edit, Paste: the browser's clipboard if it lets the page read it, else the keys to press. */
     async function pasteFromMenu() {
@@ -1183,6 +1221,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             ["Delete", "Remove what is picked"],
             ["Ctrl+C", "Copy"],
             ["Ctrl+V", "Paste a picture"],
+            ["Right-click", "A menu for what is under the pointer, with Copy and Paste (Shift: the browser's own)"],
             ["Ctrl+Z", "Undo"],
             ["Ctrl+Shift+Z", "Redo"],
             ["Ctrl+0", "Fit"],
@@ -1278,6 +1317,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
             finding.destroy();
             grading.panel.remove();
             document.removeEventListener("paste", pasted);
+            pressMenu.close(false);
+            pressAnchor.remove();
             session.destroy();
             frame.destroy();
             stage.destroy();

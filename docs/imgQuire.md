@@ -354,6 +354,16 @@ what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mar
 single keys C, R, A, T, B, E, I, W and G only while the picture has the keyboard, Enter and Escape; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
 
+**A right-click's menu** (`press-menu.ts`, opened in `editor.ts`), as mdQuire's text has one. On the
+picture: Copy, Copy text when words were read, Paste, and Export under a rule. On a mark or a cover, that
+one is picked first (`stage.pickAt`) and Remove, Bring forward and Send back come before the rest. With no
+picture yet: Paste and Choose a picture. Each line is the menus' own, found by its name, so it does what
+the menu's line does. Paste reads the clipboard through the browser (which asks once in Chromium); where
+the browser refuses, the status says to press Ctrl+V. The menu key or Shift+F10 opens it from the
+keyboard, Shift with the right-click leaves the browser's own, and a field, a button, the strip and a
+panel keep theirs. Opened by the pointer it still takes the keyboard, so Escape closes it and gives the
+keyboard back to the picture.
+
 **Drawing.** WebGPU first, WebGL2 where it is missing, behind `Backend` in `draw.ts`. A picture of up to
 4096 a side is one texture; a larger one a smaller copy and full-size pieces of 2048 made when zoomed in
 (at most twelve kept). Nearest pixels past one to one, the card's smaller copies when zoomed out.

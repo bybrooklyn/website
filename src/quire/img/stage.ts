@@ -596,6 +596,8 @@ export function createStage(hooks: StageHooks) {
         return undefined;
     }
 
+    /** The marks, and with Hide, reading or no tool the covers, that a press can pick. */
+    const pickableOf = (steps: Kept[]) => steps.filter((step) => !step.off && (step.type === "arrow" || step.type === "box" || step.type === "text" || (step.type === "cover" && (tool === "hide" || tool === "none" || tool === "read")))) as (Kept & (Mark | { type: "cover"; rect: Rect }))[];
     element.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 && event.button !== 1) return;
         element.focus({ preventScroll: true });
@@ -661,7 +663,7 @@ export function createStage(hooks: StageHooks) {
         // (covers only with Hide or no tool, so that an arrow can start inside one); pressed again where one
         // is picked and let go without moving, the one beneath it is picked, round to the top again
         const steps = found.steps;
-        const pickable = steps.filter((step) => !step.off && (step.type === "arrow" || step.type === "box" || step.type === "text" || (step.type === "cover" && (tool === "hide" || tool === "none" || tool === "read")))) as (Kept & (Mark | { type: "cover"; rect: Rect }))[];
+        const pickable = pickableOf(steps);
         const under = allAt(pickable, there, 6 / place().across).map((at) => pickable[at]!);
         const now = under.findIndex((step) => step.id === picked);
         const target = under[Math.max(0, now)];
@@ -1026,6 +1028,16 @@ export function createStage(hooks: StageHooks) {
         frame: () => cropFrame,
         /** The step picked, if one is. */
         picked: () => picked,
+        /** Picks the mark or cover at a place on the screen, as a press there would, without moving it: what is picked stays picked if it is there, else the topmost is, and with nothing there nothing is picked. The crop, the text and the grade tools keep the press for themselves, and what is picked is left as it was. */
+        pickAt(clientX: number, clientY: number) {
+            const found = hooks.picture();
+            if (!found || !loaded || tool === "crop" || tool === "text" || tool === "grade") return;
+            const pickable = pickableOf(found.steps);
+            const under = allAt(pickable, toOriginal(pointer({ clientX, clientY })), 6 / place().across).map((at) => pickable[at]!);
+            picked = (under.find((step) => step.id === picked) ?? under[0])?.id;
+            paint();
+            hooks.moved();
+        },
         pick(id: string | undefined) {
             picked = id;
             paint();
