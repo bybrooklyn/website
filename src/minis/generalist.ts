@@ -577,7 +577,7 @@ export default function generalist(m: Mote): Scene {
         // the brain, drawn live from the first second, so a visitor watches it grow as it learns
         const brainPicture = el("canvas", { class: "walker-brain-picture generalist-brain" });
         brainPicture.setAttribute("role", "img");
-        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its plain neurons in a column either side of its pool, and what it does on the right. In the pool, small squares are memory neurons filled as full as what they hold, rings with a dot going round are rhythms, and bars under them are moods, which turn groups of the plain neurons up or down. Lines are the connections passing the most, thicker where a connection has changed since the world last changed. A small trace in the corner is its surprise: how wrong its guess of what it would see was. Pressing a neuron shows everything it listens to. With growth switched on, a connection just added grows out of the neuron it reads and one just cut draws back into it, and the words under the brain say how many connections it keeps and what share of its energy they cost a minute.");
+        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its plain neurons in a column either side of its pool, and what it does on the right. In the pool, small squares are memory neurons filled as full as what they hold, rings with a dot going round are rhythms, and bars under them are moods, which turn groups of the plain neurons up or down. Lines are the connections passing the most, thicker where a connection has changed since the world last changed. A small trace in the corner is its surprise: how wrong its guess of what it would see was. Pressing a neuron shows everything it listens to. With growth switched on, a connection just added grows out of the neuron it reads and one just cut draws back into it, and the words under the brain say how many connections it keeps and what share of all its energy they cost a minute.");
         /** Connections just added or cut in a brain that grows them, by where they go into and come from: whether added, and when it was seen. Each is drawn for `FLASH` seconds, an added one growing out of the neuron it reads, a cut one drawn back into it. */
         const flashes = new Map<string, { from: number; into: number; added: boolean; at: number }>();
         const FLASH = 1.2;
@@ -833,8 +833,9 @@ export default function generalist(m: Mote): Scene {
                 // the brain drawn, which until its run ends may be the shape before a slider moved; one that grows its
                 // connections says how many it keeps and what share of its energy they cost a minute
                 const growth = kinds?.growth;
+                const percent = growth ? growth.cost * 6000 : 0;
                 const brainWords = growth
-                    ? `${growth.joined} connections${wide > 330 ? `, ${(growth.cost * 6000).toFixed(1)}% energy a minute` : ""}`
+                    ? wide > 280 ? `${growth.joined} connections cost ${percent < 1 ? percent.toFixed(1) : Math.round(percent)}% a minute` : `${growth.joined} connections`
                     : kinds ? `${2 * kinds.counts.plain + kinds.counts.memory + kinds.counts.rhythm + kinds.counts.mood} neurons` : "neurons";
                 ctx.fillText(brainWords, wide / 2, high - 3);
                 ctx.textAlign = "right";
