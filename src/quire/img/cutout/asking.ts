@@ -69,7 +69,8 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
                 if (count) count.textContent = `${Math.min(Math.round(fetched / 1e6), Math.round(partSize(tier) / 1e6))} of ${megabytes(partSize(tier))}`;
             };
             const cards = () => {
-                const group = make("div", "quire-img-read-cards quire-img-find-cards");
+                // three qualities stand three in a row, as reading's sizes do; two (with no graphics card for Best) stand side by side, so that no card is left alone on a row of its own
+                const group = make("div", choices.length === 2 ? "quire-img-read-cards quire-img-find-cards" : "quire-img-read-cards");
                 group.setAttribute("role", "radiogroup");
                 group.setAttribute("aria-label", "Quality");
                 const all = choices.map((each) => {
