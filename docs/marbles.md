@@ -1019,6 +1019,10 @@ and no longer offered.
 **The controls line** says only what a newcomer needs first; bending and settings moved into the keys
 list. New keys: V, Shift+V, T, H, G, Shift+G, X, the menu key.
 
+**The bar** holds seventeen tools now, and one row of them fits no screen. Where one row does not fit, its
+groups go two to a row in two columns (`paired`), and they stack one to a row only where that does not fit
+either, as on a phone. Before this a wide screen had four short rows with nothing beside them.
+
 **Fell short, said plainly.**
 
 - *No run with every piece.* A run chaining every moving and sounding piece after the stage 2 run, joint by
