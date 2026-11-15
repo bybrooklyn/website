@@ -60,6 +60,9 @@ export const PLAIN: Look = { shape: "square", eyes: "square", ink: { kind: "soli
 /** The middle picture's least and greatest width, as a share of the code's side, and the step it snaps to. */
 export const MIDDLE_SIZES = { least: 0.12, most: 0.32, step: 0.02 };
 
+/** The ground left about a middle picture, inside the square of modules it covers, in modules. */
+export const MIDDLE_INSET = 0.5;
+
 /** A number written short for a path: at most three decimals, no trailing zeros. */
 const n = (value: number): string => String(Math.round(value * 1000) / 1000);
 
@@ -262,19 +265,16 @@ export function modulesPath(code: Code, shape: Shape, skip: (x: number, y: numbe
     return parts.join("");
 }
 
-/** The path of the three eyes, each a ring and its middle, to be filled even-odd. */
+/** The path of one eye with its top left at a place: its outer edge, its inner edge and its middle, to be filled even-odd. */
+export function eyePath(x: number, y: number, eyes: EyeShape): string {
+    if (eyes === "round") return circle(x + 3.5, y + 3.5, 3.5) + circle(x + 3.5, y + 3.5, 2.5) + circle(x + 3.5, y + 3.5, 1.5);
+    if (eyes === "rounded") return roundRect(x, y, 7, 7, 2) + roundRect(x + 1, y + 1, 5, 5, 1.3) + roundRect(x + 2, y + 2, 3, 3, 0.9);
+    return rect(x, y, 7, 7) + rect(x + 1, y + 1, 5, 5) + rect(x + 2, y + 2, 3, 3);
+}
+
+/** The path of the three eyes, to be filled even-odd. */
 export function eyesPath(side: number, eyes: EyeShape): string {
-    const parts: string[] = [];
-    for (const [x, y] of [
-        [0, 0],
-        [side - 7, 0],
-        [0, side - 7],
-    ] as const) {
-        if (eyes === "round") parts.push(circle(x + 3.5, y + 3.5, 3.5), circle(x + 3.5, y + 3.5, 2.5), circle(x + 3.5, y + 3.5, 1.5));
-        else if (eyes === "rounded") parts.push(roundRect(x, y, 7, 7, 2), roundRect(x + 1, y + 1, 5, 5, 1.3), roundRect(x + 2, y + 2, 3, 3, 0.9));
-        else parts.push(rect(x, y, 7, 7), rect(x + 1, y + 1, 5, 5), rect(x + 2, y + 2, 3, 3));
-    }
-    return parts.join("");
+    return eyePath(0, 0, eyes) + eyePath(side - 7, 0, eyes) + eyePath(0, side - 7, eyes);
 }
 
 /** Text made safe inside an SVG attribute. */
@@ -340,8 +340,13 @@ export function halftone(code: Code, light: Uint8Array): Uint8Array {
     return dark;
 }
 
-/** The SVG of a code in a look: `size` pixels a side (the viewBox counted in modules, from the margin's corner), and `id` to keep its gradients apart from another SVG's on the same page. */
-export function drawSvg(code: Code, look: Look, options: { size?: number; id?: string; title?: string } = {}): string {
+/**
+ * The SVG of a code in a look: `size` pixels a side (the viewBox counted in modules, from the margin's
+ * corner), and `id` to keep its gradients apart from another SVG's on the same page. `bare` leaves out
+ * the ground and the pictures, which the page lays as steady layers of its own under and over it, so
+ * typing does not make a picture be decoded again.
+ */
+export function drawSvg(code: Code, look: Look, options: { size?: number; id?: string; title?: string; bare?: boolean } = {}): string {
     const { side } = code;
     const m = Math.max(0, Math.round(look.margin));
     const full = side + 2 * m;
@@ -350,7 +355,7 @@ export function drawSvg(code: Code, look: Look, options: { size?: number; id?: s
     const ink = fillOf(look.ink, look.ground, side, id);
     const defs: string[] = [ink.defs];
     const body: string[] = [];
-    if (look.ground) body.push(`<rect x="${-m}" y="${-m}" width="${full}" height="${full}" fill="${attribute(look.ground)}"/>`);
+    if (look.ground && !options.bare) body.push(`<rect x="${-m}" y="${-m}" width="${full}" height="${full}" fill="${attribute(look.ground)}"/>`);
     let skip: (x: number, y: number) => boolean = () => false;
     if (look.middle) {
         const { from, width } = middleSquare(side, look.middle.size);
@@ -360,7 +365,7 @@ export function drawSvg(code: Code, look: Look, options: { size?: number; id?: s
         const ground = look.ground ?? "#ffffff";
         if (look.through.colored) {
             // the picture in color over the code's square, the modules small over it, their middles in the code's two colors
-            body.push(`<image href="${attribute(look.through.href)}" x="0" y="0" width="${side}" height="${side}" preserveAspectRatio="xMidYMid slice"/>`);
+            if (!options.bare) body.push(`<image href="${attribute(look.through.href)}" x="0" y="0" width="${side}" height="${side}" preserveAspectRatio="xMidYMid slice"/>`);
             const darkDots: string[] = [];
             const lightDots: string[] = [];
             const patternPath: string[] = [];
@@ -400,16 +405,16 @@ export function drawSvg(code: Code, look: Look, options: { size?: number; id?: s
                     x = end;
                 }
             }
-            if (!look.ground) body.push(`<rect x="0" y="0" width="${side}" height="${side}" fill="#ffffff"/>`);
+            if (!look.ground && !options.bare) body.push(`<rect x="0" y="0" width="${side}" height="${side}" fill="#ffffff"/>`);
             body.push(`<path d="${runs.join("")}" fill="${ink.fill}"/>`);
         }
     } else {
         body.push(`<path d="${modulesPath(code, look.shape, skip)}" fill="${ink.fill}"/>`);
     }
     body.push(`<path d="${eyesPath(side, look.eyes)}" fill="${ink.fill}" fill-rule="evenodd"/>`);
-    if (look.middle) {
+    if (look.middle && !options.bare) {
         const { from, width } = middleSquare(side, look.middle.size);
-        const inset = 0.5;
+        const inset = MIDDLE_INSET;
         defs.push(`<clipPath id="${id}-middle"><rect x="${n(from + inset)}" y="${n(from + inset)}" width="${n(width - 2 * inset)}" height="${n(width - 2 * inset)}" rx="${n(Math.min(1.2, width / 6))}"/></clipPath>`);
         body.push(`<image href="${attribute(look.middle.href)}" x="${n(from + inset)}" y="${n(from + inset)}" width="${n(width - 2 * inset)}" height="${n(width - 2 * inset)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id}-middle)"/>`);
     }
