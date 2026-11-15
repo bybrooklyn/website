@@ -18,7 +18,7 @@
 
 import { MARBLE, type Solid } from "../mote/space";
 import type { Mark } from "./checks";
-import { RADIUS } from "./pieces";
+import { RADIUS, SINK, made, shapeOf } from "./pieces";
 import type { Placed } from "./run";
 import { makeTable, type Table } from "./table";
 import type { V3 } from "../mote/solids";
@@ -166,4 +166,70 @@ export function ghostMarks(paths: Path[], openEnds: Mark[]): Mark[] {
         if (!marks.some((mark) => mark.id === path.last && mark.why === why)) marks.push({ id: path.last, why });
     }
     return marks;
+}
+
+/** Where a marble rests along the run's track, kept for the run it was worked out for. */
+const resting: { key: string; cells: Map<string, { at: V3; next?: V3 }[]> } = { key: "", cells: new Map() };
+
+/** How near a ghost marble's middle must be to where a marble rests in a groove for its thread to be drawn there, in cm: as far as one rocks. */
+const ON_TRACK = 1.2;
+
+/**
+ * The line a ghost marble's thread is drawn along: where the marble is on track, the groove's own middle
+ * line at a resting marble's height (the track is known exactly, so the line is calm however the marble
+ * rocks from side to side); where it flies between pieces, or circles a bowl, its own places smoothed.
+ */
+export function threadOf(places: V3[], run: Placed[]): V3[] {
+    // where a marble rests along every length of track, every 4 mm, kept in a grid of 4 cm cells; made
+    // again only when the run changes, since the thread is drawn again as the ghost's way grows
+    const runKey = JSON.stringify(run.map((piece) => [piece.kind, piece.place]));
+    const fresh = runKey !== resting.key;
+    const cells = fresh ? new Map<string, { at: V3; next?: V3 }[]>() : resting.cells;
+    const key = (p: V3) => `${Math.floor(p[0] / 4)} ${Math.floor(p[1] / 4)} ${Math.floor(p[2] / 4)}`;
+    if (fresh) Object.assign(resting, { key: runKey, cells });
+    for (const piece of fresh ? run : []) {
+        for (const { piece: track } of made(shapeOf(piece.kind), piece.place).lengths) {
+            const end = track.path.end;
+            const count = Math.max(2, Math.ceil(end / 0.4));
+            let before: { at: V3; next?: V3 } | undefined;
+            for (let i = 0; i <= count; i++) {
+                const f = track.frame((end * i) / count);
+                const one = { at: [f.p[0] - f.up[0] * SINK, f.p[1] - f.up[1] * SINK, f.p[2] - f.up[2] * SINK] as V3, next: undefined as V3 | undefined };
+                if (before) before.next = one.at;
+                const k = key(one.at);
+                cells.set(k, [...(cells.get(k) ?? []), one]);
+                before = one;
+            }
+        }
+    }
+    const onTrack = (p: V3): V3 | undefined => {
+        let best: { at: V3; d: number } | undefined;
+        const [cx, cy, cz] = [Math.floor(p[0] / 4), Math.floor(p[1] / 4), Math.floor(p[2] / 4)];
+        for (let x = cx - 1; x <= cx + 1; x++) {
+            for (let y = cy - 1; y <= cy + 1; y++) {
+                for (let z = cz - 1; z <= cz + 1; z++) {
+                    for (const one of cells.get(`${x} ${y} ${z}`) ?? []) {
+                        // the nearest point of the short stretch from this sample to the next
+                        const to = one.next ?? one.at;
+                        const d: V3 = [to[0] - one.at[0], to[1] - one.at[1], to[2] - one.at[2]];
+                        const long = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+                        const t = long > 0 ? Math.max(0, Math.min(1, ((p[0] - one.at[0]) * d[0] + (p[1] - one.at[1]) * d[1] + (p[2] - one.at[2]) * d[2]) / long)) : 0;
+                        const q: V3 = [one.at[0] + d[0] * t, one.at[1] + d[1] * t, one.at[2] + d[2] * t];
+                        const far = Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+                        if (!best || far < best.d) best = { at: q, d: far };
+                    }
+                }
+            }
+        }
+        return best && best.d < ON_TRACK ? best.at : undefined;
+    };
+    const snapped = places.map(onTrack);
+    return places.map((p, i) => {
+        const on = snapped[i];
+        if (on) return on;
+        // in the air or a bowl: smoothed over its neighbours, those on track taken where the track is
+        const near: V3[] = [];
+        for (let j = Math.max(0, i - 4); j <= Math.min(places.length - 1, i + 4); j++) near.push(snapped[j] ?? places[j]!);
+        return [0, 1, 2].map((axis) => near.reduce((sum, q) => sum + q[axis]!, 0) / near.length) as V3;
+    });
 }

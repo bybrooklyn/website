@@ -29,7 +29,7 @@ import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
 import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
-import { ghostMarks, makeGhost } from "./ghost";
+import { ghostMarks, makeGhost, threadOf } from "./ghost";
 import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
@@ -2059,11 +2059,8 @@ export default function marbles(m: Mote): Scene {
         const points: V3[] = [];
         const faces: number[][] = [];
         for (const path of ghost.paths) {
-            // the marble's middle rocks from side to side in the groove; the thread follows it smoothed, as a way and not a wobble
-            const smooth = path.places.map((_, i): V3 => {
-                const near = path.places.slice(Math.max(0, i - 4), i + 5);
-                return [0, 1, 2].map((axis) => near.reduce((sum, p) => sum + p[axis]!, 0) / near.length) as V3;
-            });
+            // the marble's middle rocks from side to side in the groove; the thread is drawn along the groove itself, calm
+            const smooth = threadOf(path.places, ghostRun());
             const places = smooth.filter((_, i) => i % 2 === 0 || i === smooth.length - 1);
             if (places.length < 2) continue;
             const first = points.length;

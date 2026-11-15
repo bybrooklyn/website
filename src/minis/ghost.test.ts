@@ -6,7 +6,7 @@
 
 import { expect, test } from "bun:test";
 import { checks } from "./checks";
-import { ghostMarks, makeGhost } from "./ghost";
+import { ghostMarks, makeGhost, threadOf } from "./ghost";
 import type { Kind } from "./pieces";
 import { fit, jointsOf, read, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -99,3 +99,25 @@ test("a real table rolls the same to the bit whether a ghost runs beside it or n
     };
     expect(new Float64Array(race(true))).toEqual(new Float64Array(race(false)));
 }, 60_000);
+
+test("the ghost's thread lies along the groove's middle where the marble is on track, calm however it rocks, and smoothed in the air", () => {
+    const run = chain(10, [kind("s", [3]), kind("s", [3])]);
+    const ghost = makeGhost();
+    ghost.start(run);
+    ghost.work(0, 120 * 6);
+    const places = ghost.paths[0]!.places;
+    const thread = threadOf(places, run);
+    expect(thread.length).toBe(places.length);
+    // the straights run along x, their groove's middle at one z and one height: the thread keeps to them where the marble is on them
+    const row = jointsOf(run[1]!)[0]!.at;
+    const far = jointsOf(run[2]!)[1]!.at;
+    const [low, high] = [Math.min(row[0], far[0]) + 1, Math.max(row[0], far[0]) - 1];
+    const on = thread.filter((_, i) => Math.abs(places[i]![1] - (row[1] - 0.7)) < 1 && places[i]![0] > low && places[i]![0] < high);
+    expect(on.length).toBeGreaterThan(20);
+    for (const p of on) {
+        expect(p[2]).toBeCloseTo(row[2], 6);
+        expect(p[1]).toBeCloseTo(row[1] - 0.7, 6);
+    }
+    // off the end it flies: the thread there is the marble's own way, smoothed, and goes down to the table
+    expect(Math.min(...thread.map((p) => p[1]))).toBeLessThan(row[1] - 5);
+});
