@@ -299,8 +299,10 @@
     font-size: 0.85rem;
 }
 
-/* the wrap switch stands beside its line's name, which says what it is: the tick alone is seen, the words are said */
+/* the wrap switch stands under its line's name, which says what it is: the tick alone is seen, the words are said; it is as
+   wide as its tick and no wider (a switch is as wide as its list elsewhere, which here was an empty box across the panel) */
 .quire-switch.quire-picture-wrap {
+    width: auto;
     min-height: 1.9rem;
     padding: 0 0.45rem;
 }
