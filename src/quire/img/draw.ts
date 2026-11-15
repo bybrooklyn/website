@@ -34,7 +34,7 @@
 
 import { webgl2 } from "./gl";
 import { webgpu } from "./gpu";
-import { drawMarks } from "./marks";
+import { drawMarks, lensRegion, type Place } from "./marks";
 import type { Filter, Look, Rect } from "./steps";
 import { pack, type Packed, type PackedGrade } from "./grade-shader";
 import { stackFor } from "./masks";
@@ -294,6 +294,34 @@ export function spread(turn: Turn, crop: Rect): { wider: number; shrink: number 
     return { wider, shrink: Math.min(8, shrink) };
 }
 
+/**
+ * What a magnifier's lens shows, as a look of its own: the square of the level picture round the place it looks
+ * at (`lensRegion`), drawn as many pixels across as the lens is where it is drawn, with the grades and covers of
+ * the picture and the marks drawn before it (but no other lens or spotlight). Flattened as any look is, it is
+ * the picture as it looks, enlarged from the original's own pixels.
+ */
+export function lensLook(look: Look, index: number, place: Place): Look | undefined {
+    const mark = look.marks[index];
+    if (mark?.type !== "magnifier") return undefined;
+    const { crop, pixels } = lensRegion(mark, place);
+    const under = look.marks.slice(0, index).filter((each) => each.type !== "magnifier" && each.type !== "spotlight");
+    return { ...look, crop, width: pixels, height: pixels, filter: "lanczos", marks: under };
+}
+
+/** Every magnifier's lens of a look flattened by `flatten` and made a canvas in the result's space, by its place among the marks. */
+export async function lensPictures(look: Look, place: Place, flatten: (part: Look) => Promise<ImageData>, tagged: ImageDataSettings): Promise<Map<number, OffscreenCanvas>> {
+    const made = new Map<number, OffscreenCanvas>();
+    for (let index = 0; index < look.marks.length; index++) {
+        const part = lensLook(look, index, place);
+        if (!part) continue;
+        const pixels = await flatten(part);
+        const canvas = new OffscreenCanvas(pixels.width, pixels.height);
+        canvas.getContext("2d", tagged)!.putImageData(new ImageData(pixels.data, pixels.width, pixels.height, tagged), 0, 0);
+        made.set(index, canvas);
+    }
+    return made;
+}
+
 /** The original, decoded once by the browser and kept on the card, drawn and flattened through a backend. */
 export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
     const full = await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
@@ -332,109 +360,114 @@ export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
         drawAgain?.();
     };
 
+    /** Draws the picture on the canvas as the scene says. */
+    function draw(scene: Scene, again?: () => void) {
+        drawAgain = again;
+        const { look, view } = scene;
+        const shown = scene.cropping ?? look.crop;
+        const turn = turnOf(look.turn ?? 0, size, look.perspective);
+        // canvas pixels per pixel of the original: a resize is seen as the picture drawn larger or smaller
+        const across = scene.cropping ? view.scale : (view.scale * look.width) / look.crop.width;
+        const down = scene.cropping ? view.scale : (view.scale * look.height) / look.crop.height;
+        const place = (rect: Rect): Rect => ({ x: view.x + (rect.x - shown.x) * across, y: view.y + (rect.y - shown.y) * down, width: rect.width * across, height: rect.height * down });
+        const point = (at: { x: number; y: number }) => ({ x: view.x + (at.x - shown.x) * across, y: view.y + (at.y - shown.y) * down });
+        // a part of the original on the canvas: a rectangle, or turned, four corners and the box round them
+        const onCanvas = (rect: Rect, angle?: number): { to: Rect; quad?: Quad; depths?: [number, number, number, number] } => {
+            if (!bent(turn) && !angle) return { to: place(rect) };
+            const quad = quadOn(rect, angle, turn, point);
+            // in perspective, each corner's depth, so that the card draws the piece through the map and not as two flat triangles
+            const depths = turn.matrix ? cornerDepths([{ x: quad[0], y: quad[1] }, { x: quad[2], y: quad[3] }, { x: quad[4], y: quad[5] }, { x: quad[6], y: quad[7] }]) : undefined;
+            return { to: quadBox(quad), quad, ...(depths ? { depths } : {}) };
+        };
+        const sharp = across >= 1 - 1e-6 && !bent(turn);
+        const images: Drawn[] = [{ texture: overview, ...onCanvas({ x: 0, y: 0, ...size }), sharp: sharp && whole === full }];
+        // zoomed in beyond the smaller copy: the full-size pieces in sight, drawn over it
+        if (whole !== full && across > (whole.width / size.width) * 1.05) {
+            for (let row = 0; row * PIECE < size.height; row++)
+                for (let column = 0; column * PIECE < size.width; column++) {
+                    const drawnAt = onCanvas({ x: column * PIECE, y: row * PIECE, width: Math.min(PIECE, size.width - column * PIECE), height: Math.min(PIECE, size.height - row * PIECE) });
+                    const to = drawnAt.to;
+                    if (to.x > scene.canvas.width || to.y > scene.canvas.height || to.x + to.width < 0 || to.y + to.height < 0) continue;
+                    const texture = tile(column, row);
+                    if (texture) images.push({ texture, ...drawnAt, sharp });
+                    else void makeTile(column, row);
+                }
+        }
+        const fills: Fill[] = look.covers.map((cover) => {
+            const drawnAt = onCanvas(cover.rect, cover.angle);
+            return { rect: drawnAt.to, ...(drawnAt.quad ? { quad: drawnAt.quad } : {}), color: rgba(cover.color), graded: true };
+        });
+        if (scene.cropping) {
+            // the outside of the crop dimmed, so the frame shows what is kept
+            const inside = place(look.crop);
+            const all = place(scene.cropping);
+            const dim: Color = [0, 0, 0, 0.55];
+            fills.push(
+                { rect: { x: all.x, y: all.y, width: all.width, height: inside.y - all.y }, color: dim, dim: true },
+                { rect: { x: all.x, y: inside.y + inside.height, width: all.width, height: all.y + all.height - inside.y - inside.height }, color: dim, dim: true },
+                { rect: { x: all.x, y: inside.y, width: inside.x - all.x, height: inside.height }, color: dim, dim: true },
+                { rect: { x: inside.x + inside.width, y: inside.y, width: all.x + all.width - inside.x - inside.width, height: inside.height }, color: dim, dim: true },
+            );
+        }
+        backend.grading(scene.grading);
+        // a canvas pixel's place in the original, for the grade's masks
+        const graded: ScreenGrade | undefined = scene.grading ? { toOriginal: [shown.x - view.x / across, shown.y - view.y / down, 1 / across, 1 / down], split: scene.split ?? -1 } : undefined;
+        backend.draw(images, fills, scene.cropping ? undefined : place(look.crop), graded);
+    }
+    /** The picture as it looks, at full size: its pixels, the covers painted in before resampling so that nothing they hide is read, and the marks drawn over, each magnifier's lens flattened the same way at the size it is drawn. */
+    async function flatten(look: Look, most = PIECE, grading?: Grading, space: Space = "srgb"): Promise<ImageData> {
+        const result = new ImageData(look.width, look.height);
+        backend.grading(grading);
+        const stepX = look.crop.width / look.width;
+        const stepY = look.crop.height / look.height;
+        const turn = turnOf(look.turn ?? 0, size, look.perspective);
+        // a turned piece reads a part of the original as wide as the piece turned, so each piece is made smaller to fit the card
+        const reached = turn.matrix ? spread(turn, look.crop) : { wider: Math.abs(turn.cos) + Math.abs(turn.sin), shrink: 1 };
+        const wider = bent(turn) ? reached.wider : 1;
+        // past the filter's own reach, as many more pixels as the map shrinks the picture there
+        const margin = 4 + 3 * Math.ceil(reached.shrink - 1);
+        const limit = Math.min(most, backend.most);
+        for (const piece of plan(look, bent(turn) ? Math.max(16, Math.floor((limit - 2 * margin - 2) / wider)) : limit)) {
+            // the part of the original the piece reads: its own place, or turned, the box round it in the original and a filter's reach more
+            let read = piece.source;
+            if (bent(turn)) {
+                const corners = cornersOf(piece.source).map((corner) => fromLevel(corner, turn));
+                const left = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.x))) - margin);
+                const top = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.y))) - margin);
+                const right = Math.min(size.width, Math.ceil(Math.max(...corners.map((corner) => corner.x))) + margin);
+                const bottom = Math.min(size.height, Math.ceil(Math.max(...corners.map((corner) => corner.y))) + margin);
+                read = { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
+            }
+            const part = await createImageBitmap(full, read.x, read.y, read.width, read.height, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+            const covers: PieceCover[] = look.covers.map((cover) => ({ rect: { x: cover.rect.x - read.x, y: cover.rect.y - read.y, width: cover.rect.width, height: cover.rect.height }, color: rgba(cover.color), ...(cover.angle ? { angle: cover.angle } : {}) }));
+            const graded: [number, number, number, number] | undefined = grading ? [look.crop.x + piece.out.x * stepX, look.crop.y + piece.out.y * stepY, stepX, stepY] : undefined;
+            const turned: TurnPass | undefined = bent(turn) ? { matrix: pieceMatrix(turn, piece.source, read), width: piece.source.width, height: piece.source.height } : undefined;
+            const pixels = await backend.resample(part, covers, piece, graded, turned);
+            part.close();
+            for (let row = 0; row < piece.out.height; row++) result.data.set(pixels.subarray(row * piece.out.width * 4, (row + 1) * piece.out.width * 4), ((piece.out.y + row) * look.width + piece.out.x) * 4);
+        }
+        if (look.marks.length) {
+            // the marks drawn in the result's own space, so that a mark on a Display P3 picture is the color picked, the browser turning its sRGB color into P3 numbers
+            const p3 = space === "p3" && !grading?.convert;
+            const tagged: ImageDataSettings = { colorSpace: p3 ? "display-p3" : "srgb" };
+            const canvas = new OffscreenCanvas(look.width, look.height);
+            const context = canvas.getContext("2d", tagged)!;
+            context.putImageData(new ImageData(result.data, look.width, look.height, tagged), 0, 0);
+            const place = resultPlace(look, size);
+            const lenses = await lensPictures(look, place, (part) => flatten(part, most, grading, space), tagged);
+            drawMarks(context, look.marks, place, (index) => lenses.get(index));
+            return new ImageData(context.getImageData(0, 0, look.width, look.height, tagged).data, look.width, look.height);
+        }
+        return result;
+    }
+
     return {
         size,
         backend: backend.name,
         /** Puts the canvas in a space: true when it took it. */
         colors: (space: "srgb" | "display-p3") => backend.colors(space),
-        /** Draws the picture on the canvas as the scene says. */
-        draw(scene: Scene, again?: () => void) {
-            drawAgain = again;
-            const { look, view } = scene;
-            const shown = scene.cropping ?? look.crop;
-            const turn = turnOf(look.turn ?? 0, size, look.perspective);
-            // canvas pixels per pixel of the original: a resize is seen as the picture drawn larger or smaller
-            const across = scene.cropping ? view.scale : (view.scale * look.width) / look.crop.width;
-            const down = scene.cropping ? view.scale : (view.scale * look.height) / look.crop.height;
-            const place = (rect: Rect): Rect => ({ x: view.x + (rect.x - shown.x) * across, y: view.y + (rect.y - shown.y) * down, width: rect.width * across, height: rect.height * down });
-            const point = (at: { x: number; y: number }) => ({ x: view.x + (at.x - shown.x) * across, y: view.y + (at.y - shown.y) * down });
-            // a part of the original on the canvas: a rectangle, or turned, four corners and the box round them
-            const onCanvas = (rect: Rect, angle?: number): { to: Rect; quad?: Quad; depths?: [number, number, number, number] } => {
-                if (!bent(turn) && !angle) return { to: place(rect) };
-                const quad = quadOn(rect, angle, turn, point);
-                // in perspective, each corner's depth, so that the card draws the piece through the map and not as two flat triangles
-                const depths = turn.matrix ? cornerDepths([{ x: quad[0], y: quad[1] }, { x: quad[2], y: quad[3] }, { x: quad[4], y: quad[5] }, { x: quad[6], y: quad[7] }]) : undefined;
-                return { to: quadBox(quad), quad, ...(depths ? { depths } : {}) };
-            };
-            const sharp = across >= 1 - 1e-6 && !bent(turn);
-            const images: Drawn[] = [{ texture: overview, ...onCanvas({ x: 0, y: 0, ...size }), sharp: sharp && whole === full }];
-            // zoomed in beyond the smaller copy: the full-size pieces in sight, drawn over it
-            if (whole !== full && across > (whole.width / size.width) * 1.05) {
-                for (let row = 0; row * PIECE < size.height; row++)
-                    for (let column = 0; column * PIECE < size.width; column++) {
-                        const drawnAt = onCanvas({ x: column * PIECE, y: row * PIECE, width: Math.min(PIECE, size.width - column * PIECE), height: Math.min(PIECE, size.height - row * PIECE) });
-                        const to = drawnAt.to;
-                        if (to.x > scene.canvas.width || to.y > scene.canvas.height || to.x + to.width < 0 || to.y + to.height < 0) continue;
-                        const texture = tile(column, row);
-                        if (texture) images.push({ texture, ...drawnAt, sharp });
-                        else void makeTile(column, row);
-                    }
-            }
-            const fills: Fill[] = look.covers.map((cover) => {
-                const drawnAt = onCanvas(cover.rect, cover.angle);
-                return { rect: drawnAt.to, ...(drawnAt.quad ? { quad: drawnAt.quad } : {}), color: rgba(cover.color), graded: true };
-            });
-            if (scene.cropping) {
-                // the outside of the crop dimmed, so the frame shows what is kept
-                const inside = place(look.crop);
-                const all = place(scene.cropping);
-                const dim: Color = [0, 0, 0, 0.55];
-                fills.push(
-                    { rect: { x: all.x, y: all.y, width: all.width, height: inside.y - all.y }, color: dim, dim: true },
-                    { rect: { x: all.x, y: inside.y + inside.height, width: all.width, height: all.y + all.height - inside.y - inside.height }, color: dim, dim: true },
-                    { rect: { x: all.x, y: inside.y, width: inside.x - all.x, height: inside.height }, color: dim, dim: true },
-                    { rect: { x: inside.x + inside.width, y: inside.y, width: all.x + all.width - inside.x - inside.width, height: inside.height }, color: dim, dim: true },
-                );
-            }
-            backend.grading(scene.grading);
-            // a canvas pixel's place in the original, for the grade's masks
-            const graded: ScreenGrade | undefined = scene.grading ? { toOriginal: [shown.x - view.x / across, shown.y - view.y / down, 1 / across, 1 / down], split: scene.split ?? -1 } : undefined;
-            backend.draw(images, fills, scene.cropping ? undefined : place(look.crop), graded);
-        },
-        /** The picture as it looks, at full size: its pixels, the covers painted in before resampling so that nothing they hide is read, and the marks drawn over. */
-        async flatten(look: Look, most = PIECE, grading?: Grading, space: Space = "srgb"): Promise<ImageData> {
-            const result = new ImageData(look.width, look.height);
-            backend.grading(grading);
-            const stepX = look.crop.width / look.width;
-            const stepY = look.crop.height / look.height;
-            const turn = turnOf(look.turn ?? 0, size, look.perspective);
-            // a turned piece reads a part of the original as wide as the piece turned, so each piece is made smaller to fit the card
-            const reached = turn.matrix ? spread(turn, look.crop) : { wider: Math.abs(turn.cos) + Math.abs(turn.sin), shrink: 1 };
-            const wider = bent(turn) ? reached.wider : 1;
-            // past the filter's own reach, as many more pixels as the map shrinks the picture there
-            const margin = 4 + 3 * Math.ceil(reached.shrink - 1);
-            const limit = Math.min(most, backend.most);
-            for (const piece of plan(look, bent(turn) ? Math.max(16, Math.floor((limit - 2 * margin - 2) / wider)) : limit)) {
-                // the part of the original the piece reads: its own place, or turned, the box round it in the original and a filter's reach more
-                let read = piece.source;
-                if (bent(turn)) {
-                    const corners = cornersOf(piece.source).map((corner) => fromLevel(corner, turn));
-                    const left = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.x))) - margin);
-                    const top = Math.max(0, Math.floor(Math.min(...corners.map((corner) => corner.y))) - margin);
-                    const right = Math.min(size.width, Math.ceil(Math.max(...corners.map((corner) => corner.x))) + margin);
-                    const bottom = Math.min(size.height, Math.ceil(Math.max(...corners.map((corner) => corner.y))) + margin);
-                    read = { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
-                }
-                const part = await createImageBitmap(full, read.x, read.y, read.width, read.height, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
-                const covers: PieceCover[] = look.covers.map((cover) => ({ rect: { x: cover.rect.x - read.x, y: cover.rect.y - read.y, width: cover.rect.width, height: cover.rect.height }, color: rgba(cover.color), ...(cover.angle ? { angle: cover.angle } : {}) }));
-                const graded: [number, number, number, number] | undefined = grading ? [look.crop.x + piece.out.x * stepX, look.crop.y + piece.out.y * stepY, stepX, stepY] : undefined;
-                const turned: TurnPass | undefined = bent(turn) ? { matrix: pieceMatrix(turn, piece.source, read), width: piece.source.width, height: piece.source.height } : undefined;
-                const pixels = await backend.resample(part, covers, piece, graded, turned);
-                part.close();
-                for (let row = 0; row < piece.out.height; row++) result.data.set(pixels.subarray(row * piece.out.width * 4, (row + 1) * piece.out.width * 4), ((piece.out.y + row) * look.width + piece.out.x) * 4);
-            }
-            if (look.marks.length) {
-                // the marks drawn in the result's own space, so that a mark on a Display P3 picture is the color picked, the browser turning its sRGB color into P3 numbers
-                const p3 = space === "p3" && !grading?.convert;
-                const tagged: ImageDataSettings = { colorSpace: p3 ? "display-p3" : "srgb" };
-                const canvas = new OffscreenCanvas(look.width, look.height);
-                const context = canvas.getContext("2d", tagged)!;
-                context.putImageData(new ImageData(result.data, look.width, look.height, tagged), 0, 0);
-                drawMarks(context, look.marks, resultPlace(look, size));
-                return new ImageData(context.getImageData(0, 0, look.width, look.height, tagged).data, look.width, look.height);
-            }
-            return result;
-        },
+        draw,
+        flatten,
         /** The whole original made small, its longer side at most `long`, as pixels: for the histogram and the fixes, which are worked out on the processor. */
         async small(long = 256): Promise<ImageData> {
             const scale = Math.min(1, long / Math.max(size.width, size.height));
