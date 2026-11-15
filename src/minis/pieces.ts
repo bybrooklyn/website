@@ -625,22 +625,56 @@ export function made(shape: Shape, place: Place): { lengths: { piece: ReturnType
 
 // ---- drawing a block ----
 
-/** The outline of a block across, as runs of points: each run is lit smooth along itself, with a sharp edge where two meet. */
-function outline(): V2[][] {
-    const groove: V2[] = [];
-    const count = 14;
-    for (let i = 0; i <= count; i++) {
-        const angle = Math.PI + (Math.PI * i) / count;
-        groove.push([GROOVE * cosine(angle), GROOVE * sine(angle)]);
+/** How round a block's top edges are drawn, and the lip of its groove, in cm: enough to catch the light. */
+const ROUNDED = { edge: 0.18, lip: 0.14 };
+
+/**
+ * The outline of a block across, as runs of points, each lit smooth along itself with a sharp edge where
+ * two meet, and the closed outlines its cut ends are filled from. Its top edges and the lips of its
+ * groove are rounded a little, so that they catch the light. With `slot`, a slot that wide runs down
+ * through the middle of the groove and the block, for a hoist's paddles to come up through.
+ */
+export function outline(slot = 0): { runs: V2[][]; ends: V2[][] } {
+    const arc = (middle: V2, radius: number, from: number, to: number, count: number): V2[] => Array.from({ length: count + 1 }, (_, i) => {
+        const angle = from + ((to - from) * i) / count;
+        return [middle[0] + radius * cosine(angle), middle[1] + radius * sine(angle)];
+    });
+    const [b, c] = [ROUNDED.edge, ROUNDED.lip];
+    // each lip: a small round between the top and the groove, tangent to both
+    const out = Math.sqrt((GROOVE + c) * (GROOVE + c) - c * c);
+    const meets = Math.atan2(c, out);
+    const lip = (side: number): V2[] => {
+        const middle: V2 = [side * out, -c];
+        return side < 0 ? arc(middle, c, Math.PI / 2, -meets, 4) : arc(middle, c, Math.PI + meets, Math.PI / 2, 4);
+    };
+    // the groove from lip to lip, or to each side of the slot
+    const half = slot / 2;
+    const cut = half > 0 ? Math.asin(Math.min(1, half / GROOVE)) : 0;
+    const grooveLeft = arc([0, 0], GROOVE, Math.PI + meets, half > 0 ? 1.5 * Math.PI - cut : 2 * Math.PI - meets, half > 0 ? 8 : 16);
+    const grooveRight = half > 0 ? arc([0, 0], GROOVE, 1.5 * Math.PI + cut, 2 * Math.PI - meets, 8) : [];
+    const left = [...lip(-1), ...grooveLeft.slice(1)];
+    const right = half > 0 ? [...grooveRight, ...lip(1).slice(1)] : [];
+    if (half <= 0) left.push(...lip(1).slice(1));
+    const topLeft: V2[] = [[-WIDE / 2 + b, 0], [-out, 0]];
+    const topRight: V2[] = [[out, 0], [WIDE / 2 - b, 0]];
+    const edgeRight = arc([WIDE / 2 - b, -b], b, Math.PI / 2, 0, 3);
+    const edgeLeft = arc([-WIDE / 2 + b, -b], b, Math.PI, Math.PI / 2, 3);
+    const sideRight: V2[] = [[WIDE / 2, -b], [WIDE / 2, -DEEP]];
+    const sideLeft: V2[] = [[-WIDE / 2, -DEEP], [-WIDE / 2, -b]];
+    if (half <= 0) {
+        const runs = [topLeft, left, topRight, edgeRight, sideRight, [[WIDE / 2, -DEEP], [-WIDE / 2, -DEEP]] as V2[], sideLeft, edgeLeft];
+        const ring: V2[] = [];
+        for (const run of runs) for (const q of run.slice(0, -1)) ring.push(q);
+        return { runs, ends: [ring] };
     }
-    return [
-        [[-WIDE / 2, 0], [-GROOVE, 0]],
-        groove,
-        [[GROOVE, 0], [WIDE / 2, 0]],
-        [[WIDE / 2, 0], [WIDE / 2, -DEEP]],
-        [[WIDE / 2, -DEEP], [-WIDE / 2, -DEEP]],
-        [[-WIDE / 2, -DEEP], [-WIDE / 2, 0]],
-    ];
+    // with a slot, two halves: each groove's edge goes straight down the slot's wall to the bottom
+    const low = grooveLeft[grooveLeft.length - 1]!;
+    const wallLeft: V2[] = [low, [low[0], -DEEP]];
+    const high = grooveRight[0]!;
+    const wallRight: V2[] = [[high[0], -DEEP], high];
+    const runs = [topLeft, left, wallLeft, [[low[0], -DEEP], [-WIDE / 2, -DEEP]] as V2[], sideLeft, edgeLeft, wallRight, right, topRight, edgeRight, sideRight, [[WIDE / 2, -DEEP], [high[0], -DEEP]] as V2[]];
+    const ring = (list: V2[][]) => list.flatMap((run) => run.slice(0, -1));
+    return { runs, ends: [ring([topLeft, left, wallLeft, [[low[0], -DEEP], [-WIDE / 2, -DEEP]], sideLeft, edgeLeft]), ring([wallRight, right, topRight, edgeRight, sideRight, [[WIDE / 2, -DEEP], [high[0], -DEEP]]])] };
 }
 
 /** A polygon's triangles, by cutting off one corner after another: for the end of a block, which is not a simple shape. */
@@ -670,18 +704,30 @@ export function triangles(polygon: V2[]): [number, number, number][] {
     return out;
 }
 
-/** Faces for a block of track along a Mote piece: its groove, top, sides and underside, and its two ends closed. */
-export function blockMesh(piece: { frame(t: number): { p: V3; along: V3; up: V3; across: V3 }; path: Path }, straight: boolean): Mesh {
-    const runs = outline();
+/**
+ * Faces for a block of track along a Mote piece: its groove, top, sides and underside, and its two ends
+ * closed; with `slot`, a slot down its middle. Each point's place in the grain of its wood is how far
+ * along the piece it is, and how far up and across from the line the track is made along, so that the
+ * grain runs along the piece and bends with it, and a cut end shows the rings.
+ */
+export function blockMesh(piece: { frame(t: number): { p: V3; along: V3; up: V3; across: V3 }; path: Path }, straight: boolean, slot = 0): Mesh {
+    const { runs, ends } = outline(slot);
     const end = piece.path.end;
     const rings = straight ? 2 : Math.max(2, Math.ceil(end / 0.7) + 1);
-    const frames = Array.from({ length: rings }, (_, i) => piece.frame((end * i) / (rings - 1)));
+    const along = Array.from({ length: rings }, (_, i) => (end * i) / (rings - 1));
+    const frames = along.map((t) => piece.frame(t));
     const placeOf = (f: { p: V3; up: V3; across: V3 }, [u, v]: V2): V3 => plus(f.p, plus(scaled(f.across, u), scaled(f.up, v)));
     const points: V3[] = [];
+    const grain: V3[] = [];
     const faces: number[][] = [];
     for (const run of runs) {
         const first = points.length;
-        for (const f of frames) for (const q of run) points.push(placeOf(f, q));
+        frames.forEach((f, i) => {
+            for (const q of run) {
+                points.push(placeOf(f, q));
+                grain.push([along[i]!, q[1], q[0]]);
+            }
+        });
         const n = run.length;
         for (let i = 0; i + 1 < rings; i++) {
             for (let j = 0; j + 1 < n; j++) {
@@ -690,16 +736,19 @@ export function blockMesh(piece: { frame(t: number): { p: V3; along: V3; up: V3;
             }
         }
     }
-    // the ends: the outline once round, each corner once
-    const ring: V2[] = [];
-    for (const run of runs) for (const q of run.slice(0, -1)) ring.push(q);
-    const cut = triangles(ring);
-    for (const [f, backward] of [[frames[0]!, true], [frames[rings - 1]!, false]] as const) {
-        const first = points.length;
-        for (const q of ring) points.push(placeOf(f, q));
-        for (const [a, b, c] of cut) faces.push(backward ? [first + a, first + b, first + c] : [first + c, first + b, first + a]);
+    // the ends: each outline once round, each corner once
+    for (const ring of ends) {
+        const cut = triangles(ring);
+        for (const [f, at, backward] of [[frames[0]!, 0, true], [frames[rings - 1]!, end, false]] as const) {
+            const first = points.length;
+            for (const q of ring) {
+                points.push(placeOf(f, q));
+                grain.push([at, q[1], q[0]]);
+            }
+            for (const [a, b, c] of cut) faces.push(backward ? [first + a, first + b, first + c] : [first + c, first + b, first + a]);
+        }
     }
-    return { points, faces, smooth: true };
+    return { points, faces, smooth: true, grain };
 }
 
 // ---- bending ----

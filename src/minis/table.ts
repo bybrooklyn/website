@@ -187,6 +187,8 @@ export interface Table {
     setParts(state: Map<number, number[]>): void;
     /** The piece a hinge belongs to. */
     hingeOf(hinge: Hinge): number | undefined;
+    /** A marble's number: how many were made on this table before it, so that its look is decided by it and a run replayed looks the same. */
+    numberOf(marble: Solid): number;
 }
 
 /** Where a marble rests in the groove at a point along a piece of track: the nearest point of its middle line, then down by how far a marble sinks. */
@@ -269,9 +271,13 @@ export function makeTable({ filled = true } = {}): Table {
         }
         return mover;
     };
+    /** Each marble's number, in the order they were made. */
+    const numbers = new WeakMap<Solid, number>();
+    let count = 0;
     /** A marble made inside a hopper's box and held there, to come out to its mouth. */
     const fill = (hopper: Hopper) => {
         const marble = ball([...hopper.inside]);
+        numbers.set(marble, count++);
         space.hold(marble);
         hopper.coming = { marble, time: 0 };
     };
@@ -492,6 +498,7 @@ export function makeTable({ filled = true } = {}): Table {
             }
         },
         hingeOf: (hinge) => hinges.get(hinge),
+        numberOf: (marble) => numbers.get(marble) ?? 0,
         arrived(marble) {
             for (const one of built.values()) {
                 const box = one.catches;

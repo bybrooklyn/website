@@ -412,7 +412,8 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
             const under = (x: number): V3 => [x + 0.6 * 3.3, -1.5 + 0.75 * (x - c0) - 0.8 * 3.3, 4];
             const loop: Loop = { bottom: under(5), top: under(8 * cells - 4.5), radius: 1.5 };
             const long = 2 * Math.hypot(loop.top[0] - loop.bottom[0], loop.top[1] - loop.bottom[1]) + 2 * Math.PI * loop.radius;
-            const paddle = body([-0.2, 0, 2.9], [0.2, 1.6, 5.1], 7.8);
+            // each paddle 6 mm across, so that it comes up through a slot down the groove's middle and pushes a marble from behind at its foot
+            const paddle = body([-0.2, 0, 3.7], [0.2, 1.6, 4.3], 7.8);
             return {
                 ...none,
                 joints: [J0, joint([end, 6 * cells - 10, 4], [1, 0, 0])],

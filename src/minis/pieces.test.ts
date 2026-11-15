@@ -6,7 +6,7 @@
 // of its points, changes its curve smoothly all along, and is held to its limits. Run with `bun run test`.
 
 import { describe, expect, test } from "bun:test";
-import { BOX, CELL, LEVEL, STEEPEST, TIGHTEST, WARN_STEEP, WARN_TIGHT, bendAllowed, blockMesh, brokenBy, isBent, keyOf, made, pathOf, pointsAt, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, triangles, warned, wayToWorld, withBend, type Kind, type Place } from "./pieces";
+import { BOX, CELL, GROOVE, LEVEL, STEEPEST, TIGHTEST, WARN_STEEP, WARN_TIGHT, bendAllowed, blockMesh, brokenBy, isBent, keyOf, made, pathOf, pointsAt, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, triangles, warned, wayToWorld, withBend, type Kind, type Place } from "./pieces";
 import { isPart } from "./parts";
 import type { V3 } from "../mote/solids";
 
@@ -90,22 +90,37 @@ test("a polygon with a notch cut in it is cut into triangles that cover it exact
     expect(sum).toBeCloseTo(4 * 3 - 2, 12);
 });
 
-test("a block drawn along a curve is closed: every edge of its faces is shared by two faces, once each way", () => {
+test("a block drawn along a curve is closed, slotted or not: every edge of its faces is shared by two faces, once each way; and its grain runs along it", () => {
     const shape = shapeOf({ family: "c", sizes: [1, 1], mirror: false });
-    const mesh = blockMesh(sweepOf(shape.lengths[0]!), false);
-    // corners where two runs of the outline meet are separate points, so edges are matched by place
-    const key = (p: V3) => p.map((value) => Math.round(value * 1e6)).join(" ");
-    const edges = new Map<string, number>();
-    for (const face of mesh.faces) {
-        for (let i = 0; i < face.length; i++) {
-            const [a, b] = [key(mesh.points[face[i]!]!), key(mesh.points[face[(i + 1) % face.length]!]!)];
-            edges.set(`${a}|${b}`, (edges.get(`${a}|${b}`) ?? 0) + 1);
+    const piece = sweepOf(shape.lengths[0]!);
+    for (const slot of [0, 0.7]) {
+        const mesh = blockMesh(piece, false, slot);
+        // corners where two runs of the outline meet are separate points, so edges are matched by place
+        const key = (p: V3) => p.map((value) => Math.round(value * 1e6)).join(" ");
+        const edges = new Map<string, number>();
+        for (const face of mesh.faces) {
+            for (let i = 0; i < face.length; i++) {
+                const [a, b] = [key(mesh.points[face[i]!]!), key(mesh.points[face[(i + 1) % face.length]!]!)];
+                edges.set(`${a}|${b}`, (edges.get(`${a}|${b}`) ?? 0) + 1);
+            }
         }
-    }
-    for (const [edge, count] of edges) {
-        const [a, b] = edge.split("|");
-        expect(count).toBe(1);
-        expect(edges.get(`${b}|${a}`)).toBe(1);
+        for (const [edge, count] of edges) {
+            const [a, b] = edge.split("|");
+            expect(count).toBe(1);
+            expect(edges.get(`${b}|${a}`)).toBe(1);
+        }
+        // each point's place in the grain: how far along the piece, then up and across from its line
+        expect(mesh.grain!.length).toBe(mesh.points.length);
+        const along = mesh.grain!.map((g) => g[0]);
+        expect(Math.min(...along)).toBe(0);
+        expect(Math.max(...along)).toBeCloseTo(piece.path.end, 9);
+        for (const [i, g] of mesh.grain!.entries()) {
+            const f = piece.frame(g[0]);
+            const p = mesh.points[i]!;
+            for (let axis = 0; axis < 3; axis++) expect(p[axis]!).toBeCloseTo(f.p[axis]! + f.across[axis]! * g[2] + f.up[axis]! * g[1], 9);
+        }
+        // a slot leaves the bottom of the groove open: no point of the block is within it there
+        if (slot) expect(mesh.points.every((p, i) => Math.abs(mesh.grain![i]![2]) >= slot / 2 - 1e-9 || mesh.grain![i]![1] > -GROOVE + 0.2)).toBe(true);
     }
 });
 
