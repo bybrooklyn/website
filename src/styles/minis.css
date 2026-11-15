@@ -168,6 +168,102 @@
     display: none;
 }
 
+/* Blocks' panel is one row: the kind of piece to drop, its color, and a word that takes one away. */
+.mini-stage[data-mini="blocks"] {
+    --panel-room: 8rem;
+}
+
+.blocks-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.75rem;
+}
+
+.blocks-kinds {
+    display: inline-flex;
+    gap: 0.15rem;
+}
+
+/* a kind is a small picture of itself in a fingertip's target, quiet until it is the one chosen */
+.mote-panel .blocks-kind {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.5rem;
+    color: var(--muted);
+    text-decoration: none;
+    transition:
+        color 0.15s ease,
+        background-color 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+.mote-panel .blocks-kind + .blocks-kind {
+    margin-inline-start: 0;
+}
+
+.mote-panel .blocks-kind:hover {
+    color: var(--ink);
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+.mote-panel .blocks-kind[aria-pressed="true"] {
+    color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+}
+
+.blocks-kind svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    fill: currentColor;
+}
+
+.blocks-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
+.mote .mote-panel canvas.blocks-wheel {
+    display: block;
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.mote .mote-panel canvas.blocks-wheel:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.2rem;
+}
+
+.blocks-tones {
+    display: inline-grid;
+    gap: 0.35rem;
+    justify-items: start;
+}
+
+/* a hue by chance is a word like the rest, plain while it is on and quiet while a hue is picked */
+.mote-panel .blocks-chance:not([aria-pressed="true"]) {
+    color: var(--muted);
+    text-decoration-color: transparent;
+}
+
+.blocks-dark {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--muted);
+}
+
+.blocks-dark input[type="range"] {
+    width: 7rem;
+}
+
 /* Comet's panel is one quiet line: which field and the shots on it, and the sound. */
 .mini-stage[data-mini="comet"] {
     --panel-room: 4.5rem;
