@@ -395,7 +395,7 @@ export function readSaid(read: ReadSaid): string {
 }
 
 /** The strip for the tool in hand: the crop's shapes and Apply, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
+export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
     const strip = make("div", "quire-img-strip");
     strip.setAttribute("role", "toolbar");
     strip.setAttribute("aria-label", "Tool");
@@ -416,21 +416,30 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
         button.addEventListener("click", () => press(button));
         return button;
     };
+    // the horizon's dial and the button that draws a line along it, made once so that a drag on the dial is never cut short by the strip filling again
+    const dial = hooks.turn ? turnDial(hooks.turn) : undefined;
+    const level = hooks.turn ? control("Draw along the horizon to level it", icon("line"), () => hooks.turn?.setLevelling(!hooks.turn.levelling())) : undefined;
     function fill(kind: "crop" | "mark" | "read" | "grade" | "none") {
         const grading = kind === "grade" ? hooks.grade?.() : undefined;
         if (kind === "grade" && !grading) kind = "none";
         strip.classList.toggle("open", kind !== "none");
         strip.inert = kind === "none";
         if (kind === "crop") {
+            // the dial keeps the keyboard when the strip is filled again after each turn it makes
+            const had = !!dial && document.activeElement === dial.element;
+            queueMicrotask(() => had && dial?.element.focus({ preventScroll: true }));
             strip.replaceChildren(
                 ...SHAPES.map((shape) => {
                     const button = control(shape.name === "Free" ? "Free shape" : `${shape.name} shape`, icon(shape.icon), () => hooks.setShape(shape.name));
                     button.classList.toggle("pressed", hooks.shape() === shape.name);
                     return button;
                 }),
+                ...(dial && level ? [make("span", "quire-img-strip-rule"), dial.element, level] : []),
                 make("span", "quire-img-strip-rule"),
                 control("Apply (Enter)", icon("tick"), () => hooks.apply()),
             );
+            dial?.show();
+            level?.classList.toggle("pressed", !!hooks.turn?.levelling());
         } else if (kind === "mark") {
             strip.replaceChildren(
                 ...COLORS.map((color) => {
@@ -470,6 +479,110 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
         if (still()) strip.style.transition = "none";
     }
     return { strip, fill };
+}
+
+/** What the horizon's dial is given: the picture's turn, the turn drawn while dragging (none to stop), the turn made a step, and whether a drag on the picture draws a line along the horizon. */
+export interface TurnHooks {
+    turn(): number;
+    turning(degrees: number | undefined): void;
+    turned(degrees: number): void;
+    levelling(): boolean;
+    setLevelling(on: boolean): void;
+}
+
+/** The degrees a dial's drag across its whole width turns the picture: the whole range, 15 each way. */
+export const DIAL_RANGE = 30;
+
+/** A turn as the dial says it, in tenths of a degree: "0°", "2.4°", "−3.1°". */
+export const turnSaid = (degrees: number): string => (degrees ? `${degrees < 0 ? "−" : ""}${Math.abs(degrees).toFixed(1)}°` : "0°");
+
+/** The turn a dial's drag gives: from where it started, by how far the pointer moved over the dial's width (a tenth as far with Shift), in tenths, snapping to level within two tenths, held within 15 each way. */
+export function dialTurn(start: number, moved: number, width: number, fine: boolean): number {
+    const raw = start + (moved / Math.max(1, width)) * DIAL_RANGE * (fine ? 0.1 : 1);
+    const kept = Math.max(-DIAL_RANGE / 2, Math.min(DIAL_RANGE / 2, Math.round(raw * 10) / 10));
+    return Math.abs(kept) < 0.25 ? 0 : kept;
+}
+
+/**
+ * The horizon's dial: a ruler of degrees under a fixed middle line, which moves as it is dragged from
+ * wherever it was pressed, so nothing jumps to the pointer; the number above says the turn. Letting go
+ * makes the turn one step. The arrow keys turn it by a tenth (Shift, a degree), 0 or a double press
+ * levels it again.
+ */
+function turnDial(hooks: TurnHooks) {
+    const element = make("div", "quire-img-dial");
+    element.tabIndex = 0;
+    element.setAttribute("role", "slider");
+    element.setAttribute("aria-label", "Straighten");
+    element.setAttribute("aria-valuemin", String(-DIAL_RANGE / 2));
+    element.setAttribute("aria-valuemax", String(DIAL_RANGE / 2));
+    element.title = "Straighten: drag, or use the arrow keys";
+    const ruler = make("div", "quire-img-dial-ruler");
+    const said = make("span", "quire-img-dial-said");
+    element.append(ruler, make("span", "quire-img-dial-middle"), said);
+    let now = 0;
+    const show = (degrees = hooks.turn()) => {
+        now = degrees;
+        said.textContent = turnSaid(degrees);
+        element.setAttribute("aria-valuenow", String(degrees));
+        element.setAttribute("aria-valuetext", turnSaid(degrees));
+        element.classList.toggle("moved", degrees !== 0);
+        // the ruler slides under the middle line: a degree is a fixed share of the dial's width
+        ruler.style.setProperty("--turn", String(degrees));
+    };
+    let dragging: { id: number; x: number; start: number } | undefined;
+    element.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        element.focus({ preventScroll: true });
+        element.setPointerCapture(event.pointerId);
+        dragging = { id: event.pointerId, x: event.clientX, start: now };
+        element.classList.add("dragging");
+    });
+    element.addEventListener("pointermove", (event) => {
+        if (!dragging || dragging.id !== event.pointerId) return;
+        // dragging right turns the picture back: the ruler is moved the way the pointer goes
+        const next = dialTurn(dragging.start, dragging.x - event.clientX, element.clientWidth, event.shiftKey);
+        if (next === now) return;
+        show(next);
+        hooks.turning(next);
+    });
+    const letGo = (event: PointerEvent) => {
+        if (!dragging || dragging.id !== event.pointerId) return;
+        const started = dragging.start;
+        dragging = undefined;
+        element.classList.remove("dragging");
+        hooks.turning(undefined);
+        if (now !== started) hooks.turned(now);
+    };
+    element.addEventListener("pointerup", letGo);
+    element.addEventListener("pointercancel", (event) => {
+        if (!dragging || dragging.id !== event.pointerId) return;
+        const started = dragging.start;
+        dragging = undefined;
+        element.classList.remove("dragging");
+        hooks.turning(undefined);
+        show(started);
+    });
+    element.addEventListener("dblclick", () => {
+        if (!now) return;
+        show(0);
+        hooks.turned(0);
+    });
+    element.addEventListener("keydown", (event) => {
+        const step = event.shiftKey ? 1 : 0.1;
+        const by: Record<string, number> = { ArrowLeft: -step, ArrowDown: -step, ArrowRight: step, ArrowUp: step };
+        let next: number | undefined;
+        if (event.key in by) next = Math.round(Math.max(-DIAL_RANGE / 2, Math.min(DIAL_RANGE / 2, now + by[event.key]!)) * 10) / 10;
+        else if (event.key === "0" || event.key === "Home") next = 0;
+        if (next === undefined) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (next === now) return;
+        show(next);
+        hooks.turned(next);
+    });
+    return { element, show: () => show() };
 }
 
 /** Says an original's kind as a writer reads it: "PNG", "JPEG". */

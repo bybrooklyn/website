@@ -22,7 +22,7 @@ import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
 import { blocksOut, factsOf, profileOf, spaceOf, type Facts, type Keep } from "./metadata";
 import { gradingWith } from "./draw";
-import { createStage, type Pen, type Tool } from "./stage";
+import { createStage, setTurn, type Pen, type Tool } from "./stage";
 import { createReading } from "./reading";
 import { gradePanel } from "./grade-panel";
 import { gradeMore } from "./grade-more";
@@ -113,6 +113,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         change: (steps) => commit(steps),
         pen: () => pen,
         moved: () => refresh(),
+        turned: (degrees) => turnTo(degrees),
         say: (short, full) => frame.status.say(short, full, "warn"),
         space: () => colors.space,
         parts: {
@@ -509,6 +510,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
             stage.setAspect(chosen === "original" && picture ? picture.original.width / picture.original.height : (chosen as number | undefined));
         },
         apply: () => applyCrop(),
+        turn: {
+            turn: () => (picture ? (look(picture).turn ?? 0) : 0),
+            turning: (degrees) => stage.turning(degrees),
+            turned: (degrees) => turnTo(degrees),
+            levelling: () => stage.levelling(),
+            setLevelling: (on) => stage.setLevelling(on),
+        },
         read: () => {
             const found = reading.found();
             return { state: reading.state(), progress: reading.progress(), words: found ? found.lines.reduce((sum, line) => sum + line.words.length, 0) : 0, private: stage.findings().length, model: reading.tier().name };
@@ -601,6 +609,14 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (stage.tool() !== "read") stage.setTool("read");
         stage.element.focus({ preventScroll: true });
         void reading.use(id, buttons.read);
+    }
+    /** Turns the picture to level it, as one step; level again takes the step away. The crop's frame follows, and a line being drawn is done. */
+    function turnTo(degrees: number) {
+        if (!picture) return;
+        stage.setLevelling(false);
+        const next = setTurn(history.now(), degrees);
+        if (next !== history.now()) commit(next);
+        refresh();
     }
     function applyCrop() {
         stage.applyCrop();
