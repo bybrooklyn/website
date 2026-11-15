@@ -85,6 +85,8 @@ const isMetal = (body: Body) => body.density >= 2;
 const STEEL: Color = [0.72, 0.73, 0.76];
 const BRASS: Color = [0.86, 0.66, 0.34];
 const CHIME: Color = [0.82, 0.83, 0.86];
+/** Oak's color as a whole: the pattern draws its grain; where patterns cannot be drawn, a part is drawn plain in this. */
+const OAK: Color = [0.62, 0.43, 0.26];
 /** How wide the slot down a hoist's groove is drawn, in cm, for its paddles to come up through. */
 const SLOT = 0.8;
 
@@ -184,7 +186,7 @@ function lampAt(low: V3, high: V3): V3 {
     return [middle[0] - wide * 0.4, high[1] + wide * 1.1 + 60, middle[2] + wide * 0.55];
 }
 /** The pillars' look: oak, each its own grain by its seed. */
-const pillarLook: Look = { color: [1, 1, 1], pattern: "wood" };
+const pillarLook: Look = { color: OAK, pattern: "wood" };
 
 /** The meshes and looks a kind of piece is drawn with: oak, glass that casts no shadow, and the metal or skin of what it strikes. A new look for each, so that each part's light round its edges is its own. */
 function piecesLooks(kind: Kind, colors: { glass: Color }, still = true): { mesh: Mesh; look: Look; glass: boolean }[] {
@@ -195,12 +197,12 @@ function piecesLooks(kind: Kind, colors: { glass: Color }, still = true): { mesh
         if (!mesh || ((which === "moving" || which === "steel") && !still)) continue;
         const look: Look =
             which === "glass"
-                ? { color: colors.glass, pattern: "glass", casts: false }
+                ? { color: colors.glass, alpha: 0.3, pattern: "glass", casts: false }
                 : which === "metal"
                   ? { color: drawing.metalLook!.color, pattern: drawing.metalLook!.pattern }
                   : which === "steel"
                     ? { color: STEEL, pattern: "brushed" }
-                    : { color: [1, 1, 1], pattern: "wood" };
+                    : { color: OAK, pattern: "wood" };
         out.push({ mesh, look, glass: which === "glass" });
     }
     return out;
@@ -430,7 +432,7 @@ export default function marbles(m: Mote): Scene {
     const disc = block([1.2, 0.15, 1.2]);
     const marble = ball(RADIUS, 22, 14);
     /** Every marble is drawn with one look, each its own by its seed and tints (look.ts), so that they are drawn all at once. */
-    const marbleLookAll: Look = { color: [1, 1, 1], pattern: "marble" };
+    const marbleLookAll: Look = { color: [0.78, 0.82, 0.88], alpha: 0.75, pattern: "marble" };
 
     /**
      * Parts for a kind of piece, of oak, glass and metal, with a light round their edges in `rim` if
@@ -625,7 +627,7 @@ export default function marbles(m: Mote): Scene {
                     // oak, or steel; the grain along the solid's longest side; solids of one shape (a hoist's
                     // paddles) share a mesh, so that they are drawn at once; held up off the table, they are
                     // left out of the map from above
-                    const look: Look = metal ? { color: STEEL, pattern: "brushed", touches: false } : { color: [1, 1, 1], pattern: "wood", touches: false };
+                    const look: Look = metal ? { color: STEEL, pattern: "brushed", touches: false } : { color: OAK, pattern: "wood", touches: false };
                     const key = solid.points.map((p) => p.map((v) => v.toFixed(3)).join(" ")).join("|");
                     let mesh = moverMeshes.get(key);
                     if (!mesh) moverMeshes.set(key, (mesh = grained({ points: solid.points, faces: solid.faces })));
