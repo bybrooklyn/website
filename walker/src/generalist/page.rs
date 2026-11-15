@@ -18,6 +18,7 @@ use super::eyes::{self, RAYS};
 use super::land::Hazard;
 use super::pool::Shape;
 use super::ppo::{Learner, Settings};
+use super::wiring::Grow;
 use super::practice::{Practice, Way};
 use super::recipe::Recipe;
 use super::stage::Thing;
@@ -86,6 +87,9 @@ pub struct Page {
     runs_shown: u32,
     since: Vec<f32>,
     changes_seen: u32,
+    /// Whether the brain practice has here adds and cuts its connections while it lives (`wiring`), by the
+    /// rule the page carries; off unless the visitor switches it on.
+    pub grow: bool,
 }
 
 /// How the page's world changes when the visitor switches its changing world on: some of everything,
@@ -113,7 +117,7 @@ impl Page {
         let land = Rc::new(super::land::Land::new(recipe, super::envs::MADE));
         let start = Run::new(land, legs, seconds)?;
         let layout = evolution.layout;
-        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), form_room: Vec::new(), shape: BRAIN, parts: Default::default(), shown_weights: Vec::new(), conditions: Conditions::REST, changing: false, runs_shown: 0, since: Vec::new(), changes_seen: 0 };
+        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), form_room: Vec::new(), shape: BRAIN, parts: Default::default(), shown_weights: Vec::new(), conditions: Conditions::REST, changing: false, runs_shown: 0, since: Vec::new(), changes_seen: 0, grow: false };
         page.show_reset();
         Some(page)
     }
@@ -161,6 +165,16 @@ impl Page {
         self.shape = shape;
     }
 
+    /// The settings practice has here: the brain's shape, and whether it grows its connections.
+    fn settings(&self) -> Settings {
+        Settings { shape: self.shape, grow: self.growing(), ..Settings::default() }
+    }
+
+    /// What the brain is told to grow by, if it grows here.
+    fn growing(&self) -> Option<Grow> {
+        self.grow.then_some(Grow::PAGE)
+    }
+
     /// A learner for `count` creatures of the form written into `form_room`, or of the brain practice
     /// is to have here if none is written, with its predictor of what it will see; none if the form does
     /// not hold together.
@@ -173,9 +187,9 @@ impl Page {
     /// The same, sensing `senses` numbers, without a predictor.
     fn learner_sensing(&self, count: usize, senses: usize, actions: usize) -> Option<Learner> {
         if self.form_room.is_empty() {
-            Some(Learner::new(Settings { shape: self.shape, ..Settings::default() }, senses, actions, count, 0))
+            Some(Learner::new(self.settings(), senses, actions, count, 0))
         } else {
-            Learner::of_form(Settings::default(), &self.form_room, senses, actions, count, 0)
+            Learner::of_form(self.settings(), &self.form_room, senses, actions, count, 0)
         }
     }
 
@@ -212,6 +226,7 @@ impl Page {
         if learner.settings.shape != self.shape {
             learner = learner.reshaped(self.shape, self.recipe.seed as u64);
         }
+        learner.grow(self.growing());
         let practice = self.practice.as_mut().unwrap();
         learner.begin(&mut practice.worlds);
         practice.worlds.steps = learner.practised;
@@ -234,6 +249,8 @@ impl Page {
                     if self.show.judge.steps.is_multiple_of(way.skip) {
                         let mut asked = core::mem::take(&mut self.asked);
                         policy.act(&self.senses, &mut asked);
+                        // a brain that grows its connections pays for them from the creature's energy
+                        super::practice::charge_brain(&mut self.show, policy.show_cost().0);
                         way.hold(&asked, &mut self.held_actions);
                         self.asked = asked;
                     }
@@ -585,7 +602,7 @@ impl Page {
     /// Starts learning by practice here, `count` creatures in fresh worlds of this recipe's kind, the
     /// first weights from `seed` and the worlds' seeds from `stream`. Returns the length of `state`.
     pub fn practice_create(&mut self, count: usize, seed: u64, stream: u32) -> usize {
-        self.practice = Practice::new(self.recipe, Way::of(self.legs), Settings { shape: self.shape, ..Settings::default() }, count.clamp(1, 256), seed, stream);
+        self.practice = Practice::new(self.recipe, Way::of(self.legs), self.settings(), count.clamp(1, 256), seed, stream);
         self.practice.as_ref().map_or(0, |practice| practice.learner.state().len())
     }
 
@@ -603,10 +620,11 @@ impl Page {
             }
             start.stage.feeds = true;
         }
-        let Some(learner) = self.loaded(1) else {
+        let Some(mut learner) = self.loaded(1) else {
             self.policy_off();
             return false;
         };
+        learner.grow(self.growing());
         self.held_actions = vec![0.0; start.body.actions()];
         self.asked = vec![0.0; start.body.actions()];
         self.start = start;
@@ -649,6 +667,16 @@ impl Page {
             None => super::mind::picture(&super::mind::Bred { brain: &self.brain, weights: &self.shown_weights }, &self.senses, &mut self.out),
         }
         &self.out
+    }
+
+    /// Switches the brain's growing on or off for practice from the next `practice_create` or
+    /// `practice_load` on, and for the policy on show at once (its connections start afresh).
+    pub fn brain_grow(&mut self, on: bool) {
+        self.grow = on;
+        let growing = self.growing();
+        if let Some(policy) = &mut self.policy {
+            policy.grow(growing);
+        }
     }
 
     /// What neuron `n` of the brain on show listens to, into `out` (`api::brain_reads`): for a learner with a

@@ -280,6 +280,12 @@ pub fn into_since(learner: &Learner, n: usize, since: Option<&[f32]>) -> Vec<Int
 ///
 /// With `since` (the pool's state when the world last changed), a plastic connection's change is counted
 /// from then.
+///
+/// For a pool that adds and cuts its connections (`wiring`), four more numbers and a list: how many of its
+/// memory neurons' places hold a connection, how many places there are, what its connections cost each
+/// second as a share of all its energy, and how many places changed at the last decision; then for each
+/// of those three numbers, the memory neuron it goes into, the neuron it comes from (in the order `Kinds`
+/// numbers them), and 1 if it was added or -1 if cut.
 pub fn pool_picture(learner: &Learner, senses: &[f32], since: Option<&[f32]>, out: &mut Vec<f32>) {
     let kinds = Kinds::of(learner);
     out.clear();
@@ -335,5 +341,23 @@ pub fn pool_picture(learner: &Learner, senses: &[f32], since: Option<&[f32]>, ou
                 None => out.extend_from_slice(&[-1.0, 0.0, 0.0]),
             }
         }
+    }
+    if pool.grow.is_some() {
+        let (joined, places) = pool.joined(state);
+        out.extend_from_slice(&[joined as f32, places as f32, pool.cost(state)]);
+        let count_at = out.len();
+        out.push(0.0);
+        if before.len() == state.len() {
+            let k = shape.reads;
+            for n in 0..shape.memory {
+                for r in 0..k {
+                    let (was, now) = (pool.is_joined(before, n, r), pool.is_joined(state, n, r));
+                    if was != now {
+                        out.extend_from_slice(&[(kinds.pool() + n) as f32, kinds.source(pool.reads[n * k + r], s) as f32, if now { 1.0 } else { -1.0 }]);
+                    }
+                }
+            }
+        }
+        out[count_at] = ((out.len() - count_at - 1) / 3) as f32;
     }
 }

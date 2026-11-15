@@ -623,6 +623,15 @@ pub extern "C" fn brain_shape(memory: u32, rhythm: u32, mood: u32, reads: u32) {
     }
 }
 
+/// Whether the brain adds and cuts its connections while it lives (`wiring`), by the rule the page carries,
+/// for practice from the next `practice_create` or `practice_load` on, and for the policy on show at once.
+#[unsafe(no_mangle)]
+pub extern "C" fn brain_grow(on: u32) {
+    if let Some(page) = page() {
+        page.brain_grow(on != 0);
+    }
+}
+
 /// The caps on the brain, four f32: the most memory neurons, the most rhythms, the fewest and the most
 /// reads each; then the brain practice starts with, four more (memory, rhythm, mood, reads).
 #[unsafe(no_mangle)]
