@@ -71,7 +71,7 @@ const workerScript = (only: string) => `
             await serve({ type: "matte", id: 1, tier, picture: scene(width, height), prefer, side: 1024 }, { shelf: async () => shelf, say: (answer) => (said = answer) });
             if (said.type === "found") {
                 const started = performance.now();
-                await serve({ type: "matte", id: 2, tier, picture: scene(width, height), prefer, side: 1024 }, { shelf: async () => shelf, say: () => {} });
+                await serve({ type: "matte", id: 2, tier, picture: scene(width, height), prefer, side: 1024 }, { shelf: async () => shelf, say: (answer) => answer.type === "failed" && (said.warmError = answer.message) });
                 said.warm = Math.round(performance.now() - started);
             }
         } catch (error) {
@@ -115,23 +115,38 @@ test("each quality of cut-out runs on the site's ONNX Runtime where it can, and 
         let card = false;
         for (const tier of TIERS) {
           for (const prefer of ["wasm", "webgpu"]) {
-            const page = await pageFor(tier.id);
+            let page = await pageFor(tier.id);
             if (!page) return;
             try {
                 await page.tab.run(`window.go("card")`);
                 while (!(await page.tab.run<boolean>("!!window.done"))) await page.tab.wait(100);
                 card = await page.tab.run<boolean>("window.done.card");
                 if (prefer === "webgpu" && !card) continue;
+                type Done = { type: string; found: { width: number; height: number; runs: string }; ms: number; warm: number; place: string; message?: string; warmError?: string; warns: string[] };
                 for (const [width, height] of [[1732, 1155], [4243, 2828]] as const) {
-                    await page.tab.run(`window.go(["${tier.id}", "${prefer}", ${width}, ${height}])`);
-                    // a run that has not ended in three minutes is given up and said to be
-                    const began = Date.now();
-                    while (!(await page.tab.run<boolean>("!!window.done")) && Date.now() - began < 180_000) await page.tab.wait(250);
-                    if (!(await page.tab.run<boolean>("!!window.done"))) {
+                    const runOnce = async (): Promise<Done | undefined> => {
+                        await page!.tab.run(`window.go(["${tier.id}", "${prefer}", ${width}, ${height}])`);
+                        // a run that has not ended in three minutes is given up and said to be
+                        const began = Date.now();
+                        while (!(await page!.tab.run<boolean>("!!window.done")) && Date.now() - began < 180_000) await page!.tab.wait(250);
+                        return (await page!.tab.run<boolean>("!!window.done")) ? page!.tab.run<Done>("window.done") : undefined;
+                    };
+                    let done = await runOnce();
+                    // the graphics card failing (beside other drawing on it) names its cause, and the run is made again in a fresh worker, as the cut-out does
+                    const failed = (each: Done | undefined) => [each?.message, each?.warmError].find((said) => said && /graphics card/.test(said));
+                    // beside another browser drawing hard on the same card a fresh worker can fail too, so up to three are tried, each failure named
+                    for (let again = 0; again < 3 && failed(done); again++) {
+                        console.log(`${tier.name} on ${prefer}: the card failed (${failed(done)!.slice(0, 200)}); run again in a fresh worker`);
+                        await page.close();
+                        page = await pageFor(tier.id);
+                        if (!page) return;
+                        done = await runOnce();
+                    }
+                    expect(failed(done)).toBeUndefined();
+                    if (!done) {
                         console.log(`${tier.name} on ${prefer}: did not finish within three minutes`);
                         break;
                     }
-                    const done = await page.tab.run<{ type: string; found: { width: number; height: number; runs: string }; ms: number; warm: number; place: string; message?: string; warns: string[] }>("window.done");
                     const warns = done.warns;
                     if (done.message) {
                         console.log(`${tier.name} on ${prefer}: does not run: ${done.message.slice(0, 300)}`);
@@ -145,7 +160,7 @@ test("each quality of cut-out runs on the site's ONNX Runtime where it can, and 
                     expect(onGround.inside).toBeLessThan(0.05);
                 }
             } finally {
-                await page.close();
+                await page?.close();
             }
           }
         }

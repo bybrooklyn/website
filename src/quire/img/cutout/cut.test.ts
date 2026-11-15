@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { encodeRuns } from "../masks";
-import { maskOf } from "./cut";
+import { blank, findCut, maskOf } from "./cut";
 
 const SIZE = { width: 20, height: 10 };
 const half = () => {
@@ -31,3 +31,31 @@ test("a cut-out's mask is the one found, narrowed to the subject pressed, then k
     expect(brushed[8 * 20 + 8]).toBe(1);
     expect(maskOf({ found: { width: 20, height: 10, runs: "!!" }, background: "clear" }, SIZE)).toBeUndefined();
 });
+
+test("a mask all kept or all gone is no answer: the model is run once more in a fresh worker, and only a second blank answer is said", async () => {
+    const whole = { width: 2, height: 1, runs: encodeRuns(Uint8Array.of(255, 255)) };
+    const good = { width: 2, height: 1, runs: encodeRuns(Uint8Array.of(255, 0)) };
+    expect(blank(whole)).toBe(true);
+    expect(blank(good)).toBe(false);
+    const finder = (answers: ("whole" | "good" | "lost")[]) => {
+        let made = 0;
+        return {
+            made: () => made,
+            destroy: () => void made++,
+            matte: async () => {
+                const next = answers.shift();
+                if (next === "lost") throw Object.assign(new Error("the graphics card gave the model no answer"), { again: true });
+                return { found: next === "good" ? good : whole, ms: 1 };
+            },
+        };
+    };
+    const picture = async () => ({}) as ImageBitmap;
+    const once = finder(["whole", "good"]);
+    expect((await findCut(once, "cut-best", picture)).found).toEqual(good);
+    expect(once.made()).toBe(1);
+    const lost = finder(["lost", "good"]);
+    expect((await findCut(lost, "cut-best", picture)).found).toEqual(good);
+    expect(lost.made()).toBe(1);
+    await expect(findCut(finder(["whole", "whole"]), "cut-best", picture)).rejects.toThrow("found nothing to cut out");
+});
+

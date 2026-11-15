@@ -33,7 +33,7 @@ import { createFinding } from "./finding";
 import { createFinder } from "./parts/finder";
 import { PART_TIERS } from "./parts/models";
 import { createAsking } from "./cutout/asking";
-import { cutOut, CUT_SIDE, valuesOf, type Cut, type Laid } from "./cutout/cut";
+import { cutOut, CUT_SIDE, findCut, type Cut, type Laid } from "./cutout/cut";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
@@ -615,13 +615,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         cutBusy = true;
         refresh();
         try {
-            const source = await sourceBitmap();
-            if (!source) return;
             const started = performance.now();
-            const answer = await sharedFinder.matte(cutAsking.tier().id, source, undefined, CUT_SIDE);
-            const values = valuesOf(answer.found);
-            const share = values ? values.reduce((sum, value) => sum + value, 0) / values.length : 1;
-            if (share > 0.985 || share < 0.002) throw new Error("the model found nothing to cut out; try again, or another quality");
+            const answer = await findCut(sharedFinder, cutAsking.tier().id, async () => (await sourceBitmap())!, CUT_SIDE);
             commit(setOnly(history.now(), { type: "cutout", found: answer.found, background: "clear" }));
             frame.status.say("Cut out", `Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s with ${cutAsking.tier().name}`);
         } catch (error) {

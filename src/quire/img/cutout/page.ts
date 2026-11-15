@@ -19,7 +19,7 @@ import { createFinder, type Finder } from "../parts/finder";
 import { PART_TIERS } from "../parts/models";
 import type { Stroke } from "../masks";
 import { createAsking } from "./asking";
-import { cutOut, CUT_SIDE, valuesOf, type Cut, type Laid } from "./cut";
+import { cutOut, CUT_SIDE, findCut, type Cut, type Laid } from "./cut";
 
 /** The words of the page that a visitor reads first. */
 export const CUT_WORDS = {
@@ -222,11 +222,8 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         fill();
         const started = performance.now();
         try {
-            const answer = await finderNow().matte(asking.tier().id, await createImageBitmap(picture), undefined, CUT_SIDE);
-            // a mask all kept or all gone is no answer (a card that let the model go can give one): said, and nothing made
-            const values = valuesOf(answer.found);
-            const share = values ? values.reduce((sum, value) => sum + value, 0) / values.length : 1;
-            if (share > 0.985 || share < 0.002) throw new Error("the model found nothing to cut out; try again, or another quality");
+            const shown = picture;
+            const answer = await findCut(finderNow(), asking.tier().id, () => createImageBitmap(shown), CUT_SIDE);
             cut = { found: answer.found, background: laid, ...(laid === "color" ? { color } : {}) };
             await again();
             say(`Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s, ${picture.width} × ${picture.height}.`);
