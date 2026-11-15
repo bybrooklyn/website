@@ -195,10 +195,16 @@ export function inkOn(color: string): string {
     return light > 0.36 ? "#000000" : "#ffffff";
 }
 
+/** A highlighter's ink: its color a third of the way to white, as a highlighter's is lighter than paint of the same color. */
+export function inkOfHighlight(color: string): string {
+    const channel = (at: number) => Math.round(parseInt(color.slice(at, at + 2), 16) + (255 - parseInt(color.slice(at, at + 2), 16)) / 3);
+    return `#${[1, 3, 5].map((at) => channel(at).toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** A highlighter's stroke: straight, square at its ends, multiplying what is under it. */
 function drawHighlight(context: Context, mark: Extract<Mark, { type: "highlight" }>, place: Place) {
     context.globalCompositeOperation = "multiply";
-    context.strokeStyle = mark.color;
+    context.strokeStyle = inkOfHighlight(mark.color);
     context.lineCap = "butt";
     context.beginPath();
     if (place.perspective) {

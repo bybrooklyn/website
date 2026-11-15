@@ -20,24 +20,24 @@
 // grid inside them showing how it will be squared; each handle let go, or nudged by the arrow keys, is one
 // change.
 
-import { backendFor, gradingWith, loadPicture, type Loaded, type Scene, type View } from "./draw";
+import { backendFor, gradingWith, lensLook, loadPicture, type Loaded, type Scene, type View } from "./draw";
 import { maskSize, stackFor, type Stroke } from "./masks";
 import type { Space } from "./grade";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
-import { allAt, drawMarks, markBox, moved, pivotOf, placeOn, type Place } from "./marks";
+import { alignShare, allAt, drawMarks, moved, partOf, placeOn, ringsOf, type Place, type Ring } from "./marks";
 import { bent, cornersOf, fromLevel, keepInside, levelBox, fitInside, levelling, toLevel, turnOf, type Turn } from "./turn";
 import { apply, convex, squareToQuad, stretch, type Matrix } from "./homography";
 import { perspectiveMap, rectCorners, type Corners, type Perspective } from "./perspective";
-import { add, change, look, setOnly, within, type Kept, type Look, type Mark, type Picture, type Point, type Rect } from "./steps";
+import { add, change, isMark, look, setOnly, within, type Align, type Kept, type Look, type Mark, type MarkKind, type Picture, type Point, type Rect } from "./steps";
 import { decodeRuns, type Shape } from "./masks";
 import { corners } from "./read/pixels";
 import { coverFor, type Line } from "./read/words";
 import type { Finding } from "./read/private";
 import { make } from "../core/ui";
 
-/** The tools: the crop's frame, hiding, the three marks, reading text, grading (the picture then pans, and shows the grade's parts), or none (dragging then picks and moves, or selects words). */
-export type Tool = "crop" | "hide" | "arrow" | "box" | "text" | "read" | "grade" | "cutout" | "none";
+/** The tools: the crop's frame, hiding, the seven marks, reading text, grading (the picture then pans, and shows the grade's parts), or none (dragging then picks and moves, or selects words). */
+export type Tool = "crop" | "hide" | MarkKind | "read" | "grade" | "cutout" | "none";
 
 /** A word on the stage: its text and box, its line, and the cover pressing it makes. */
 export interface PlacedWord {
@@ -100,10 +100,47 @@ export function runText(words: PlacedWord[], from: number, to: number): string {
     return text;
 }
 
-/** How new marks are drawn: their color, and their thickness as a share of the picture's longer side. */
+/** How new marks are drawn: their color, and their thickness as a share of the picture's longer side; a text's outline (its color, or none, and its width as a share of the text's size) and alignment; a magnifier's enlargement; a spotlight's shape and how dark it shades. */
 export interface Pen {
     color: string;
     weight: number;
+    outline?: string;
+    outlineWeight?: number;
+    align?: Align;
+    zoom?: number;
+    round?: boolean;
+    dim?: number;
+}
+
+/** What a pen leaves out, as new marks take it. */
+export const PEN = { outlineWeight: 0.08, align: "left" as Align, zoom: 2, dim: 0.55 };
+
+/** The sizes of new marks from a pen, in the original's pixels: a line's thickness, a text's size and its outline's width, a number's circle, a highlighter's stroke, a lens's radius. */
+export function sizesFor(pen: Pen, size: { width: number; height: number }) {
+    const line = thickness(pen, size);
+    const text = line * 6;
+    return { line, text, outline: Math.max(1, Math.round(text * (pen.outlineWeight ?? PEN.outlineWeight) * 2) / 2), number: line * 7, highlight: line * 4, lens: Math.max(12, Math.round(Math.max(size.width, size.height) * pen.weight * 16)) };
+}
+
+/** Where a magnifier's lens goes when it is put down with a press and no drag: beside the place it looks at, half a lens away, on the first side where it lies whole inside `room` (up and right, up and left, down and right, down and left), else up and right. */
+export function lensBeside(at: Point, radius: number, room: Rect): Point {
+    const far = radius * 1.5;
+    const sides = [{ x: 1, y: -1 }, { x: -1, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }].map((side) => ({ x: at.x + side.x * far, y: at.y + side.y * far }));
+    return sides.find((each) => each.x - radius >= room.x && each.y - radius >= room.y && each.x + radius <= room.x + room.width && each.y + radius <= room.y + room.height) ?? sides[0]!;
+}
+
+/** A highlighter's stroke laid on read words: along their line through its middle, from the first word's start to the last's end and a tenth of the line's height past each, as thick as the line and a tenth more. */
+export function onWords(line: Line, words: Line["words"]): { from: Point; to: Point; thickness: number } | undefined {
+    if (!words.length) return undefined;
+    const { at, along, height } = line.box;
+    const down = { x: -along.y, y: along.x };
+    const lengths = words.flatMap((word) => corners(word.box).map((point) => (point.x - at.x) * along.x + (point.y - at.y) * along.y));
+    const pad = height * 0.1;
+    const start = Math.min(...lengths) - pad;
+    const end = Math.max(...lengths) + pad;
+    const middle = height / 2;
+    const place = (u: number): Point => ({ x: at.x + along.x * u + down.x * middle, y: at.y + along.y * u + down.y * middle });
+    return { from: place(start), to: place(end), thickness: height * 1.1 };
 }
 
 /** What the stage is given by the editor: the document, and where its changes go. */
@@ -224,8 +261,10 @@ export function createStage(hooks: StageHooks) {
         grip.dataset.handle = handle;
         frame.append(grip);
     }
-    const writing = make("input", "quire-img-writing");
-    writing.type = "text";
+    // a text's lines are typed in place: Enter keeps them, Shift and Enter starts another line
+    const writing = make("textarea", "quire-img-writing");
+    writing.rows = 1;
+    writing.spellcheck = false;
     writing.setAttribute("aria-label", "Text");
     // the split between the original and the grade: a fine line with a grip to drag
     const splitter = make("div", "quire-img-split");
@@ -276,6 +315,7 @@ export function createStage(hooks: StageHooks) {
     let sizeOf = { width: 0, height: 0 };
     // the words the reader found, what of them looks private, the word under the pointer, and a run being dragged or selected
     let words: PlacedWord[] = [];
+    let lines: Line[] = [];
     let findings: number[][] = [];
     let hover: number | undefined;
     let run: [number, number] | undefined;
@@ -354,6 +394,61 @@ export function createStage(hooks: StageHooks) {
         return { x: event.clientX - box.left, y: event.clientY - box.top };
     };
 
+    // ---- the magnifiers' lenses: each flattened by the card as the export flattens it, at the size it is drawn on the screen ----
+    // the last picture made for each magnifier (by its place among the marks) and what it was made from; a lens whose
+    // picture is being made again shows the last one meanwhile, so that it never blinks while it is dragged
+    const lenses = new Map<number, { key: string; image: OffscreenCanvas }>();
+    const lensJobs = new Map<number, { key: string; part: Look }>();
+    let lensBusy = false;
+    /** What a lens's picture is made from, as a key: everything that changes it but the original. */
+    const lensKey = (part: Look) =>
+        JSON.stringify({
+            crop: part.crop,
+            size: part.width,
+            marks: part.marks,
+            covers: part.covers,
+            turn: part.turn,
+            perspective: part.perspective,
+            repair: part.repair,
+            cut: part.cutout ? part.cutout.background + (part.cutout.color ?? "") : "",
+            holding,
+            grades: part.grades.map((each) => [each.id, each.grade, each.part && { ...each.part, found: each.part.found?.runs.length, strokes: each.part.strokes?.length }]),
+        });
+    /** The picture a magnifier's lens shows on the screen, asked for when it is not made yet (the last one meanwhile). */
+    function lensFor(seen: Look, index: number, at: Place): OffscreenCanvas | undefined {
+        const part = lensLook(seen, index, at);
+        if (!part) return undefined;
+        const key = lensKey(part);
+        const made = lenses.get(index);
+        if (made?.key !== key) {
+            lensJobs.set(index, { key, part: holding ? { ...part, grades: [] } : part });
+            if (!lensBusy) void makeLenses();
+        }
+        return made?.image;
+    }
+    /** Makes the lenses asked for, one at a time, the newest asking for each. */
+    async function makeLenses() {
+        lensBusy = true;
+        try {
+            while (lensJobs.size && loaded) {
+                const [index, job] = lensJobs.entries().next().value!;
+                lensJobs.delete(index);
+                if (lenses.get(index)?.key === job.key) continue;
+                const from = loaded;
+                // the marks' canvas is sRGB, so a Display P3 picture's lens is made sRGB as it is flattened
+                const space = hooks.space?.() ?? "srgb";
+                const pixels = await from.flatten(job.part, undefined, gradingWith(job.part, space, from.size, space === "p3"), space).catch(() => undefined);
+                if (!pixels || from !== loaded) continue;
+                const image = new OffscreenCanvas(pixels.width, pixels.height);
+                image.getContext("2d")!.putImageData(pixels, 0, 0);
+                lenses.set(index, { key: job.key, image });
+                paint();
+            }
+        } finally {
+            lensBusy = false;
+        }
+    }
+
     // ---- drawing, once a frame at most ----
     let asked = false;
     const paint = () => {
@@ -408,27 +503,47 @@ export function createStage(hooks: StageHooks) {
         // marks are seen in crop mode too, but cut to the frame as they will be
         context.save();
         const kept = levelOnStage(cornering ? seen.crop : cropping() && cropFrame ? cropFrame : now.crop);
+        // out to whole pixels, so that a spotlight's shade reaches the picture's last row and column
+        const left = Math.floor(kept.x * ratio);
+        const top = Math.floor(kept.y * ratio);
         context.beginPath();
-        context.rect(kept.x * ratio, kept.y * ratio, kept.width * ratio, kept.height * ratio);
+        context.rect(left, top, Math.ceil((kept.x + kept.width) * ratio) - left, Math.ceil((kept.y + kept.height) * ratio) - top);
         context.clip();
-        drawMarks(context, now.marks, scaled);
+        // a highlighter multiplies what is under it, so the picture under each is copied onto this canvas first, the marks before it drawn over the copy as they are in the export
+        for (const mark of now.marks) {
+            if (mark.type !== "highlight") continue;
+            const ring = ringsOf(mark)[0] as Extract<Ring, { rect: Rect }>;
+            const reach = boxAround(cornersOnStage(ring.rect, ring.angle, ring.pivot));
+            const x = Math.max(0, Math.floor((reach.x - 2) * ratio));
+            const y = Math.max(0, Math.floor((reach.y - 2) * ratio));
+            const right = Math.min(width, Math.ceil((reach.x + reach.width + 2) * ratio));
+            const bottom = Math.min(height, Math.ceil((reach.y + reach.height + 2) * ratio));
+            if (right > x && bottom > y) context.drawImage(canvas, x, y, right - x, bottom - y, x, y, right - x, bottom - y);
+        }
+        drawMarks(context, now.marks, scaled, (index) => lensFor({ ...seen, marks: now.marks }, index, scaled));
         if (words.length && (tool === "read" || selection)) drawWords(context, ratio);
         context.restore();
-        // what is picked: a fine ring round it in the page's accent
+        // what is picked: a fine ring round it in the page's accent, four screen pixels out, turned with the picture and with the thing's own turn
         const chosen = picture()?.steps.find((step) => step.id === picked);
-        if (chosen && (chosen.type === "cover" || chosen.type === "arrow" || chosen.type === "box" || chosen.type === "text")) {
-            // a fine ring round it, four screen pixels out, turned with the picture and with the thing's own turn
-            const box = chosen.type === "cover" ? chosen.rect : markBox(chosen);
-            const angle = chosen.type === "cover" || chosen.type === "box" || chosen.type === "text" ? (chosen.angle ?? 0) : 0;
-            const out = 4 / Math.max(1e-6, place().across);
-            const ring = cornersOnStage({ x: box.x - out, y: box.y - out, width: box.width + 2 * out, height: box.height + 2 * out }, angle, angle ? pivotOf(chosen as never) : undefined);
+        if (chosen && (chosen.type === "cover" || isMark(chosen))) {
+            const rings: Ring[] = chosen.type === "cover" ? [{ rect: chosen.rect, angle: chosen.angle ?? 0, pivot: { x: chosen.rect.x + chosen.rect.width / 2, y: chosen.rect.y + chosen.rect.height / 2 } }] : ringsOf(chosen);
+            const across = Math.max(1e-6, place().across);
+            const out = 4 / across;
             context.strokeStyle = getComputedStyle(element).getPropertyValue("--accent") || "#b48cff";
             context.lineWidth = 1.5 * ratio;
             context.setLineDash([5 * ratio, 4 * ratio]);
-            context.beginPath();
-            ring.forEach((corner, at) => (at ? context.lineTo(corner.x * ratio, corner.y * ratio) : context.moveTo(corner.x * ratio, corner.y * ratio)));
-            context.closePath();
-            context.stroke();
+            for (const ring of rings) {
+                context.beginPath();
+                if ("middle" in ring) {
+                    const middle = pointOnStage(ring.middle);
+                    context.arc(middle.x * ratio, middle.y * ratio, (ring.radius * across + 4) * ratio, 0, Math.PI * 2);
+                } else {
+                    const corners = cornersOnStage({ x: ring.rect.x - out, y: ring.rect.y - out, width: ring.rect.width + 2 * out, height: ring.rect.height + 2 * out }, ring.angle, ring.pivot);
+                    corners.forEach((corner, at) => (at ? context.lineTo(corner.x * ratio, corner.y * ratio) : context.moveTo(corner.x * ratio, corner.y * ratio)));
+                    context.closePath();
+                }
+                context.stroke();
+            }
             context.setLineDash([]);
         }
         if (cropping() && cropFrame) {
@@ -973,24 +1088,58 @@ export function createStage(hooks: StageHooks) {
     const fingers = new Map<number, Point>();
     let pinch: { distance: number; middle: Point; view: View } | undefined;
 
-    /** The steps a drawing drag makes so far: a cover or a mark from where it started to here, or nothing yet. */
-    function drawing(from: Point, to: Point): Kept[] | undefined {
+    /**
+     * The steps a drawing drag makes so far: a cover or a mark from where it started to here, or nothing yet. A
+     * number follows the pointer; a highlighter's stroke is level on the screen unless `free` (Shift held), or
+     * started on a word read, lies along that word's line as far as the word under the pointer; a magnifier looks
+     * at where the drag started, its lens where it is now.
+     */
+    function drawing(from: Point, to: Point, free = false): Kept[] | undefined {
         const found = hooks.picture();
         if (!found) return undefined;
         const pen = hooks.pen();
-        const line = thickness(pen, found.original);
-        // on a turned picture a cover or a box is upright on the screen: spanned on the level picture, kept turned back by the picture's turn
+        const sizes = sizesFor(pen, found.original);
+        // on a turned picture a cover, a box or a spotlight is upright on the screen: spanned on the level picture, kept turned back by the picture's turn
         const turn = turnNow();
         const rect = bent(turn) ? uprightRect(from, to, turn) : spanned(from, to);
         const angle = turn.degrees ? { angle: -turn.degrees } : {};
         if (tool === "hide") return add(found.steps, { type: "cover", rect, color: "#000000", ...angle });
-        if (tool === "box") return add(found.steps, { type: "box", rect, color: pen.color, thickness: line, ...angle });
-        if (tool === "arrow") return add(found.steps, { type: "arrow", from, to, color: pen.color, thickness: line });
+        if (tool === "box") return add(found.steps, { type: "box", rect, color: pen.color, thickness: sizes.line, ...angle });
+        if (tool === "arrow") return add(found.steps, { type: "arrow", from, to, color: pen.color, thickness: sizes.line });
+        if (tool === "number") return add(found.steps, { type: "number", at: to, color: pen.color, size: sizes.number, ...angle });
+        if (tool === "magnifier") return add(found.steps, { type: "magnifier", at: to, from, radius: sizes.lens, zoom: pen.zoom ?? PEN.zoom, color: pen.color, thickness: sizes.line });
+        if (tool === "spotlight") {
+            // every spotlight shades alike, so a new one takes the shade there is
+            const shade = (found.steps.find((step) => step.type === "spotlight" && !step.off) as { dim: number } | undefined)?.dim ?? pen.dim ?? PEN.dim;
+            return add(found.steps, { type: "spotlight", rect, ...(pen.round ? { round: true as const } : {}), dim: shade, ...angle });
+        }
+        if (tool === "highlight") {
+            const laid = alongWords(from, to);
+            if (laid) return add(found.steps, { type: "highlight", ...laid, color: pen.color });
+            const start = toLevel(from, turn);
+            const end = toLevel(to, turn);
+            return add(found.steps, { type: "highlight", from, to: free ? to : fromLevel({ x: end.x, y: start.y }, turn), color: pen.color, thickness: sizes.highlight });
+        }
         return undefined;
+    }
+    /** A highlighter's stroke on the words read, when a drag starts on one: their line's height and place, from the word pressed to the word under the pointer on the same line. */
+    function alongWords(from: Point, to: Point) {
+        const start = words.length ? wordAt(from) : undefined;
+        if (start === undefined) return undefined;
+        const line = words[start]!.line;
+        const end = wordAt(to) ?? nearestWord(to) ?? start;
+        const chosen: Line["words"] = [];
+        for (let at = Math.min(start, end); at <= Math.max(start, end); at++) if (words[at]?.line === line) chosen.push({ text: words[at]!.text, box: words[at]!.box, sure: 1, line });
+        return lines[line] ? onWords(lines[line]!, chosen) : undefined;
     }
 
     /** The marks, and with Hide, reading or no tool the covers, that a press can pick. */
-    const pickableOf = (steps: Kept[]) => steps.filter((step) => !step.off && (step.type === "arrow" || step.type === "box" || step.type === "text" || (step.type === "cover" && (tool === "hide" || tool === "none" || tool === "read")))) as (Kept & (Mark | { type: "cover"; rect: Rect }))[];
+    const pickableOf = (steps: Kept[]) => steps.filter((step) => !step.off && (isMark(step) || (step.type === "cover" && (tool === "hide" || tool === "none" || tool === "read")))) as (Kept & (Mark | { type: "cover"; rect: Rect }))[];
+    /** Which part of a magnifier a press there takes: its lens, or the place it looks at. */
+    let pickedPart: "lens" | "source" | undefined;
+    const partAt = (step: Kept & (Mark | { type: "cover"; rect: Rect }), at: Point) => (step.type === "magnifier" ? (partOf(step, at, 6 / place().across) ?? "lens") : undefined);
+    /** A step moved by an amount: a cover's rectangle, or a mark (a magnifier's lens or the place it looks at alone, when `part` says which). */
+    const movedStep = (step: Kept, by: Point, part = pickedPart ?? "lens"): Kept => (step.type === "cover" ? { ...step, rect: { ...step.rect, x: step.rect.x + by.x, y: step.rect.y + by.y } } : isMark(step) ? ({ ...moved(step, by, part), id: step.id } as Kept) : step);
     element.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 && event.button !== 1) return;
         element.focus({ preventScroll: true });
@@ -1082,6 +1231,7 @@ export function createStage(hooks: StageHooks) {
         const target = under[Math.max(0, now)];
         if (target) {
             picked = target.id;
+            pickedPart = partAt(target, there);
             drag = { kind: "move", id: target.id, from: there, steps, beneath: now >= 0 && under.length > 1 ? under[(now + 1) % under.length]!.id : undefined };
             hooks.moved();
             paint();
@@ -1174,11 +1324,11 @@ export function createStage(hooks: StageHooks) {
             points.push(Math.round(there.x), Math.round(there.y));
             cutLine = stroke;
         }
-        else if (drag.kind === "draw") live = drawing(drag.from, there);
+        else if (drag.kind === "draw") live = drawing(drag.from, there, event.shiftKey);
         else {
             const by = { x: there.x - drag.from.x, y: there.y - drag.from.y };
             const id = drag.id;
-            live = drag.steps.map((step) => (step.id !== id ? step : step.type === "cover" ? { ...step, rect: { ...step.rect, x: step.rect.x + by.x, y: step.rect.y + by.y } } : step.type === "arrow" || step.type === "box" || step.type === "text" ? ({ ...moved(step, by), id: step.id } as Kept) : step));
+            live = drag.steps.map((step) => (step.id !== id ? step : movedStep(step, by)));
         }
         paint();
     }
@@ -1256,25 +1406,35 @@ export function createStage(hooks: StageHooks) {
             if (!still) hooks.change(made!.map((step) => (step.type === "cover" && step.id === was.id && !step.angle ? { ...step, rect: within(step.rect, hooks.picture()!.original) } : step)));
             else if (was.beneath) {
                 picked = was.beneath;
+                pickedPart = undefined;
                 hooks.moved();
             }
             return paint();
         }
-        if (was.kind !== "draw" || !made) return paint();
-        const step = made.at(-1)!;
+        // a number is put down by a press alone, and a magnifier too, so a press with no move makes the step there is so far
+        const pressed = was.kind === "draw" && !made && (tool === "number" || tool === "magnifier") ? drawing(was.from, was.from) : made;
+        if (was.kind !== "draw" || !pressed) return paint();
+        let step = pressed.at(-1)!;
         const where = place();
-        // a press with hardly any drag makes nothing
-        const size = step.type === "arrow" ? Math.hypot(step.to.x - step.from.x, step.to.y - step.from.y) * where.across : step.type === "cover" || step.type === "box" ? Math.min(step.rect.width, step.rect.height) * where.across : 0;
+        // a press with hardly any drag makes nothing, but a number, and a magnifier, whose lens then goes beside the place it looks at
+        const size = step.type === "arrow" || step.type === "highlight" ? Math.hypot(step.to.x - step.from.x, step.to.y - step.from.y) * where.across : step.type === "cover" || step.type === "box" || step.type === "spotlight" ? Math.min(Math.abs(step.rect.width), Math.abs(step.rect.height)) * where.across : Infinity;
         if (size < 4) return paint();
+        if (step.type === "magnifier" && Math.hypot(step.at.x - step.from.x, step.at.y - step.from.y) * where.across < 12) {
+            const turn = turnNow();
+            const lens = lensBeside(toLevel(step.from, turn), step.radius, shown()?.crop ?? { x: 0, y: 0, ...loaded!.size });
+            step = { ...step, at: fromLevel(lens, turn) };
+            pressed[pressed.length - 1] = step;
+        }
         if (step.type === "cover") {
             // the cover takes the color round where it was put, from the original's own pixels (round the box about a turned one)
             const rect = step.angle ? step.rect : within(step.rect, hooks.picture()!.original);
             const box = step.angle ? within(boxAround(cornersOf(rect, step.angle)), hooks.picture()!.original) : rect;
             const area = ringArea(box, loaded!.size);
             const color = coverColor(await loaded!.pixels(area), area, box);
-            hooks.change(made.map((each) => (each.id === step.id ? ({ ...each, rect, color } as Kept) : each)));
-        } else hooks.change(made);
+            hooks.change(pressed.map((each) => (each.id === step.id ? ({ ...each, rect, color } as Kept) : each)));
+        } else hooks.change(pressed);
         picked = step.type === "cover" ? undefined : step.id;
+        pickedPart = step.type === "magnifier" ? "lens" : undefined;
         hooks.moved();
         paint();
     };
@@ -1307,8 +1467,23 @@ export function createStage(hooks: StageHooks) {
         writingAt = at;
         const where = pointOnStage(at);
         const found = hooks.picture();
-        const size = found ? thickness(hooks.pen(), found.original) * 6 : 24;
-        Object.assign(writing.style, { left: `${where.x}px`, top: `${where.y}px`, fontSize: `${Math.max(12, size * place().across)}px`, color: hooks.pen().color });
+        const pen = hooks.pen();
+        const sizes = found ? sizesFor(pen, found.original) : { text: 24, outline: 2 };
+        const scale = place().across;
+        const shown = Math.max(12, sizes.text * scale);
+        // the field lies where the text will: aligned on the place pressed, its outline as it will be drawn
+        const align = pen.align ?? PEN.align;
+        Object.assign(writing.style, {
+            left: `${where.x}px`,
+            top: `${where.y}px`,
+            fontSize: `${shown}px`,
+            color: pen.color,
+            textAlign: align,
+            // the field has a little room each side for the outline, so the text inside it lies on the place pressed as the step will draw it
+            padding: "0 0.12em",
+            translate: `calc(${-alignShare(align) * 100}% + ${(2 * alignShare(align) - 1) * 0.12}em) 0`,
+            webkitTextStroke: pen.outline ? `${sizes.outline * 2 * (shown / sizes.text)}px ${pen.outline}` : "",
+        });
         writing.value = "";
         writing.classList.add("shown");
         writing.focus({ preventScroll: true });
@@ -1318,15 +1493,19 @@ export function createStage(hooks: StageHooks) {
         writingAt = undefined;
         writing.classList.remove("shown");
         const found = hooks.picture();
-        if (!at || !found || !writing.value.trim()) return;
+        // the lines as typed, the empty ones at the ends left out
+        const text = writing.value.replace(/^\s*\n|\n\s*$/g, "").replace(/[ \t]+$/gm, "").slice(0, 400);
+        if (!at || !found || !text.trim()) return;
         const pen = hooks.pen();
+        const sizes = sizesFor(pen, found.original);
         const turn = turnNow();
-        const next = add(found.steps, { type: "text", at, text: writing.value.trim().slice(0, 400), color: pen.color, size: thickness(pen, found.original) * 6, ...(turn.degrees ? { angle: -turn.degrees } : {}) });
+        const align = pen.align ?? PEN.align;
+        const next = add(found.steps, { type: "text", at, text, color: pen.color, size: sizes.text, ...(turn.degrees ? { angle: -turn.degrees } : {}), ...(pen.outline ? { outline: pen.outline, outlineWidth: sizes.outline } : {}), ...(align !== "left" ? { align } : {}) });
         picked = next.at(-1)!.id;
         hooks.change(next);
     }
     writing.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
+        if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             keepWriting();
             element.focus({ preventScroll: true });
@@ -1364,7 +1543,7 @@ export function createStage(hooks: StageHooks) {
             const along = turn.degrees ? { x: turn.cos * by.x + turn.sin * by.y, y: -turn.sin * by.x + turn.cos * by.y } : by;
             by.x = along.x;
             by.y = along.y;
-            hooks.change(found.steps.map((each) => (each.id !== id ? each : each.type === "cover" ? { ...each, rect: { ...each.rect, x: each.rect.x + by.x, y: each.rect.y + by.y } } : each.type === "arrow" || each.type === "box" || each.type === "text" ? ({ ...moved(each, by), id } as Kept) : each)));
+            hooks.change(found.steps.map((each) => (each.id !== id ? each : movedStep(each, by))));
         } else view = { ...view, x: view.x - by.x * 10, y: view.y - by.y * 10 };
         paint();
     });
@@ -1407,6 +1586,7 @@ export function createStage(hooks: StageHooks) {
         async show(original: Blob | ImageBitmap) {
             loaded?.destroy();
             loaded = undefined;
+            lenses.clear();
             blob = original;
             loaded = await prepare();
             if (tool === "crop") cropFrame = shown()?.crop;
@@ -1420,6 +1600,7 @@ export function createStage(hooks: StageHooks) {
             const fresh = await prepare();
             if (blob !== source) return loaded;
             loaded = fresh;
+            lenses.clear();
             old?.destroy();
             paint();
             return loaded;
@@ -1455,16 +1636,19 @@ export function createStage(hooks: StageHooks) {
             blob = undefined;
             picked = undefined;
             words = [];
+            lines = [];
+            lenses.clear();
             findings = [];
             hover = run = selection = undefined;
             paint();
         },
         /** The words the reader found, and what of them looks private (each finding as the places of its words). */
-        setWords(lines: Line[], found: Finding[] = []) {
-            words = placeWords(lines);
+        setWords(read: Line[], found: Finding[] = []) {
+            lines = read;
+            words = placeWords(read);
             const index = new Map<string, number>();
             let at = 0;
-            lines.forEach((line, number) => line.words.forEach((_, word) => index.set(`${number},${word}`, at++)));
+            read.forEach((line, number) => line.words.forEach((_, word) => index.set(`${number},${word}`, at++)));
             findings = found.map((finding) => finding.words.map((place) => index.get(`${place.line},${place.word}`)).filter((each): each is number => each !== undefined));
             hover = run = selection = undefined;
             paint();
@@ -1502,8 +1686,11 @@ export function createStage(hooks: StageHooks) {
             const found = hooks.picture();
             if (!found || !loaded || tool === "crop" || tool === "text" || tool === "grade") return;
             const pickable = pickableOf(found.steps);
-            const under = allAt(pickable, toOriginal(pointer({ clientX, clientY })), 6 / place().across).map((at) => pickable[at]!);
-            picked = (under.find((step) => step.id === picked) ?? under[0])?.id;
+            const there = toOriginal(pointer({ clientX, clientY }));
+            const under = allAt(pickable, there, 6 / place().across).map((at) => pickable[at]!);
+            const chosen = under.find((step) => step.id === picked) ?? under[0];
+            picked = chosen?.id;
+            pickedPart = chosen && partAt(chosen, there);
             paint();
             hooks.moved();
         },

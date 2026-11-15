@@ -6,7 +6,7 @@
 // browser tests of the editor.
 
 import { expect, test } from "bun:test";
-import { alignShare, allAt, canvasOf, headOf, inkOn, lensRegion, markAt, markBox, moved, partOf, ringsOf } from "./marks";
+import { alignShare, allAt, canvasOf, headOf, inkOfHighlight, inkOn, lensRegion, markAt, markBox, moved, partOf, ringsOf } from "./marks";
 import type { Mark, Point, Rect } from "./steps";
 
 const arrow: Mark = { type: "arrow", from: { x: 10, y: 10 }, to: { x: 110, y: 10 }, color: "#d52d00", thickness: 4 };
@@ -114,4 +114,10 @@ test("a number's figure is black on a light color and white on a dark one", () =
     expect(inkOn("#ff3b30")).toBe("#ffffff");
     expect(inkOn("#0a84ff")).toBe("#ffffff");
     expect(inkOn("#000000")).toBe("#ffffff");
+});
+
+test("a highlighter's ink is its color a third of the way to white", () => {
+    expect(inkOfHighlight("#ffd60a")).toBe("#ffe45c");
+    expect(inkOfHighlight("#000000")).toBe("#555555");
+    expect(inkOfHighlight("#ffffff")).toBe("#ffffff");
 });

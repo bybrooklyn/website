@@ -442,6 +442,8 @@ export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
             const covers: PieceCover[] = look.covers.map((cover) => ({ rect: { x: cover.rect.x - read.x, y: cover.rect.y - read.y, width: cover.rect.width, height: cover.rect.height }, color: rgba(cover.color), ...(cover.angle ? { angle: cover.angle } : {}) }));
             const graded: [number, number, number, number] | undefined = grading ? [look.crop.x + piece.out.x * stepX, look.crop.y + piece.out.y * stepY, stepX, stepY] : undefined;
             const turned: TurnPass | undefined = bent(turn) ? { matrix: pieceMatrix(turn, piece.source, read), width: piece.source.width, height: piece.source.height } : undefined;
+            // the grades handed over again for each piece, since the screen (or a lens) may have handed over others while this one waited
+            backend.grading(grading);
             const pixels = await backend.resample(part, covers, piece, graded, turned);
             part.close();
             for (let row = 0; row < piece.out.height; row++) result.data.set(pixels.subarray(row * piece.out.width * 4, (row + 1) * piece.out.width * 4), ((piece.out.y + row) * look.width + piece.out.x) * 4);

@@ -1,5 +1,6 @@
 // The menu a right-click on the picture opens, as mdQuire's text has one: what can be done with what is
-// under the pointer first (a mark or a cover: remove it, bring it forward, send it back), then copy and
+// under the pointer first (a mark or a cover: remove it, bring it forward, send it back; a numbered step whose
+// number was set by hand: number it in order again), then copy and
 // paste, then the one-press fixes for the whole picture (straightening its lines, repairing a JPEG), then
 // export. Each is the menus' own line, so it does what that line does, with its shortcut.
 // With no picture yet it holds Paste and Choose a picture. The keyboard's menu key, or Shift+F10, opens
@@ -9,8 +10,8 @@
 
 import { everyLine, RULE, type MenuItem } from "../core/ui";
 
-/** The commands for what is picked, by their names in the menus' table. */
-export const PICKED_COMMANDS = ["remove", "forward", "back"];
+/** The commands for what is picked, by their names in the menus' table; those after the first three only when they can be used (a numbered step's number set by hand counted in order again). */
+export const PICKED_COMMANDS = ["remove", "forward", "back", "renumber"];
 
 /** The commands for the picture as a whole, in the menu's order; a rule goes before Export. */
 export const PICTURE_COMMANDS = ["copy", "copy-text", "paste", "export"];
@@ -29,7 +30,7 @@ export function pressLines(menus: { items: () => MenuItem[] }[], state: { pictur
     const line = (key: string) => all.find((item) => item.key === key);
     const paste = line("paste");
     if (!state.picture) return [...(paste ? [paste] : []), choose];
-    const picked = state.picked ? PICKED_COMMANDS.flatMap((key) => line(key) ?? []) : [];
+    const picked = state.picked ? PICKED_COMMANDS.flatMap((key, at) => line(key)?.disabled && at >= 3 ? [] : (line(key) ?? [])) : [];
     const whole = PICTURE_COMMANDS.flatMap((key) => {
         const found = line(key);
         if (!found) return [];
