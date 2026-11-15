@@ -2,10 +2,17 @@
 // 1024 a side) and applied at the picture's full size. Two things are worked out at the mask's size
 // here, on the processor, from the mask and the picture made as small as it:
 //
-// - a guided filter (He, Sun and Tang) of the mask against the picture's lightness: for each place the
-//   straight line `a × lightness + b` that best fits the mask round it, the lines then averaged; laid
-//   over the full-size picture (`a` and `b` read between their entries) it gives the mask again at
-//   full size, its edges following the real pixels, so hair finer than the mask's pixels is kept;
+// - a guided filter (He, Sun and Tang) of the mask against the picture's colors: for each place the
+//   plane `a · rgb + b` that best fits the mask round it (`a` three numbers, solved from the colors'
+//   3 by 3 spread there), the planes then averaged; laid over the full-size picture (`a` and `b` read
+//   between their entries) it gives the mask again at full size, its edges following the real pixels:
+//   as sharp as the picture where the picture is sharp, even between two colors of one lightness (a red
+//   coat on green grass), and soft where the picture is, so hair finer than the mask's pixels is kept;
+// - where a model's mask is soft across an edge the picture has sharp, the plane gives the two sides
+//   shares short of whole and of nothing (0.75 and 0.25, say), a rim of half-clear pixels on a new
+//   background; so where the mask round a place runs from nothing to whole, the plane's shares there
+//   are stretched from their least to their most (`low`, `high`), which leaves hair inside a figure as
+//   it was and makes a sharp edge a pixel soft;
 // - the colors of what is kept and of the old background near each place, as averages weighted by the
 //   mask and by what is not in it.
 //
@@ -59,12 +66,14 @@ export function boxMean(plane: Float32Array, width: number, height: number, radi
     return out;
 }
 
-/** What the card needs at the mask's size: the guided filter's averaged lines (`a`, `b`), and the colors of what is kept (`kept`) and of the old background (`ground`), RGB from 0 to 1, three to a place. */
+/** What the card needs at the mask's size: the guided filter's averaged planes (`a`, three to a place, and `b`), and the colors of what is kept (`kept`) and of the old background (`ground`), RGB from 0 to 1, three to a place. */
 export interface Low {
     width: number;
     height: number;
     a: Float32Array;
     b: Float32Array;
+    /** The plane's least and most shares near each place, two to a place, stretched to nothing and whole; 0 and 1 where the mask round it is not sure of both. */
+    levels: Float32Array;
     kept: Float32Array;
     ground: Float32Array;
 }
@@ -72,25 +81,38 @@ export interface Low {
 /** The low-size numbers from a mask (0 to 1) and the picture made the mask's size (RGBA, 8 bits). */
 export function lowOf(alpha: Float32Array, rgba: ArrayLike<number>, width: number, height: number, guide = GUIDE, colorRadius = COLOR_RADIUS): Low {
     const count = width * height;
-    const light = new Float32Array(count);
-    const lightAlpha = new Float32Array(count);
-    const lightLight = new Float32Array(count);
-    for (let at = 0; at < count; at++) {
-        const value = lightness(rgba[at * 4]!, rgba[at * 4 + 1]!, rgba[at * 4 + 2]!);
-        light[at] = value;
-        lightAlpha[at] = value * alpha[at]!;
-        lightLight[at] = value * value;
-    }
-    const meanLight = boxMean(light, width, height, guide.radius);
-    const meanAlpha = boxMean(alpha, width, height, guide.radius);
-    const meanLightAlpha = boxMean(lightAlpha, width, height, guide.radius);
-    const meanLightLight = boxMean(lightLight, width, height, guide.radius);
-    const a = new Float32Array(count);
+    const mean = (plane: Float32Array) => boxMean(plane, width, height, guide.radius);
+    const channel = (c: number) => Float32Array.from({ length: count }, (_, at) => rgba[at * 4 + c]! / 255);
+    const rgb = [channel(0), channel(1), channel(2)] as const;
+    const product = (x: Float32Array, y: Float32Array) => Float32Array.from({ length: count }, (_, at) => x[at]! * y[at]!);
+    const meanAlpha = mean(alpha);
+    const meanColor = rgb.map(mean);
+    const meanColorAlpha = rgb.map((each) => mean(product(each, alpha)));
+    // the colors' spread round each place, its six distinct entries: rr, rg, rb, gg, gb, bb
+    const pairs = [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]] as const;
+    const meanPairs = pairs.map(([i, j]) => mean(product(rgb[i], rgb[j])));
+    const a = new Float32Array(count * 3);
     const b = new Float32Array(count);
     for (let at = 0; at < count; at++) {
-        const spread = meanLightLight[at]! - meanLight[at]! * meanLight[at]!;
-        a[at] = (meanLightAlpha[at]! - meanLight[at]! * meanAlpha[at]!) / (spread + guide.eps);
-        b[at] = meanAlpha[at]! - a[at]! * meanLight[at]!;
+        const m = [meanColor[0]![at]!, meanColor[1]![at]!, meanColor[2]![at]!];
+        const spread = pairs.map(([i, j], k) => meanPairs[k]![at]! - m[i]! * m[j]! + (i === j ? guide.eps : 0));
+        const [rr, rg, rb, gg, gb, bb] = spread as [number, number, number, number, number, number];
+        const cov = [0, 1, 2].map((c) => meanColorAlpha[c]![at]! - m[c]! * meanAlpha[at]!);
+        // the 3 by 3 spread inverted by its cofactors, then times what the colors and the mask share
+        const c00 = gg * bb - gb * gb;
+        const c01 = rb * gb - rg * bb;
+        const c02 = rg * gb - rb * gg;
+        const c11 = rr * bb - rb * rb;
+        const c12 = rb * rg - rr * gb;
+        const c22 = rr * gg - rg * rg;
+        const det = rr * c00 + rg * c01 + rb * c02;
+        const x = (c00 * cov[0]! + c01 * cov[1]! + c02 * cov[2]!) / det;
+        const y = (c01 * cov[0]! + c11 * cov[1]! + c12 * cov[2]!) / det;
+        const z = (c02 * cov[0]! + c12 * cov[1]! + c22 * cov[2]!) / det;
+        a[at * 3] = x;
+        a[at * 3 + 1] = y;
+        a[at * 3 + 2] = z;
+        b[at] = meanAlpha[at]! - x * m[0]! - y * m[1]! - z * m[2]!;
     }
     // the colors near each place: weighted by the mask for what is kept, by what is not for the old background, averaged three times for a smooth reach
     const kept = new Float32Array(count * 3);
@@ -118,7 +140,62 @@ export function lowOf(alpha: Float32Array, rgba: ArrayLike<number>, width: numbe
             ground[at * 3 + channel] = wg[at]! > 1e-4 ? gs[at]! / wg[at]! : own;
         }
     }
-    return { width, height, a: boxMean(a, width, height, guide.radius), b: boxMean(b, width, height, guide.radius), kept, ground };
+    const averaged = new Float32Array(count * 3);
+    for (let c = 0; c < 3; c++) {
+        const plane = mean(Float32Array.from({ length: count }, (_, at) => a[at * 3 + c]!));
+        for (let at = 0; at < count; at++) averaged[at * 3 + c] = plane[at]!;
+    }
+    const averagedB = mean(b);
+    return { width, height, a: averaged, b: averagedB, levels: levelsOf(alpha, rgb, averaged, averagedB, width, height), kept, ground };
+}
+
+/** How much of a sure edge's faint tail on each side is taken to be nothing or whole. */
+export const SNAP = 0.125;
+
+/** How far round each place the least and most of the plane's shares are looked for, in the mask's pixels. */
+export const LEVEL_RADIUS = 4;
+
+/** The least or most of a plane over the square of a radius round each place. */
+function extreme(plane: Float32Array, width: number, height: number, radius: number, most: boolean): Float32Array {
+    const pick = most ? Math.max : Math.min;
+    const across = new Float32Array(plane.length);
+    const out = new Float32Array(plane.length);
+    for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) {
+            let found = plane[y * width + x]!;
+            for (let i = Math.max(0, x - radius); i <= Math.min(width - 1, x + radius); i++) found = pick(found, plane[y * width + i]!);
+            across[y * width + x] = found;
+        }
+    for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) {
+            let found = across[y * width + x]!;
+            for (let j = Math.max(0, y - radius); j <= Math.min(height - 1, y + radius); j++) found = pick(found, across[j * width + x]!);
+            out[y * width + x] = found;
+        }
+    return out;
+}
+
+/** The plane's least and most shares near each place where the mask round it runs from under a tenth to over nine tenths and the two differ by a fifth or more; else 0 and 1, which stretch nothing. */
+function levelsOf(alpha: Float32Array, rgb: readonly Float32Array[], a: Float32Array, b: Float32Array, width: number, height: number): Float32Array {
+    const count = width * height;
+    const fitted = new Float32Array(count);
+    for (let at = 0; at < count; at++) fitted[at] = Math.min(1, Math.max(0, a[at * 3]! * rgb[0]![at]! + a[at * 3 + 1]! * rgb[1]![at]! + a[at * 3 + 2]! * rgb[2]![at]! + b[at]!));
+    const least = extreme(fitted, width, height, LEVEL_RADIUS, false);
+    const most = extreme(fitted, width, height, LEVEL_RADIUS, true);
+    const maskLeast = extreme(alpha, width, height, LEVEL_RADIUS, false);
+    const maskMost = extreme(alpha, width, height, LEVEL_RADIUS, true);
+    const levels = new Float32Array(count * 2);
+    for (let at = 0; at < count; at++) {
+        const sure = maskLeast[at]! < 0.1 && maskMost[at]! > 0.9 && most[at]! - least[at]! > 0.2;
+        // a sure edge drops the plane's faint tails too: a share under an eighth goes to nothing, over seven eighths to whole
+        levels[at * 2] = sure ? Math.max(least[at]!, SNAP) : 0;
+        levels[at * 2 + 1] = sure ? Math.min(most[at]!, 1 - SNAP) : 1;
+    }
+    // smoothed, so that the stretch changes gently from place to place
+    const low = boxMean(Float32Array.from({ length: count }, (_, at) => levels[at * 2]!), width, height, 1);
+    const high = boxMean(Float32Array.from({ length: count }, (_, at) => levels[at * 2 + 1]!), width, height, 1);
+    for (let at = 0; at < count; at++) ((levels[at * 2] = low[at]!), (levels[at * 2 + 1] = high[at]!));
+    return levels;
 }
 
 /** What a cut-out is laid on: nothing (clear), a color, or the old background blurred. */
@@ -144,16 +221,19 @@ export const FAINT = 0.02;
 export const SURE = 0.3;
 
 /**
- * One pixel of the cut-out at full size, as the card works it out: its mask from the guided line at
- * its lightness, its kept color with the old background taken out, and laid on the background. Colors
+ * One pixel of the cut-out at full size, as the card works it out: its mask from the guided plane at
+ * its color, its kept color with the old background taken out, and laid on the background. Colors
  * from 0 to 1; gives red, green, blue and alpha (straight, not multiplied by alpha). `behind` is the
  * blurred old picture's color there, for a blurred background.
  */
 export function applyOne(low: Low, rgb: [number, number, number], u: number, v: number, background: Background, color: [number, number, number] = [1, 1, 1], behind: [number, number, number] = rgb): [number, number, number, number] {
-    const light = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]);
-    const a = readLow(low.a, low.width, low.height, u, v);
     const b = readLow(low.b, low.width, low.height, u, v);
-    const alpha = Math.min(1, Math.max(0, a * light + b));
+    let alpha = b;
+    for (let c = 0; c < 3; c++) alpha += readLow(low.a, low.width, low.height, u, v, 3, c) * rgb[c]!;
+    alpha = Math.min(1, Math.max(0, alpha));
+    const least = readLow(low.levels, low.width, low.height, u, v, 2, 0);
+    const most = readLow(low.levels, low.width, low.height, u, v, 2, 1);
+    alpha = Math.min(1, Math.max(0, (alpha - least) / Math.max(0.05, most - least)));
     const kept: number[] = [];
     for (let channel = 0; channel < 3; channel++) {
         const near = readLow(low.kept, low.width, low.height, u, v, 3, channel);

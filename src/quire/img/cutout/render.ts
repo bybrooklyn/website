@@ -1,5 +1,5 @@
 // The cut-out made at the picture's full size on the card, through WebGL2 written by hand: each pixel
-// worked out as refine.ts's `applyOne` says (its mask from the guided line at its lightness, its color
+// worked out as refine.ts's `applyOne` says (its mask from the guided plane at its color, its color
 // with the old background taken out, laid on the background chosen), the picture read in pieces of at
 // most 2048 a side so that a 50 megapixel photograph never sits on the card whole. The numbers at the
 // mask's size are float textures read between their entries by hand, as the processor reads them, so
@@ -24,6 +24,7 @@ uniform highp sampler2D lines;
 uniform highp sampler2D kept;
 uniform highp sampler2D ground;
 uniform highp sampler2D behind;
+uniform highp sampler2D levels;
 uniform vec2 at;
 uniform vec2 whole;
 uniform int lay;
@@ -45,8 +46,10 @@ void main() {
     ivec2 here = ivec2(gl_FragCoord.xy);
     vec3 rgb = texelFetch(piece, here, 0).rgb;
     vec2 share = (at + vec2(here) + 0.5) / whole;
-    vec2 ab = low(lines, share).xy;
-    float alpha = clamp(ab.x * dot(rgb, vec3(0.299, 0.587, 0.114)) + ab.y, 0.0, 1.0);
+    vec4 plane = low(lines, share);
+    float alpha = clamp(dot(plane.rgb, rgb) + plane.a, 0.0, 1.0);
+    vec2 level = low(levels, share).xy;
+    alpha = clamp((alpha - level.x) / max(0.05, level.y - level.x), 0.0, 1.0);
     vec3 near = low(kept, share).rgb;
     vec3 old = low(ground, share).rgb;
     vec3 solved = alpha > ${FAINT} ? clamp((rgb - (1.0 - alpha) * old) / alpha, 0.0, 1.0) : near;
@@ -105,11 +108,15 @@ export async function renderCut(full: ImageBitmap, low: Low, background: Backgro
         return out;
     };
     const lines = new Float32Array(low.width * low.height * 4);
-    for (let at = 0; at < low.width * low.height; at++) ((lines[at * 4] = low.a[at]!), (lines[at * 4 + 1] = low.b[at]!));
+    for (let at = 0; at < low.width * low.height; at++) {
+        for (let c = 0; c < 3; c++) lines[at * 4 + c] = low.a[at * 3 + c]!;
+        lines[at * 4 + 3] = low.b[at]!;
+    }
     const made = [
         texture(1, "lines", () => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, low.width, low.height, 0, gl.RGBA, gl.FLOAT, lines)),
         texture(2, "kept", () => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, low.width, low.height, 0, gl.RGBA, gl.FLOAT, floats(low.kept, 3))),
         texture(3, "ground", () => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, low.width, low.height, 0, gl.RGBA, gl.FLOAT, floats(low.ground, 3))),
+        texture(6, "levels", () => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, low.width, low.height, 0, gl.RGBA, gl.FLOAT, floats(low.levels, 2))),
         texture(4, "behind", () => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, behind?.width ?? 1, behind?.height ?? 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, behind?.rgba ?? new Uint8Array(4))),
     ];
     gl.uniform2f(gl.getUniformLocation(program, "whole"), full.width, full.height);

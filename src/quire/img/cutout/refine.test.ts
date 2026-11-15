@@ -59,7 +59,8 @@ test("a box average is the mean of its square, cut at the edges, and a flat mask
     const flat = new Float32Array(64).fill(1);
     const rgba = new Uint8ClampedArray(64 * 4).fill(128);
     const low = lowOf(flat, rgba, 8, 8);
-    expect(readLow(low.a, 8, 8, 0.5, 0.5) * 0.5 + readLow(low.b, 8, 8, 0.5, 0.5)).toBeCloseTo(1, 5);
+    const fitted = [0, 1, 2].reduce((sum, c) => sum + readLow(low.a, 8, 8, 0.5, 0.5, 3, c) * 0.5, readLow(low.b, 8, 8, 0.5, 0.5));
+    expect(fitted).toBeCloseTo(1, 5);
 });
 
 test("on fine strands against a green ground, the guided mask follows the true edges better than the mask enlarged, and with the ground's color taken out the edges carry no green halo", () => {
@@ -103,4 +104,45 @@ test("on fine strands against a green ground, the guided mask follows the true e
     console.log(`over ${edges} edge pixels (true share 0.1 to 0.95): the mask's error ${said(guidedError)} of 255 guided, ${said(enlargedError)} enlarged; the halo (the edge color's distance from the figure's) ${said(haloCut)} of 255 with the ground taken out, ${said(haloPlain)} without`);
     expect(guidedError).toBeLessThan(enlargedError * 0.2);
     expect(haloCut).toBeLessThan(haloPlain * 0.4);
+    // and no worse than before sharp edges were tightened (15.5 of 255 then)
+    expect((haloCut / edges) * 255).toBeLessThan(16);
 });
+
+test("across a sharp edge between a red coat and green grass of one lightness, the cut's edge is as sharp as the picture's, where the mask enlarged is several pixels soft", () => {
+    const coat: [number, number, number] = [0.72, 0.27, 0.18];
+    const grass: [number, number, number] = [0.31, 0.56, 0.29];
+    // a straight edge down the picture at x = 240.4: the pixel it crosses part coat, the rest whole
+    const truth = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) truth[y * W + x] = Math.min(1, Math.max(0, 240.4 - x));
+    const picture = new Float32Array(W * H * 3);
+    for (let at = 0; at < W * H; at++) for (let c = 0; c < 3; c++) picture[at * 3 + c] = coat[c]! * truth[at]! + grass[c]! * (1 - truth[at]!);
+    // the model's mask at a quarter size, softened once more, as a model's edge is: the rim a soft mask leaves on a new background
+    const small = { width: W / 4, height: H / 4 };
+    const found = boxMean(quarter(truth, W, H), small.width, small.height, 1);
+    const smallPicture = quarter(picture, W, H, 3);
+    const rgba = new Uint8ClampedArray(small.width * small.height * 4);
+    for (let at = 0; at < small.width * small.height; at++) {
+        for (let c = 0; c < 3; c++) rgba[at * 4 + c] = Math.round(smallPicture[at * 3 + c]! * 255);
+        rgba[at * 4 + 3] = 255;
+    }
+    const low = lowOf(found, rgba, small.width, small.height);
+    // the band of partly clear pixels across the edge (a share from 0.05 to 0.95), its width a row, on average
+    let cutBand = 0;
+    let enlargedBand = 0;
+    for (let y = 40; y < H - 40; y++)
+        for (let x = 200; x < 280; x++) {
+            const at = y * W + x;
+            const u = (x + 0.5) / W;
+            const v = (y + 0.5) / H;
+            const alpha = applyOne(low, [picture[at * 3]!, picture[at * 3 + 1]!, picture[at * 3 + 2]!], u, v, { kind: "clear" })[3];
+            const enlarged = readLow(found, small.width, small.height, u, v);
+            if (alpha > 0.05 && alpha < 0.95) cutBand++;
+            if (enlarged > 0.05 && enlarged < 0.95) enlargedBand++;
+        }
+    const rows = H - 80;
+    console.log(`across a sharp edge of two colors of one lightness: the band of partly clear pixels is ${(cutBand / rows).toFixed(2)} wide in the cut, ${(enlargedBand / rows).toFixed(2)} in the mask enlarged`);
+    // the stated bound: the band of partly clear pixels across a sharp edge at most a pixel and a half wide
+    expect(cutBand / rows).toBeLessThanOrEqual(1.5);
+    expect(enlargedBand / rows).toBeGreaterThan(4);
+});
+
