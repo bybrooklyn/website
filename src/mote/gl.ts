@@ -474,6 +474,8 @@ float open() {
 void main() {
     vec3 n = normalize(gl_FrontFacing ? facing : -facing);
     vec3 v = normalize(eyeAt - where);
+    // a pixel's size on a part in its own place, as a share of its size: for easing a marble's ribbon's edges
+    float footprint = length(fwidth(local)) / max(length(local), 1e-3);
     float lean = max(dot(n, toSun), 0.0);
     // the face's plane in the sun's map: how its depth there changes across the map, for comparing each look
     vec3 inMap = lit.xyz / lit.w * 0.5 + 0.5;
@@ -571,14 +573,22 @@ void main() {
             float f = fresnel(facingEye, 0.04);
             vec3 inside = full ? refract(d, o, 1.0 / 1.5) : d;
             float out_ = -2.0 * dot(o, inside);
-            float nearest = out_;
-            vec3 vane = vec3(0.0);
+            // how much of a vane covers the pixel: its edges eased over the pixel's size on the marble,
+            // a little more for the glass's bending, so that a close look shows a clean edge, not speckle;
+            // the vanes met are laid nearest last, each over what is behind it by how much it covers
+            float wide = footprint * 1.6;
+            vec3 hitColor[3];
+            float hitAt[3];
+            float hitCover[3];
             for (int k = 0; k < 3; k++) {
+                hitAt[k] = 1e9;
+                hitCover[k] = 0.0;
+                hitColor[k] = vec3(0.0);
                 float angle = fract(seed) * 2.0 * PI + float(k) * PI / 3.0;
                 float t = 0.0;
                 vec3 at = o;
-                // the vane twists as it goes up the marble: found again at the twist where it is met, once
-                for (int go = 0; go < 2; go++) {
+                // the vane twists as it goes up the marble: found again at the twist where it is met, a few times
+                for (int go = 0; go < 4; go++) {
                     float twist = angle + at.y * 0.8;
                     vec3 across = vec3(cos(twist), 0.0, sin(twist));
                     float toward = dot(inside, across);
@@ -586,30 +596,48 @@ void main() {
                     t = -dot(o, across) / toward;
                     at = o + inside * t;
                 }
-                if (t <= 0.0 || t >= nearest) continue;
+                if (t <= 0.0 || t >= out_) continue;
                 float twist = angle + at.y * 0.8;
                 // each vane a narrow leaf from the middle out, as tall as most of the marble
                 float out2 = abs(dot(at, vec3(-sin(twist), 0.0, cos(twist))));
                 float tall = 0.7 * sqrt(max(0.0, 1.0 - (out2 / 0.36) * (out2 / 0.36)));
-                if (out2 >= 0.36 || out2 < 0.025 || abs(at.y) >= tall) continue;
-                nearest = t;
+                // a vane seen edge on is a sliver thinner than a pixel, met here and missed beside: it fades instead
+                float facing_ = abs(dot(inside, vec3(cos(twist), 0.0, sin(twist))));
+                // where the twist was not settled on, the point is off the vane: it fades rather than flickers
+                float off = abs(dot(at, vec3(cos(twist), 0.0, sin(twist))));
+                float cover = smoothstep(0.02, 0.0, off) * smoothstep(-wide, wide, 0.36 - out2) * smoothstep(-wide, wide, out2 - 0.025) * smoothstep(-wide, wide, tall - abs(at.y)) * smoothstep(0.04, 0.22, facing_);
+                if (cover <= 0.0) continue;
                 vec3 tone = k == 0 ? tintA : k == 1 ? tintB : tintC;
                 float side = abs(dot(vec3(cos(twist), 0.0, sin(twist)), localSun));
                 float rimmed = smoothstep(0.0, 0.25, 1.0 - out2 / 0.36) * smoothstep(0.0, 0.15, 1.0 - abs(at.y) / max(tall, 1e-3));
-                vane = linear(tone) * (0.35 + 0.65 * side) * (0.55 + 0.45 * rimmed);
+                hitAt[k] = t;
+                hitCover[k] = cover;
+                hitColor[k] = linear(tone) * (0.35 + 0.65 * side) * (0.55 + 0.45 * rimmed);
             }
-            bool met = nearest < out_;
-            // the glass darkens what is behind it toward its edge, where it turns the light away
+            // furthest first, each over what is behind it
+            vec3 vane = vec3(0.0);
+            float covered = 0.0;
+            for (int pass = 0; pass < 3; pass++) {
+                int far = -1;
+                float most = -1.0;
+                for (int k = 0; k < 3; k++) if (hitCover[k] > 0.0 && hitAt[k] > most && hitAt[k] < 1e8) { most = hitAt[k]; far = k; }
+                if (far < 0) break;
+                vec3 c = far == 0 ? hitColor[0] : far == 1 ? hitColor[1] : hitColor[2];
+                float a = far == 0 ? hitCover[0] : far == 1 ? hitCover[1] : hitCover[2];
+                vane = covered > 0.0 ? mix(vane, c, a) : c;
+                covered = covered + a * (1.0 - covered);
+                if (far == 0) hitAt[0] = 2e9; else if (far == 1) hitAt[1] = 2e9; else hitAt[2] = 2e9;
+            }
+            // the glass darkens what is behind it toward its edge, where it turns the light away; a faint
+            // light along that edge keeps a marble found on the dark cloth
             float edge = 1.0 - facingEye;
             vec3 room_ = room(r);
-            if (met) {
-                seen = vane * (lamp * mix(0.35, 1.0, light) * 0.9 + around * 2.0) * (1.0 - f) * (1.0 - 0.4 * edge) + room_ * f;
-                alpha = 1.0;
-            } else {
-                vec3 glassTint = mix(vec3(1.0), linear(tintA), 0.12);
-                seen = room_ * f + glassTint * around * 0.05;
-                alpha = clamp(0.06 + 0.6 * edge * edge * edge + f, 0.0, 1.0);
-            }
+            vec3 glassTint = mix(vec3(1.0), linear(tintA), 0.12);
+            vec3 glass = room_ * f + glassTint * around * 0.05 + (skyColor * levels.y + lamp * 0.15) * pow(edge, 4.0) * 0.12;
+            float glassAlpha = clamp(0.06 + 0.6 * edge * edge * edge + f, 0.0, 1.0);
+            vec3 ribbon = vane * (lamp * mix(0.35, 1.0, light) * 0.9 + around * 2.0) * (1.0 - f) * (1.0 - 0.4 * edge) + room_ * f;
+            seen = mix(glass, ribbon, covered);
+            alpha = mix(glassAlpha, 1.0, covered);
             shine = lamp * light * pow(max(dot(n, half_), 0.0), 1200.0) * 60.0;
             seen += shine;
             // the light through the marble gathered on its far side, a soft glow in the ribbon's color
