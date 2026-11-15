@@ -22,7 +22,10 @@ import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
 import { blocksOut, factsOf, profileOf, spaceOf, type Facts, type Keep } from "./metadata";
 import { gradingWith } from "./draw";
-import { createStage, setTurn, type Pen, type Tool } from "./stage";
+import { createStage, setPerspective, setTurn, type Pen, type Tool } from "./stage";
+import { perspectiveMap, rectangleOf, type Corners, type Perspective } from "./perspective";
+import { apply, ratioOf } from "./homography";
+import { grey, segments, straighten } from "./lines";
 import { createReading } from "./reading";
 import { gradePanel } from "./grade-panel";
 import { gradeMore } from "./grade-more";
@@ -62,7 +65,7 @@ const keep = (key: string, value: string) => {
 };
 
 /** The single keys that pick a tool, while the picture has the keyboard. */
-const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read", KeyG: "grade", KeyK: "cutout" };
+const TOOL_KEYS: Record<string, Tool | "export" | "facts" | "perspective"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read", KeyG: "grade", KeyK: "cutout", KeyP: "perspective" };
 
 /** Hands the writer a file. */
 function give(blob: Blob, name: string) {
@@ -113,6 +116,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     // the part models' worker, shared by Find and the cut-out, made when first asked
     const sharedFinder = createFinder();
     let shape = "Free";
+    // perspective's dials and corners in the crop's strip, in place of its shapes
+    let straightening = false;
 
     const stage = createStage({
         picture: () => picture,
@@ -120,6 +125,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         pen: () => pen,
         moved: () => refresh(),
         turned: (degrees) => turnTo(degrees),
+        cornered: (corners) => cornerTo(corners),
         clear: () => !!picture && look(picture).cutout?.background === "clear",
         cutout: {
             brush: () => (cutBrush && picture ? { size: Math.max(4, Math.round(Math.max(picture.original.width, picture.original.height) / 60)), erase: cutBrush === "remove" } : undefined),
@@ -197,6 +203,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         target = undefined;
         making = undefined;
         measuredMasks = undefined;
+        // a new picture starts with the crop's own strip, not perspective's
+        straightening = false;
+        stage.setCornering(false);
         stage.setTool(grading.isOpen() ? "grade" : "crop");
         measured = false;
         refresh();
@@ -540,6 +549,17 @@ export function mountEditor(host: HTMLElement, context: Context) {
             levelling: () => stage.levelling(),
             setLevelling: (on) => stage.setLevelling(on),
         },
+        perspective: {
+            vertical: () => perspectiveStep()?.vertical ?? 0,
+            horizontal: () => perspectiveStep()?.horizontal ?? 0,
+            live: (dials) => stage.keystone(dials),
+            set: (dials) => keystoneTo(dials),
+            cornering: () => stage.cornering(),
+            setCornering: (on) => (stage.setCornering(on), refresh()),
+            hasCorners: () => !!perspectiveStep()?.corners,
+            auto: () => void autoStraighten(),
+            setOpen: (on) => setStraightening(on),
+        },
         read: () => {
             const found = reading.found();
             return { state: reading.state(), progress: reading.progress(), words: found ? found.lines.reduce((sum, line) => sum + line.words.length, 0) : 0, private: stage.findings().length, model: reading.tier().name };
@@ -735,6 +755,66 @@ export function mountEditor(host: HTMLElement, context: Context) {
         stage.setLevelling(false);
         const next = setTurn(history.now(), degrees);
         if (next !== history.now()) commit(next);
+        refresh();
+    }
+    /** The picture's perspective step, if it has one. */
+    const perspectiveStep = (): Perspective | undefined => history.now().find((step) => step.type === "perspective") as Perspective | undefined;
+    /** Perspective's part of the crop's strip, open or shut; shut, the corners are no longer being set. */
+    function setStraightening(on: boolean) {
+        if (!picture) return;
+        if (on && stage.tool() !== "crop") pickTool("crop");
+        straightening = on;
+        if (!on) stage.setCornering(false);
+        refresh();
+    }
+    /** The keystone dials made a step, the corners set by hand kept; both at zero with no corners takes the step away. A straightening that cannot be seen whole is refused. */
+    function keystoneTo(dials: { vertical: number; horizontal: number }) {
+        if (!picture) return;
+        const next = setPerspective(history.now(), { ...perspectiveStep(), ...dials });
+        if ((dials.vertical || dials.horizontal) && !look({ ...picture, steps: next }).perspective) return frame.status.say("Too far", "The picture cannot be straightened that far: part of it would be thrown past where it can be seen", "warn");
+        if (next !== history.now()) commit(next);
+        refresh();
+    }
+    /**
+     * Corners set by hand made a step: they become a rectangle of the proportions guessed from them
+     * (homography.ts, `ratioOf`), the dials and the horizon's turn put back to none since the corners now
+     * say how the picture stands, and the crop set to that rectangle, so that a page or a screen comes out
+     * alone. False when they cannot make a rectangle that can be seen whole.
+     */
+    function cornerTo(corners: Corners): boolean {
+        if (!picture) return false;
+        const size = picture.original;
+        const ratio = Math.round(ratioOf(corners, size) * 1000) / 1000;
+        if (!perspectiveMap({ corners, ratio }, size)) return false;
+        const rect = rectangleOf(corners, ratio);
+        const crop = { x: Math.ceil(rect.x), y: Math.ceil(rect.y), width: Math.floor(rect.x + rect.width) - Math.ceil(rect.x), height: Math.floor(rect.y + rect.height) - Math.ceil(rect.y) };
+        const next = setOnly(setTurn(setPerspective(history.now(), { corners, ratio }), 0), { type: "crop", rect: crop });
+        commit(next);
+        refresh();
+        return true;
+    }
+    /** Perspective's one press: the picture's lines found and its upright ones stood straight (the level ones made level too where they are clear), as the two dials and the horizon's turn, one change; with no clear lines it says so and changes nothing. */
+    async function autoStraighten() {
+        const loaded = stage.loaded();
+        if (!picture || !loaded) return;
+        const small = await loaded.small(1024);
+        let lines = segments(grey(small.data, small.width, small.height), small.width, small.height);
+        const step = perspectiveStep();
+        const scale = loaded.size.width / small.width;
+        // with corners set by hand, the lines are first put where the corners' map puts them, so the dials straighten what the corners made
+        const cornersMap = step?.corners && step.ratio ? perspectiveMap({ corners: step.corners, ratio: step.ratio }, loaded.size) : undefined;
+        if (cornersMap)
+            lines = lines.map((line) => {
+                const a = apply(cornersMap, { x: line.x1 * scale, y: line.y1 * scale });
+                const b = apply(cornersMap, { x: line.x2 * scale, y: line.y2 * scale });
+                return { x1: a.x / scale, y1: a.y / scale, x2: b.x / scale, y2: b.y / scale, length: Math.hypot(b.x - a.x, b.y - a.y) / scale };
+            });
+        const fix = straighten(lines, small, loaded.size);
+        if (!fix) return frame.status.say("No clear lines", "No clear upright lines were found to straighten the picture by, so nothing was changed");
+        const next = setTurn(setPerspective(history.now(), { ...(step?.corners ? { corners: step.corners, ratio: step.ratio } : {}), vertical: fix.vertical, horizontal: fix.horizontal }), fix.turn);
+        if ((fix.vertical || fix.horizontal) && !look({ ...picture, steps: next }).perspective) return frame.status.say("No clear lines", "The lines found would straighten the picture too far, so nothing was changed");
+        if (next !== history.now()) commit(next);
+        frame.status.say("Straightened", `${fix.upright} upright ${fix.upright === 1 ? "line" : "lines"} stood straight${fix.level ? `, ${fix.level} made level` : ""}`);
         refresh();
     }
     function applyCrop() {
@@ -1118,7 +1198,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
-        const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
+        if (stage.tool() !== "crop") straightening = false;
+        const kind = !has ? "none" : stage.tool() === "crop" ? (straightening ? "perspective" : "crop") : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
         strip.fill(kind);
         if (picture && !facts.textContent) facts.textContent = factsSaid(look(picture), picture.original.bytes, kindOf(picture.original));
         if (!picture) facts.textContent = "";
@@ -1214,6 +1295,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         { label: "Crop", icon: tick(stage.tool() === "crop", "crop"), hint: "C", key: "crop", pressed: stage.tool() === "crop", disabled: !picture, run: () => pickTool("crop") },
                         { label: "Crop shape", icon: "free", items: () => SHAPES.map((each) => ({ label: each.name, icon: tick(shape === each.name, each.icon), pressed: shape === each.name, run: () => (pickTool("crop"), strip.fill("crop"), (shape = each.name), stage.setAspect(each.value === "original" && picture ? picture.original.width / picture.original.height : (each.value as number | undefined))) })), run: () => {} },
                         { label: "Remove the crop", icon: "trash", disabled: !history.now().some((step) => step.type === "crop"), run: () => commit(history.now().filter((step) => step.type !== "crop")) },
+                    ],
+                    [
+                        { label: "Perspective", icon: tick(straightening, "perspective"), hint: "P", key: "perspective", pressed: straightening, disabled: !picture, run: () => setStraightening(!straightening) },
+                        { label: "Straighten lines", icon: "perspective", key: "straighten", disabled: !picture, run: () => void autoStraighten() },
+                        { label: "Remove the perspective", icon: "trash", disabled: !history.now().some((step) => step.type === "perspective"), run: () => commit(history.now().filter((step) => step.type !== "perspective")) },
                     ],
                     [
                         { label: "Resize", icon: "resize", key: "resize", disabled: !picture, run: () => resizing.open(buttons.resize) },
@@ -1329,7 +1415,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         }
     }
     /** The first step drawn over the picture (a cover or a mark), which nothing picked can go behind. */
-    const firstMarked = () => history.now().find((step) => step.type !== "crop" && step.type !== "resize" && step.type !== "grade")?.id;
+    const firstMarked = () => history.now().find((step) => step.type !== "crop" && step.type !== "resize" && step.type !== "grade" && step.type !== "turn" && step.type !== "perspective")?.id;
     /** Moves what is picked one place forward (over the next thing drawn) or back (under the one before), skipping the crop and the resize, which are drawn under everything. */
     function restack(by: 1 | -1) {
         const id = stage.picked();
@@ -1337,7 +1423,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const at = steps.findIndex((step) => step.id === id);
         if (!id || at < 0) return;
         let to = at + by;
-        while (steps[to] && (steps[to]!.type === "crop" || steps[to]!.type === "resize" || steps[to]!.type === "grade")) to += by;
+        while (steps[to] && (steps[to]!.type === "crop" || steps[to]!.type === "resize" || steps[to]!.type === "grade" || steps[to]!.type === "turn" || steps[to]!.type === "perspective")) to += by;
         if (to < 0 || to >= steps.length) return;
         commit(move(steps, id, to));
     }
@@ -1356,6 +1442,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     function showKeys() {
         const rows: [string, string][] = [
             ["C", "Crop"],
+            ["P", "Perspective: two dials, corners to drag, and Auto"],
             ["R", "Hide"],
             ["W", "Read text: press a word to hide it, drag to hide a run"],
             ["A", "Arrow"],
@@ -1366,7 +1453,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             ["E", "Export"],
             ["Enter", "Apply the crop"],
             ["Escape", "Leave the tool"],
-            ["Arrows", "Nudge the frame or what is picked (Shift: 10 pixels)"],
+            ["Arrows", "Nudge the frame, a corner or what is picked (Shift: 10 pixels)"],
             ["Delete", "Remove what is picked"],
             ["Ctrl+C", "Copy"],
             ["Ctrl+V", "Paste a picture"],
@@ -1403,7 +1490,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         // single keys only while the picture, not a field, has the keyboard
         if (!onPicture || event.altKey || control) return undefined;
         const picked = TOOL_KEYS[event.code];
-        if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : picked === "facts" ? showFacts() : picked === "grade" ? showGrade() : pickTool(picked));
+        if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : picked === "facts" ? showFacts() : picked === "grade" ? showGrade() : picked === "perspective" ? setStraightening(!(straightening && stage.tool() === "crop")) : pickTool(picked));
         if (event.key === "Enter" && stage.tool() === "crop") return applyCrop;
         if (event.key === "Escape") {
             if (asking) return () => cancelPick();
@@ -1417,6 +1504,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 };
             if (stage.picked()) return () => stage.pick(undefined);
             if (stage.selected()) return () => stage.selectAll(false);
+            // setting the corners, Escape stops; with perspective open, it goes back to the crop's strip
+            if (stage.cornering()) return () => (stage.setCornering(false), refresh());
+            if (straightening && stage.tool() === "crop") return () => setStraightening(false);
             if (stage.tool() !== "none") return () => (stage.tool() === "crop" ? stage.setTool("none") : stage.setTool("none"));
             return undefined;
         }

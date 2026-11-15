@@ -571,6 +571,14 @@ export function createStage(hooks: StageHooks) {
         handle.addEventListener("pointerup", (event) => letGo(event, true));
         handle.addEventListener("pointercancel", (event) => letGo(event, false));
         handle.addEventListener("keydown", (event) => {
+            // Escape on a handle stops setting the corners and gives the keyboard back to the picture
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                setCornering(false);
+                element.focus({ preventScroll: true });
+                return;
+            }
             const step = event.shiftKey ? 10 : 1;
             const by: Record<string, Point> = { ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 }, ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step } };
             const move = by[event.key];

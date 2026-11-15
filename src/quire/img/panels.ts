@@ -410,8 +410,8 @@ export function readSaid(read: ReadSaid): string {
     return read.private ? `${count}, ${read.private} ${read.private === 1 ? "looks" : "look"} private` : count;
 }
 
-/** The strip for the tool in hand: the crop's shapes and Apply, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
+/** The strip for the tool in hand: the crop's shapes and Apply, perspective's dials and corners, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
+export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; perspective?: PerspectiveHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
     const strip = make("div", "quire-img-strip");
     strip.setAttribute("role", "toolbar");
     strip.setAttribute("aria-label", "Tool");
@@ -437,8 +437,16 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
     const level = hooks.turn ? control("Draw along the horizon to level it", icon("line"), () => hooks.turn?.setLevelling(!hooks.turn.levelling())) : undefined;
     // the dial and its line button as one group, which a narrow screen puts on a row of its own under the shapes and Apply
     const horizon = make("div", "quire-img-strip-horizon");
-    if (dial && level) horizon.append(make("span", "quire-img-strip-rule"), dial.element, level);
-    function fill(kind: "crop" | "mark" | "read" | "grade" | "cut" | "none") {
+    // perspective, from the crop's strip: a button that fills the strip with its two dials, its corners and its one press
+    const straighten = hooks.perspective ? control("Perspective (P)", icon("perspective"), () => hooks.perspective?.setOpen(true)) : undefined;
+    if (dial && level) horizon.append(make("span", "quire-img-strip-rule"), dial.element, level, ...(straighten ? [straighten] : []));
+    const keystone = hooks.perspective;
+    const upright = keystone ? keystoneDial(keystone, "vertical") : undefined;
+    const across = keystone ? keystoneDial(keystone, "horizontal") : undefined;
+    const corners = keystone ? control("Corners: drag them to the corners of something that should be a rectangle", icon("corners"), () => keystone.setCornering(!keystone.cornering())) : undefined;
+    const keystones = make("div", "quire-img-strip-horizon");
+    if (upright && across) keystones.append(upright.element, across.element);
+    function fill(kind: "crop" | "perspective" | "mark" | "read" | "grade" | "cut" | "none") {
         const grading = kind === "grade" ? hooks.grade?.() : kind === "cut" ? hooks.cut?.() : undefined;
         if ((kind === "grade" || kind === "cut") && !grading) kind = "none";
         strip.classList.toggle("open", kind !== "none");
@@ -460,6 +468,14 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
             );
             dial?.show();
             level?.classList.toggle("pressed", !!hooks.turn?.levelling());
+            straighten?.classList.toggle("pressed", !!keystone && (keystone.vertical() !== 0 || keystone.horizontal() !== 0 || keystone.hasCorners()));
+        } else if (kind === "perspective" && keystone && upright && across && corners) {
+            const had = [upright.element, across.element].find((each) => document.activeElement === each);
+            queueMicrotask(() => had?.focus({ preventScroll: true }));
+            strip.replaceChildren(keystones, make("span", "quire-img-strip-rule"), corners, words("Auto", () => keystone.auto(), "Straighten the upright lines, and the level ones where they are clear"), make("span", "quire-img-strip-rule"), control("Done (Escape)", icon("tick"), () => keystone.setOpen(false)));
+            upright.show();
+            across.show();
+            corners.classList.toggle("pressed", keystone.cornering());
         } else if (kind === "mark") {
             strip.replaceChildren(
                 ...COLORS.map((color) => {
@@ -510,6 +526,19 @@ export interface TurnHooks {
     setLevelling(on: boolean): void;
 }
 
+/** What perspective's part of the strip is given: the dials' degrees, the degrees drawn while one is dragged (none to stop), the dials made a step, the corners set by hand on or off and whether there are any, the one press, and the strip opened or closed. */
+export interface PerspectiveHooks {
+    vertical(): number;
+    horizontal(): number;
+    live(dials: { vertical: number; horizontal: number } | undefined): void;
+    set(dials: { vertical: number; horizontal: number }): void;
+    cornering(): boolean;
+    setCornering(on: boolean): void;
+    hasCorners(): boolean;
+    auto(): void;
+    setOpen(on: boolean): void;
+}
+
 /** The degrees a dial's drag across its whole width turns the picture: the whole range, 15 each way. */
 export const DIAL_RANGE = 30;
 
@@ -517,9 +546,9 @@ export const DIAL_RANGE = 30;
 export const turnSaid = (degrees: number): string => (degrees ? `${degrees < 0 ? "−" : ""}${Math.abs(degrees).toFixed(1)}°` : "0°");
 
 /** The turn a dial's drag gives: from where it started, by how far the pointer moved over the dial's width (a tenth as far with Shift), in tenths, snapping to level within two tenths, held within 15 each way. */
-export function dialTurn(start: number, moved: number, width: number, fine: boolean): number {
+export function dialTurn(start: number, moved: number, width: number, fine: boolean, most = DIAL_RANGE / 2): number {
     const raw = start + (moved / Math.max(1, width)) * DIAL_RANGE * (fine ? 0.1 : 1);
-    const kept = Math.max(-DIAL_RANGE / 2, Math.min(DIAL_RANGE / 2, Math.round(raw * 10) / 10));
+    const kept = Math.max(-most, Math.min(most, Math.round(raw * 10) / 10));
     return Math.abs(kept) < 0.25 ? 0 : kept;
 }
 
@@ -530,18 +559,49 @@ export function dialTurn(start: number, moved: number, width: number, fine: bool
  * levels it again.
  */
 function turnDial(hooks: TurnHooks) {
+    return dial({ name: "Straighten", tip: "Straighten: drag, or use the arrow keys", most: DIAL_RANGE / 2, value: hooks.turn, live: hooks.turning, set: hooks.turned });
+}
+
+/** One of perspective's two keystone dials: the camera tilted up or down (vertical), or turned left or right (horizontal), in degrees, 30 at most either way; the same dial as the horizon's, its ruler longer. */
+function keystoneDial(hooks: PerspectiveHooks, which: "vertical" | "horizontal") {
+    const other = which === "vertical" ? "horizontal" : "vertical";
+    const both = (value: number) => ({ [which]: value, [other]: hooks[other]() }) as { vertical: number; horizontal: number };
+    const made = dial({
+        name: which === "vertical" ? "Vertical" : "Horizontal",
+        tip: which === "vertical" ? "Vertical: stands leaning upright lines straight; drag, or use the arrow keys" : "Horizontal: makes lines that run away to one side level; drag, or use the arrow keys",
+        most: 30,
+        value: hooks[which],
+        live: (value) => hooks.live(value === undefined ? undefined : both(value)),
+        set: (value) => hooks.set(both(value)),
+    });
+    made.element.classList.add("long");
+    return made;
+}
+
+/** What a dial is given: its name and tooltip, how far it goes either way, its value, the value drawn while it is dragged (none to stop), and the value made a step. */
+interface DialHooks {
+    name: string;
+    tip: string;
+    most: number;
+    value(): number;
+    live(value: number | undefined): void;
+    set(value: number): void;
+}
+
+/** A dial: a ruler of degrees under a fixed middle line, dragged from wherever it is pressed (the whole width 30 degrees, a tenth as far with Shift), snapping to zero within a quarter of a degree; the arrow keys move it by a tenth (Shift, a degree), 0 or a double press puts it back to zero; letting go is one step. */
+function dial(hooks: DialHooks) {
     const element = make("div", "quire-img-dial");
     element.tabIndex = 0;
     element.setAttribute("role", "slider");
-    element.setAttribute("aria-label", "Straighten");
-    element.setAttribute("aria-valuemin", String(-DIAL_RANGE / 2));
-    element.setAttribute("aria-valuemax", String(DIAL_RANGE / 2));
-    element.title = "Straighten: drag, or use the arrow keys";
+    element.setAttribute("aria-label", hooks.name);
+    element.setAttribute("aria-valuemin", String(-hooks.most));
+    element.setAttribute("aria-valuemax", String(hooks.most));
+    element.title = hooks.tip;
     const ruler = make("div", "quire-img-dial-ruler");
     const said = make("span", "quire-img-dial-said");
     element.append(ruler, make("span", "quire-img-dial-middle"), said);
     let now = 0;
-    const show = (degrees = hooks.turn()) => {
+    const show = (degrees = hooks.value()) => {
         now = degrees;
         said.textContent = turnSaid(degrees);
         element.setAttribute("aria-valuenow", String(degrees));
@@ -562,18 +622,18 @@ function turnDial(hooks: TurnHooks) {
     element.addEventListener("pointermove", (event) => {
         if (!dragging || dragging.id !== event.pointerId) return;
         // dragging right turns the picture back: the ruler is moved the way the pointer goes
-        const next = dialTurn(dragging.start, dragging.x - event.clientX, element.clientWidth, event.shiftKey);
+        const next = dialTurn(dragging.start, dragging.x - event.clientX, element.clientWidth, event.shiftKey, hooks.most);
         if (next === now) return;
         show(next);
-        hooks.turning(next);
+        hooks.live(next);
     });
     const letGo = (event: PointerEvent) => {
         if (!dragging || dragging.id !== event.pointerId) return;
         const started = dragging.start;
         dragging = undefined;
         element.classList.remove("dragging");
-        hooks.turning(undefined);
-        if (now !== started) hooks.turned(now);
+        hooks.live(undefined);
+        if (now !== started) hooks.set(now);
     };
     element.addEventListener("pointerup", letGo);
     element.addEventListener("pointercancel", (event) => {
@@ -581,26 +641,26 @@ function turnDial(hooks: TurnHooks) {
         const started = dragging.start;
         dragging = undefined;
         element.classList.remove("dragging");
-        hooks.turning(undefined);
+        hooks.live(undefined);
         show(started);
     });
     element.addEventListener("dblclick", () => {
         if (!now) return;
         show(0);
-        hooks.turned(0);
+        hooks.set(0);
     });
     element.addEventListener("keydown", (event) => {
         const step = event.shiftKey ? 1 : 0.1;
         const by: Record<string, number> = { ArrowLeft: -step, ArrowDown: -step, ArrowRight: step, ArrowUp: step };
         let next: number | undefined;
-        if (event.key in by) next = Math.round(Math.max(-DIAL_RANGE / 2, Math.min(DIAL_RANGE / 2, now + by[event.key]!)) * 10) / 10;
+        if (event.key in by) next = Math.round(Math.max(-hooks.most, Math.min(hooks.most, now + by[event.key]!)) * 10) / 10;
         else if (event.key === "0" || event.key === "Home") next = 0;
         if (next === undefined) return;
         event.preventDefault();
         event.stopPropagation();
         if (next === now) return;
         show(next);
-        hooks.turned(next);
+        hooks.set(next);
     });
     return { element, show: () => show() };
 }
