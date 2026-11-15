@@ -835,7 +835,7 @@ export default function generalist(m: Mote): Scene {
                 const growth = kinds?.growth;
                 const percent = growth ? growth.cost * 6000 : 0;
                 const brainWords = growth
-                    ? wide > 280 ? `${growth.joined} connections cost ${percent < 1 ? percent.toFixed(1) : Math.round(percent)}% a minute` : `${growth.joined} connections`
+                    ? wide > 280 ? `${growth.joined} connections, ${percent < 1 ? percent.toFixed(1) : Math.round(percent)}% a minute` : `${growth.joined} connections`
                     : kinds ? `${2 * kinds.counts.plain + kinds.counts.memory + kinds.counts.rhythm + kinds.counts.mood} neurons` : "neurons";
                 ctx.fillText(brainWords, wide / 2, high - 3);
                 ctx.textAlign = "right";
