@@ -65,6 +65,8 @@ pub struct Made {
     pub index: usize,
     pub body: u32,
     pub driven: bool,
+    /// How fast it was going down after the last step, for hearing it land (`Run::hear`).
+    pub falling: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -87,13 +89,15 @@ pub struct Stage {
     pub feeds: bool,
     pub food: Vec<Food>,
     next_food: usize,
+    /// Where food landed in the last step, in the physics, for hearing it (`Run::hear`).
+    pub landed: Vec<Vec2>,
 }
 
 impl Stage {
     /// The land's start, laid in a new world. The creature is built in it next, before anything else,
     /// so its bodies come first and never change places.
     pub fn new(land: Rc<Land>) -> Stage {
-        let mut stage = Stage { world: World::new(), land, origin: 0.0, made: Vec::new(), next: [0; 3], laid: f32::MIN, pieces: 0, blocks: 0, feeds: false, food: Vec::new(), next_food: 0 };
+        let mut stage = Stage { world: World::new(), land, origin: 0.0, made: Vec::new(), next: [0; 3], laid: f32::MIN, pieces: 0, blocks: 0, feeds: false, food: Vec::new(), next_food: 0, landed: Vec::new() };
         stage.lay(AHEAD);
         stage
     }
@@ -115,6 +119,8 @@ impl Stage {
         self.food.clear();
         self.food.extend_from_slice(&other.food);
         self.next_food = other.next_food;
+        self.landed.clear();
+        self.landed.extend_from_slice(&other.landed);
     }
 
     /// Lays the land's ground and blocks up to `until`, in the land's metres, making more land if it
@@ -144,6 +150,7 @@ impl Stage {
     /// behind, makes and takes away things, and moves everything back past 512 m. Called before each
     /// step; returns how far the world was moved back, if it was.
     pub fn keep(&mut self, x: f32) -> f32 {
+        self.landed.clear();
         let along = x + self.origin;
         if along + AHEAD > self.laid + STRETCH * 0.5 {
             self.lay(along + AHEAD + STRETCH);
@@ -187,6 +194,7 @@ impl Stage {
             let below = self.surface_under(at.x, at.y);
             if below.is_some_and(|top| next - super::eyes::FOOD_RADIUS <= top) {
                 self.food[k] = Food { at: Vec2::new(at.x, below.unwrap_or(next) + super::eyes::FOOD_RADIUS), falling: 0.0 };
+                self.landed.push(self.food[k].at);
             } else if next < self.floor(at.x) - 1.0 {
                 self.food.remove(k);
                 continue;
@@ -216,7 +224,7 @@ impl Stage {
             body.friction = 0.5;
             body.spin_damping = 0.5;
             let index = self.world.add_body(body);
-            self.made.push(Made { thing: Thing::Loose, index: self.next[0], body: index, driven: false });
+            self.made.push(Made { thing: Thing::Loose, index: self.next[0], body: index, driven: false, falling: 0.0 });
             self.next[0] += 1;
         }
         while let Some(mover) = geometry.movers.get(self.next[1]).filter(|mover| mover.left.x - MOVER_HALF.x < along + NEAR) {
@@ -225,7 +233,7 @@ impl Stage {
             body.kinematic = true;
             body.friction = 0.9;
             let index = self.world.add_body(body);
-            self.made.push(Made { thing: Thing::Mover, index: self.next[1], body: index, driven: true });
+            self.made.push(Made { thing: Thing::Mover, index: self.next[1], body: index, driven: true, falling: 0.0 });
             self.next[1] += 1;
         }
         while let Some(&food) = geometry.food.get(self.next_food).filter(|food| self.feeds && food.x < along + NEAR) {
@@ -245,7 +253,7 @@ impl Stage {
             joint.lower = -TIP;
             joint.upper = TIP;
             self.world.add_joint(joint);
-            self.made.push(Made { thing: Thing::Seesaw, index: self.next[2], body: index, driven: false });
+            self.made.push(Made { thing: Thing::Seesaw, index: self.next[2], body: index, driven: false, falling: 0.0 });
             self.next[2] += 1;
         }
     }
@@ -299,7 +307,7 @@ impl Stage {
         body.friction = 0.5;
         body.spin_damping = 0.5;
         let index = self.world.add_body(body);
-        self.made.push(Made { thing: Thing::Loose, index: usize::MAX, body: index, driven: false });
+        self.made.push(Made { thing: Thing::Loose, index: usize::MAX, body: index, driven: false, falling: 0.0 });
         index
     }
 

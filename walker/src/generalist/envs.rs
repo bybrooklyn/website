@@ -185,6 +185,10 @@ pub struct Run {
     /// meet one: at this step of its run its feet and body grip with this friction from then on (the
     /// ground's own grip is each body's, `physics::contact`), so the ground has gone slippery.
     pub slip: Option<(u32, f32)>,
+    /// How the world around it changes (`changes`), for a creature that meets a changing world.
+    pub changes: Option<super::changes::Changes>,
+    /// What it hears now, for a body that hears: a landing ahead of it, and behind it, each from 0 to 1.
+    pub heard: [f32; 2],
 }
 
 impl Run {
@@ -194,7 +198,7 @@ impl Run {
         let body = Body::build(&mut stage.world, legs)?;
         stage.keep(stage.world.bodies[body.creature.torso as usize].position.x);
         // the jolt of a body at rest: gravity, felt as one up
-        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4], jolt: Vec2::new(0.0, 1.0), last_velocity: Vec2::ZERO, visits: None, ahead: false, curiosity: None, slip: None })
+        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4], jolt: Vec2::new(0.0, 1.0), last_velocity: Vec2::ZERO, visits: None, ahead: false, curiosity: None, slip: None, changes: None, heard: [0.0; 2] })
     }
 
     /// Makes this run the same as another, reusing its memory.
@@ -210,6 +214,8 @@ impl Run {
         self.visits.clone_from(&other.visits);
         self.ahead = other.ahead;
         self.curiosity.clone_from(&other.curiosity);
+        self.changes.clone_from(&other.changes);
+        self.heard = other.heard;
     }
 
     /// How many numbers it senses: the rays, then what it feels of itself.
@@ -224,7 +230,10 @@ impl Run {
         let (rays, feelings) = into.split_at_mut(RAYS * PER_RAY);
         if self.body.gazing {
             let angles = eyes::gazed(self.body.gaze);
-            eyes::see_along(&self.stage, torso, group, &angles, rays, &mut self.seen);
+            match &self.changes {
+                Some(changes) if changes.now.light < 1.0 => eyes::see_within(&self.stage, torso, group, &angles, super::changes::sight(changes.now.light), rays, &mut self.seen),
+                _ => eyes::see_along(&self.stage, torso, group, &angles, rays, &mut self.seen),
+            }
             self.ahead = eyes::ahead(&self.stage, torso, group);
             if let Some(curiosity) = &mut self.curiosity {
                 let eye = eyes::eye(&self.stage, torso) + Vec2::new(self.stage.origin, 0.0);
@@ -242,10 +251,44 @@ impl Run {
             });
         }
         self.body.feel(&self.stage.world, feelings);
+        let world = if self.body.hears { super::changes::SENSES } else { 0 };
         if self.body.touch {
-            let at = feelings.len() - touch::felt(self.body.legs());
+            let at = feelings.len() - world - touch::felt(self.body.legs());
             touch::feel(&self.body.creature, &self.stage.world, self.jolt, &mut feelings[at..]);
         }
+        if self.body.hears {
+            let at = feelings.len() - world;
+            let light = self.changes.as_ref().map_or(1.0, |changes| changes.now.light);
+            // the last, its surprise, is the brain's to write (`expect`)
+            feelings[at..at + world].copy_from_slice(&[self.heard[0], self.heard[1], light, 0.0]);
+        }
+    }
+
+    /// After a step, for a body that hears: what it heard fades, and a box or a piece of food that has
+    /// just landed is heard, louder the nearer, ahead of it or behind it.
+    pub fn hear(&mut self) {
+        use super::changes::{FOOD_LOUD, HEARD_FADE, THUD, loudness};
+        self.heard = self.heard.map(|heard| heard * HEARD_FADE);
+        let x = self.stage.world.bodies[self.body.creature.torso as usize].position.x;
+        let mut heard = self.heard;
+        let mut hear = |at: f32, loud: f32| {
+            let side = usize::from(at < x);
+            heard[side] = heard[side].max(loudness(at - x, loud));
+        };
+        for food in &self.stage.landed {
+            hear(food.x, FOOD_LOUD);
+        }
+        let world = &self.stage.world;
+        for made in self.stage.made.iter_mut().filter(|made| made.thing == super::stage::Thing::Loose) {
+            let body = &world.bodies[made.body as usize];
+            let falling = body.velocity.y;
+            // falling fast and now stopped short: it has landed, as loud as it was quick
+            if made.falling < -THUD && falling > 0.5 * made.falling {
+                hear(body.position.x, (-made.falling / 4.0).min(1.0));
+            }
+            made.falling = falling;
+        }
+        self.heard = heard;
     }
 
     /// What comes after each step of the physics, before it is judged: the jolt its body felt, for a
@@ -261,6 +304,9 @@ impl Run {
             self.last_velocity = now;
         }
         needs::after_step(self);
+        if self.body.hears {
+            self.hear();
+        }
         if let Some(curiosity) = &mut self.curiosity {
             let torso = self.stage.world.bodies[self.body.creature.torso as usize].position;
             curiosity.been(torso + Vec2::new(self.stage.origin, 0.0));
@@ -286,6 +332,10 @@ impl Run {
             && self.judge.steps == step
         {
             self.slippery(friction);
+        }
+        if let Some(mut changes) = self.changes.take() {
+            changes.before_step(self);
+            self.changes = Some(changes);
         }
         self.body.drive(&mut self.stage.world, actions);
     }

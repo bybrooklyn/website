@@ -40,7 +40,7 @@ const DROP: f32 = 0.12;
 const DEGREE: f32 = crate::math::PI / 180.0;
 /// The moving eye's rays, in degrees from where it looks, from the lowest turning up: close together in
 /// the middle, far apart at the edges.
-const FAN: [f32; RAYS] = [-90.0, -62.0, -42.0, -28.0, -18.0, -11.0, -6.0, -2.0, 2.0, 6.0, 11.0, 18.0, 28.0, 42.0, 62.0, 90.0];
+pub const FAN_DEGREES: [f32; RAYS] = [-90.0, -62.0, -42.0, -28.0, -18.0, -11.0, -6.0, -2.0, 2.0, 6.0, 11.0, 18.0, 28.0, 42.0, 62.0, 90.0];
 /// The lowest and highest it can look, in radians from level ahead (more than pi is behind it, over the
 /// top), where an action of 0 has it look (a little down ahead, as the fixed eyes look), and the
 /// fastest it turns its eye, in radians a second.
@@ -100,7 +100,7 @@ pub fn angles() -> [f32; RAYS] {
 /// The direction of each ray of the moving eye looking at `gaze`, in radians from straight ahead, from
 /// the lowest turning up.
 pub fn gazed(gaze: f32) -> [f32; RAYS] {
-    FAN.map(|degrees| gaze + degrees * DEGREE)
+    FAN_DEGREES.map(|degrees| gaze + degrees * DEGREE)
 }
 
 /// Where an action from -1 to 1 asks the eye to look: 0 a little down ahead, -1 as low as it looks,
@@ -125,12 +125,17 @@ pub fn look(stage: &Stage, from: Vec2, angle: f32, skip: u32) -> (f32, Seen) {
 
 /// `look`, seeing food or not.
 fn look_for(stage: &Stage, from: Vec2, angle: f32, skip: u32, food: bool) -> (f32, Seen) {
+    look_within(stage, from, angle, skip, food, RANGE)
+}
+
+/// `look_for`, seeing no further than `range`: in the dark it sees less far (`changes`).
+fn look_within(stage: &Stage, from: Vec2, angle: f32, skip: u32, food: bool, range: f32) -> (f32, Seen) {
     let (s, c) = sin_cos(angle);
     let toward = Vec2::new(c, s);
     let world = &stage.world;
-    let mut distance = RANGE;
+    let mut distance = range;
     let mut seen = Seen::Nothing;
-    if let Some(hit) = world.cast(from, toward, RANGE, skip) {
+    if let Some(hit) = world.cast(from, toward, range, skip) {
         distance = hit.distance;
         let at = from + toward * hit.distance;
         seen = match hit.struck {
@@ -204,9 +209,15 @@ pub fn see(stage: &Stage, torso: u32, skip: u32, into: &mut [f32], seen: &mut [(
 
 /// `see`, along rays in these directions: the fixed eyes' or the moving eye's (`gazed`).
 pub fn see_along(stage: &Stage, torso: u32, skip: u32, angles: &[f32; RAYS], into: &mut [f32], seen: &mut [(f32, Seen); RAYS]) {
+    see_within(stage, torso, skip, angles, RANGE, into, seen);
+}
+
+/// `see_along`, seeing no further than `range` (in the dark, `changes::sight`); how near a thing is
+/// is still told against the whole `RANGE`, so a thing at a metre means the same by day and by night.
+pub fn see_within(stage: &Stage, torso: u32, skip: u32, angles: &[f32; RAYS], range: f32, into: &mut [f32], seen: &mut [(f32, Seen); RAYS]) {
     let from = eye(stage, torso);
     for (k, angle) in angles.iter().enumerate() {
-        let (distance, what) = look(stage, from, *angle, skip);
+        let (distance, what) = look_within(stage, from, *angle, skip, true, range);
         seen[k] = (distance, what);
         let out = &mut into[k * PER_RAY..(k + 1) * PER_RAY];
         out[0] = if what == Seen::Nothing { 0.0 } else { 1.0 - distance / RANGE };

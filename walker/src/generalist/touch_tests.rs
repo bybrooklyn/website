@@ -27,8 +27,10 @@ fn run(legs: u32, amounts: [f32; 4]) -> Run {
 fn felt(run: &mut Run) -> Vec<f32> {
     let mut senses = vec![0.0; run.senses()];
     run.sense(&mut senses);
+    // touch comes before what it senses of a changing world (`changes::SENSES`)
     let count = touch::felt(run.body.legs());
-    senses[senses.len() - count..].to_vec()
+    let end = senses.len() - if run.body.hears { super::changes::SENSES } else { 0 };
+    senses[end - count..end].to_vec()
 }
 
 /// The actions that hold every joint at the angle it was built at, standing, the eye where it rests,
@@ -61,7 +63,8 @@ fn a_creature_that_feels_touch_senses_more_and_one_that_does_not_senses_as_befor
         let touching = run(legs, [0.0; 4]);
         let mut plain = touching.clone();
         plain.body.touch = false;
-        assert_eq!(touching.senses(), plain.senses() + touch::felt(legs as usize));
+        plain.body.hears = false;
+        assert_eq!(touching.senses(), plain.senses() + touch::felt(legs as usize) + super::changes::SENSES);
         // and its energy, whether it has just eaten, and where its eye looks
         assert_eq!(plain.senses(), RAYS * PER_RAY + 3 + if legs == 2 { 18 } else { 28 });
     }
