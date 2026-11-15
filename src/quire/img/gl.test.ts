@@ -1,14 +1,15 @@
 // What drawing through WebGL2 is held to: flattening gives the same pixels as the same arithmetic
 // done here on the processor (the same plan, the same filters, rounding between the passes as the
 // card's 8-bit textures do), to within rounding, through crops, every filter, sizes up and down and
-// turns, piece by piece; and a covered place holds none of the original's pixels, through any resize
-// or turn, a cover made on the turned picture too.
+// turns and perspectives (a filter widened where the map shrinks the picture), piece by piece; and a
+// covered place holds none of the original's pixels, through any resize, turn or perspective, a cover
+// made on the turned picture too.
 
 import { expect, test } from "bun:test";
 import { corePage, quire } from "../../../scripts/core-page";
-import { plan, weight, type Pass } from "./draw";
+import { pieceMatrix, plan, spread, weight, type Pass } from "./draw";
 import { look, type Look } from "./steps";
-import { cornersOf, turnOf } from "./turn";
+import { bent, cornersOf, turnOf } from "./turn";
 
 const original = { name: "pictures/a.png", width: 300, height: 200, type: "image/png", bytes: 1 };
 
@@ -50,7 +51,7 @@ function flattenHere(pixels: Uint8ClampedArray, width: number, shown: Look, most
         });
         for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (inside(x + 0.5, y + 0.5)) covered.set([red!, green!, blue!, 255], (y * width + x) * 4);
     }
-    const turn = turnOf(shown.turn ?? 0, { width, height });
+    const turn = turnOf(shown.turn ?? 0, { width, height }, shown.perspective);
     // doubting, every reach counts as a share, the negative lobes too, so that nothing a doubted pixel touches is missed
     const lanczos = (x: number) => (doubt ? Math.abs(weight("lanczos", x)) : weight("lanczos", x));
     const result = new Uint8ClampedArray(shown.width * shown.height * 4);
@@ -66,26 +67,33 @@ function flattenHere(pixels: Uint8ClampedArray, width: number, shown: Look, most
         }
         return sum.map((value) => Math.round(Math.min(255, Math.max(0, value / total))));
     };
-    const wider = turn.degrees ? Math.abs(turn.cos) + Math.abs(turn.sin) : 1;
-    for (const piece of plan(shown, turn.degrees ? Math.max(16, Math.floor((most - 10) / wider)) : most)) {
+    const reached = turn.matrix ? spread(turn, shown.crop) : { wider: Math.abs(turn.cos) + Math.abs(turn.sin), shrink: 1 };
+    const margin = 4 + 3 * Math.ceil(reached.shrink - 1);
+    for (const piece of plan(shown, bent(turn) ? Math.max(16, Math.floor((most - 2 * margin - 2) / reached.wider)) : most)) {
         let at = (x: number, y: number) => [...covered.subarray(((piece.source.y + y) * width + piece.source.x + x) * 4, ((piece.source.y + y) * width + piece.source.x + x) * 4 + 4)];
-        if (turn.degrees) {
-            // the piece made upright first: each level pixel read from the original about its place there, six by six, rounded to 8 bits
+        if (bent(turn)) {
+            // the piece made upright first: each level pixel read from the original about its place there, six by six (wider
+            // where the map shrinks the picture), rounded to 8 bits
             const level: number[][] = [];
             const read = (x: number, y: number) => covered.subarray((Math.min(height - 1, Math.max(0, y)) * width + Math.min(width - 1, Math.max(0, x))) * 4);
+            const m = pieceMatrix(turn, piece.source, { x: 0, y: 0, width, height });
             for (let y = 0; y < piece.source.height; y++)
                 for (let x = 0; x < piece.source.width; x++) {
-                    const qx = piece.source.x - width / 2 + x + 0.5;
-                    const qy = piece.source.y - height / 2 + y + 0.5;
-                    const ux = turn.cos * qx + turn.sin * qy + width / 2 - 0.5;
-                    const uy = -turn.sin * qx + turn.cos * qy + height / 2 - 0.5;
-                    const fx = Math.floor(ux) - 2;
-                    const fy = Math.floor(uy) - 2;
+                    const qx = x + 0.5;
+                    const qy = y + 0.5;
+                    const d = m[6] * qx + m[7] * qy + m[8];
+                    const ux = (m[0] * qx + m[1] * qy + m[2]) / d;
+                    const uy = (m[3] * qx + m[4] * qy + m[5]) / d;
+                    const wideOf = (value: number) => (value < 1.0001 ? 1 : Math.min(value, 8));
+                    const wx = wideOf(Math.hypot((m[0] - ux * m[6]) / d, (m[1] - ux * m[7]) / d));
+                    const wy = wideOf(Math.hypot((m[3] - uy * m[6]) / d, (m[4] - uy * m[7]) / d));
+                    const fx = Math.floor(ux - 3 * wx) + 1;
+                    const fy = Math.floor(uy - 3 * wy) + 1;
                     const sum = [0, 0, 0, 0];
                     let total = 0;
-                    for (let j = 0; j < 6; j++)
-                        for (let i = 0; i < 6; i++) {
-                            const w = lanczos(fx + i - ux) * lanczos(fy + j - uy);
+                    for (let j = 0; j < 6 * Math.ceil(wy); j++)
+                        for (let i = 0; i < 6 * Math.ceil(wx); i++) {
+                            const w = lanczos((fx + i - ux) / wx) * lanczos((fy + j - uy) / wy);
                             const value = read(fx + i, fy + j);
                             for (let channel = 0; channel < 4; channel++) sum[channel]! += w * value[channel]!;
                             total += w;
@@ -113,6 +121,9 @@ const looks: Look[] = [
     look({ original, steps: [{ id: "s1", type: "turn", angle: 7 }] }),
     look({ original, steps: [{ id: "s1", type: "turn", angle: -11 }, { id: "s2", type: "crop", rect: { x: 40, y: 30, width: 200, height: 140 } }, { id: "s3", type: "resize", width: 97, filter: "lanczos" }, { id: "s4", type: "cover", rect: { x: 40, y: 40, width: 60, height: 30 }, color: "#10f0a0" }, { id: "s5", type: "cover", rect: { x: 120, y: 90, width: 50, height: 24 }, color: "#2040e0", angle: 11 }] }),
     look({ original, steps: [{ id: "s1", type: "turn", angle: 3.5 }, { id: "s2", type: "resize", width: 410, filter: "bilinear" }] }),
+    // straightened: the keystone dials with a cover and a shrink; corners set by hand, turned a little, enlarged
+    look({ original, steps: [{ id: "s1", type: "perspective", vertical: 14, horizontal: -6 }, { id: "s2", type: "cover", rect: { x: 40, y: 40, width: 60, height: 30 }, color: "#10f0a0" }, { id: "s3", type: "resize", width: 120, filter: "lanczos" }] }),
+    look({ original, steps: [{ id: "s1", type: "perspective", corners: [{ x: 30, y: 20 }, { x: 260, y: 40 }, { x: 290, y: 190 }, { x: 10, y: 170 }], ratio: 1.6 }, { id: "s2", type: "turn", angle: 2 }, { id: "s3", type: "resize", width: 380, filter: "lanczos" }] }),
 ];
 
 test("in Chromium, WebGL2 flattens to the same pixels as the same arithmetic here, to within rounding, and covered places hold none of the original", async () => {
@@ -155,12 +166,19 @@ test("in Chromium, WebGL2 flattens to the same pixels as the same arithmetic her
                 if (doubt[at - (at % 4)]) return void (at % 4 === 0 && doubted++);
                 most = Math.max(most, Math.abs(value - here[at]!));
             });
-            expect(most).toBeLessThanOrEqual(1);
+            // straightened and much enlarged, a rounding of the level piece can be carried by the filter's lobes to two, in a few values
+            const off = gl.out[index]!.filter((value, at) => !doubt[at - (at % 4)] && Math.abs(value - here[at]!) > 1).length;
+            if (shown.perspective) {
+                expect(most).toBeLessThanOrEqual(2);
+                expect(off / gl.out[index]!.length).toBeLessThan(1e-4);
+                if (off) console.log(`${off} of ${gl.out[index]!.length} values two apart`);
+            } else expect(most).toBeLessThanOrEqual(1);
             if (doubted) console.log(`${doubted} of ${shown.width * shown.height} pixels near a turned cover's edge were not compared`);
             // nothing of the magenta under a cover is left, through any resize
             if (shown.covers.length) for (let at = 0; at < gl.out[index]!.length; at += 4) expect(gl.out[index]![at] === 255 && gl.out[index]![at + 1]! < 40 && gl.out[index]![at + 2] === 255).toBe(false);
             if (shown.covers.some((cover) => cover.angle)) for (let at = 0; at < gl.out[index]!.length; at += 4) expect(gl.out[index]![at]! > 170 && gl.out[index]![at + 1]! < 30 && gl.out[index]![at + 2]! > 170 && Math.abs(gl.out[index]![at]! - gl.out[index]![at + 2]!) < 20).toBe(false);
-            if (shown.turn) console.log(`turned ${shown.turn} degrees: WebGL2 against the arithmetic here, at most ${most} apart`);
+            if (shown.turn || shown.perspective) console.log(`${shown.perspective ? "straightened" : "turned"} ${shown.turn ?? 0} degrees: WebGL2 against the arithmetic here, at most ${most} apart`);
+            if (shown.perspective) expect(shown.width * shown.height).toBeGreaterThan(1000);
         });
     } finally {
         await page.close();

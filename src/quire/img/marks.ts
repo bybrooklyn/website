@@ -2,8 +2,14 @@
 // They are drawn by the browser's 2D canvas, on the screen over the picture and into the result when
 // it is flattened, so that both of the card's ways give the same marks. Which mark is under the
 // pointer, and how far a mark reaches, are worked out here for choosing and moving one.
+//
+// On a picture whose perspective is set, the 2D canvas cannot draw through a plane-to-plane map, so a box's
+// corners and an arrow's ends are each put where the map puts them and drawn straight between (which is
+// exact, since the map keeps straight lines straight), and a text and an arrow's head are drawn by the
+// map's nearest straight-line likeness at their place.
 
 import type { Mark, Point, Rect } from "./steps";
+import { apply, type Matrix } from "./homography";
 
 /** Where the original's pixels fall on what is drawn: pixels per pixel each way, and where its corner falls, on the level picture; and, for a turned picture, its turn (degrees, clockwise) about the original's middle, made before the rest. */
 export interface Place {
@@ -12,10 +18,109 @@ export interface Place {
     x: number;
     y: number;
     turn?: { degrees: number; x: number; y: number };
+    /** With a perspective, the whole map from the original's pixels to the level picture, the turn in it, in place of `turn`. */
+    perspective?: Matrix;
 }
 
-/** Sets a 2D canvas to draw in the original's pixels: placed, then turned about the original's middle if the picture is. */
-export function placeOn(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, place: Place) {
+/** The nearest straight-line likeness of a map at a place, as a 2D canvas's six numbers, after the level picture's place. */
+function likeness(map: Matrix, at: Point, place: Place): [number, number, number, number, number, number] {
+    const w = map[6] * at.x + map[7] * at.y + map[8];
+    const there = apply(map, at);
+    const a = (map[0] - there.x * map[6]) / w;
+    const b = (map[3] - there.y * map[6]) / w;
+    const c = (map[1] - there.x * map[7]) / w;
+    const d = (map[4] - there.y * map[7]) / w;
+    const e = there.x - a * at.x - c * at.y;
+    const f = there.y - b * at.x - d * at.y;
+    return [a * place.across, b * place.down, c * place.across, d * place.down, e * place.across + place.x, f * place.down + place.y];
+}
+
+/** Draws one mark through a perspective's map: its lines between places put where the map puts them, its text and head by the map's likeness there. */
+function drawBent(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, mark: Mark, place: Place, map: Matrix) {
+    const angle = mark.type === "arrow" ? 0 : (mark.angle ?? 0);
+    const own = (point: Point): Point => (angle ? turnedAbout(point, pivotOf(mark), angle) : point);
+    const onCanvas = (point: Point): Point => {
+        const there = apply(map, own(point));
+        return { x: there.x * place.across + place.x, y: there.y * place.down + place.y };
+    };
+    const scale = (at: Point) => {
+        const [a, b, c, d] = likeness(map, at, place);
+        return Math.sqrt(Math.abs(a * d - b * c));
+    };
+    context.strokeStyle = context.fillStyle = mark.color;
+    if (mark.type === "box") {
+        const { x, y, width, height } = mark.rect;
+        const corners = [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }].map(onCanvas);
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.lineWidth = mark.thickness * scale(pivotOf(mark));
+        context.beginPath();
+        corners.forEach((corner, at) => (at ? context.lineTo(corner.x, corner.y) : context.moveTo(corner.x, corner.y)));
+        context.closePath();
+        context.stroke();
+    } else if (mark.type === "arrow") {
+        // the line between places put by the map; the head drawn by the likeness at the tip
+        const length = Math.hypot(mark.to.x - mark.from.x, mark.to.y - mark.from.y);
+        if (length < 0.5) return;
+        const head = Math.min(headOf(mark.thickness), length);
+        const along = { x: (mark.to.x - mark.from.x) / length, y: (mark.to.y - mark.from.y) / length };
+        const base = { x: mark.to.x - along.x * head, y: mark.to.y - along.y * head };
+        const from = onCanvas(mark.from);
+        const stop = onCanvas({ x: base.x + along.x * head * 0.3, y: base.y + along.y * head * 0.3 });
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.lineWidth = mark.thickness * scale(mark.to);
+        context.beginPath();
+        context.moveTo(from.x, from.y);
+        context.lineTo(stop.x, stop.y);
+        context.stroke();
+        context.setTransform(...likeness(map, mark.to, place));
+        const side = head * 0.55;
+        context.beginPath();
+        context.moveTo(mark.to.x, mark.to.y);
+        context.lineTo(base.x - along.y * side, base.y + along.x * side);
+        context.lineTo(base.x + along.y * side, base.y - along.x * side);
+        context.closePath();
+        context.fill();
+    } else {
+        context.setTransform(...likeness(map, own(mark.at), place));
+        if (angle) context.rotate((angle * Math.PI) / 180);
+        context.font = FACE.replace("1px", `${mark.size}px`);
+        context.textBaseline = "top";
+        context.fillText(mark.text, 0, 0);
+    }
+}
+
+/** A place turned by some degrees about a pivot. */
+function turnedAbout(point: Point, pivot: Point, degrees: number): Point {
+    const radians = (degrees * Math.PI) / 180;
+    const dx = point.x - pivot.x;
+    const dy = point.y - pivot.y;
+    return { x: pivot.x + Math.cos(radians) * dx - Math.sin(radians) * dy, y: pivot.y + Math.sin(radians) * dx + Math.cos(radians) * dy };
+}
+
+/** An arrow drawn in the canvas's present frame: its line, stopped short of its tip, and its head. */
+function drawArrow(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, mark: Extract<Mark, { type: "arrow" }>) {
+    const length = Math.hypot(mark.to.x - mark.from.x, mark.to.y - mark.from.y);
+    if (length < 0.5) return;
+    const head = Math.min(headOf(mark.thickness), length);
+    const along = { x: (mark.to.x - mark.from.x) / length, y: (mark.to.y - mark.from.y) / length };
+    const base = { x: mark.to.x - along.x * head, y: mark.to.y - along.y * head };
+    context.lineWidth = mark.thickness;
+    context.beginPath();
+    context.moveTo(mark.from.x, mark.from.y);
+    context.lineTo(base.x + along.x * head * 0.3, base.y + along.y * head * 0.3);
+    context.stroke();
+    const side = head * 0.55;
+    context.beginPath();
+    context.moveTo(mark.to.x, mark.to.y);
+    context.lineTo(base.x - along.y * side, base.y + along.x * side);
+    context.lineTo(base.x + along.y * side, base.y - along.x * side);
+    context.closePath();
+    context.fill();
+}
+
+/** Sets a 2D canvas to draw in the original's pixels: placed, then turned about the original's middle if the picture is (with a perspective, by the map's likeness at the original's middle, which is close enough for a tint or a stroke being painted). */
+export function placeOn(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, place: Place, middle?: Point) {
+    if (place.perspective) return context.setTransform(...likeness(place.perspective, middle ?? { x: place.turn?.x ?? 0, y: place.turn?.y ?? 0 }, place));
     context.setTransform(place.across, 0, 0, place.down, place.x, place.y);
     if (!place.turn?.degrees) return;
     context.translate(place.turn.x, place.turn.y);
@@ -55,6 +160,11 @@ export function drawMarks(context: CanvasRenderingContext2D | OffscreenCanvasRen
     context.lineJoin = "round";
     for (const mark of marks) {
         context.save();
+        if (place.perspective) {
+            drawBent(context, mark, place, place.perspective);
+            context.restore();
+            continue;
+        }
         // a box or a text made on a turned picture turns by its own angle about its middle or its place
         const angle = mark.type === "arrow" ? 0 : (mark.angle ?? 0);
         if (angle) {
@@ -67,28 +177,8 @@ export function drawMarks(context: CanvasRenderingContext2D | OffscreenCanvasRen
         if (mark.type === "box") {
             context.lineWidth = mark.thickness;
             context.strokeRect(mark.rect.x, mark.rect.y, mark.rect.width, mark.rect.height);
-        } else if (mark.type === "arrow") {
-            const length = Math.hypot(mark.to.x - mark.from.x, mark.to.y - mark.from.y);
-            if (length < 0.5) {
-                context.restore();
-                continue;
-            }
-            const head = Math.min(headOf(mark.thickness), length);
-            const along = { x: (mark.to.x - mark.from.x) / length, y: (mark.to.y - mark.from.y) / length };
-            const base = { x: mark.to.x - along.x * head, y: mark.to.y - along.y * head };
-            context.lineWidth = mark.thickness;
-            context.beginPath();
-            context.moveTo(mark.from.x, mark.from.y);
-            context.lineTo(base.x + along.x * head * 0.3, base.y + along.y * head * 0.3);
-            context.stroke();
-            const side = head * 0.55;
-            context.beginPath();
-            context.moveTo(mark.to.x, mark.to.y);
-            context.lineTo(base.x - along.y * side, base.y + along.x * side);
-            context.lineTo(base.x + along.y * side, base.y - along.x * side);
-            context.closePath();
-            context.fill();
-        } else {
+        } else if (mark.type === "arrow") drawArrow(context, mark);
+        else {
             context.font = FACE.replace("1px", `${mark.size}px`);
             context.textBaseline = "top";
             context.fillText(mark.text, mark.at.x, mark.at.y);

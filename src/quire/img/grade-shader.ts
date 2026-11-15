@@ -82,6 +82,9 @@ uniform vec2 maskSize;
 uniform vec2 pictureSize;
 uniform int gradeConvert;
 uniform vec4 gradeTurn;
+uniform vec3 gradeBackX;
+uniform vec3 gradeBackY;
+uniform vec4 gradeBackW;
 const mat3 P3_TO_SRGB = mat3(${columns});
 const float PIVOT = ${Math.fround(1.055 * Math.pow(0.18, 1 / 2.4) - 0.055).toFixed(9)};
 vec4 entry(int i) { return texelFetch(gradeData, ivec2(i % ${ROW}, i / ${ROW}), 0); }
@@ -215,7 +218,12 @@ float maskAt(int layer, vec2 place) {
     return mix(mix(m00, m10, f.x), mix(m01, m11, f.x), f.y);
 }
 // a place on the turned picture back to the original's pixels, where the masks are: gradeTurn is the turn's cosine and sine and the middle it turns about
+// with a perspective, the whole map back instead, as three rows, its last number saying it is used
 vec2 unturned(vec2 p) {
+    if (gradeBackW.w == 1.0) {
+        vec3 q = vec3(p, 1.0);
+        return vec2(dot(gradeBackX, q), dot(gradeBackY, q)) / dot(gradeBackW.xyz, q);
+    }
     vec2 d = p - gradeTurn.zw;
     return vec2(gradeTurn.x * d.x + gradeTurn.y * d.y, -gradeTurn.y * d.x + gradeTurn.x * d.y) + gradeTurn.zw;
 }
@@ -242,7 +250,7 @@ vec3 graded(vec3 c, vec2 given) {
 
 /** The grade in WGSL for WebGPU, the same sums: `graded(color, place)`. Its bindings are `@group(1)`, set by gpu.ts. */
 export const GRADE_WGSL = /* wgsl */ `
-struct Grading { luma: vec4f, backR: vec4f, backG: vec4f, backB: vec4f, maskSize: vec2f, pictureSize: vec2f, count: i32, layers: i32, convert: f32, pad: f32, turn: vec4f };
+struct Grading { luma: vec4f, backR: vec4f, backG: vec4f, backB: vec4f, maskSize: vec2f, pictureSize: vec2f, count: i32, layers: i32, convert: f32, pad: f32, turn: vec4f, backX: vec4f, backY: vec4f, backW: vec4f };
 @group(1) @binding(0) var<uniform> grading: Grading;
 @group(1) @binding(1) var<storage, read> gradeData: array<vec4f>;
 @group(1) @binding(2) var<storage, read> gradeMasks: array<f32>;
@@ -386,6 +394,10 @@ fn maskAt(layer: i32, place: vec2f) -> f32 {
     return mix(mix(maskTexel(layer, a.x, a.y), maskTexel(layer, b.x, a.y), f.x), mix(maskTexel(layer, a.x, b.y), maskTexel(layer, b.x, b.y), f.x), f.y);
 }
 fn unturned(p: vec2f) -> vec2f {
+    if (grading.backW.w == 1.0) {
+        let q = vec3f(p, 1.0);
+        return vec2f(dot(grading.backX.xyz, q), dot(grading.backY.xyz, q)) / dot(grading.backW.xyz, q);
+    }
     let t = grading.turn;
     let d = p - t.zw;
     return vec2f(t.x * d.x + t.y * d.y, -t.y * d.x + t.x * d.y) + t.zw;

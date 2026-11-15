@@ -13,7 +13,9 @@
 import type { Edits } from "./metadata";
 import { readGrade, trimGrade, type Grade, type KeptGrade } from "./grade";
 import { decodeRuns, MOST_STROKES, type Shape, type Stroke } from "./masks";
-import { fitInside, largestInside, MOST_TURN, turnOf } from "./turn";
+import { fitInside, largestInside, levelBox, MOST_TURN, turnOf } from "./turn";
+import { MOST_KEYSTONE, perspectiveMap, type Corners, type Perspective } from "./perspective";
+import type { Matrix } from "./homography";
 import type { Cut } from "./cutout/cut";
 
 /** A rectangle in the original's pixels. */
@@ -51,8 +53,11 @@ export type PartStep = { type: "part"; grade: KeptGrade } & Shape;
 /** The picture cut out of its background (cutout/cut.ts): the mask a model found, the brush's strokes, the subject pressed, and what it is laid on. */
 export type CutStep = { type: "cutout" } & Cut;
 
-/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture. A cut-out takes the background away first, before anything else is drawn. */
-export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | ({ type: "cover" } & Cover) | GradeStep | PartStep | CutStep | Mark;
+/** The picture straightened by a perspective (perspective.ts): the keystone dials, and corners set by hand with their rectangle's proportions. */
+export type PerspectiveStep = { type: "perspective" } & Perspective;
+
+/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture; a perspective straightens it before it is turned. A cut-out takes the background away first, before anything else is drawn. */
+export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | PerspectiveStep | ({ type: "cover" } & Cover) | GradeStep | PartStep | CutStep | Mark;
 
 /** A step as the document keeps it: with an id of its own, and switched off if it is. */
 export type Kept = Step & { id: string; off?: boolean };
@@ -86,6 +91,8 @@ export interface Look {
     grades: { id: string; grade: Grade; part?: Shape }[];
     /** How far the picture is turned to level it, in degrees, clockwise; none when level. */
     turn?: number;
+    /** The map that straightens the picture's perspective before it is turned (homography.ts), from the original's pixels; none when it has none. */
+    perspective?: Matrix;
     /** The picture cut out of its background, if it is. */
     cutout?: Cut;
 }
@@ -112,7 +119,11 @@ export function look(picture: Picture): Look {
     const { original } = picture;
     // the turn first, wherever it is in the list, since the crop is upright on the turned picture
     const turning = picture.steps.find((step) => step.type === "turn" && !step.off) as { angle: number } | undefined;
-    const turn = turnOf(turning?.angle ?? 0, original);
+    const straightening = picture.steps.find((step) => step.type === "perspective" && !step.off) as PerspectiveStep | undefined;
+    const perspective = straightening && perspectiveMap(straightening, original);
+    const turn = turnOf(turning?.angle ?? 0, original, perspective);
+    // a crop of her own is held to the original's box, or on a straightened picture, which may spread past it, to the box round the picture
+    const room = perspective ? levelBox(turn) : original;
     let crop: Rect = largestInside(turn);
     let across = 1;
     let down = 1;
@@ -125,18 +136,26 @@ export function look(picture: Picture): Look {
         if (step.off) continue;
         if (step.type === "grade") grades.push({ id: step.id, grade: gradeOf(step) });
         else if (step.type === "part") grades.push({ id: step.id, grade: gradeOf(step), part: shapeOf(step) });
-        else if (step.type === "crop") crop = fitInside(within(step.rect, original), turn);
+        else if (step.type === "crop") crop = fitInside(perspective ? inBox(step.rect, room as Rect) : within(step.rect, original), turn);
         else if (step.type === "resize") {
             across = step.width / crop.width;
             down = step.height ? step.height / crop.height : across;
             filter = step.filter;
         } else if (step.type === "cover") covers.push({ rect: step.angle ? step.rect : within(step.rect, original), color: step.color, ...(step.angle ? { angle: step.angle } : {}) });
         else if (step.type === "cutout") cutout = cutOf(step);
-        else if (step.type !== "turn") marks.push(withoutId(step) as Mark);
+        else if (step.type !== "turn" && step.type !== "perspective") marks.push(withoutId(step) as Mark);
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
-    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(cutout ? { cutout } : {}) };
+    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(perspective ? { perspective } : {}), ...(cutout ? { cutout } : {}) };
+}
+
+/** A rectangle with its corners in either order, kept inside a box and at least a pixel each way, in whole pixels. */
+function inBox(rect: Rect, box: Rect): Rect {
+    const left = Math.ceil(box.x);
+    const top = Math.ceil(box.y);
+    const moved = within({ x: rect.x - left, y: rect.y - top, width: rect.width, height: rect.height }, { width: Math.max(1, Math.floor(box.x + box.width) - left), height: Math.max(1, Math.floor(box.y + box.height) - top) });
+    return { ...moved, x: moved.x + left, y: moved.y + top };
 }
 
 // a grade step's whole grade, worked out once for each step as kept, so that drawing many times a second reads it once
@@ -208,7 +227,7 @@ export function toggle(steps: Kept[], id: string): Kept[] {
 }
 
 /** The list with the picture's one crop (or one resize, or its whole grade) set: the step changed where there is one, added where there is not. */
-export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" | "turn" | "cutout" }>): Kept[] {
+export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" | "turn" | "perspective" | "cutout" }>): Kept[] {
     const there = steps.find((each) => each.type === step.type);
     return there ? change(steps, there.id, step) : add(steps, step);
 }
@@ -306,6 +325,7 @@ function readStep(value: unknown): Step | undefined {
         const angle = number(step.angle, -MOST_TURN, MOST_TURN);
         return angle === undefined ? undefined : { type: "turn", angle: Math.round(angle * 100) / 100 };
     }
+    if (step.type === "perspective") return readPerspective(step);
     // a box's, a text's or a cover's own turn, if it has one
     const angle = number(step.angle, -MOST_TURN, MOST_TURN);
     const turned = angle ? { angle } : {};
@@ -331,6 +351,21 @@ function readStep(value: unknown): Step | undefined {
         return at && size && text && color ? { type: "text", at, text, color, size, ...turned } : undefined;
     }
     return undefined;
+}
+
+/** A perspective step from a file: the dials within their range in hundredths, and corners only as four places with a ratio from a twentieth to twenty; nothing when it holds nothing. */
+function readPerspective(step: Record<string, unknown>): PerspectiveStep | undefined {
+    const dial = (value: unknown) => {
+        const read = number(value, -MOST_KEYSTONE, MOST_KEYSTONE);
+        return read ? Math.round(read * 100) / 100 : undefined;
+    };
+    const vertical = dial(step.vertical);
+    const horizontal = dial(step.horizontal);
+    const given = Array.isArray(step.corners) && step.corners.length === 4 ? step.corners.map(readPoint) : undefined;
+    const ratio = number(step.ratio, 0.05, 20);
+    const corners = given?.every((point) => point) && ratio ? (given as Corners) : undefined;
+    if (!vertical && !horizontal && !corners) return undefined;
+    return { type: "perspective", ...(vertical ? { vertical } : {}), ...(horizontal ? { horizontal } : {}), ...(corners ? { corners, ratio } : {}) };
 }
 
 /** A found mask from a file, checked: whole sizes up to 2048 a side, and runs that read to exactly its size. */
