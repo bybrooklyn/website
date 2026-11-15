@@ -23,7 +23,14 @@ How to add a mini is in `src/mote/README.md`.
 
 - **Blocks** (toy, 2D; `blocks.ts`): a pile of blocks with real physics. A piece can be dragged and thrown;
   a double click on an empty spot, or Space, drops a new block, now and then a ball or a wedge. After sixty
-  pieces the oldest is taken away. It is also what posts embed.
+  pieces the oldest is taken away. It is also what posts embed. Backspace or Delete takes a piece away: the
+  one held, else the one under the pointer, else the newest. A row under the pile chooses what is dropped
+  next: its kind (any, block, ball, wedge), its color from a wheel of hues with a slider for how dark, or a
+  hue by chance as before, and a word that takes a piece away for a hand with no keyboard. The choice is
+  kept between visits; the pile always opens in its soft colors. The arithmetic is in `tints.ts`. These came
+  from a visitor's letter.
+- **Feedback** is a letter: every mini's page ends with a link that opens an email to the site's address
+  with the subject filled in for that mini, and the footer has one for the site. No form and no server.
 - **Dice** (toy, 3D; first called Table; `dice.ts`, `tower.ts`, `rolls.ts`, `luck.ts`): a dice tower. Dice
   are picked from pictures of each seen from above, or typed as a roll (`2d6+3`, `4d6 drop lowest`,
   `d20 adv`, `d100`). They tumble down the ramps as real solids on Mote's 3D physics and roll into the tray;

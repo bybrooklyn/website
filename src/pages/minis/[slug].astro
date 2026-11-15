@@ -7,6 +7,7 @@ import "../../styles/blog.css";
 import "../../styles/minis.css";
 import PrevNext from "../../components/PrevNext.astro";
 import Opened from "../../layouts/Opened.astro";
+import { site } from "../../data/site";
 import { getMinis, type Mini } from "../../lib/minis";
 import { miniFacts, sharePicture } from "../../lib/share";
 
@@ -26,6 +27,8 @@ interface Props {
 
 const { mini, previous, next } = Astro.props;
 const { name, summary, kind, space, controls, panel } = mini.data;
+// a letter to the site's address with its subject filled in for this mini: no form and nothing between the visitor and the inbox
+const feedback = `mailto:${site.email}?subject=${encodeURIComponent(`feedback: ${name}`)}`;
 const { Content } = await render(mini);
 ---
 
@@ -45,7 +48,7 @@ const { Content } = await render(mini);
 
         <div class="prose">
             <Content />
-            <p class="note">Runs on <a href="/projects/mote/">Mote</a>.</p>
+            <p class="note">Runs on <a href="/projects/mote/">Mote</a> · <a href={feedback}>send feedback</a></p>
         </div>
 
         <PrevNext
