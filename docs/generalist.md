@@ -80,6 +80,16 @@ doing things, all written from scratch in that engine. An article about it is pl
   always was), let the world change by itself (off unless switched on), and choose whether a tap drops food
   or a box; the changes are drawn, the brain's thickened lines count from the last change, and its surprise
   is a trace. `walker/README.md`, "A world that changes while it lives", has every number.
+- **The risky bet** (15 November 2026, stage 5 of the plan): a pool whose memory neurons add and cut their
+  connections while it lives (`wiring.rs`). Each of a memory neuron's 16 places holds a connection or not; a
+  rule of seven numbers joins the empty place where the two neurons have been most active together and cuts
+  the connection that carries least, every half second, moved by surprise and eating and readier to cut when
+  short of energy. Each connection costs energy from the body (a whole brain as much as being awake), so a
+  hungry brain thins. The rule was found by evolution (`examples/rule.rs`), each candidate practising from
+  scratch; the page carries its seven numbers. It measured no better than stage 4's brain on anything, and
+  does not recover its pace within a change. On the page a switch under "brain", off as it opens, turns it
+  on, and the brain's picture shows connections growing and drawing back and what they cost.
+  `walker/README.md`, "The risky bet", has every number.
 - **Measures**: a gait measure that says whether a run counts as walking, printed three ways (in the
   held-out worlds as a whole, which is the test; on open ground in them; on level ground); a comparison of evolution and
   practice on the same compute (practice goes three to six times as far through unseen worlds for about
@@ -161,6 +171,24 @@ not to be claimed: hard 2D parkour was reported open in 2021; training walkers i
 well-trodden.
 
 ## Open
+
+- **Stage 5, for her to say** (15 November 2026). Whether the growing brain stays on the page behind its
+  switch (off as it opens) or is taken out: it measured no better than stage 4's brain, but it is something
+  a visitor can watch, connections growing and drawing back with what they cost, and the code is small and
+  behind one setting. Its price: a whole brain costs as much energy as being awake (a quarter of all its
+  energy a minute); on the page a hungry creature thinned to about a quarter of its places, and with
+  connections free the learners had more energy and went as far. Whether the switch should be remembered
+  between visits (it is not). The words under the brain ("134 connections, 7% a minute").
+- **Stage 5, still open.** Neurons whose whole rule is an evolved program were not started, since the plan
+  makes them depend on the growing brain working. Evolution of the rule was too noisy to tell rules apart
+  in three million steps on one seed a generation; a search that is to find anything needs several seeds a
+  candidate, or longer practice, which is hours of the machine. The page's switch shows connections change
+  but not why they help, since they do not measurably help. The surprise and eating the rule reads move it
+  little in the rule found.
+- **The page text, after stage 5,** would need to say: that a switch under "brain" lets its memory neurons
+  add and cut connections as it lives, each paid for from its energy, and that the brain then shows them
+  growing and drawing back and what they cost; and, for the article, that this was the risky bet and it
+  did not measurably help.
 
 - **Stage 4, for her to say** (15 November 2026). Whether practice keeps the teacher or settings drawn evenly:
   for two legs, on the same steps, neither learned faster or went further; for four legs settings drawn
@@ -274,6 +302,8 @@ cd walker && cargo run --release --example watch -- kept=keep/pool-20000000 legs
 cd walker && cargo run --release --example brain_cost -- updates=20   # practice's speed for each size of brain
 cd walker && cargo run --release --example compare -- legs=2 difficulty=0.2 amounts=0.6,0.4,0.4,0.4 memory=32 rhythm=4 mood=4 reads=16 changing=1 save=keep/even   # practice in worlds drawn evenly (2 the teacher's, 0 still), measured still and changing
 cd walker && cargo run --release --example adapt -- kept=keep/even-20000000 legs=2   # the world changed at ten seconds into 200 held-out worlds: pace kept, recovery, falls
+cd walker && cargo run --release --example rule -- legs=2 generations=8 population=8 steps=3000000   # the growing brain's rule, by evolution (about 17 minutes on four cores)
+cd walker && cargo run --release --example compare -- legs=2 difficulty=0.2 amounts=0.6,0.4,0.4,0.4 memory=32 rhythm=4 mood=4 reads=16 grow=1 save=keep/grow   # the growing brain (rule= and price= for others)
 ```
 
 ## Known weak spots
@@ -292,6 +322,8 @@ cd walker && cargo run --release --example adapt -- kept=keep/even-20000000 legs
   rhythms are neurons the rest may read or ignore, and memory is learned back through time.
 - Practising with a pool is slower per step in the browser: the page's brain practises at about 63
   percent of the plain network's speed, the largest the sliders allow at about a quarter.
-- The engine is 494 KiB with SIMD, 18 KiB under the 512 KiB limit (451 before stage 4, 331 before the pool).
+- The engine is 507 KiB with SIMD, 5 KiB under the 512 KiB limit (494 before stage 5, 451 before stage 4, 331
+  before the pool). Stage 5's first build was over it; writing a few things once rather than at every use
+  brought it back, and anything more for the page will need the same care or a decision on the limit.
 - Centred actions and a curriculum are in the code and unused, and so are the trial knobs of the gait work
   (shorter hips, costs on spin, bobbing, joint speed and torque, easing, the top pace's other values).
