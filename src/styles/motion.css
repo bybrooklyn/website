@@ -199,24 +199,52 @@
         animation: panel-arrive 0.45s var(--ease) backwards;
     }
 
-    html[data-arrive~="close"] body > * {
+    /* The site comes back as one, the root itself moved: its corner is on a whole pixel, so its text is drawn while it
+       moves just where it is drawn at rest, and nothing is put right when it stops. Moved part by part, each part
+       starting at a fraction of a pixel, all the text shifted a hair at the stop. The ground stays, being the canvas's. */
+    html[data-arrive~="close"] {
         animation: site-return 0.45s var(--ease) backwards;
     }
 
+    /* The shift and the fade are two animations here, and the shift is over while the fade is still well under way.
+       Firefox draws text that is being moved a fraction of a pixel off where it draws it at rest, and puts it right
+       the moment the movement ends: at the end of a fade that showed as a flicker of the whole text, and part way
+       through one it does not show. */
     html[data-arrive~="move"] body > main,
     html[data-arrive~="swap"] .opened-panel main {
-        animation: shift-in 0.4s var(--ease) backwards;
+        animation:
+            arrive-shift 0.24s var(--ease) backwards,
+            arrive-fade 0.4s ease-out backwards;
     }
 
     html[data-arrive~="move"][data-arrive~="back"] body > main {
-        animation-name: shift-in-back;
+        animation-name: arrive-shift-back, arrive-fade;
     }
 
-    html[data-arrive] :is(.opened-panel, body > *, main),
-    html[data-leave] :is(.opened-panel, body > *, main) {
-        will-change: translate, opacity;
+    @keyframes arrive-shift {
+        from {
+            translate: 1.5rem 0;
+        }
     }
 
+    @keyframes arrive-shift-back {
+        from {
+            translate: -1.5rem 0;
+        }
+    }
+
+    @keyframes arrive-fade {
+        from {
+            opacity: 0;
+        }
+    }
+
+    /* (No `will-change` here. It was set on the header, the page and the panel for as long as a page was marked,
+       and Firefox drew all their text again, a little differently, the moment the mark was taken off, 0.8 s after
+       arriving: the whole page flashed once it had come to rest. What moves is given its own layer by the browser
+       for as long as it moves.) */
+
+    html[data-hold],
     html[data-hold] :is(.opened-panel, body > *, main) {
         animation-play-state: paused;
     }
