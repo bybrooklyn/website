@@ -1,8 +1,9 @@
 // The browser driver every browser test stands on: that it leaves nothing behind, that it sends a modifier alone as a keyboard does, and that two fingers are two pointers. Held true: a
 // closed browser leaves no Chromium process and no profile folder; one that fails to start is
 // cleaned up at once, not at the end of the run; when Chromium dies, calls waiting on it fail
-// instead of hanging; and many browsers in one run do not pile up signal handlers. Skipped, with
-// a notice, on a machine with no Chromium.
+// instead of hanging; many browsers in one run do not pile up signal handlers; and a script killed
+// outright, which runs no handler, still leaves no browser and no profile. Skipped, with a notice, on a
+// machine with no Chromium.
 
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
@@ -131,3 +132,19 @@ used("two fingers go down, move and lift as two pointers, each known by its own 
 });
 
 if (!live) console.warn("browser.test.ts: no Chromium on this machine, so the driver was not tried.");
+
+used("a script killed outright leaves no Chromium process and no profile folder behind", async () => {
+    // a script of its own opens a browser, says which profile it was given, and is killed with no chance to tidy up
+    const script = `
+        import { browser } from ${JSON.stringify(join(import.meta.dir, "browser.ts"))};
+        await browser({ width: 300, height: 200 });
+        const line = Bun.spawnSync(["ps", "-eo", "ppid=,args="]).stdout.toString().split("\\n").find((each) => each.trim().startsWith(process.pid + " ") && each.includes("--remote-debugging-port="));
+        console.log(/--user-data-dir=(\\S+)/.exec(line)[1]);
+        process.kill(process.pid, "SIGKILL");
+    `;
+    const child = Bun.spawn(["bun", "-e", script], { stdout: "pipe", stderr: "ignore" });
+    const profile = (await new Response(child.stdout).text()).trim();
+    await child.exited;
+    expect(profile).toContain("site-browser-");
+    expect(await until(() => !existsSync(profile) && !listed().some((one) => one.args.includes(`--user-data-dir=${profile}`)), 10_000)).toBe(true);
+});

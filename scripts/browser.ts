@@ -151,9 +151,19 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
         open.delete(tidy);
         stop("SIGKILL");
         rmSync(profile, { recursive: true, force: true });
+        try {
+            guard.kill("SIGKILL");
+        } catch {
+            // gone already
+        }
     };
     open.add(tidy);
     watch();
+    // A script killed outright runs no handler. A small shell left beside the browser waits for this process to be gone,
+    // then ends every process that names this profile and takes the profile away: browsers left by killed runs had held the
+    // graphics card and gigabytes of /tmp for hours. It is ended with the browser when the script tidies up itself.
+    const guard = spawn("sh", ["-c", 'while kill -0 "$1" 2>/dev/null; do sleep 2; done; pkill -9 -f -- "--user-data-dir=$2"; rm -rf -- "$2"', "sh", String(process.pid), profile], { stdio: "ignore", detached: true });
+    guard.unref();
 
     const errors: string[] = [];
     const requests: { method: string; url: string; body: boolean }[] = [];
