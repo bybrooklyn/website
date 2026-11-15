@@ -1014,7 +1014,23 @@ funnel (new: one lane, so every marble starts alike, and the funnel mixes them; 
 themselves by wide turns back, 42 levels high). The two new runs were made by hand and checked by the run's
 own checks, the ghost, races of four and eight and ten stepped minutes (a marble every 2.5 s, trays emptied
 every ten seconds: 240 let go, none lost, none on the cloth, none stuck). Twenty pieces is kept for tests
-and no longer offered.
+and no longer offered. Added after (15 November 2026): **every moving and sounding piece**, from a hopper at
+level 44 down a long straight, a gate, a steep slope, a chime bar (G5), a gentle slope and a long straight to
+slow it, a bell, a drum, a turn back and a steep slope to a switch; one way out a spinner, a lift of 8
+levels and a chain hoist of 4 cells, gentle slopes between, to a tray up at level 27; the other a seesaw
+that tips at each marble and a trapdoor that drops them two at a time, to a tray at level 10. Its test is
+the same ten minutes, and it counts the marbles each moving or sounding piece has on it: gate, chime bar
+and bell 239 of the 240, drum and switch 238, then each way about half, spinner, lift and seesaw 119,
+hoist and trapdoor 118 (the rest still on their way when the ten minutes end). It was built by hand in Bun,
+a piece at a time at the open end as the box places it, the ghost and a short stream run after each
+change. Three things made it work. The sounding pieces come before the switch and each comes slowly: a
+long straight before the bell, a turn back after the drum. The spinner, the seesaw, the trapdoor and the
+lift come after the switch, since any of them before it lets marbles reach it together (the run's own
+check marks that). And the seesaw holds one: one holding two, or a trapdoor before it, tipped marbles out
+in pairs, and a pair queueing before a lift or a hoist now and then knocked one off onto the cloth (once
+or twice in ten minutes in most layouts tried). Let go every 1.5, 2.2 or 2.8 s instead of 2.5, it lost
+none either. Its race of four finishes all four, 8.21 to 13.73 s; of eight, seven finish, 7.43 to 15.26 s,
+and the last down the trapdoor's side waits on it for a second that never comes.
 
 **The controls line** says only what a newcomer needs first; bending and settings moved into the keys
 list. New keys: V, Shift+V, T, H, G, Shift+G, X, the menu key.
@@ -1025,17 +1041,19 @@ either, as on a phone. Before this a wide screen had four short rows with nothin
 
 **Fell short, said plainly.**
 
-- *No run with every piece.* A run chaining every moving and sounding piece after the stage 2 run, joint by
-  joint, threw marbles off the slope after the chime bar and off the bell and the drum, and a search for one
-  was given up; the run offered as every kind of piece has every piece of track but none of the moving or
-  sounding ones. Stage 5's browser run, built by pressing pieces in, did carry marbles through all of them.
+- *No run with every piece*, at first. A run chaining every moving and sounding piece after the stage 2
+  run, joint by joint, threw marbles off the slope after the chime bar and off the bell and the drum, and a
+  search for one was given up; the run offered as every kind of piece has every piece of track but none of
+  the moving or sounding ones. Every moving and sounding piece, made by hand afterward, has those ten and
+  no other curve than a turn back, no spiral, S bend, drop, funnel or loop; no one run has every piece of
+  both kinds.
 - *No race track with lanes.* Four lanes turned about a funnel's middle, dropping into its bowl, threw their
   marbles out of it; the race is one lane through a funnel instead.
 - *A race on a run of moving or sounding pieces loses marbles*: let go 0.35 s apart they bunch and knock
   each other off at the chime bars, the bell and the drum. One lane with nothing to mix them (the first run,
   the tall bent run) is a photo finish every time, as it should be.
-- *The ten minutes* were checked for the two new runs (in `runs.test.ts`), and for the loop by stage 6's
-  test; not for the first run, the tune or sorting.
+- *The ten minutes* were checked for the two new runs and every moving and sounding piece (in
+  `runs.test.ts`), and for the loop by stage 6's test; not for the first run, the tune or sorting.
 - The search for runs was first run without a time limit, and an import in the scratch builder that never
   settled kept it waiting for hours; it was stopped, and the runs above were made by hand.
 - Measured only in headless Chromium: two fingers and a long press on a real phone, and the feel of a
