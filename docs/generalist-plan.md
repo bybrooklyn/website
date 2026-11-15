@@ -111,6 +111,28 @@ machine has up to four workers. The numbers are in `walker/README.md`, "The brai
   of it.
 - The teacher: worlds evolved to stay at the edge of what it can do.
 
+**State (15 November 2026): built, on its branch, to be looked at.** The ground's grip (ice to sticky),
+bounce and softness, gravity, a wind and the light are conditions of every practice world, changing by
+stretches as a setting has it, and boxes and food are dropped near the creature; at night it sees a quarter
+as far, and it hears a landing from either side. A predictor of 50 weights, learned beside the policy,
+guesses what each ray will see next; its surprise is a sense the moods read first and, above the level it is
+used to, a small pay. The teacher breeds eight settings toward runs the creature comes through half the
+time. On the page the folded controls set the ground, gravity, the wind and the light, each resting where
+the world always was, let the world change by itself (off until switched on), and choose whether a tap
+drops food or a box; ice, wind, sticky, bouncy and soft ground and night are drawn, the brain thickens the
+connections changed since the world last changed, and its surprise is a small trace. A learner kept at
+stage 3 is taken up and grown. Honest results: practising in a changing world costs nothing measurable in
+distance; its eye is on things 0.16 of the time against chance 0.06, which the pay for surprise makes (0.09
+unpaid); it looks at a box that has just landed ahead about a quarter of the time against a tenth before;
+it hears food land behind it and still never turns for it; it does not look up at night or at a wind. The
+connections that change during a run did not earn the narrow claim: pooled over nine changes, the creature
+with them kept its pace while up (0.98 of the second five seconds over the first) and fell less (0.39 of
+changed runs) than the same pool without them (0.92, 0.50), but the plain network and a creature that never
+practised changes recovered as well. The teacher learned no faster and went no further than settings
+drawn evenly, on the same steps; for four legs settings drawn evenly did better (30.7 m against 21.9, one
+taught seed of four standing still). The numbers are in `walker/README.md`, "A world that changes while it
+lives".
+
 ### 5. The risky bet
 
 A brain of a fixed number of neurons that adds and cuts connections while it lives, each paid for in
