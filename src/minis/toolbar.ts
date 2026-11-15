@@ -44,6 +44,16 @@ const PATHS: Record<string, string> = {
     keys: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     // runs to start from: a list
     runs: '<path d="M8.5 6.5h11M8.5 12h11M8.5 17.5h11"/><circle cx="4.75" cy="6.5" r=".9" fill="currentColor"/><circle cx="4.75" cy="12" r=".9" fill="currentColor"/><circle cx="4.75" cy="17.5" r=".9" fill="currentColor"/>',
+    // a marble going, the air behind it: ride along with it
+    ride: '<circle cx="15" cy="12" r="4.5"/><path d="M3.5 9h5M2.5 12h6M3.5 15h5"/>',
+    // a pin standing where a view was kept
+    spots: '<path d="M12 20.5s-6-5.6-6-10.5a6 6 0 0 1 12 0c0 4.9-6 10.5-6 10.5z"/><circle cx="12" cy="10" r="2.2"/>',
+    // a way that winds, an arrow at its end: a tour along the run
+    tour: '<path d="M4 19c4 0 3.5-7 8-7s4-6 7.5-6"/><path d="m16.5 3.5 3 2.5-3 2.5"/>',
+    // a flag on its pole: a race
+    race: '<path d="M6 21V3.5"/><path d="M6 4.5h11.5l-2.5 4 2.5 4H6"/>',
+    // an arrow up out of an open box: share the run
+    share: '<path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M5.5 11.5v7a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-7"/>',
     close: '<path d="m7 7 10 10M17 7 7 17"/>',
     done: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
 };

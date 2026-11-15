@@ -1,10 +1,14 @@
 // Runs made to start from, in the run's own text form (run.ts), each tested to carry every marble
 // from its hopper to its tray and to have nothing marked (table.test.ts, checks.test.ts).
 
-/** A run to load: what it is called, and the run as text. */
+import type { Orbit } from "./orbit";
+
+/** A run to load: what it is called, the run as text, and, for those offered in the runs to start from, the camera spot it opens with. Those not listed are kept for the tests that measure them. */
 export interface Made {
     name: string;
     text: string;
+    spot?: Orbit;
+    listed?: boolean;
 }
 
 /** The made runs, shortest first. */
