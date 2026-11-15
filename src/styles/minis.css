@@ -385,8 +385,9 @@
 }
 
 /* The tools: one raised surface of icon buttons in groups parted by thin rules, as mdQuire's bar is
-   (quire.css). Where one row does not fit, the groups stack, one to a row, lined up at the left and
-   with no rules (toolbar.ts measures which: `stacked`); a row that wrapped would start with a rule. */
+   (quire.css). Where one row does not fit, the groups go two to a row in two columns, and where that
+   does not fit either they stack, one to a row; lined up at the left and with no rules both ways
+   (toolbar.ts measures which: `paired`, `stacked`). A row that wrapped would start with a rule. */
 .marbles-bar {
     display: flex;
     align-items: center;
@@ -402,10 +403,16 @@
     max-width: none;
 }
 
+.marbles-bar.paired,
 .marbles-bar.stacked {
     display: grid;
     justify-items: start;
     gap: 0.25rem;
+}
+
+.marbles-bar.paired {
+    grid-template-columns: repeat(2, max-content);
+    column-gap: 0.7rem;
 }
 
 .marbles-group {
@@ -419,6 +426,7 @@
     border-left: 0.0625rem solid var(--rule);
 }
 
+.marbles-bar.paired .marbles-group + .marbles-group,
 .marbles-bar.stacked .marbles-group + .marbles-group {
     margin-left: 0;
     padding-left: 0;

@@ -86,11 +86,13 @@ export function swap(button: HTMLButtonElement, name: string, label: string, key
 }
 
 /**
- * Keeps a bar of groups in one row while they fit there, and otherwise stacks them, one group to a row,
- * by the class `stacked`: a row that wraps would start with the rule that parts it from the group
- * before, left hanging. Measured, not guessed from the page's width, since the room the panel has
- * depends on the page round it. The width one row needs is read with the bar laid out in one row for
- * a moment (the class `measuring`), within the same frame, so nothing is seen of it.
+ * Keeps a bar of groups in one row while they fit there; otherwise two groups to a row, in two columns
+ * (the class `paired`), while that fits; and otherwise stacks them, one group to a row (the class
+ * `stacked`). A row that merely wrapped would start with the rule that parts it from the group before,
+ * left hanging, and one group to a row in a wide panel is a tall block with nothing beside it.
+ * Measured, not guessed from the page's width, since the room the panel has depends on the page round
+ * it. The width each way needs is read with the bar laid out that way for a moment (the class
+ * `measuring`), within the same frame, so nothing is seen of it.
  */
 export function stacking(bar: HTMLElement): void {
     const fit = () => {
@@ -100,10 +102,14 @@ export function stacking(bar: HTMLElement): void {
         const room = parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
         if (room <= 0) return;
         bar.classList.add("measuring");
-        bar.classList.remove("stacked");
-        const needed = bar.getBoundingClientRect().width;
-        bar.classList.remove("measuring");
-        bar.classList.toggle("stacked", needed > room + 0.5);
+        bar.classList.remove("stacked", "paired");
+        const row = bar.getBoundingClientRect().width;
+        bar.classList.add("paired");
+        const pairs = bar.getBoundingClientRect().width;
+        bar.classList.remove("measuring", "paired");
+        const fits = (needed: number) => needed <= room + 0.5;
+        bar.classList.toggle("paired", !fits(row) && fits(pairs));
+        bar.classList.toggle("stacked", !fits(row) && !fits(pairs));
     };
     if (bar.parentElement) new ResizeObserver(fit).observe(bar.parentElement);
     fit();
