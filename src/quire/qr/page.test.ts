@@ -1,10 +1,13 @@
-// What the QR code page is held to: its menu, its words for a code's size and for text too long; and in
-// Chromium, the code changing as a link is typed with its square never changing size, read back and said
-// so; the keys picking a kind, a Wi-Fi login made from its form; text too long said plainly with the last
-// code kept; the right-click menu's lines; Copy giving the clipboard a PNG and Save naming its files by
-// what the code holds; a picture in the middle raising the error correction and still reading back; and a
-// picture with codes in it read four ways (pasted, dropped, chosen, and Paste from the menu), each code
-// laid out by its kind. Nothing is fetched from anywhere.
+// What the QR code page is held to: its menu, in lowercase as every label of the page is; its words for a
+// code's size and for text too long; and in Chromium, the column built only from the small tools' kit
+// (core/bench.ts), its headings in order and every heading, label, choice and word to press in lowercase,
+// with no boxed button and what acts on a code faint until there is one; the code changing as a link is
+// typed with its square never changing size, read back and said so in the line under it; the keys picking
+// a kind, a Wi-Fi login made from its form growing open; text too long said plainly with the last code
+// kept; the right-click menu's lines; copy giving the clipboard a PNG and save naming its files by what
+// the code holds; a picture in the middle raising the error correction and still reading back; and a
+// picture with codes in it read four ways (pasted, dropped, chosen, and paste from the menu), each code
+// laid out by its kind as a group of the column. Nothing is fetched from anywhere.
 
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -12,22 +15,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { corePage, quire } from "../../../scripts/core-page";
 import { encode } from "./encode";
-import { factsOf, KINDS, qrMenuLines, tooLongWords } from "./page";
+import { factsOf, KINDS, LEVEL_WORDS, qrMenuLines, QR_WORDS, tooLongWords } from "./page";
 
-test("the right-click menu holds Copy, Save as SVG, Save as PNG and Paste a picture to read, and only the last with no code", () => {
+test("the right-click menu holds copy, save as svg, save as png and paste a picture to read, in lowercase, and only the last with no code", () => {
     const run = { copy() {}, svg() {}, png() {}, paste() {} };
-    expect(qrMenuLines({ code: true }, run).map((each) => each.label || "-")).toEqual(["Copy", "Save as SVG", "Save as PNG", "-", "Paste a picture to read"]);
-    expect(qrMenuLines({ code: false }, run).map((each) => each.label)).toEqual(["Paste a picture to read"]);
+    expect(qrMenuLines({ code: true }, run).map((each) => each.label || "-")).toEqual(["copy", "save as svg", "save as png", "-", "paste a picture to read"]);
+    expect(qrMenuLines({ code: false }, run).map((each) => each.label)).toEqual(["paste a picture to read"]);
 });
 
-test("the words for a code's size and for text too long are plain", () => {
+test("the words for a code's size and for text too long are plain, and every label of the column is lowercase", () => {
     expect(factsOf(encode("hello", { level: "M" }))).toBe("Version 1, 21 by 21 modules, error correction highest.");
     expect(tooLongWords("a".repeat(3000), "M")).toBe("Too long for a QR code: about 3,000 bytes, and one holds at most 2,331 at this error correction. Shorten it, or lower the error correction.");
     expect(KINDS.map((each) => each.key)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    for (const label of [...Object.values(QR_WORDS), ...KINDS.map((each) => each.label), ...LEVEL_WORDS.map((each) => each.label)]) expect(label).toBe(label.toLowerCase());
 });
 
-test("in Chromium, the page makes codes as they are typed, styles them, saves them, and reads pictures four ways, fetching nothing", async () => {
-    const css = await Bun.file(`${import.meta.dir}/../../styles/quire-qr.css`).text();
+test("in Chromium, the page is built from the kit, makes codes as they are typed, styles them, saves them, and reads pictures four ways, fetching nothing", async () => {
+    const css = (await Promise.all(["quire-bench.css", "quire-qr.css"].map((name) => Bun.file(`${import.meta.dir}/../../styles/${name}`).text()))).join("\n");
     const folder = await mkdtemp(join(tmpdir(), "quire-qr-page-"));
     const page = await corePage(
         `
@@ -71,20 +75,30 @@ test("in Chromium, the page makes codes as they are typed, styles them, saves th
         }
         throw new Error(`waited for ${expression}`);
     };
-    const centerOf = (selector: string) => tab.run<{ x: number; y: number }>(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); e.scrollIntoView({ block: "center", behavior: "instant" }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
-    const press = async (selector: string) => {
-        const at = await centerOf(selector);
+    const centerOf = (expression: string) => tab.run<{ x: number; y: number }>(`(() => { const e = ${expression}; e.scrollIntoView({ block: "center", behavior: "instant" }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+    const pressAt = async (expression: string) => {
+        const at = await centerOf(expression);
         await tab.click(at.x, at.y);
     };
-    const buttonByText = (text: string, within = ".quire-qr") => `[...document.querySelectorAll('${within} button')].find((each) => each.textContent.trim() === ${JSON.stringify(text)} && !each.closest('[inert]'))`;
-    const pressText = async (text: string, within?: string) => {
-        const at = await tab.run<{ x: number; y: number }>(`(() => { const e = ${buttonByText(text, within)}; e.scrollIntoView({ block: "center", behavior: "instant" }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
-        await tab.click(at.x, at.y);
-    };
+    const press = (selector: string) => pressAt(`document.querySelector(${JSON.stringify(selector)})`);
+    /** A word to press, or a choice's label, by what it says, out of what is out of reach. */
+    const pressText = (text: string, within = ".quire-qr") => pressAt(`[...document.querySelectorAll('${within} button, ${within} label')].find((each) => each.textContent.trim() === ${JSON.stringify(text)} && !each.closest('[inert]'))`);
+    const verdict = "document.querySelector('.quire-qr-verdict')?.textContent === 'It reads back as written.'";
     try {
         await tab.serve(["http://", "https://"], async () => undefined);
         await tab.wait(200);
         expect(await tab.run<string>("document.querySelector('.quire-qr-code .quire-qr-empty').textContent")).toBe("Type a link or some text, and its code appears here.");
+        // the column is the kit's: its headings in order, every label in lowercase, every choice a round dot or a small picture, every
+        // field a line to type on, every button a word to press or a color, and what acts on a code there and faint until there is one
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side .quire-bench-heading')].filter((each) => !each.closest('.quire-qr-read')).map((each) => each.textContent)")).toEqual(["make or read", "what it holds", "shape", "corners", "color", "ground", "margin", "picture", "error correction", "png size"]);
+        const words = await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-side :is(.quire-bench-heading, .quire-bench-label, .quire-bench-choices label, .quire-bench-press)')].map((each) => each.textContent.trim()).filter(Boolean)");
+        expect(words.length).toBeGreaterThan(60);
+        expect(words.filter((each) => each !== each.toLowerCase())).toEqual([]);
+        expect(await tab.run("[...document.querySelectorAll('.quire-qr button')].filter((each) => !each.matches('.quire-bench-press, .quire-bench-swatch')).length")).toBe(0);
+        expect(await tab.run("[...document.querySelectorAll('.quire-qr input[type=radio]')].filter((each) => !each.closest('.quire-bench-choices')).length")).toBe(0);
+        expect(await tab.run("[...document.querySelectorAll('.quire-qr :is(textarea, input:not([type=radio], [type=range], [type=file]))')].filter((each) => !each.matches('.quire-bench-typed')).length")).toBe(0);
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-pictured')].map((each) => each.getAttribute('aria-label'))")).toEqual(["shape", "corners", "direction", "flag"]);
+        expect(await tab.run("[document.querySelector('.quire-qr-out').inert, [...document.querySelectorAll('.quire-qr-out .quire-bench-press')].map((each) => [each.textContent, each.classList.contains('quiet')])]")).toEqual([true, [["copy", false], ["save png", true], ["save svg", true]]]);
         // typing a link: the code follows each letter, its square the same size throughout
         await press(".quire-qr-form[data-kind=text] textarea");
         const boxSize = () => tab.run<string>("(() => { const b = document.querySelector('.quire-qr-box').getBoundingClientRect(); return b.width + 'x' + b.height; })()");
@@ -95,64 +109,83 @@ test("in Chromium, the page makes codes as they are typed, styles them, saves th
         }
         expect(sizes.size).toBe(1);
         expect(await tab.run("window.qr.shown().payload")).toBe("https://example.com");
-        await until("document.querySelector('.quire-qr-verdict').textContent === 'It reads back as written.'");
-        expect(await tab.run<string>("document.querySelector('.quire-qr-said').textContent")).toMatch(/^Version 2, 25 by 25 modules, error correction (high|highest)\./);
+        await until(verdict);
+        expect(await tab.run<string>("document.querySelector('.quire-bench-said').textContent")).toMatch(/^Version 2, 25 by 25 modules, error correction (high|highest)\. It reads back as written\.$/);
+        expect(await tab.run("document.querySelector('.quire-qr-out').inert")).toBe(false);
         // Ctrl+C copies the code as a PNG, at the size chosen
         await tab.run("document.activeElement.blur()");
         await tab.press("c", { ctrl: true });
         await until("window.copied.length === 1");
         expect(await tab.run("window.copied[0]")).toEqual({ width: 1024, height: 1024 });
-        // Save PNG and Save SVG name their files by what the code holds
-        await pressText("Save PNG");
-        await pressText("Save SVG");
+        // save png and save svg name their files by what the code holds
+        await pressText("save png");
+        await pressText("save svg");
         await until("window.downloads['qr-link-example-com.png'] > 100 && window.downloads['qr-link-example-com.svg'] > 100");
         // the right-click menu on the code
-        const boxAt = await centerOf(".quire-qr-box");
+        const boxAt = await centerOf("document.querySelector('.quire-qr-box')");
         await tab.run(`document.querySelector('.quire-qr-box').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: ${boxAt.x}, clientY: ${boxAt.y} }))`);
         await until("document.querySelector('.quire-menu:popover-open')");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].map((each) => each.querySelector('.quire-menu-label')?.textContent ?? each.textContent)")).toEqual(expect.arrayContaining([expect.stringContaining("Copy"), expect.stringContaining("Save as SVG"), expect.stringContaining("Save as PNG"), expect.stringContaining("Paste a picture to read")]));
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].map((each) => each.querySelector('.quire-menu-label')?.textContent ?? each.textContent)")).toEqual(expect.arrayContaining([expect.stringContaining("copy"), expect.stringContaining("save as svg"), expect.stringContaining("save as png"), expect.stringContaining("paste a picture to read")]));
         await tab.press("Escape");
-        // each shape, a flag and a dark ground: each still reads back
+        // each shape, a flag and a dark ground: each still reads back, the small picture chosen
         for (const tip of ["Dots", "Joined", "Bars"]) {
-            await press(`.quire-qr-choice[title="${tip}"]`);
-            await until("document.querySelector('.quire-qr-verdict').textContent === 'It reads back as written.'");
+            await press(`.quire-bench-pictured label[title="${tip}"]`);
+            await until(`document.querySelector('.quire-bench-pictured label[title="${tip}"] input').checked`);
+            await until(verdict);
         }
-        await pressText("Flag");
-        await press('.quire-qr-choice[title="The trans flag"]');
-        await until("document.querySelector('.quire-qr-said').textContent.includes('drawn deeper')");
-        await until("document.querySelector('.quire-qr-verdict').textContent === 'It reads back as written.'");
+        await pressText("flag");
+        await until("document.querySelector('.quire-qr-fold:has(.quire-bench-pictured[aria-label=flag])').classList.contains('open')");
+        await press('.quire-bench-pictured label[title="The trans flag"]');
+        await until("document.querySelector('.quire-bench-said').textContent.includes('drawn deeper')");
+        await until(verdict);
         // a picture in the middle: the error correction raised as far as it needs, and it still reads back
         const scene = await tab.run<number[]>("(async () => { const c = new OffscreenCanvas(300, 200); const g = c.getContext('2d'); g.fillStyle = '#e07a5f'; g.fillRect(0, 0, 300, 200); g.fillStyle = '#3d405b'; g.beginPath(); g.arc(150, 100, 70, 0, 7); g.fill(); return [...new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer())]; })()");
         await Bun.write(`${folder}/picture.png`, new Uint8Array(scene));
         await tab.files([`${folder}/picture.png`]);
-        await pressText("In the middle");
+        await pressText("in the middle");
         await until("document.querySelector('.quire-qr-middle.shown')");
-        await until("document.querySelector('.quire-qr-verdict').textContent === 'It reads back as written.'");
-        // the keys pick a kind: 2 is Wi-Fi, and its form makes a login
+        await until(verdict);
+        expect(await tab.run<string>("[...document.querySelectorAll('.quire-bench-press')].find((each) => each.textContent.includes('another picture'))?.textContent")).toBe("choose another picture");
+        // the keys pick a kind: 2 is Wi-Fi, and its form grows open and makes a login
         await tab.run("document.activeElement.blur()");
         await tab.press("2");
-        await until("document.querySelector('.quire-qr-form[data-kind=wifi]').classList.contains('shown')");
+        await until("document.querySelector('.quire-qr-form[data-kind=wifi]').classList.contains('open') && !document.querySelector('.quire-qr-form[data-kind=text]').classList.contains('open')");
+        // the form has grown to its height before it is pressed
+        await tab.wait(450);
         await press(".quire-qr-form[data-kind=wifi] input");
         await tab.type("Home; net");
         await tab.press("Tab");
         await tab.type("pa:ss");
         expect(await tab.run("window.qr.shown().payload")).toBe("WIFI:T:WPA;S:Home\\; net;P:pa\\:ss;;");
+        expect(await tab.run("[...document.querySelectorAll('.quire-qr-form[data-kind=wifi] .quire-bench-label')].map((each) => each.textContent)")).toEqual(["network name", "password", "security", "the network's name is"]);
+        // a key still picks a kind with a round dot holding the keyboard
+        await tab.run("document.querySelector('input[value=nopass]').focus()");
+        await tab.press("1");
+        await until("document.querySelector('.quire-qr-form[data-kind=text]').classList.contains('open')");
         // too long: said plainly, the last code kept
         await tab.run("document.activeElement.blur()");
-        await tab.press("1");
         await tab.run("(() => { const t = document.querySelector('.quire-qr-form[data-kind=text] textarea'); t.value = 'x'.repeat(3000); t.dispatchEvent(new Event('input')); })()");
-        expect(await tab.run<string>("document.querySelector('.quire-qr-said').textContent")).toStartWith("Too long for a QR code");
+        expect(await tab.run<string>("document.querySelector('.quire-bench-said').textContent")).toStartWith("Too long for a QR code");
         expect(await tab.run("document.querySelector('.quire-qr').classList.contains('stale')")).toBe(true);
-        // reading: a picture pasted, with two codes in it
+        // reading: a picture pasted, with two codes in it, each laid out as a group of the column
         await tab.run("window.picture(['https://example.com/one', 'WIFI:T:WPA;S:Cafe;P:latte;;'], 'two.png').then((file) => { const data = new DataTransfer(); data.items.add(file); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })");
         await until("window.qr.found().length === 2");
-        expect(await tab.run("document.querySelector('.quire-qr').classList.contains('reading')")).toBe(true);
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-qr-card-title')].map((each) => each.textContent)")).toEqual(["1. Link", "2. Wi-Fi"]);
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-qr-card')[1].querySelectorAll('.quire-qr-line')].map((each) => each.querySelector('dt').textContent + ': ' + each.querySelector('dd').textContent)")).toEqual(["Network: Cafe", "Password: latte", "Security: WPA"]);
+        expect(await tab.run("[document.querySelector('.quire-qr').classList.contains('reading'), document.querySelector('input[value=read]').checked]")).toEqual([true, true]);
+        await until("document.querySelector('.quire-bench-said').textContent === 'Found 2 codes.'");
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-qr-card > .quire-bench-heading')].map((each) => each.textContent)")).toEqual(["1. link", "2. wi-fi"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-qr-card')[1].querySelectorAll('.quire-qr-line')].map((each) => each.querySelector('.quire-bench-label').textContent + ': ' + each.querySelector('.quire-qr-value').textContent)")).toEqual(["network: Cafe", "password: latte", "security: WPA"]);
         // a link is shown and copied, never opened
-        expect(await tab.run("document.querySelectorAll('.quire-qr-results a').length")).toBe(0);
-        await pressText("Copy", ".quire-qr-card");
+        expect(await tab.run("document.querySelectorAll('.quire-qr-card a').length")).toBe(0);
+        await pressText("copy", ".quire-qr-card");
         await until("window.copied.some((each) => each.text === 'https://example.com/one')");
+        expect(await tab.run<string>("document.querySelector('.quire-bench-said').textContent")).toBe("Copied the address.");
+        // m and r go between the two, each with its own line
+        await tab.run("document.activeElement.blur()");
+        await tab.press("m");
+        await until("!document.querySelector('.quire-qr').classList.contains('reading')");
+        expect(await tab.run<string>("document.querySelector('.quire-bench-said').textContent")).toStartWith("Too long for a QR code");
+        await tab.press("r");
+        await until("document.querySelector('.quire-bench-said').textContent === 'Copied the address.'");
         // dropped
         await tab.run("window.picture(['dropped here'], 'drop.png').then((file) => { const data = new DataTransfer(); data.items.add(file); document.querySelector('.quire-qr-box').dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true })); })");
         await until("window.qr.found()[0]?.text === 'dropped here'");
@@ -162,15 +195,16 @@ test("in Chromium, the page makes codes as they are typed, styles them, saves th
         await tab.files([`${folder}/chosen.png`]);
         await tab.press("o", { ctrl: true });
         await until("window.qr.found()[0]?.text === 'chosen file'");
-        // Paste from the right-click menu
+        // paste from the right-click menu
         await tab.run("window.picture(['from the menu'], 'menu.png').then((file) => (window.clipboardPicture = file))");
         await tab.run(`document.querySelector('.quire-qr-box').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: ${boxAt.x}, clientY: ${boxAt.y} }))`);
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Paste a picture')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('paste a picture')).click()");
         await until("window.qr.found()[0]?.text === 'from the menu'");
         // a picture with no code in it
         await tab.run("(async () => { const c = new OffscreenCanvas(200, 200); c.getContext('2d').fillRect(0, 0, 100, 100); const file = new File([await c.convertToBlob()], 'none.png', { type: 'image/png' }); window.qr.read(file); })()");
-        await until("document.querySelector('.quire-qr-read-said').textContent === 'No QR code found in this picture.'");
+        await until("document.querySelector('.quire-bench-said').textContent === 'No QR code found in this picture.'");
+        expect(await tab.run("document.querySelectorAll('.quire-qr-card').length")).toBe(0);
         // nothing was fetched from anywhere
         expect(tab.requests.filter((each) => /^https?:/.test(each.url))).toEqual([]);
         expect(tab.errors).toEqual([]);
