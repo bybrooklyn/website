@@ -634,7 +634,7 @@ used("a version is kept, listed with what changed, shown as it read, and restore
     expect(await tab.run("document.querySelector('.quire-history-text').textContent")).toBe("First draft.");
     expect(await tab.run("document.querySelector('.quire-history-text').isContentEditable")).toBe(false);
     // the panel is Version history, below the bar, and Escape steps back one level: to the list, then out
-    expect(await tab.run("document.querySelector('.quire-history-head .quire-outline-title').textContent")).toBe("Version history");
+    expect(await tab.run("document.querySelector('.quire-history-head .quire-outline-title').textContent")).toBe("version history");
     expect(await tab.run("document.querySelector('.quire-history').getBoundingClientRect().top >= document.querySelector('.quire-bar').getBoundingClientRect().bottom")).toBe(true);
     await tab.press("Escape");
     await tab.wait(400);
@@ -948,13 +948,13 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     // it comes below the bar and leaves the keyboard in the text, so that a key typed as it comes chooses nothing
     expect(await tab.run("document.querySelector('.quire-conflict').getBoundingClientRect().top >= document.querySelector('.quire-bar').getBoundingClientRect().bottom")).toBe(true);
     expect(await tab.run("document.activeElement === q.editor.surface.element")).toBe(true);
-    expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-conflict-choices button')].map((b) => b.textContent)")).toEqual(["See both", "Take theirs", "Keep mine"]);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-conflict-choices button')].map((b) => b.textContent)")).toEqual(["see both", "take theirs", "keep mine"]);
     // see both, side by side
-    await press(".quire-conflict button", "See both");
+    await press(".quire-conflict button", "see both");
     await tab.wait(400);
     expect(await tab.run("[...document.querySelectorAll('.quire-conflict-side pre')].map((pre) => pre.textContent.trim())")).toEqual(["Original mine", "Theirs"]);
     // take theirs: theirs is shown, and mine is in the version history
-    await press(".quire-conflict button", "Take theirs");
+    await press(".quire-conflict button", "take theirs");
     await tab.wait(200);
     expect(await md()).toBe("Theirs\n");
     expect(await tab.run("q.status()")).toBe("Saved");
@@ -966,7 +966,7 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     await tab.wait(1400);
     expect(await tab.run("q.status()")).toBe("Changed elsewhere");
     await tab.wait(400);
-    await press(".quire-conflict button", "Keep mine");
+    await press(".quire-conflict button", "keep mine");
     await tab.wait(300);
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs and mine\n");
     expect(await tab.run("q.status()")).toBe("Saved");
@@ -1007,10 +1007,10 @@ used("words that could not be saved keep the writer in the document: she is told
     await tab.wait(700);
     expect(await tab.run<string>("document.querySelector('dialog.quire-dialog[open]')?.textContent ?? ''")).toContain("have not been saved: the disk is full");
     // every way out is a button in the one row, leaving without saving at the far left and trying again, filled, at the right
-    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Leave without saving", "Download a copy", "Stay", "Try again"]);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["leave without saving", "download a copy", "stay", "try again"]);
     expect(await tab.run<number>("document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-body button').length")).toBe(0);
     // staying keeps the words and the document
-    await press("dialog.quire-dialog[open] button", "Stay");
+    await press("dialog.quire-dialog[open] button", "stay");
     await tab.wait(400);
     expect(await tab.run("window.went")).toBe(false);
     expect(await md()).toBe("Words more\n");
@@ -1019,7 +1019,7 @@ used("words that could not be saved keep the writer in the document: she is told
     await tab.run(going);
     await tab.wait(700);
     await tab.run("q.store.save = window.realSave");
-    await press("dialog.quire-dialog[open] button", "Try again");
+    await press("dialog.quire-dialog[open] button", "try again");
     await tab.wait(600);
     expect(await tab.run("window.went")).toBe(true);
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Words more\n");
@@ -1031,7 +1031,7 @@ used("words that could not be saved keep the writer in the document: she is told
     await tab.wait(1400);
     await tab.run("(window.went = undefined, q.editor.leave().then((left) => (window.went = left)), true)");
     await tab.wait(700);
-    await press("dialog.quire-dialog[open] button", "Leave without saving");
+    await press("dialog.quire-dialog[open] button", "leave without saving");
     await tab.wait(400);
     expect(await tab.run("window.went")).toBe(true);
     expect(await tab.run(`q.kept(${JSON.stringify(other)})`)).toBe("The other one\n");

@@ -198,11 +198,11 @@ export function repositoryForm(form: RepositoryForm): { element: HTMLElement; se
         return input;
     };
     const kept = form.settings;
-    const repository = field("Repository", kept ? `${kept.owner}/${kept.repo}` : "", "owner/name");
-    const branch = field("Branch", kept?.branch ?? "main", "main");
-    const folder = field("Folder of documents", kept?.folder ?? "", "src/content/blog");
-    const pictures = field("Folder for pictures", kept?.pictures ?? "", "src/assets/blog");
-    const token = field("Access token", kept?.token ?? "", "github_pat_…", "password");
+    const repository = field("repository", kept ? `${kept.owner}/${kept.repo}` : "", "owner/name");
+    const branch = field("branch", kept?.branch ?? "main", "main");
+    const folder = field("folder of documents", kept?.folder ?? "", "src/content/blog");
+    const pictures = field("folder for pictures", kept?.pictures ?? "", "src/assets/blog");
+    const token = field("access token", kept?.token ?? "", "github_pat_…", "password");
     const about = make("p", "quire-repository-about");
     about.append(
         "Use a fine-grained personal access token that can read and write the contents of this one repository and nothing else (",

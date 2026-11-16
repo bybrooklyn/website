@@ -19,10 +19,10 @@ export function countRows(whole: string, part?: string): [string, number, number
     const solid = (text: string) => [...text.replace(/\s/g, "")].length;
     const paragraphs = (text: string) => text.split(/\n\s*\n/).filter((each) => each.trim() !== "").length;
     return [
-        ["Words", words(whole), part === undefined ? undefined : words(part)],
-        ["Characters", characters(whole), part === undefined ? undefined : characters(part)],
-        ["Characters, no spaces", solid(whole), part === undefined ? undefined : solid(part)],
-        ["Paragraphs", paragraphs(whole), part === undefined ? undefined : paragraphs(part)],
+        ["words", words(whole), part === undefined ? undefined : words(part)],
+        ["characters", characters(whole), part === undefined ? undefined : characters(part)],
+        ["characters, no spaces", solid(whole), part === undefined ? undefined : solid(part)],
+        ["paragraphs", paragraphs(whole), part === undefined ? undefined : paragraphs(part)],
     ];
 }
 

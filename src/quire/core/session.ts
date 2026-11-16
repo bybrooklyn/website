@@ -230,11 +230,11 @@ export function createSession(body: Body, options: SessionOptions) {
                 className: "quire-unsaved-dialog",
                 body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`)],
                 others: [
-                    { label: "Leave without saving", far: true, press: (dialog) => ((chosen = "discard"), void dialog.close()) },
-                    { label: "Download a copy", press: () => body.download() },
+                    { label: "leave without saving", far: true, press: (dialog) => ((chosen = "discard"), void dialog.close()) },
+                    { label: "download a copy", press: () => body.download() },
                 ],
-                action: { label: "Try again", press: (_, open) => ((chosen = "retry"), void open.close()) },
-                dismiss: "Stay",
+                action: { label: "try again", press: (_, open) => ((chosen = "retry"), void open.close()) },
+                dismiss: "stay",
                 onClose: () => answer(chosen),
             });
         });

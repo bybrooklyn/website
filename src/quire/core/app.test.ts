@@ -315,17 +315,17 @@ used("a repository is connected once, its documents listed, opened and saved as 
         await tab.run(`(() => { const row = [...document.querySelectorAll('.quire-repository-row')].find((each) => each.textContent.startsWith(${JSON.stringify(label)})); const input = row.querySelector('input'); input.focus(); input.select(); })()`);
         await tab.type(value);
     };
-    await fill("Repository", "someone/site");
-    await fill("Folder of documents", "posts");
-    await fill("Access token", "wrong-token");
+    await fill("repository", "someone/site");
+    await fill("folder of documents", "posts");
+    await fill("access token", "wrong-token");
     // a dialog, whose buttons are in every dialog's order and which says nothing of a Forget it does not have yet
     expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title').textContent")).toBe("Write in a GitHub repository");
-    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Cancel", "Connect"]);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["cancel", "connect"]);
     expect(await tab.run("document.querySelector('.quire-repository-about').textContent.includes('Forget')")).toBe(false);
-    await press("dialog.quire-dialog[open] .quire-dialog-action", "Connect");
+    await press("dialog.quire-dialog[open] .quire-dialog-action", "connect");
     await tab.wait(300);
     expect(await tab.run("document.querySelector('.quire-repository-said').textContent")).toContain("GitHub refused the token");
-    await fill("Access token", "pretend-token");
+    await fill("access token", "pretend-token");
     // Enter in a field connects, as the filled button does
     await tab.press("Enter");
     await tab.wait(900);
@@ -346,8 +346,8 @@ used("a repository is connected once, its documents listed, opened and saved as 
     await documents();
     await press(".quire-documents-menu button[data-place='github-settings']");
     await tab.wait(600);
-    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Forget", "Cancel", "Save and open"]);
-    await press("dialog.quire-dialog[open] button", "Forget");
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["forget", "cancel", "save and open"]);
+    await press("dialog.quire-dialog[open] button", "forget");
     await tab.wait(700);
     expect(await tab.run("localStorage.getItem('quire-github')")).toBeNull();
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).not.toBe("hello.md");
