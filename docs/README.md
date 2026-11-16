@@ -11,6 +11,7 @@ open, how to run and test it, and its known weak spots.
 - [mdQuire-ux-audit.md](mdQuire-ux-audit.md): an audit of how mdQuire looks and behaves, finding by finding, with the changes that would most improve it.
 - [mdQuire-against-docs.md](mdQuire-against-docs.md): what Google Docs' menus have that mdQuire does not, each marked small, big or not fitting.
 - [AUDIT.md](AUDIT.md): the audit of 13 November 2026: what was read, found, fixed and left.
+- [audit-16-november.md](audit-16-november.md): the audit of 16 November 2026: how much code there is and what it is for, what testers found in the tools by using them, what was fixed, and what was decided for the design.
 - [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.
 - [imgQuire.md](imgQuire.md): an image editor to sit beside mdQuire; nothing built.
 - [quire-core.md](quire-core.md): the shared core every Quire is built on, in `src/quire/core/`: the interface a kind of document gives it, where things are, and what is still tied to Markdown.
