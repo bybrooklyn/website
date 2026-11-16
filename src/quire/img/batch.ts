@@ -183,6 +183,16 @@ export function changesSaid(picture: BatchPicture, fallback: Settings): string {
         .join(", ");
 }
 
+/** A batch's name as it arrives: "Pictures, 15 Nov 2026 14:30". */
+export function batchName(now: Date): string {
+    const day = now.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const time = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    return `Pictures, ${day} ${time}`;
+}
+
+/** The name a picture's small copy is kept under beside it: `IMG_1.small.webp` for `pictures/IMG_1.jpg`. */
+export const smallName = (address: string, type: string) => `${address.replace(/^pictures\//, "").replace(/\.[^.]*$/, "")}.small${type === "image/webp" ? ".webp" : ".png"}`;
+
 /** How many pictures, in words: "1 picture", "24 pictures". */
 export const picturesSaid = (count: number) => `${count} ${count === 1 ? "picture" : "pictures"}`;
 

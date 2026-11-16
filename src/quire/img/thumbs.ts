@@ -19,12 +19,18 @@ export const SMALL_SIDE = 192;
 /** A picture's small copy: its longer side `SMALL_SIDE`, as a WebP (a PNG where the browser writes no WebP). */
 export async function smallOf(file: Blob): Promise<Blob> {
     const bitmap = await createImageBitmap(await displayable(file));
+    const small = await smallFrom(bitmap);
+    bitmap.close();
+    return small;
+}
+
+/** A small copy made from a picture already decoded, which is left open for the one who gave it. */
+export async function smallFrom(bitmap: ImageBitmap): Promise<Blob> {
     const scale = Math.min(1, SMALL_SIDE / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = new OffscreenCanvas(width, height);
     canvas.getContext("2d")!.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
     const webp = await canvas.convertToBlob({ type: "image/webp", quality: 0.82 });
     return webp.type === "image/webp" ? webp : canvas.convertToBlob({ type: "image/png" });
 }

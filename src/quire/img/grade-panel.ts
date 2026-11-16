@@ -10,7 +10,7 @@
 //   panel.open(button); panel.fill(); panel.counts(counts);
 
 import { control, icon, make } from "../core/ui";
-import { sidePanel } from "./panels";
+import { giveRow, sidePanel, type GiveHooks } from "./panels";
 import { SLIDERS, type Grade } from "./grade";
 import { WAVE, type Counts } from "./measure";
 
@@ -34,6 +34,8 @@ export interface GradeHooks {
     hold(on: boolean): void;
     split(): boolean;
     setSplit(on: boolean): void;
+    /** In a batch, the whole picture's grade given to the others. */
+    give?: GiveHooks;
 }
 
 /** The six sliders the surface shows first; Tint is under More. */
@@ -296,6 +298,8 @@ export function gradePanel(hooks: GradeHooks) {
         hooks.set({ ...now, light: 0, contrast: 0, shadows: 0, highs: 0, warmth: 0, tint: 0, color: 0, curves: { all: [{ x: 0, y: 0 }, { x: 1, y: 1 }], red: [{ x: 0, y: 0 }, { x: 1, y: 1 }], green: [{ x: 0, y: 0 }, { x: 1, y: 1 }], blue: [{ x: 0, y: 0 }, { x: 1, y: 1 }] }, wheels: { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 } }, colors: [], lut: undefined });
     });
     fixes.append(auto, balance, reset);
+    // in a batch, the grade given to the other pictures, said in plain words before it is pressed
+    const giving = hooks.give && giveRow(hooks.give);
     // the six sliders
     const sliders = FIRST.map((spec) =>
         slider(spec, {
@@ -317,7 +321,7 @@ export function gradePanel(hooks: GradeHooks) {
     looks.append(make("summary", "", "Looks"), looksBody);
     const parts = make("div", "quire-img-grade-parts");
     const space = make("p", "quire-img-grade-space");
-    side.body.append(target, top, fixes, list, more, looks, parts, space);
+    side.body.append(target, top, fixes, ...(giving ? [giving.row] : []), list, more, looks, parts, space);
     // on a phone the sheet's head drags it shorter or taller, the picture above refitting as it goes
     const head = side.panel.querySelector<HTMLElement>(".quire-img-panel-head")!;
     let sheet: { y: number; height: number; id: number } | undefined;
@@ -344,6 +348,7 @@ export function gradePanel(hooks: GradeHooks) {
         balance.classList.toggle("pressed", hooks.balancing());
         split.classList.toggle("pressed", hooks.split());
         space.textContent = hooks.space();
+        giving?.fill();
     }
     return {
         ...side,
