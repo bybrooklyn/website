@@ -1,35 +1,28 @@
 ---
 // The QR code maker and reader as a page of its own: make a code for a link, a Wi-Fi login, a contact, an
 // email, a call or a message, styled as wished, and read the codes in a picture, all in this browser
-// (src/quire/qr/page.ts). It is unlisted, kept out of search and the sitemap, and linked from nowhere,
-// until she says otherwise.
-import Document from "../layouts/Document.astro";
-import Flags from "../components/Flags.astro";
-import { site } from "../data/site";
+// (src/quire/qr/page.ts). It opens the way a mini or a project does (layouts/Opened.astro), as the
+// cut-out does: the site's name and the trail at the top, a small label, its name, one line saying what
+// it does, then the thing itself in one box. Its way back is the list of tools (/tools/). It is unlisted,
+// kept out of search and the sitemap, and linked from nowhere but that list, until she says otherwise.
+import Opened from "../layouts/Opened.astro";
+import "../styles/blog.css";
 import "../styles/quire.css";
 import "../styles/quire-img.css";
+import "../styles/quire-bench.css";
 import "../styles/quire-qr.css";
 ---
 
-<Document title="QR codes" description="Makes and reads QR codes, in your browser." unlisted bodyClass="quire-app quire-qr-page" icon="/mdquire/icon.svg">
-    <header class="quire-top">
-        <div class="quire-top-in">
-            <div class="quire-top-line">
-                <nav class="quire-trail" aria-label="Where you are">
-                    <div class="site-id">
-                        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
-                        <Flags />
-                    </div>
-                    <span class="quire-stroke quire-word-stroke" aria-hidden="true">/</span>
-                    <a class="quire-word" href="/qr/">qr</a>
-                </nav>
-            </div>
-        </div>
-    </header>
-    <main id="main" tabindex="-1">
-        <div id="qr" class="quire-qr-host"></div>
-    </main>
-</Document>
+<Opened title="QR codes" description="Makes and reads QR codes, in your browser." unlisted icon="/mdquire/icon.svg" back={{ href: "/tools/", label: "tools" }}>
+    <article class="post">
+        <header class="post-header">
+            <p class="post-meta"><span>tool</span></p>
+            <h1>QR codes</h1>
+            <p class="lede">Makes and reads QR codes, in your browser.</p>
+        </header>
+        <div id="qr" class="quire-bench-host"></div>
+    </article>
+</Opened>
 
 <script>
     import "../scripts/qr";

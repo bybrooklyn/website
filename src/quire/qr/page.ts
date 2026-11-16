@@ -1,18 +1,22 @@
-// The QR code page (/qr/): a maker and a reader in one, everything in this browser. The code is the work:
-// it stands in its square at the left (at the top on a phone, staying in view), and the forms and the
-// looks have their own room beside it (under it on a phone), never over it. Make: choose what it holds
-// (a link or text, Wi-Fi, a contact, an email, a phone call, a text message), and the code changes as
-// it is typed, the smallest that holds it, its square the same size whatever its version; then its look
-// (shape, eyes, colors, ground, margin, a picture in the middle or as the code, error correction). Each
-// code drawn is read back here, and the page says plainly when a look would not be read. Out: Copy, Save
-// PNG at a chosen size, Save SVG, named in a few safe letters by what the code holds. Read: a picture
-// pasted, dropped, chosen, or pasted from the right-click menu (a Paste button on a phone), and what each
-// code in it holds, laid out by its kind, a link shown and copied but never opened. The code has its own
-// right-click menu (Shift leaves the browser's); keys for everything.
+// The QR code page (/qr/): a maker and a reader in one, everything in this browser. It is one box, as
+// every small tool's is (core/bench.ts): the code is the work, in its square on the left with one line
+// under it, staying in view while the column beside it scrolls past; the column is written the way the
+// site's own controls are (the Walker's column): a small heading for each group, round dots for a choice
+// of one, small pictures for the shapes, lines to type on, words in the accent to press, thin rules
+// between, everything in lowercase. Make: choose what it holds (a link or text, Wi-Fi, a contact, an
+// email, a phone call, a text message), and the code changes as it is typed, the smallest that holds it,
+// its square the same size whatever its version; then its look (shape, corners, color, ground, margin, a
+// picture in the middle or as the code, error correction). Each code drawn is read back here, and the
+// line says plainly when a look would not be read. At the column's foot: the PNG's size, then copy, save
+// png and save svg, named in a few safe letters by what the code holds. Read: a picture pasted, dropped,
+// chosen, or pasted from the right-click menu (a plain paste on a phone), and what each code in it holds,
+// laid out by its kind, a link shown and copied but never opened. The code has its own right-click menu
+// (Shift leaves the browser's); keys for everything.
 //
-//   createQrPage(host, { grounds: [{ name: "White", value: "#ffffff" }, ...] });
+//   createQrPage(host, { grounds: [{ name: "Violet", value: "#b48cff" }, ...] });
 
-import { flowMenu, make, moveIndex, RULE, type MenuItem } from "../core/ui";
+import { bench, count, dots, group, pictured, row, slide, swatches, typed, word, type Swatch } from "../core/bench";
+import { flowMenu, make, RULE, still, type MenuItem } from "../core/ui";
 import { normalHex, FLAGS, isHex } from "./colors";
 import { contactText, describe, emailText, EMPTY_CONTACT, fileName, messageText, phoneText, wifiText, type Contact, type Kind, type Wifi } from "./content";
 import type { Code } from "./encode";
@@ -20,11 +24,8 @@ import { readCodes, type Found } from "./read";
 import { codeFor, deepenedAny, drawSvg, eyePath, lookWord, modulesPath, MIDDLE_INSET, MIDDLE_SIZES, middleSquare, PLAIN, type EyeShape, type Look, type Paint, type Shape } from "./style";
 import { dataBytes, type Level } from "./tables";
 
-/** A color offered by name. */
-export interface Swatch {
-    name: string;
-    value: string;
-}
+/** A color offered by name (the kit's). */
+export type { Swatch };
 
 /** What the page is given: the grounds offered besides white and clear (the site's colors). */
 export interface PageOptions {
@@ -33,12 +34,12 @@ export interface PageOptions {
 
 /** The kinds, in the order they are offered, with their names and the key that picks each. */
 export const KINDS: { kind: Kind; label: string; key: string }[] = [
-    { kind: "text", label: "Link or text", key: "1" },
-    { kind: "wifi", label: "Wi-Fi", key: "2" },
-    { kind: "contact", label: "Contact", key: "3" },
-    { kind: "email", label: "Email", key: "4" },
-    { kind: "phone", label: "Phone", key: "5" },
-    { kind: "message", label: "Message", key: "6" },
+    { kind: "text", label: "link or text", key: "1" },
+    { kind: "wifi", label: "wi-fi", key: "2" },
+    { kind: "contact", label: "contact", key: "3" },
+    { kind: "email", label: "email", key: "4" },
+    { kind: "phone", label: "phone", key: "5" },
+    { kind: "message", label: "message", key: "6" },
 ];
 
 /** The inks offered: deep colors that stand well from a light ground. */
@@ -55,23 +56,45 @@ export const INKS: Swatch[] = [
 
 /** The levels of error correction, with the words for each and how much of the code each can mend. */
 export const LEVEL_WORDS: { level: Level; label: string; tip: string }[] = [
-    { level: "L", label: "Low", tip: "Mends about 7 percent of the code" },
-    { level: "M", label: "Medium", tip: "Mends about 15 percent of the code" },
-    { level: "Q", label: "High", tip: "Mends about 25 percent of the code" },
-    { level: "H", label: "Highest", tip: "Mends about 30 percent of the code" },
+    { level: "L", label: "low", tip: "Mends about 7 percent of the code" },
+    { level: "M", label: "medium", tip: "Mends about 15 percent of the code" },
+    { level: "Q", label: "high", tip: "Mends about 25 percent of the code" },
+    { level: "H", label: "highest", tip: "Mends about 30 percent of the code" },
 ];
 
 /** The sizes a PNG is saved at, in pixels a side. */
 export const PNG_SIZES = [512, 1024, 2048, 4096];
 
-/** The lines of the code's right-click menu: Copy, Save as SVG, Save as PNG, then Paste a picture to read; with no code, only the last. */
+/** The words of the column, in the order they stand: each group's small heading, then what is in it. Every one is lowercase, as the site's labels are. */
+export const QR_WORDS = {
+    modes: "make or read",
+    holds: "what it holds",
+    shape: "shape",
+    corners: "corners",
+    color: "color",
+    ground: "ground",
+    margin: "margin",
+    picture: "picture",
+    level: "error correction",
+    sizes: "png size",
+    copy: "copy",
+    png: "save png",
+    svg: "save svg",
+    choose: "choose a picture",
+    chooseAnother: "choose another picture",
+    paste: "paste",
+    copyAll: "copy all",
+    copyOne: "copy",
+};
+
+/** The lines of the code's right-click menu, in lowercase as the page's own controls are: copy, save as svg, save as png, then paste a picture to read; with no code, only the last. */
 export function qrMenuLines(state: { code: boolean }, run: { copy(): void; svg(): void; png(): void; paste(): void }): MenuItem[] {
-    const paste: MenuItem = { label: "Paste a picture to read", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
+    const paste: MenuItem = { label: "paste a picture to read", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
     if (!state.code) return [paste];
     return [
-        { label: "Copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
-        { label: "Save as SVG", icon: "download", hint: "Ctrl+Shift+S", key: "svg", run: run.svg },
-        { label: "Save as PNG", icon: "download", hint: "Ctrl+S", key: "png", run: run.png },
+        { label: "copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
+        { label: "save as svg", icon: "download", hint: "Ctrl+Shift+S", key: "svg", run: run.svg },
+        { label: "save as png", icon: "download", hint: "Ctrl+S", key: "png", run: run.png },
         RULE,
         paste,
     ];
@@ -80,7 +103,7 @@ export function qrMenuLines(state: { code: boolean }, run: { copy(): void; svg()
 /** The words for a code's size and error correction. */
 export function factsOf(code: Code): string {
     const word = LEVEL_WORDS.find((each) => each.level === code.level)!;
-    return `Version ${code.version}, ${code.side} by ${code.side} modules, error correction ${word.label.toLowerCase()}.`;
+    return `Version ${code.version}, ${code.side} by ${code.side} modules, error correction ${word.label}.`;
 }
 
 /** The words for text too long for any code at a level: its bytes, and the most bytes version 40 holds in byte mode (its data less the mode and length, 20 bits). */
@@ -89,68 +112,8 @@ export function tooLongWords(text: string, level: Level): string {
     return `Too long for a QR code: about ${bytes.toLocaleString("en-US")} bytes, and one holds at most ${Math.floor((dataBytes(40, level) * 8 - 20) / 8).toLocaleString("en-US")} at this error correction. Shorten it, or lower the error correction.`;
 }
 
-/** A row of choices, one pressed at a time, moved along by the arrow keys. */
-function choices<T extends string>(label: string, options: { value: T; content: string | Node; tip?: string }[], initial: T, change: (value: T) => void) {
-    const row = make("div", "quire-qr-choices");
-    row.setAttribute("role", "radiogroup");
-    row.setAttribute("aria-label", label);
-    let value = initial;
-    const buttons = options.map((option) => {
-        const button = make("button", "quire-qr-choice");
-        button.type = "button";
-        button.setAttribute("role", "radio");
-        button.dataset.value = option.value;
-        if (typeof option.content === "string") button.textContent = option.content;
-        else button.append(option.content);
-        if (option.tip) {
-            button.title = option.tip;
-            button.setAttribute("aria-label", option.tip);
-        }
-        button.addEventListener("click", () => {
-            set(option.value);
-            change(option.value);
-        });
-        return button;
-    });
-    row.append(...buttons);
-    row.addEventListener("keydown", (event) => {
-        const at = buttons.findIndex((each) => each.dataset.value === value);
-        const next = moveIndex(at, event.key, buttons.length);
-        if (next === undefined) return;
-        event.preventDefault();
-        buttons[next]!.focus();
-        buttons[next]!.click();
-    });
-    const set = (next: T) => {
-        value = next;
-        for (const button of buttons) {
-            const on = button.dataset.value === next;
-            button.classList.toggle("pressed", on);
-            button.setAttribute("aria-checked", String(on));
-            button.tabIndex = on ? 0 : -1;
-        }
-    };
-    set(initial);
-    return { element: row, set, value: () => value, buttons };
-}
-
-/** A field with its label above it. */
-function field(label: string, options: { multiline?: boolean; placeholder?: string; type?: string; autocomplete?: string } = {}) {
-    const wrap = make("label", "quire-qr-field");
-    wrap.append(make("span", "quire-qr-label", label));
-    const input = options.multiline ? make("textarea") : make("input");
-    if (input instanceof HTMLInputElement) input.type = options.type ?? "text";
-    else input.rows = 3;
-    input.className = "quire-qr-input";
-    input.spellcheck = false;
-    input.autocomplete = (options.autocomplete ?? "off") as AutoFill;
-    if (options.placeholder) input.placeholder = options.placeholder;
-    wrap.append(input);
-    return { wrap, input };
-}
-
-/** A part of the panel that folds open and shut, growing from nothing to its height. */
-function fold(...content: HTMLElement[]) {
+/** A part of the column that folds open and shut, growing from no height to its own and back. */
+function fold(...content: Node[]) {
     const outer = make("div", "quire-qr-fold");
     const inner = make("div", "quire-qr-fold-in");
     // the room around the content is inside what is clipped, so a shut fold takes no height at all
@@ -161,14 +124,7 @@ function fold(...content: HTMLElement[]) {
     return { element: outer, open: (on: boolean) => ((outer.classList.toggle("open", on)), (inner.inert = !on)) };
 }
 
-/** A small titled part of the panel. */
-function section(title: string, ...content: HTMLElement[]) {
-    const part = make("section", "quire-qr-section");
-    part.append(make("h3", "quire-qr-heading", title), ...content);
-    return part;
-}
-
-/** A sample of a shape for its button: a few modules drawn in it. */
+/** A sample of a shape for its picture: a few modules drawn in it. */
 function shapeSample(shape: Shape | EyeShape, eye = false): SVGSVGElement {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", eye ? "-0.5 -0.5 8 8" : "-0.3 -0.3 5.6 5.6");
@@ -178,7 +134,7 @@ function shapeSample(shape: Shape | EyeShape, eye = false): SVGSVGElement {
         svg.innerHTML = `<path fill-rule="evenodd" d="${eyePath(0, 0, shape as EyeShape)}"/>`;
         return svg;
     }
-    // a little square of modules, drawn by the code's own drawing so the button shows exactly what it makes
+    // a little square of modules, drawn by the code's own drawing so the picture shows exactly what it makes
     const pattern = [1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0];
     const sample = { side: 4, modules: Uint8Array.from(pattern), parts: new Uint8Array(16) } as unknown as Code;
     svg.setAttribute("viewBox", "-0.15 -0.15 4.3 4.3");
@@ -186,53 +142,49 @@ function shapeSample(shape: Shape | EyeShape, eye = false): SVGSVGElement {
     return svg;
 }
 
-/** A row of color swatches and a field for any color as hex digits; the swatch matching the field is pressed. */
-function colorRow(label: string, swatches: Swatch[], initial: string, change: (value: string) => void, extra?: HTMLElement) {
-    const row = make("div", "quire-qr-colors");
-    row.setAttribute("role", "group");
-    row.setAttribute("aria-label", label);
-    const buttons = swatches.map((swatch) => {
-        const button = make("button", "quire-qr-swatch");
-        button.type = "button";
-        button.title = swatch.name;
-        button.setAttribute("aria-label", swatch.name);
-        button.dataset.value = swatch.value;
-        const mark = make("span", "quire-qr-swatch-mark");
-        mark.style.background = swatch.value;
-        button.append(mark);
-        button.addEventListener("click", () => {
-            set(swatch.value);
-            change(swatch.value);
-        });
-        return button;
-    });
-    const hex = make("input", "quire-qr-input quire-qr-hex");
-    hex.type = "text";
-    hex.spellcheck = false;
-    hex.maxLength = 7;
-    hex.setAttribute("aria-label", `${label} as hex digits`);
-    hex.title = "Any color, as hex digits";
-    hex.addEventListener("input", () => {
-        if (!isHex(hex.value)) return;
-        const value = normalHex(hex.value);
-        for (const button of buttons) button.classList.toggle("pressed", button.dataset.value === value);
+/** An arrow for a gradient's direction, turned by its angle. */
+function arrow(angle: number): SVGSVGElement {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", "quire-qr-arrow");
+    svg.innerHTML = `<g transform="rotate(${angle} 12 12)"><path d="M5 12h14M14 7l5 5-5 5"/></g>`;
+    return svg;
+}
+
+/** The kit's row of colors with a line under it for any color as hex digits; the color matching the line is ringed. */
+function colorPick(label: string, colors: Swatch[], initial: string, change: (value: string) => void) {
+    const picked = swatches(label, colors, (value) => {
+        set(value);
         change(value);
     });
-    row.append(...buttons, ...(extra ? [extra] : []), hex);
+    const hex = typed(`${label} as hex digits`, (value) => {
+        if (!isHex(value)) return;
+        const color = normalHex(value);
+        picked.show(color);
+        change(color);
+    }).input as HTMLInputElement;
+    hex.classList.add("quire-qr-hex");
+    hex.maxLength = 7;
+    hex.autocomplete = "off";
+    hex.title = "Any color, as hex digits";
+    const line = make("div", "quire-qr-color");
+    line.append(picked.set, hex);
     const set = (value: string) => {
-        for (const button of buttons) button.classList.toggle("pressed", button.dataset.value === value);
+        picked.show(value);
         if (value.startsWith("#") && document.activeElement !== hex) hex.value = value;
     };
     set(initial);
-    return { element: row, set, buttons };
+    return { element: line, set };
 }
 
 /** Builds the page on its host. */
 export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
-    const root = make("div", "quire-qr");
-    const stage = make("div", "quire-qr-stage");
-    const box = make("div", "quire-qr-box");
-    box.tabIndex = 0;
+    // the box every small tool is built from (core/bench.ts): the code's side, one line under it, and the column
+    const box = bench("QR codes", "quire-qr");
+    const { root, side } = box;
+    const square = make("div", "quire-qr-box");
+    square.tabIndex = 0;
     const codeView = make("div", "quire-qr-code");
     codeView.setAttribute("role", "img");
     const ground = make("div", "quire-qr-ground");
@@ -251,15 +203,10 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
     readMarks.setAttribute("aria-hidden", "true");
     const readEmpty = make("p", "quire-qr-empty", "Drop, paste or choose a picture with a QR code in it. It never leaves your browser.");
     readView.append(readImage, readMarks, readEmpty);
-    box.append(codeView, readView);
-    const said = make("p", "quire-qr-said");
-    said.setAttribute("aria-live", "polite");
-    const verdict = make("p", "quire-qr-verdict");
-    verdict.setAttribute("aria-live", "polite");
-    const out = make("div", "quire-qr-out");
-    stage.append(box, said, verdict, out);
-    const panel = make("div", "quire-qr-panel");
-    root.append(stage, panel);
+    square.append(codeView, readView);
+    const room = make("div", "quire-qr-room");
+    room.append(square);
+    box.hold(room);
     host.append(root);
 
     // ---- the state ----
@@ -286,258 +233,272 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
     let shown: { code: Code; payload: string; look: Look } | undefined;
     let found: Found[] = [];
     let readCount = 0;
-    const say = (words: string) => (said.textContent = words);
 
-    // ---- the panel: Make and Read ----
-    const modes = choices<"make" | "read">("Make or read", [{ value: "make", content: "Make" }, { value: "read", content: "Read" }], "make", (value) => setMode(value));
-    modes.element.classList.add("quire-qr-modes");
+    // ---- the one line under the code: the maker's and the reader's each kept, and the one of the mode shown said ----
+    const saidLine = box.status.querySelector<HTMLElement>(".quire-bench-said")!;
+    let makeLine: { words: string; verdict?: { words: string; kind: "" | "good" | "bad" } } = { words: "" };
+    let readLine = "";
+    function sayLine() {
+        if (mode === "read") return box.say(readLine);
+        box.say(makeLine.words);
+        // whether it reads back follows what it is, marked by a small dot (quire-qr.css)
+        const verdict = makeLine.verdict;
+        if (verdict) saidLine.append(makeLine.words ? " " : "", make("span", `quire-qr-verdict ${verdict.kind}`.trim(), verdict.words));
+    }
+    const say = (words: string) => ((makeLine = { words }), sayLine());
+    const sayRead = (words: string) => ((readLine = words), sayLine());
+
+    // ---- the column: make or read ----
+    const modes = dots<"make" | "read">(
+        QR_WORDS.modes,
+        [
+            { value: "make", text: "make" },
+            { value: "read", text: "read" },
+        ],
+        (value) => setMode(value),
+    );
     const makePart = make("div", "quire-qr-make");
     const readPart = make("div", "quire-qr-read");
     const parts = make("div", "quire-qr-parts");
     parts.append(makePart, readPart);
-    panel.append(modes.element, parts);
+    side.append(modes.group, parts);
 
-    // what it holds
-    const kinds = choices<Kind>("What the code holds", KINDS.map((each) => ({ value: each.kind, content: each.label })), "text", (value) => setKind(value));
-    kinds.element.classList.add("quire-qr-kinds");
-    const forms = make("div", "quire-qr-forms");
-    const formOf = new Map<Kind, HTMLElement>();
+    // what it holds: the kinds, and the lines to type on of the one chosen, each growing open under them
     const changed = () => draw();
+    const kinds = dots<Kind>(
+        QR_WORDS.holds,
+        KINDS.map((each) => ({ value: each.kind, text: each.label })),
+        (value) => setKind(value),
+    );
+    const formOf = new Map<Kind, ReturnType<typeof fold>>();
+    /** A row with its label over it and the group's whole width, as every row of the maker's column is, since the column is too narrow for a long label beside its line. */
+    const widely = (label: string, ...inside: Node[]) => {
+        const made = row(label, ...inside);
+        made.classList.add("wide");
+        return made;
+    };
+    /** A line to type on in a form, its label over it, its value told to `change`. */
+    const line = (label: string, change: (value: string) => void, more: { hint?: string; many?: boolean; kind?: string } = {}) => {
+        const made = typed(label, change, { ...more, wide: true });
+        made.input.autocomplete = "off";
+        return made.row;
+    };
+    formOf.set("text", fold(line("link or text", (value) => ((text = value), changed()), { many: true, hint: "https://" })));
     {
-        const form = make("div", "quire-qr-form");
-        const one = field("Link or text", { multiline: true, placeholder: "https://" });
-        one.input.addEventListener("input", () => ((text = one.input.value), changed()));
-        form.append(one.wrap);
-        formOf.set("text", form);
+        const security = dots<Wifi["security"]>(
+            "security",
+            [
+                { value: "WPA", text: "wpa" },
+                { value: "WEP", text: "wep" },
+                { value: "nopass", text: "none" },
+            ],
+            (value) => ((wifi = { ...wifi, security: value }), security.show(value), changed()),
+        );
+        security.show(wifi.security);
+        const hidden = dots<"no" | "yes">(
+            "Hidden network",
+            [
+                { value: "no", text: "shown" },
+                { value: "yes", text: "hidden" },
+            ],
+            (value) => ((wifi = { ...wifi, hidden: value === "yes" }), hidden.show(value), changed()),
+        );
+        hidden.show("no");
+        formOf.set("wifi", fold(line("network name", (value) => ((wifi = { ...wifi, name: value }), changed())), line("password", (value) => ((wifi = { ...wifi, password: value }), changed())), widely("security", security.set), widely("the network's name is", hidden.set)));
     }
     {
-        const form = make("div", "quire-qr-form");
-        const name = field("Network name", { autocomplete: "off" });
-        const password = field("Password");
-        const security = choices<Wifi["security"]>("Security", [{ value: "WPA", content: "WPA" }, { value: "WEP", content: "WEP" }, { value: "nopass", content: "None" }], "WPA", (value) => ((wifi = { ...wifi, security: value }), changed()));
-        const hidden = choices<"no" | "yes">("Hidden network", [{ value: "no", content: "Shown" }, { value: "yes", content: "Hidden" }], "no", (value) => ((wifi = { ...wifi, hidden: value === "yes" }), changed()));
-        name.input.addEventListener("input", () => ((wifi = { ...wifi, name: name.input.value }), changed()));
-        password.input.addEventListener("input", () => ((wifi = { ...wifi, password: password.input.value }), changed()));
-        const pair = make("div", "quire-qr-pair");
-        pair.append(labelled("Security", security.element), labelled("The network's name is", hidden.element));
-        form.append(name.wrap, password.wrap, pair);
-        formOf.set("wifi", form);
-    }
-    {
-        const form = make("div", "quire-qr-form quire-qr-form-wide");
-        const names: [keyof Contact, string, string?][] = [
-            ["first", "First name", "given-name"],
-            ["last", "Last name", "family-name"],
-            ["phone", "Phone", "tel"],
-            ["email", "Email", "email"],
-            ["organization", "Organization", "organization"],
-            ["title", "Job title", "organization-title"],
-            ["website", "Website", "url"],
-            ["street", "Street", "street-address"],
-            ["city", "City", "address-level2"],
-            ["region", "State or region", "address-level1"],
-            ["postcode", "Postal code", "postal-code"],
-            ["country", "Country", "country-name"],
+        const names: [keyof Contact, string][] = [
+            ["first", "first name"],
+            ["last", "last name"],
+            ["phone", "phone"],
+            ["email", "email"],
+            ["organization", "organization"],
+            ["title", "job title"],
+            ["website", "website"],
+            ["street", "street"],
+            ["city", "city"],
+            ["region", "state or region"],
+            ["postcode", "postal code"],
+            ["country", "country"],
         ];
-        for (const [key, label] of names) {
-            const one = field(label);
-            one.input.addEventListener("input", () => ((contact = { ...contact, [key]: one.input.value }), changed()));
-            form.append(one.wrap);
-        }
-        const note = field("Note", { multiline: true });
-        note.wrap.classList.add("quire-qr-whole");
-        note.input.addEventListener("input", () => ((contact = { ...contact, note: note.input.value }), changed()));
-        form.append(note.wrap);
-        formOf.set("contact", form);
+        const rows = names.map(([key, label]) => line(label, (value) => ((contact = { ...contact, [key]: value }), changed())));
+        rows.push(line("note", (value) => ((contact = { ...contact, note: value }), changed()), { many: true }));
+        formOf.set("contact", fold(...rows));
     }
-    {
-        const form = make("div", "quire-qr-form");
-        const to = field("To", { type: "email", placeholder: "name@example.com" });
-        const subject = field("Subject");
-        const body = field("Message", { multiline: true });
-        to.input.addEventListener("input", () => ((email = { ...email, to: to.input.value }), changed()));
-        subject.input.addEventListener("input", () => ((email = { ...email, subject: subject.input.value }), changed()));
-        body.input.addEventListener("input", () => ((email = { ...email, body: body.input.value }), changed()));
-        form.append(to.wrap, subject.wrap, body.wrap);
-        formOf.set("email", form);
-    }
-    {
-        const form = make("div", "quire-qr-form");
-        const number = field("Phone number", { type: "tel", placeholder: "+1 555 123 4567" });
-        number.input.addEventListener("input", () => ((phone = number.input.value), changed()));
-        form.append(number.wrap);
-        formOf.set("phone", form);
-    }
-    {
-        const form = make("div", "quire-qr-form");
-        const number = field("Phone number", { type: "tel", placeholder: "+1 555 123 4567" });
-        const body = field("Message", { multiline: true });
-        number.input.addEventListener("input", () => ((message = { ...message, number: number.input.value }), changed()));
-        body.input.addEventListener("input", () => ((message = { ...message, body: body.input.value }), changed()));
-        form.append(number.wrap, body.wrap);
-        formOf.set("message", form);
-    }
+    formOf.set(
+        "email",
+        fold(
+            line("to", (value) => ((email = { ...email, to: value }), changed()), { kind: "email", hint: "name@example.com" }),
+            line("subject", (value) => ((email = { ...email, subject: value }), changed())),
+            line("message", (value) => ((email = { ...email, body: value }), changed()), { many: true }),
+        ),
+    );
+    formOf.set("phone", fold(line("phone number", (value) => ((phone = value), changed()), { kind: "tel", hint: "+1 555 123 4567" })));
+    formOf.set(
+        "message",
+        fold(
+            line("phone number", (value) => ((message = { ...message, number: value }), changed()), { kind: "tel", hint: "+1 555 123 4567" }),
+            line("message", (value) => ((message = { ...message, body: value }), changed()), { many: true }),
+        ),
+    );
     for (const [each, form] of formOf) {
-        form.dataset.kind = each;
-        forms.append(form);
+        form.element.classList.add("quire-qr-form");
+        form.element.dataset.kind = each;
+        kinds.group.append(form.element);
     }
-    function labelled(label: string, content: HTMLElement) {
-        const wrap = make("div", "quire-qr-field");
-        wrap.append(make("span", "quire-qr-label", label), content);
-        return wrap;
-    }
-    makePart.append(section("What it holds", kinds.element, forms));
 
     // how it looks
-    const shapes = choices<Shape>(
-        "Shape",
-        (["square", "rounded", "dots", "diamonds", "bars", "joined"] as Shape[]).map((value) => ({ value, content: shapeSample(value), tip: { square: "Squares", rounded: "Rounded squares", dots: "Dots", diamonds: "Diamonds", bars: "Bars", joined: "Joined" }[value] })),
-        "square",
-        (value) => ((look = { ...look, shape: value }), changed()),
+    const shapeTips: Record<Shape, string> = { square: "Squares", rounded: "Rounded squares", dots: "Dots", diamonds: "Diamonds", bars: "Bars", joined: "Joined" };
+    const shapes = pictured<Shape>(
+        QR_WORDS.shape,
+        (Object.keys(shapeTips) as Shape[]).map((value) => ({ value, picture: shapeSample(value), tip: shapeTips[value] })),
+        (value) => ((look = { ...look, shape: value }), shapes.show(value), changed()),
     );
-    const eyes = choices<EyeShape>(
-        "Corners",
-        (["square", "rounded", "round"] as EyeShape[]).map((value) => ({ value, content: shapeSample(value, true), tip: { square: "Square corners", rounded: "Rounded corners", round: "Round corners" }[value] })),
-        "square",
-        (value) => ((look = { ...look, eyes: value }), changed()),
+    const eyeTips: Record<EyeShape, string> = { square: "Square corners", rounded: "Rounded corners", round: "Round corners" };
+    const eyes = pictured<EyeShape>(
+        QR_WORDS.corners,
+        (Object.keys(eyeTips) as EyeShape[]).map((value) => ({ value, picture: shapeSample(value, true), tip: eyeTips[value] })),
+        (value) => ((look = { ...look, eyes: value }), eyes.show(value), changed()),
     );
-    const paints = choices<Paint["kind"]>("Color", [{ value: "solid", content: "One color" }, { value: "gradient", content: "Gradient" }, { value: "rainbow", content: "Rainbow" }, { value: "flag", content: "Flag" }], "solid", (value) => ((paintKind = value), foldPaints(), changed()));
-    const solidRow = colorRow("Color", INKS, solid, (value) => ((solid = value), changed()));
-    const fromRow = colorRow("From", INKS, gradient.from, (value) => ((gradient = { ...gradient, from: value }), changed()));
-    const toRow = colorRow("To", [...INKS.slice(1), { name: "Magenta", value: "#b5176f" }], gradient.to, (value) => ((gradient = { ...gradient, to: value }), changed()));
-    const angles = choices<string>("Direction", [0, 45, 90, 135].map((angle) => ({ value: String(angle), content: arrow(angle), tip: { 0: "Left to right", 45: "Corner to corner, down", 90: "Top to bottom", 135: "Corner to corner, up" }[angle] })), "45", (value) => ((gradient = { ...gradient, angle: Number(value) }), changed()));
-    const flags = choices<string>(
-        "Flag",
+    const paints = dots<Paint["kind"]>(
+        QR_WORDS.color,
+        [
+            { value: "solid", text: "one color" },
+            { value: "gradient", text: "gradient" },
+            { value: "rainbow", text: "rainbow" },
+            { value: "flag", text: "flag" },
+        ],
+        (value) => ((paintKind = value), paints.show(value), foldPaints(), changed()),
+    );
+    const solidPick = colorPick("Color", INKS, solid, (value) => ((solid = value), changed()));
+    const fromPick = colorPick("From", INKS, gradient.from, (value) => ((gradient = { ...gradient, from: value }), changed()));
+    const toPick = colorPick("To", [...INKS.slice(1), { name: "Magenta", value: "#b5176f" }], gradient.to, (value) => ((gradient = { ...gradient, to: value }), changed()));
+    const angleTips: Record<number, string> = { 0: "Left to right", 45: "Corner to corner, down", 90: "Top to bottom", 135: "Corner to corner, up" };
+    const angles = pictured<string>(
+        "direction",
+        [0, 45, 90, 135].map((angle) => ({ value: String(angle), picture: arrow(angle), tip: angleTips[angle]! })),
+        (value) => ((gradient = { ...gradient, angle: Number(value) }), angles.show(value), changed()),
+    );
+    const flags = pictured<string>(
+        "flag",
         FLAGS.map((each) => {
             const mark = make("span", "quire-qr-flag-mark");
             mark.style.background = `linear-gradient(${each.stripes.map((stripe, i) => `${stripe} ${(i / each.stripes.length) * 100}% ${((i + 1) / each.stripes.length) * 100}%`).join(", ")})`;
-            return { value: each.name, content: mark, tip: `The ${each.name} flag` };
+            return { value: each.name, picture: mark, tip: `The ${each.name} flag` };
         }),
-        "rainbow",
-        (value) => ((flag = value), changed()),
+        (value) => ((flag = value), flags.show(value), changed()),
     );
-    function arrow(angle: number): SVGSVGElement {
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("viewBox", "0 0 24 24");
-        svg.setAttribute("aria-hidden", "true");
-        svg.setAttribute("class", "quire-icon");
-        svg.innerHTML = `<g transform="rotate(${angle} 12 12)"><path d="M5 12h14M14 7l5 5-5 5"/></g>`;
-        return svg;
-    }
-    const solidFold = fold(solidRow.element);
-    const gradientFold = fold(labelled("From", fromRow.element), labelled("To", toRow.element), labelled("Direction", angles.element));
-    const flagFold = fold(flags.element);
+    const solidFold = fold(solidPick.element);
+    const gradientFold = fold(widely("from", fromPick.element), widely("to", toPick.element), widely("direction", angles.set));
+    const flagFold = fold(flags.set);
+    paints.group.append(solidFold.element, gradientFold.element, flagFold.element);
     function foldPaints() {
         solidFold.open(paintKind === "solid");
         gradientFold.open(paintKind === "gradient");
         flagFold.open(paintKind === "flag");
     }
-    const clearSwatch = make("button", "quire-qr-swatch quire-qr-clear");
-    clearSwatch.type = "button";
-    clearSwatch.title = "Clear";
-    clearSwatch.setAttribute("aria-label", "Clear");
-    clearSwatch.append(make("span", "quire-qr-swatch-mark"));
-    const groundRow = colorRow("Ground", [{ name: "White", value: "#ffffff" }, ...(options.grounds ?? [])], "#ffffff", (value) => ((look = { ...look, ground: value }), clearSwatch.classList.remove("pressed"), changed()), clearSwatch);
-    clearSwatch.addEventListener("click", () => {
-        look = { ...look, ground: undefined };
-        groundRow.set("");
-        clearSwatch.classList.add("pressed");
-        changed();
-    });
-    const marginValue = make("output", "quire-qr-number", String(look.margin));
-    const marginLess = make("button", "quire-qr-choice quire-qr-step", "−");
-    const marginMore = make("button", "quire-qr-choice quire-qr-step", "+");
-    marginLess.type = marginMore.type = "button";
-    marginLess.title = "Less margin";
-    marginMore.title = "More margin";
-    marginLess.setAttribute("aria-label", "Less margin");
-    marginMore.setAttribute("aria-label", "More margin");
-    const setMargin = (value: number) => {
-        look = { ...look, margin: Math.min(8, Math.max(0, value)) };
-        marginValue.textContent = String(look.margin);
-        changed();
-    };
-    marginLess.addEventListener("click", () => setMargin(look.margin - 1));
-    marginMore.addEventListener("click", () => setMargin(look.margin + 1));
-    const marginRow = make("div", "quire-qr-stepper");
-    marginRow.append(marginLess, marginValue, marginMore, make("span", "quire-qr-unit", "modules"));
-    const levels = choices<Level>("Error correction", LEVEL_WORDS.map((each) => ({ value: each.level, content: each.label, tip: each.tip })), "M", (value) => ((level = value), changed()));
-    makePart.append(
-        section("Shape", shapes.element),
-        section("Corners", eyes.element),
-        section("Color", paints.element, solidFold.element, gradientFold.element, flagFold.element),
-        section("Ground", groundRow.element),
-        section("Margin", marginRow),
-    );
+    // clear is offered as the last of the grounds, drawn as a checkerboard (quire-qr.css)
+    const groundPick = colorPick("Ground", [{ name: "White", value: "#ffffff" }, ...(options.grounds ?? []), { name: "Clear", value: "clear" }], "#ffffff", (value) => ((look = { ...look, ground: value === "clear" ? undefined : value }), changed()));
+    const groundGroup = group(QR_WORDS.ground, groundPick.element);
+    const margin = count(QR_WORDS.margin, { min: 0, max: 8 }, (value) => ((look = { ...look, margin: value }), changed()));
+    margin.set(look.margin);
+    margin.row.querySelector(".quire-bench-held")!.append(make("span", "quire-qr-unit", "modules"));
+    // the group's heading names it, so the row's own label is kept for assistive tools only
+    const marginGroup = group(QR_WORDS.margin, margin.row);
+    marginGroup.classList.add("quire-qr-margin");
 
     // a picture in the code
     const pictureChooser = make("input");
     pictureChooser.type = "file";
     pictureChooser.accept = "image/*";
     pictureChooser.hidden = true;
-    const pictures = choices<"none" | "middle" | "through">("Picture", [{ value: "none", content: "None" }, { value: "middle", content: "In the middle" }, { value: "through", content: "As the code" }], "none", (value) => {
-        pictureMode = value;
-        foldPicture();
-        if (value !== "none" && !picture) pictureChooser.click();
-        changed();
-    });
-    const pictureButton = make("button", "quire-qr-plain", "Choose a picture");
-    pictureButton.type = "button";
-    pictureButton.addEventListener("click", () => pictureChooser.click());
-    const shareInput = make("input", "quire-qr-range");
-    shareInput.type = "range";
-    shareInput.min = String(MIDDLE_SIZES.least);
-    shareInput.max = String(MIDDLE_SIZES.most);
-    shareInput.step = String(MIDDLE_SIZES.step);
-    shareInput.value = String(share);
-    shareInput.setAttribute("aria-label", "Picture size");
-    const shareValue = make("output", "quire-qr-number", `${Math.round(share * 100)}%`);
-    shareInput.addEventListener("input", () => {
-        share = Number(shareInput.value);
-        shareValue.textContent = `${Math.round(share * 100)}%`;
-        changed();
-    });
-    const shareRow = make("div", "quire-qr-stepper");
-    shareRow.append(shareInput, shareValue);
-    const throughKinds = choices<"color" | "halftone">("How the picture shows", [{ value: "color", content: "In color" }, { value: "halftone", content: "Halftone" }], "color", (value) => ((colored = value === "color"), changed()));
+    const pictures = dots<"none" | "middle" | "through">(
+        QR_WORDS.picture,
+        [
+            { value: "none", text: "none" },
+            { value: "middle", text: "in the middle" },
+            { value: "through", text: "as the code" },
+        ],
+        (value) => {
+            pictureMode = value;
+            pictures.show(value);
+            foldPicture();
+            if (value !== "none" && !picture) pictureChooser.click();
+            changed();
+        },
+    );
+    const pictureWord = word(QR_WORDS.choose, () => pictureChooser.click());
+    const shareSlide = slide("size", { min: MIDDLE_SIZES.least, max: MIDDLE_SIZES.most, step: MIDDLE_SIZES.step }, (value) => ((share = value), changed()), (value) => `${Math.round(value * 100)}%`);
+    shareSlide.set(share);
+    const throughKinds = dots<"color" | "halftone">(
+        "How the picture shows",
+        [
+            { value: "color", text: "in color" },
+            { value: "halftone", text: "halftone" },
+        ],
+        (value) => ((colored = value === "color"), throughKinds.show(value), changed()),
+    );
+    throughKinds.show("color");
     const pictureNow = make("div", "quire-qr-picture-now");
-    pictureNow.append(pictureButton);
-    const middleFold = fold(labelled("Size", shareRow));
-    const throughFold = fold(throughKinds.element);
+    pictureNow.append(pictureWord);
+    shareSlide.row.classList.add("wide");
+    const middleFold = fold(shareSlide.row);
+    const throughFold = fold(throughKinds.set);
     const pictureFold = fold(pictureNow, middleFold.element, throughFold.element);
+    pictures.group.append(pictureFold.element, pictureChooser);
     function foldPicture() {
         pictureFold.open(pictureMode !== "none");
         middleFold.open(pictureMode === "middle");
         throughFold.open(pictureMode === "through");
     }
-    const pictureSection = section("Picture", pictures.element, pictureFold.element, pictureChooser);
-    makePart.append(pictureSection, section("Error correction", levels.element));
     pictureChooser.addEventListener("change", () => {
         const file = pictureChooser.files?.[0];
         pictureChooser.value = "";
         if (file) void takeCodePicture(file);
     });
-    // a picture dropped on this part goes into the code, not to the reader
-    pictureSection.addEventListener("dragover", (event) => {
+    // a picture dropped on this group goes into the code, not to the reader
+    const pictureGroup = pictures.group;
+    pictureGroup.addEventListener("dragover", (event) => {
         if (![...(event.dataTransfer?.items ?? [])].some((item) => item.kind === "file")) return;
         event.preventDefault();
         event.stopPropagation();
-        pictureSection.classList.add("dropping");
+        pictureGroup.classList.add("dropping");
     });
-    pictureSection.addEventListener("dragleave", () => pictureSection.classList.remove("dropping"));
-    pictureSection.addEventListener("drop", (event) => {
-        pictureSection.classList.remove("dropping");
+    pictureGroup.addEventListener("dragleave", () => pictureGroup.classList.remove("dropping"));
+    pictureGroup.addEventListener("drop", (event) => {
+        pictureGroup.classList.remove("dropping");
         const file = [...(event.dataTransfer?.files ?? [])].find((each) => each.type.startsWith("image/"));
         if (!file) return;
         event.preventDefault();
         event.stopPropagation();
         if (pictureMode === "none") {
             pictureMode = "middle";
-            pictures.set("middle");
+            pictures.show("middle");
             foldPicture();
         }
         void takeCodePicture(file);
     });
+    const levels = dots<Level>(
+        QR_WORDS.level,
+        LEVEL_WORDS.map((each) => ({ value: each.level, text: each.label, tip: each.tip })),
+        (value) => ((level = value), levels.show(value), changed()),
+    );
+
+    // ---- out, at the column's foot ----
+    const sizes = dots<string>(
+        QR_WORDS.sizes,
+        PNG_SIZES.map((size) => ({ value: String(size), text: String(size), tip: `${size} by ${size} pixels` })),
+        (value) => ((pngSize = Number(value)), sizes.show(value)),
+    );
+    const copyWord = word(QR_WORDS.copy, () => void copy());
+    copyWord.title = "Copy the code as a picture (Ctrl+C)";
+    const pngWord = word(QR_WORDS.png, () => void savePng(), true);
+    pngWord.title = "Save as PNG (Ctrl+S)";
+    const svgWord = word(QR_WORDS.svg, () => saveSvg(), true);
+    svgWord.title = "Save as SVG (Ctrl+Shift+S)";
+    const out = group(undefined, copyWord, pngWord, svgWord);
+    out.classList.add("quire-qr-out");
+    makePart.append(kinds.group, shapes.group, eyes.group, paints.group, groundGroup, marginGroup, pictureGroup, levels.group, sizes.group, out);
 
     /** A picture for the code: kept at most 1024 pixels a side, as a PNG or JPEG data address for the saved SVG and as a blob for the screen. */
     async function takeCodePicture(file: Blob) {
@@ -560,7 +521,9 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         lights.clear();
         throughImage.src = picture.url;
         middleImage.src = picture.url;
-        pictureButton.textContent = "Choose another picture";
+        // once there is a picture, choosing another is a lesser thing
+        pictureWord.textContent = QR_WORDS.chooseAnother;
+        pictureWord.classList.add("quiet");
         draw();
     }
 
@@ -582,41 +545,16 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         return light;
     }
 
-    // ---- out ----
-    const copyButton = make("button", "quire-qr-main", "Copy");
-    copyButton.type = "button";
-    copyButton.title = "Copy the code as a picture (Ctrl+C)";
-    copyButton.addEventListener("click", () => void copy());
-    const pngButton = make("button", "quire-qr-plain", "Save PNG");
-    pngButton.type = "button";
-    pngButton.title = "Save as PNG (Ctrl+S)";
-    pngButton.addEventListener("click", () => void savePng());
-    const svgButton = make("button", "quire-qr-plain", "Save SVG");
-    svgButton.type = "button";
-    svgButton.title = "Save as SVG (Ctrl+Shift+S)";
-    svgButton.addEventListener("click", () => saveSvg());
-    const sizes = choices<string>("PNG size", PNG_SIZES.map((size) => ({ value: String(size), content: String(size), tip: `${size} by ${size} pixels` })), String(pngSize), (value) => (pngSize = Number(value)));
-    const sizeRow = make("div", "quire-qr-sizes");
-    sizeRow.append(make("span", "quire-qr-unit", "PNG size"), sizes.element);
-    out.append(copyButton, pngButton, svgButton, sizeRow);
-
-    // ---- the reader's part of the panel ----
+    // ---- the reader's part of the column ----
     const readChooser = make("input");
     readChooser.type = "file";
     readChooser.accept = "image/*";
     readChooser.hidden = true;
-    const readChoose = make("button", "quire-qr-main", "Choose a picture");
-    readChoose.type = "button";
-    readChoose.addEventListener("click", () => readChooser.click());
-    const readPaste = make("button", "quire-qr-plain quire-qr-paste", "Paste");
-    readPaste.type = "button";
-    readPaste.addEventListener("click", () => void pasteFromMenu());
-    const readActions = make("div", "quire-qr-actions");
-    readActions.append(readChoose, readPaste, readChooser);
-    const readSaid = make("p", "quire-qr-read-said");
-    readSaid.setAttribute("aria-live", "polite");
-    const results = make("div", "quire-qr-results");
-    readPart.append(readActions, readSaid, results);
+    const readChoose = word(QR_WORDS.choose, () => readChooser.click());
+    const readPaste = word(QR_WORDS.paste, () => void pasteFromMenu(), true);
+    readPaste.classList.add("quire-qr-paste");
+    const readActions = group(undefined, readChoose, readPaste, readChooser);
+    readPart.append(readActions);
     readChooser.addEventListener("change", () => {
         const file = readChooser.files?.[0];
         readChooser.value = "";
@@ -654,7 +592,6 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
             codeView.removeAttribute("aria-label");
             empty.textContent = kind === "text" ? "Type a link or some text, and its code appears here." : kind === "wifi" ? "Type the network's name, and its code appears here." : "Fill in the form, and its code appears here.";
             say("");
-            verdict.textContent = "";
             return fill();
         }
         const made = codeFor(words, { level, middle: picture && pictureMode === "middle" ? share : undefined, through: !!picture && pictureMode === "through" });
@@ -662,7 +599,6 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
             // the last code stays, quieted, so nothing jumps; the words say why
             root.classList.add("stale");
             say(tooLongWords(words, level));
-            verdict.textContent = "";
             return fill();
         }
         root.classList.remove("stale");
@@ -691,9 +627,8 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         if (colors) notes.push(colors);
         if (!drawnLook.through && deepenedAny(drawnLook.ink, drawnLook.ground)) notes.push("The flag's light stripes are drawn deeper so phones can read them.");
         if (drawnLook.middle && made.code.level !== level) notes.push("Error correction is raised so the picture can sit in the middle.");
-        say([facts, ...notes].join(" "));
-        verdict.textContent = "Reading it back";
-        verdict.className = "quire-qr-verdict";
+        makeLine = { words: [facts, ...notes].join(" "), verdict: { words: "Reading it back", kind: "" } };
+        sayLine();
         clearTimeout(readBackTimer);
         const count = ++drawCount;
         readBackTimer = setTimeout(() => void readBack(count), 220);
@@ -712,11 +647,12 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
             const pixels = canvas.getContext("2d")!.getImageData(0, 0, size, size);
             const reads = readCodes(pixels).some((each) => each.text === words);
             if (count !== drawCount) return;
-            verdict.textContent = reads ? "It reads back as written." : "It does not read back here, so phones may not read it either.";
-            verdict.className = `quire-qr-verdict ${reads ? "good" : "bad"}`;
+            makeLine = { words: makeLine.words, verdict: reads ? { words: "It reads back as written.", kind: "good" } : { words: "It does not read back here, so phones may not read it either.", kind: "bad" } };
         } catch {
-            if (count === drawCount) verdict.textContent = "";
+            if (count !== drawCount) return;
+            makeLine = { words: makeLine.words };
         }
+        sayLine();
     }
 
     /** The code in a look drawn by the browser into a canvas of this size, on white where it is clear. */
@@ -788,26 +724,31 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         try {
             bitmap = await createImageBitmap(file);
         } catch {
-            readSaid.textContent = "That is not a picture this browser can read.";
+            sayRead("That is not a picture this browser can read.");
             return;
         }
         if (readImage.src.startsWith("blob:")) URL.revokeObjectURL(readImage.src);
         readImage.src = URL.createObjectURL(file);
         root.classList.add("has-picture");
-        readSaid.textContent = "Reading";
-        results.replaceChildren();
+        box.busy(true, "Reading");
+        for (const card of readPart.querySelectorAll(".quire-qr-card")) card.remove();
         readMarks.replaceChildren();
-        // the reading waits a frame, so the picture is seen first
-        await new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)));
-        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-        const context = canvas.getContext("2d", { willReadFrequently: true })!;
-        context.drawImage(bitmap, 0, 0);
-        found = readCodes(context.getImageData(0, 0, bitmap.width, bitmap.height));
-        if (count !== readCount) return;
+        try {
+            // the reading waits a frame, so the picture is seen first
+            await new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)));
+            const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+            const context = canvas.getContext("2d", { willReadFrequently: true })!;
+            context.drawImage(bitmap, 0, 0);
+            const seen = readCodes(context.getImageData(0, 0, bitmap.width, bitmap.height));
+            if (count !== readCount) return;
+            found = seen;
+        } finally {
+            if (count === readCount) box.busy(false);
+        }
         // top to bottom, then left to right, as they are read on a page
         const middleOf = (each: Found) => ({ x: each.corners.reduce((s, c) => s + c.x, 0) / 4, y: each.corners.reduce((s, c) => s + c.y, 0) / 4 });
         found.sort((a, b) => (Math.abs(middleOf(a).y - middleOf(b).y) > bitmap.height / 8 ? middleOf(a).y - middleOf(b).y : middleOf(a).x - middleOf(b).x));
-        readSaid.textContent = found.length === 0 ? "No QR code found in this picture." : found.length === 1 ? "Found one code." : `Found ${found.length} codes.`;
+        sayRead(found.length === 0 ? "No QR code found in this picture." : found.length === 1 ? "Found one code." : `Found ${found.length} codes.`);
         readMarks.setAttribute("viewBox", `0 0 ${bitmap.width} ${bitmap.height}`);
         const stroke = Math.max(2, Math.max(bitmap.width, bitmap.height) / 250);
         found.forEach((each, index) => {
@@ -824,47 +765,38 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
             label.textContent = found.length > 1 ? String(index + 1) : "";
             mark.append(outline, label);
             readMarks.append(mark);
-            results.append(card(each, index));
+            readPart.append(card(each, index));
         });
         fill();
     }
 
-    /** What one code holds, as a card: its kind, its lines, and Copy beside each. */
+    /** What one code holds, as a group of the column: its kind for a heading, a row for each of its lines with copy beside it, then copy all and its facts. */
     function card(each: Found, index: number): HTMLElement {
         const said = describe(each.text);
-        const made = make("article", "quire-qr-card");
-        made.style.setProperty("--delay", `${index * 60}ms`);
-        const head = make("div", "quire-qr-card-head");
-        head.append(make("h3", "quire-qr-card-title", found.length > 1 ? `${index + 1}. ${said.title}` : said.title));
-        const copyAll = make("button", "quire-qr-plain", "Copy all");
-        copyAll.type = "button";
-        copyAll.title = "Copy everything the code holds, as it is written";
-        copyAll.addEventListener("click", () => void copyText(each.text, "Copied what the code holds."));
-        head.append(copyAll);
-        made.append(head);
-        const list = make("dl", "quire-qr-lines");
-        for (const line of said.lines) {
-            const row = make("div", "quire-qr-line");
-            const value = make("dd", said.link && line.value === said.link ? "quire-qr-value quire-qr-link" : "quire-qr-value", line.value);
-            const copyOne = make("button", "quire-qr-plain quire-qr-copy-one", "Copy");
-            copyOne.type = "button";
+        const title = said.title.toLowerCase();
+        const rows = said.lines.map((line) => {
+            const value = make("span", said.link && line.value === said.link ? "quire-qr-value quire-qr-link" : "quire-qr-value", line.value);
+            const copyOne = word(QR_WORDS.copyOne, () => void copyText(line.value, `Copied the ${line.label.toLowerCase()}.`), true);
             copyOne.title = `Copy the ${line.label.toLowerCase()}`;
             copyOne.setAttribute("aria-label", `Copy the ${line.label.toLowerCase()}`);
-            copyOne.addEventListener("click", () => void copyText(line.value, `Copied the ${line.label.toLowerCase()}.`));
-            row.append(make("dt", "quire-qr-line-label", line.label), value, copyOne);
-            list.append(row);
-        }
-        made.append(list);
-        const facts = make("p", "quire-qr-card-facts", `Version ${each.read.version}, error correction ${LEVEL_WORDS.find((word) => word.level === each.read.level)!.label.toLowerCase()}${each.light ? ", light on dark" : ""}${each.read.mended ? `, ${each.read.mended} ${each.read.mended === 1 ? "byte" : "bytes"} mended` : ""}.`);
-        made.append(facts);
+            const made = widely(line.label.toLowerCase(), value, copyOne);
+            made.classList.add("quire-qr-line");
+            return made;
+        });
+        const copyAll = word(QR_WORDS.copyAll, () => void copyText(each.text, "Copied what the code holds."));
+        copyAll.title = "Copy everything the code holds, as it is written";
+        const facts = make("p", "quire-qr-card-facts", `Version ${each.read.version}, error correction ${LEVEL_WORDS.find((word) => word.level === each.read.level)!.label}${each.light ? ", light on dark" : ""}${each.read.mended ? `, ${each.read.mended} ${each.read.mended === 1 ? "byte" : "bytes"} mended` : ""}.`);
+        const made = group(found.length > 1 ? `${index + 1}. ${title}` : title, ...rows, copyAll, facts);
+        made.classList.add("quire-qr-card");
+        made.style.setProperty("--delay", `${index * 60}ms`);
         return made;
     }
     async function copyText(value: string, words: string) {
         try {
             await navigator.clipboard.writeText(value);
-            readSaid.textContent = words;
+            sayRead(words);
         } catch (error) {
-            readSaid.textContent = `Not copied: ${error instanceof Error ? error.message : String(error)}`;
+            sayRead(`Not copied: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
     async function pasteFromMenu() {
@@ -874,44 +806,52 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
                 if (type) return void (await read(await item.getType(type)));
             }
             setMode("read");
-            readSaid.textContent = "There is no picture on the clipboard.";
+            sayRead("There is no picture on the clipboard.");
         } catch {
             setMode("read");
-            readSaid.textContent = "Press Ctrl+V to paste.";
+            sayRead("Press Ctrl+V to paste.");
         }
     }
 
     // ---- modes, kinds, and what is shown ----
     function setKind(next: Kind) {
         kind = next;
-        kinds.set(next);
         fill();
         draw();
     }
     function setMode(next: "make" | "read") {
+        if (next === mode) return fill();
+        const from = parts.offsetHeight;
         mode = next;
-        modes.set(next);
         fill();
+        sayLine();
+        // the column's room goes from the height of the part that was shown to that of the part now shown
+        const to = parts.offsetHeight;
+        if (still() || from === to) return;
+        parts.style.height = `${from}px`;
+        void parts.offsetHeight;
+        parts.style.height = `${to}px`;
+        clearTimeout(settling);
+        settling = setTimeout(() => (parts.style.height = ""), 400);
     }
+    let settling: ReturnType<typeof setTimeout> | undefined;
     function fill() {
         root.classList.toggle("reading", mode === "read");
         makePart.inert = mode !== "make";
         readPart.inert = mode !== "read";
-        out.inert = mode !== "make" || !shown;
-        for (const [each, form] of formOf) {
-            const on = each === kind;
-            form.classList.toggle("shown", on);
-            form.inert = !on;
-        }
-        // the forms' room grows or shrinks to the one shown, from the height it had
-        forms.style.height = `${formOf.get(kind)!.offsetHeight}px`;
-        parts.style.height = `${(mode === "make" ? makePart : readPart).offsetHeight}px`;
+        modes.show(mode);
+        kinds.show(kind);
+        // what acts on a code waits for one, there and faint until then
+        out.inert = sizes.group.inert = !shown;
+        sizes.show(String(pngSize));
+        for (const [each, form] of formOf) form.open(each === kind);
     }
 
-    // ---- the four ways a picture comes to be read: paste, drop, choose, and Paste from the menu or the phone's button ----
+    // ---- the four ways a picture comes to be read: paste, drop, choose, and paste from the menu or the phone's word ----
     const pictureIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((each) => each.type.startsWith("image/"));
+    const typingIn = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("textarea, input:not([type=radio])");
     const pasted = (event: ClipboardEvent) => {
-        if (event.defaultPrevented || (event.target instanceof HTMLElement && event.target.closest("input, textarea"))) return;
+        if (event.defaultPrevented || typingIn(event.target)) return;
         const file = pictureIn(event.clipboardData);
         if (!file) return;
         event.preventDefault();
@@ -945,7 +885,7 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         menu.open(anchor, lines, false);
         menu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
     }
-    box.addEventListener("contextmenu", (event) => {
+    square.addEventListener("contextmenu", (event) => {
         // Shift leaves the browser's own menu
         if (event.shiftKey) return;
         event.preventDefault();
@@ -954,12 +894,13 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
 
     // ---- the keys ----
     const keys = (event: KeyboardEvent) => {
-        const typing = event.target instanceof HTMLElement && !!event.target.closest("input, textarea");
+        // a round dot has the keyboard while it is chosen, and is not typed in, so the keys still reach the page from it
+        const typing = typingIn(event.target);
         const command = event.ctrlKey || event.metaKey;
         const key = event.key.toLowerCase();
-        if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && document.activeElement === box) {
+        if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && document.activeElement === square) {
             event.preventDefault();
-            const at = box.getBoundingClientRect();
+            const at = square.getBoundingClientRect();
             return openMenu(at.left + at.width / 2, at.top + at.height / 2);
         }
         if (command && key === "o") {
@@ -983,11 +924,14 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         }
     };
     document.addEventListener("keydown", keys);
-    const resized = new ResizeObserver(() => fill());
-    for (const form of formOf.values()) resized.observe(form);
-    resized.observe(makePart);
-    resized.observe(readPart);
 
+    shapes.show(look.shape);
+    eyes.show(look.eyes);
+    paints.show(paintKind);
+    angles.show(String(gradient.angle));
+    flags.show(flag);
+    pictures.show(pictureMode);
+    levels.show(level);
     foldPaints();
     foldPicture();
     fill();
@@ -1002,7 +946,8 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         destroy() {
             document.removeEventListener("paste", pasted);
             document.removeEventListener("keydown", keys);
-            resized.disconnect();
+            clearTimeout(readBackTimer);
+            clearTimeout(settling);
             root.remove();
             anchor.remove();
         },

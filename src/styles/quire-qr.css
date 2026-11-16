@@ -1,62 +1,45 @@
-/* The QR code page (src/quire/qr/page.ts): the code in its square at the left, staying in view as the page
-   scrolls, and the panel of what it holds and how it looks beside it; on a phone the square stays at the
-   top and the panel runs under it. The menus are the suite's own (quire.css); what is new is laid out
-   here. Nothing that stays open covers the code. */
+/* What is the QR code page's own (src/quire/qr/page.ts): the code's square and the picture read in it,
+   the code staying in view while the column scrolls past, the parts of the column that fold open, the
+   colors with their line for hex digits, and what each code read holds. The box, its column and its one
+   line are every small tool's (quire-bench.css); the menus are the suite's (quire.css). Nothing that
+   stays open covers the code. */
 
-.quire-qr-page main {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
+/* the code stays in view while the longer column scrolls past it; a box that clipped by scrolling would
+   hold it in place, so this one clips without scrolling */
+.quire-bench.quire-qr {
+    overflow: clip;
 }
 
-.quire-qr-host {
-    display: flex;
-    flex: 1;
-    justify-content: center;
-}
-
-.quire-qr {
-    display: grid;
-    grid-template-columns: minmax(16rem, 30rem) minmax(18rem, 34rem);
-    gap: 2.5rem;
-    align-items: start;
-    width: 100%;
-    max-width: calc(var(--page) + var(--gutter) * 2);
-    padding: 1.5rem var(--gutter) 4rem;
-    box-sizing: border-box;
-    font-family: var(--font-text);
-    color: var(--ink);
-}
-
-/* ---- the stage: the code, what it is, and getting it out ---- */
-
-.quire-qr-stage {
+.quire-qr .quire-bench-work {
     position: sticky;
-    top: 6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    min-width: 0;
+    top: 1rem;
+    align-self: start;
 }
 
+.quire-qr-room {
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    outline: 0.125rem dashed transparent;
+    outline-offset: -0.5rem;
+    transition: outline-color 0.15s ease;
+}
+
+.quire-qr.dropping .quire-qr-room {
+    outline-color: var(--accent);
+}
+
+/* the square, the same size whatever the code's version */
 .quire-qr-box {
     position: relative;
-    width: 100%;
-    max-width: min(30rem, calc(100dvh - 16rem));
+    width: min(100%, var(--tall));
     aspect-ratio: 1;
-    border-radius: var(--quire-round);
-    outline: 0.125rem dashed transparent;
-    outline-offset: 0.35rem;
-    transition: outline-color 0.15s ease;
+    border-radius: var(--radius);
 }
 
 .quire-qr-box:focus-visible {
     outline: 0.125rem solid var(--accent);
-}
-
-.quire-qr.dropping .quire-qr-box {
-    outline-color: var(--accent);
+    outline-offset: 0.35rem;
 }
 
 /* the code and the picture read share the square, one fading out as the other comes */
@@ -85,7 +68,7 @@
 .quire-qr-ground {
     position: absolute;
     inset: 0;
-    border-radius: var(--quire-round-small);
+    border-radius: calc(var(--radius) * 0.6);
     transition:
         background 0.2s ease,
         opacity 0.25s ease;
@@ -141,7 +124,6 @@
     margin: 0;
     padding: 2rem;
     color: var(--muted);
-    font-size: 1.05rem;
     line-height: 1.5;
     text-align: center;
     opacity: 0;
@@ -156,6 +138,16 @@
 .quire-qr:not(.has-picture) .quire-qr-read-view .quire-qr-empty {
     opacity: 1;
     scale: 1;
+}
+
+.quire-qr-read-view {
+    border-radius: calc(var(--radius) * 0.6);
+    outline: 0.0625rem dashed transparent;
+    outline-offset: -0.0625rem;
+}
+
+.quire-qr.reading:not(.has-picture) .quire-qr-read-view {
+    outline-color: var(--rule);
 }
 
 .quire-qr-read-image,
@@ -201,39 +193,8 @@
     }
 }
 
-.quire-qr-said,
-.quire-qr-verdict {
-    max-width: 30rem;
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
-    line-height: 1.45;
-}
-
-.quire-qr-verdict {
-    min-height: 1.3rem;
-}
-
-/* while reading, the maker's words fade, keeping their room so nothing moves */
-.quire-qr-said,
-.quire-qr-verdict {
-    transition: opacity 0.25s ease;
-}
-
-.quire-qr.reading :is(.quire-qr-said, .quire-qr-verdict) {
-    opacity: 0;
-}
-
-.quire-qr-read-view {
-    border-radius: var(--quire-round-small);
-    outline: 0.0625rem dashed transparent;
-    outline-offset: -0.0625rem;
-}
-
-.quire-qr.reading:not(.has-picture) .quire-qr-read-view {
-    outline-color: var(--rule);
-}
-
+/* whether the code reads back, after what it is, in the one line under it: a small dot before it, in the
+   accent and in the ink when it would not be read */
 .quire-qr-verdict.bad {
     color: var(--ink);
     font-weight: 600;
@@ -241,13 +202,13 @@
 
 .quire-qr-verdict.bad::before,
 .quire-qr-verdict.good::before {
-    content: "";
     display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    margin-right: 0.45rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    margin-right: 0.4rem;
     border-radius: 50%;
     background: var(--accent);
+    content: "";
     vertical-align: 0.05rem;
 }
 
@@ -255,158 +216,34 @@
     background: color-mix(in oklch, var(--ink) 45%, transparent);
 }
 
-.quire-qr-out,
-.quire-qr-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    transition: opacity 0.25s ease;
-}
+/* ---- the column ---- */
 
-.quire-qr-out[inert] {
-    opacity: 0.35;
-}
-
-/* while reading there is no code to copy or save: the maker's buttons fade away as its words do, keeping their room */
-.quire-qr.reading .quire-qr-out {
-    opacity: 0;
-}
-
-.quire-qr-sizes {
-    display: flex;
-    flex-basis: 100%;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-/* ---- buttons ---- */
-
-.quire-qr :is(.quire-qr-main, .quire-qr-plain, .quire-qr-choice) {
-    min-height: 2.25rem;
-    padding: 0 0.85rem;
-    border: 0;
-    border-radius: var(--quire-round-small);
-    font: inherit;
-    font-size: 0.92rem;
-    cursor: pointer;
-    transition:
-        background 0.15s ease,
-        color 0.15s ease,
-        scale 0.2s var(--ease);
-}
-
-.quire-qr :is(.quire-qr-main, .quire-qr-plain, .quire-qr-choice, .quire-qr-swatch):active {
-    scale: 0.95;
-}
-
-.quire-qr-main {
-    min-width: 6rem;
-    background: var(--accent);
-    color: var(--ground);
-    font-weight: 600;
-}
-
-.quire-qr-plain,
-.quire-qr-choice {
-    background: color-mix(in oklch, var(--ink) 7%, transparent);
-    color: var(--ink);
-}
-
-.quire-qr-plain:hover,
-.quire-qr-choice:hover {
-    background: color-mix(in oklch, var(--ink) 13%, transparent);
-}
-
-.quire-qr-choice.pressed {
-    background: color-mix(in oklch, var(--accent) 24%, transparent);
-    color: var(--accent);
-}
-
-.quire-qr-choices {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-}
-
-.quire-qr-choice {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-}
-
-.quire-qr-sample {
-    width: 1.55rem;
-    height: 1.55rem;
-    fill: currentColor;
-}
-
-.quire-qr-flag-mark {
-    display: block;
-    width: 1.9rem;
-    height: 1.2rem;
-    border-radius: 0.2rem;
-    box-shadow: inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.5);
-}
-
-/* a phone has no right-click and no keys to paste with: there, and only there, a plain Paste button */
-.quire-qr-paste {
-    display: none;
-}
-
-@media (pointer: coarse) {
-    .quire-qr-paste {
-        display: inline-flex;
-        align-items: center;
-    }
-}
-
-/* ---- the panel ---- */
-
-.quire-qr-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    min-width: 0;
-    container: qr-panel / inline-size;
-}
-
-.quire-qr-modes .quire-qr-choice {
-    min-width: 6rem;
-    font-weight: 600;
-}
-
-/* Make and Read share one place, the one not chosen faded out; the room takes the height of the one shown */
-.quire-qr-parts,
-.quire-qr-forms {
-    display: grid;
+/* make and read share one place under the dots that choose between them, set off by the column's own rule;
+   the one not chosen is faded out and out of the flow, so the room is the height of the one shown */
+.quire-qr-parts {
+    position: relative;
+    margin-top: 0.85rem;
+    padding-top: 0.8rem;
+    border-top: 0.0625rem solid var(--rule);
     transition: height 0.35s var(--ease);
     overflow: clip;
-    overflow-clip-margin: 0.4rem;
+    overflow-clip-margin: 0.5rem;
 }
 
 .quire-qr-make,
-.quire-qr-read,
-.quire-qr-form {
-    grid-area: 1 / 1;
-    align-self: start;
+.quire-qr-read {
     transition:
         opacity 0.25s ease,
         translate 0.35s var(--ease),
         visibility 0s linear 0s;
 }
 
-.quire-qr-make,
-.quire-qr-read {
-    display: flex;
-    flex-direction: column;
-    gap: 1.35rem;
-}
-
 .quire-qr.reading .quire-qr-make,
-.quire-qr:not(.reading) .quire-qr-read,
-.quire-qr-form:not(.shown) {
+.quire-qr:not(.reading) .quire-qr-read {
+    position: absolute;
+    top: 0.8rem;
+    right: 0;
+    left: 0;
     opacity: 0;
     translate: 0 0.5rem;
     visibility: hidden;
@@ -416,212 +253,110 @@
         visibility 0s linear 0.3s;
 }
 
-.quire-qr-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    border-radius: var(--quire-round);
-    outline: 0.125rem dashed transparent;
-    outline-offset: 0.3rem;
-    transition: outline-color 0.15s ease;
+/* hidden is hidden, not drawn faint as a group with nothing to act on is */
+.quire-bench-side .quire-qr-parts > [inert] {
+    opacity: 0;
 }
 
-.quire-qr-section.dropping {
-    outline-color: var(--accent);
-}
-
-/* Where the panel has the width, the name of each part stands beside it and not over it, so that the whole maker is seen at once: on a
-   window 1288 by 828 the panel had been 968 tall, with the margin, the picture and the error correction below the fold. The fields of
-   what the code holds keep the panel's whole width. It goes by the panel's own width, since a narrower panel has no room for a name
-   beside six shapes or a row of colors, and there the names stand over their parts as on a phone. */
-@container qr-panel (min-width: 33rem) {
-    .quire-qr-make {
-        gap: 0.7rem;
-    }
-
-    /* (rows are set apart by margins, not by the grid's own gap: a fold that is shut is a row of no height, and a gap round it would show) */
-    .quire-qr-make > .quire-qr-section {
-        display: grid;
-        grid-template-columns: 7.5rem minmax(0, 1fr);
-        gap: 0 0.75rem;
-        align-items: center;
-    }
-
-    .quire-qr-make > .quire-qr-section > .quire-qr-heading {
-        grid-area: 1 / 1;
-    }
-
-    .quire-qr-make > .quire-qr-section > :not(.quire-qr-heading) {
-        grid-column: 2;
-    }
-
-    .quire-qr-make > .quire-qr-section > .quire-qr-fold {
-        margin-top: 0;
-    }
-
-    .quire-qr-make > .quire-qr-section > .quire-qr-fold.open {
-        margin-top: 0.45rem;
-    }
-
-    /* the six kinds of content, and the fields of the one chosen, have the panel's whole width under their name */
-    .quire-qr-make > .quire-qr-section > :is(.quire-qr-kinds, .quire-qr-forms) {
-        grid-column: 1 / -1;
-        margin-top: 0.45rem;
-    }
-}
-
-.quire-qr-heading {
-    margin: 0;
-    color: var(--muted);
-    font-family: var(--font-text);
-    font-size: 0.85rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-}
-
-.quire-qr-form {
-    display: grid;
-    gap: 0.6rem;
-}
-
-.quire-qr-form-wide {
-    grid-template-columns: 1fr 1fr;
-}
-
-.quire-qr-whole {
-    grid-column: 1 / -1;
-}
-
-.quire-qr-pair {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem 1.25rem;
-}
-
-.quire-qr-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    min-width: 0;
-}
-
-.quire-qr-label {
-    color: var(--muted);
-    font-size: 0.85rem;
-}
-
-.quire-qr-input {
-    box-sizing: border-box;
-    width: 100%;
-    padding: 0.5rem 0.65rem;
-    border: 0.0625rem solid var(--field-edge);
-    border-radius: var(--quire-round-small);
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.95rem;
-    line-height: 1.4;
-    resize: vertical;
-    transition: border-color 0.15s ease;
-}
-
-.quire-qr-input:focus {
-    border-color: var(--accent);
-    outline: none;
-}
-
-/* a shut fold takes no room, not even the section's gap before it */
+/* a part that folds open and shut: a shut one takes no room, not even the step before it */
 .quire-qr-fold {
     display: grid;
     grid-template-rows: 0fr;
-    margin-top: -0.55rem;
     opacity: 0;
     transition:
         grid-template-rows 0.35s var(--ease),
-        margin-top 0.35s var(--ease),
         opacity 0.2s ease;
 }
 
 .quire-qr-fold.open {
     grid-template-rows: 1fr;
-    margin-top: 0;
     opacity: 1;
 }
 
+/* it clips a little outside the column's edge, so a ring round a color or a picture at the edge is not cut */
 .quire-qr-fold-in {
     min-height: 0;
+    margin-inline: -0.45rem;
     overflow: hidden;
+}
+
+/* out of reach while folded away, it is not also drawn faint: it is not there to be seen */
+.quire-bench-side .quire-qr-fold-in[inert] {
+    opacity: 1;
 }
 
 .quire-qr-fold-pad {
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
-    padding: 0.2rem 0.15rem;
+    padding: 0.55rem 0.45rem 0.15rem;
 }
 
-.quire-qr-colors {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.15rem;
+/* a fold inside a fold already has its step from what is over it, and its edge */
+.quire-qr-fold-pad .quire-qr-fold-in {
+    margin-inline: 0;
 }
 
-.quire-qr-swatch {
-    display: grid;
-    place-items: center;
-    width: 2.1rem;
-    height: 2.1rem;
+.quire-qr-fold-pad .quire-qr-fold-pad {
     padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    cursor: pointer;
-    transition:
-        box-shadow 0.15s ease,
-        scale 0.2s var(--ease);
 }
 
-.quire-qr-swatch.pressed {
-    box-shadow: inset 0 0 0 0.125rem var(--accent);
+.quire-qr-fold-pad > .quire-bench-row {
+    margin-top: 0;
 }
 
-.quire-qr-swatch-mark {
-    width: 1.35rem;
-    height: 1.35rem;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 0.0625rem oklch(0.6 0 0 / 0.6);
+/* the small pictures of the shapes and corners, in the ink of their label; the arrows drawn as lines */
+.quire-qr-sample {
+    fill: currentColor;
 }
 
-.quire-qr-clear .quire-qr-swatch-mark {
-    background: repeating-conic-gradient(oklch(0.6 0.02 300) 0 25%, oklch(0.35 0.02 300) 0 50%) 0 0 / 0.55rem 0.55rem;
+.quire-qr-arrow {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
-.quire-qr-hex {
-    width: 6.2rem;
-    margin-left: 0.35rem;
-    padding: 0.35rem 0.5rem;
+.quire-qr-flag-mark {
+    display: block;
+    width: 1.7rem;
+    height: 1.1rem;
+    border-radius: 0.2rem;
+    box-shadow: inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.5);
+}
+
+/* a row of colors with its line for any color as hex digits under it */
+.quire-qr-color {
+    display: grid;
+    gap: 0.3rem;
+    justify-items: start;
+}
+
+.quire-qr-color .quire-bench-typed.quire-qr-hex {
+    flex: none;
+    width: 6.5rem;
     font-family: var(--font-code);
     font-size: 0.85rem;
 }
 
-.quire-qr-stepper {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+/* clear, the last of the grounds, is a checkerboard */
+.quire-qr .quire-bench-swatch[data-color="clear"]::before {
+    background: repeating-conic-gradient(oklch(0.6 0.02 300) 0 25%, oklch(0.35 0.02 300) 0 50%) 0 0 / 0.5rem 0.5rem;
 }
 
-.quire-qr-step {
-    min-width: 2.25rem;
-    padding: 0 !important;
-    font-size: 1.1rem !important;
+/* the margin's heading names it: the row's own label is kept for assistive tools only, and the unit follows the number */
+.quire-qr-margin .quire-bench-row {
+    grid-template-columns: minmax(0, 1fr);
 }
 
-.quire-qr-number {
-    min-width: 2.2rem;
-    color: var(--ink);
-    font-variant-numeric: tabular-nums;
-    text-align: center;
+.quire-qr-margin .quire-bench-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .quire-qr-unit {
@@ -629,35 +364,32 @@
     font-size: 0.85rem;
 }
 
-.quire-qr-range {
-    width: 12rem;
-    accent-color: var(--accent);
+/* a picture dropped on its group goes into the code */
+.quire-qr-make > .quire-bench-group {
+    outline: 0.125rem dashed transparent;
+    outline-offset: 0.2rem;
+    transition:
+        opacity 0.25s ease,
+        outline-color 0.15s ease;
 }
 
-.quire-qr-picture-now {
-    display: flex;
-    gap: 0.4rem;
+.quire-qr-make > .quire-bench-group.dropping {
+    outline-color: var(--accent);
 }
 
-/* ---- what was read ---- */
-
-.quire-qr-read-said {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.95rem;
+/* a phone has no right-click and no keys to paste with: there, and only there, a plain paste */
+.quire-qr-paste {
+    display: none;
 }
 
-.quire-qr-results {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
+@media (pointer: coarse) {
+    .quire-qr-paste {
+        display: inline;
+    }
 }
 
+/* ---- what each code read holds: a group of the column, a row for each line with copy beside it ---- */
 .quire-qr-card {
-    padding: 0.8rem 1rem 0.7rem;
-    border: 0.0625rem solid var(--rule);
-    border-radius: var(--quire-round);
-    background: var(--surface);
     animation: quire-qr-card 0.35s var(--ease) var(--delay) backwards;
 }
 
@@ -668,43 +400,10 @@
     }
 }
 
-.quire-qr-card-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 0.4rem;
-}
-
-.quire-qr-card-title {
-    margin: 0;
-    font-family: var(--font-text);
-    font-size: 1rem;
-}
-
-.quire-qr-lines {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    margin: 0;
-}
-
-.quire-qr-line {
-    display: grid;
-    grid-template-columns: 7rem 1fr auto;
-    align-items: baseline;
-    gap: 0.6rem;
-    padding: 0.3rem 0;
-    border-top: 0.0625rem solid color-mix(in oklch, var(--rule) 60%, transparent);
-}
-
-.quire-qr-line-label {
-    color: var(--muted);
-    font-size: 0.85rem;
-}
-
+/* the value, and copy after it on the same line while there is room */
 .quire-qr-value {
-    margin: 0;
+    flex: 1 1 8rem;
+    line-height: 1.4;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
@@ -714,80 +413,48 @@
     font-size: 0.9rem;
 }
 
-.quire-qr-copy-one {
-    min-height: 1.9rem !important;
-    padding: 0 0.6rem !important;
-    font-size: 0.85rem !important;
+.quire-qr-card > .quire-bench-press {
+    margin-top: 0.55rem;
 }
 
 .quire-qr-card-facts {
-    margin: 0.4rem 0 0;
+    margin: 0.35rem 0 0;
     color: var(--muted);
     font-size: 0.8rem;
 }
 
-/* ---- a phone: the code at the top, staying in view, and the panel under it ---- */
-
-@media (max-width: 52rem) {
-    .quire-qr {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 1rem;
-        padding-top: 0.75rem;
-    }
-
-    /* right under the top, which is 3.35rem tall on a phone */
-    .quire-qr-stage {
-        top: 3.35rem;
-        z-index: 5;
-        align-items: center;
-        margin-inline: calc(var(--gutter) * -1);
-        padding: 0.5rem var(--gutter) 0.6rem;
+/* ---- a narrow window: the column under the code, the code and its line staying at the top while the column scrolls under them ---- */
+@media (max-width: 44rem) {
+    .quire-qr .quire-bench-work {
+        top: 0;
+        z-index: 2;
         border-bottom: 0.0625rem solid var(--rule);
         background: var(--ground);
     }
 
+    .quire-qr-room {
+        padding: 0.6rem;
+    }
+
     .quire-qr-box {
-        width: min(100%, 30dvh);
+        width: min(100%, 30svh);
+    }
+
+    /* the column's own rule over it is the work's rule under it */
+    .quire-qr .quire-bench-side {
+        border-top: 0;
     }
 
     /* what the keyboard or a scroll brings into view stops below the code, never under it */
-    .quire-qr-panel :is(button, input, textarea, h3) {
-        scroll-margin-top: calc(30dvh + 14rem);
-    }
-
-    .quire-qr-said,
-    .quire-qr-verdict {
-        text-align: center;
-    }
-
-    .quire-qr-said {
-        font-size: 0.8rem;
-    }
-
-    .quire-qr-out {
-        justify-content: center;
-    }
-
-    .quire-qr-sizes {
-        justify-content: center;
-    }
-
-    .quire-qr-form-wide {
-        grid-template-columns: 1fr;
-    }
-
-    .quire-qr-line {
-        grid-template-columns: 1fr auto;
-    }
-
-    .quire-qr-line-label {
-        grid-column: 1 / -1;
+    .quire-qr .quire-bench-side :is(button, input, textarea, h3) {
+        scroll-margin-top: calc(30svh + 6rem);
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .quire-qr *,
-    .quire-qr *::before {
+    .quire-qr *::before,
+    .quire-qr *::after {
         transition-duration: 0s !important;
         animation: none !important;
     }

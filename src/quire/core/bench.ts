@@ -243,3 +243,31 @@ export function bench(label: string, className = ""): Bench {
         },
     };
 }
+
+/** One of the small pictures a pictured row chooses between: its value, the picture, and the words that name it (its tooltip, and what assistive tools say). */
+export interface Pictured<T extends string> {
+    value: T;
+    picture: Node;
+    tip: string;
+}
+
+/**
+ * A row of dots whose choices are small pictures (a shape, a corner, a flag), drawn quietly with no box round them, the one chosen
+ * in the accent with a short rule under it. It is a row of dots in every other way: a group with its small heading, radio inputs
+ * underneath (moved along by the arrow keys), `press` told the value pressed, and the pictures showing only what `show` was last
+ * told.
+ */
+export function pictured<T extends string>(heading: string, options: Pictured<T>[], press: (value: T, input: HTMLInputElement) => void): Dots {
+    const made = dots(
+        heading,
+        options.map((option) => ({ value: option.value, text: "", tip: option.tip })),
+        press,
+    );
+    made.set.classList.add("quire-bench-pictured");
+    made.set.querySelectorAll("label").forEach((label, index) => {
+        const option = options[index]!;
+        label.querySelector("input")!.setAttribute("aria-label", option.tip);
+        label.append(option.picture);
+    });
+    return made;
+}
