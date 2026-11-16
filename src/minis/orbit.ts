@@ -155,6 +155,14 @@ export function panned(orbit: Orbit, degrees: number, dx: number, dy: number): O
     return { ...orbit, at: [orbit.at[0] - level[0] * dx * reach + away[0] * along * reach, orbit.at[1], orbit.at[2] - level[2] * dx * reach + away[2] * along * reach] };
 }
 
+/**
+ * The view after a finger, or the pointer with the other button, has gone (dx, dy) pixels across a picture `height` pixels tall: the
+ * ground goes with it, so what was under the finger stays under it. To the right is positive `dx`, down the picture positive `dy`.
+ */
+export function pannedBy(orbit: Orbit, degrees: number, dx: number, dy: number, height: number): Orbit {
+    return panned(orbit, degrees, dx / height, dy / height);
+}
+
 /** The camera that frames a box (by its least and greatest corners) from the way it now looks, with a little room round it. */
 export function framing(orbit: Orbit, degrees: number, aspect: number, low: V3, high: V3): Orbit {
     const at: V3 = [(low[0] + high[0]) / 2, (low[1] + high[1]) / 2, (low[2] + high[2]) / 2];

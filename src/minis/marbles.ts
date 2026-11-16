@@ -37,7 +37,7 @@ import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, st
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
 import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
-import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
+import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, pannedBy, project, ray, straightOn, type Orbit } from "./orbit";
 import { BOX, CELL, FURTHEST, LEVEL, RADIUS, SIZES, allowed, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
 import { fits, jointsOf, links, open, read, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -3040,7 +3040,7 @@ export default function marbles(m: Mote): Scene {
                 const now = pinchOf();
                 if (now && pinch) {
                     toFree();
-                    orbit = panned(orbit, DEGREES, -(now.x - pinch.x) / m.height, -(now.y - pinch.y) / m.height);
+                    orbit = pannedBy(orbit, DEGREES, now.x - pinch.x, now.y - pinch.y, m.height);
                     const twist = now.angle - pinch.angle;
                     if (Math.abs(twist) > 1e-4) free();
                     orbit = kept({ ...orbit, far: orbit.far * (pinch.apart / Math.max(1, now.apart)), turn: orbit.turn - twist }, orbit);
@@ -3082,7 +3082,8 @@ export default function marbles(m: Mote): Scene {
             else if (one.mode === "turn") orbit = kept({ ...orbit, turn: orbit.turn - dx * 0.008, tip: orbit.tip + dy * 0.006 }, orbit);
             else if (one.mode === "pan" && (dx || dy)) {
                 toFree();
-                orbit = panned(orbit, DEGREES, -dx / m.height, -dy / m.height);
+                // the ground goes with the pointer: it had gone the other way, the drag handed on with its sign turned
+                orbit = pannedBy(orbit, DEGREES, dx, dy, m.height);
             }
             m.wake();
         },

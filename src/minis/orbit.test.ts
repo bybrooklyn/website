@@ -4,7 +4,7 @@
 // all of its corners; and the camera stays within its limits. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { enters, eyeOf, FAR, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, TIP, VIEWS, type Orbit } from "./orbit";
+import { enters, eyeOf, FAR, framing, ground, kept, lensed, nearest, panned, pannedBy, project, ray, straightOn, TIP, VIEWS, type Orbit } from "./orbit";
 import type { V3 } from "../mote/solids";
 
 const orbit: Orbit = { at: [10, 5, -20], turn: 0.7, tip: 0.6, far: 120 };
@@ -55,6 +55,20 @@ test("the camera stays within its limits, and panning keeps its height and how f
     expect(moved.at[1]).toBe(orbit.at[1]);
     expect(moved.far).toBe(orbit.far);
     expect(moved.at[0] !== orbit.at[0] || moved.at[2] !== orbit.at[2]).toBe(true);
+});
+
+test("a drag to pan takes the ground with it: what was under the pointer goes right with a drag to the right and down with a drag down", () => {
+    const [degrees, aspect, height] = [40, 1.5, 800];
+    const under = orbit.at;
+    const before = project(orbit, degrees, aspect, under)!;
+    const right = project(pannedBy(orbit, degrees, 100, 0, height), degrees, aspect, under)!;
+    const down = project(pannedBy(orbit, degrees, 0, 100, height), degrees, aspect, under)!;
+    // across the picture it goes exactly as far as the pointer did: 100 of 800 pixels of height is a quarter of the picture's half height
+    expect(right.x - before.x).toBeCloseTo((2 * (100 / height)) / aspect, 5);
+    expect(right.y).toBeCloseTo(before.y, 5);
+    // the picture's own y grows upward, so down the screen is less
+    expect(down.y).toBeLessThan(before.y - 0.05);
+    expect(down.x).toBeCloseTo(before.x, 5);
 });
 
 test("a view straight on stays where it is put, and the first drag from it does not jump to the free camera's limit", () => {
