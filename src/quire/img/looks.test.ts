@@ -57,18 +57,24 @@ test("a grade saved as a look is listed, given to another picture and forgotten;
     expect(await gradeOf()).toBeUndefined();
     await page.tab.run("[...document.querySelectorAll('.quire-img-look-apply')].find((each) => each.textContent === 'Warm evening').click()");
     expect((await gradeOf())?.warmth).toBe(30);
+    // a real press with the mouse: Chromium opens a file chooser only within a few seconds of a real input, and a press made from
+    // script left the chooser shut whenever the machine was slow
+    const pressReal = async (words: string) => {
+        const at = await page.tab.run<{ x: number; y: number }>(`(() => { const button = [...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === ${JSON.stringify(words)}); button.scrollIntoView({ block: "center", behavior: "instant" }); const box = button.getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()`);
+        await page.tab.click(at.x, at.y);
+    };
     // a .cube read in: a table that swaps red and blue
     const lines = ["TITLE \"Swap\"", "LUT_3D_SIZE 2"];
     for (let b = 0; b < 2; b++) for (let g = 0; g < 2; g++) for (let r = 0; r < 2; r++) lines.push(`${b} ${g} ${r}`);
     await Bun.write(`${folder}/swap.cube`, lines.join("\n"));
     await page.tab.files([`${folder}/swap.cube`]);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'read .cube').click()");
+    await pressReal("read .cube");
     await page.until("window.app.editing().steps().find((step) => step.type === 'grade')?.grade.lut?.name === 'Swap'");
     expect((await gradeOf())?.warmth).toBe(30);
     // a hostile one is refused, and the grade keeps what it had
     await Bun.write(`${folder}/bad.cube`, "LUT_3D_SIZE 9999\n");
     await page.tab.files([`${folder}/bad.cube`]);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'read .cube').click()");
+    await pressReal("read .cube");
     await page.until("document.querySelector('.quire-status')?.textContent?.includes('Not read') || document.body.textContent.includes('could not be read')");
     expect((await gradeOf())?.lut?.name).toBe("Swap");
     // written as a .cube: 33 a side
