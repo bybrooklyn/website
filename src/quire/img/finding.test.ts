@@ -72,7 +72,7 @@ test("Find asks first, fetches only when told, and presses, Alt-presses, Subject
         const coat = await page.onScreen(600, 420);
         await tab.click(coat.x, coat.y);
         await until("window.app.editing().steps().some((step) => step.kind === 'found')", 60_000);
-        expect(await tab.run<string>("document.querySelector('.quire-img-grade-target').textContent")).toBe("Found 1");
+        expect(await tab.run<string>("document.querySelector('.quire-img-grade-target').textContent")).toBe("found 1");
         const first = await tab.run<string>("JSON.stringify(window.app.editing().steps().find((step) => step.kind === 'found').found)");
         // an Alt-press on the head: the same part, changed
         await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')");
@@ -82,10 +82,10 @@ test("Find asks first, fetches only when told, and presses, Alt-presses, Subject
         expect(await tab.run<number>("window.app.editing().steps().filter((step) => step.kind === 'found').length")).toBe(1);
         // Subject, then Background: parts of their own, the second inside out
         await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'Subject').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'subject').click()");
         await until("window.app.editing().steps().filter((step) => step.kind === 'found').length === 2", 60_000);
         await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'Background').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'background').click()");
         await until("window.app.editing().steps().filter((step) => step.kind === 'found').length === 3", 60_000);
         expect(await tab.run<boolean>("window.app.editing().steps().filter((step) => step.kind === 'found')[2].invert")).toBe(true);
         // graded and opened again from its steps: the same pixels, with no model asked

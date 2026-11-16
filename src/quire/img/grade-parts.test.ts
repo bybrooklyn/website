@@ -17,7 +17,7 @@ test("a brush's size and a feather run finely at their small ends, and the feath
     expect(featherPixels(0, 4000)).toBe(0);
     expect(featherPixels(100, 4000)).toBe(400);
     for (const value of [0, 10, 33.3, 80, 100]) expect(featherValue(featherPixels(value, 4000), 4000)).toBeCloseTo(value, 0);
-    expect(partName("gradient", 2)).toBe("Gradient 2");
+    expect(partName("gradient", 2)).toBe("gradient 2");
     expect(partName("paint", 1)).toBe("Painted area 1");
 });
 
@@ -55,7 +55,7 @@ test("a gradient dragged out is a part of its own: its grade darkens the top, it
     expect(made.kind).toBe("gradient");
     expect(made.from!.y).toBeCloseTo(600, -1);
     expect(made.to!.y).toBeCloseTo(1800, -1);
-    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("Gradient 1");
+    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("gradient 1");
     await typeInto("light", "-80");
     const part = (await steps()).find((step) => step.type === "part")!;
     expect(part.grade).toEqual({ light: -80 });
@@ -71,18 +71,18 @@ test("a gradient dragged out is a part of its own: its grade darkens the top, it
     // its feather and turned inside out
     await typeInto("feather", "50");
     expect((await steps()).find((step) => step.type === "part")!.feather).toBe(100);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-switch')].find((each) => each.textContent === 'Inside out').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-switch')].find((each) => each.textContent === 'inside out').click()");
     expect((await steps()).find((step) => step.type === "part")!.invert).toBe(true);
     // Escape: the whole picture again, whose grade is its own
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
     await page.tab.press("Escape");
-    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("Whole picture");
+    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("whole picture");
     await typeInto("warmth", "20");
     expect((await steps()).find((step) => step.type === "grade")!.grade).toEqual({ warmth: 20 });
     // the gradient's handle pressed picks it again
     const handle = await page.onScreen(2000, 600);
     await page.tab.click(handle.x, handle.y);
-    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("Gradient 1");
+    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("gradient 1");
 }, 60_000);
 
 test("Paint makes a part a stroke paints and Erase takes from, each one undo; Delete takes the part away; the document read again flattens the same", async () => {
@@ -94,7 +94,7 @@ test("Paint makes a part a stroke paints and Erase takes from, each one undo; De
     let painted = (await steps()).find((step) => step.kind === "paint")!;
     expect(painted.strokes).toHaveLength(1);
     expect(painted.strokes![0]!.points.length).toBeGreaterThan(4);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-switch')].find((each) => each.textContent === 'Erase').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-switch')].find((each) => each.textContent === 'erase').click()");
     await page.tab.drag(await page.onScreen(1200, 1500), await page.onScreen(1250, 1500), 4);
     painted = (await steps()).find((step) => step.kind === "paint")!;
     expect(painted.strokes).toHaveLength(2);
@@ -122,5 +122,5 @@ test("Paint makes a part a stroke paints and Erase takes from, each one undo; De
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
     await page.tab.press("Delete");
     expect((await steps()).some((step) => step.kind === "paint")).toBe(false);
-    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("Whole picture");
+    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("whole picture");
 }, 60_000);

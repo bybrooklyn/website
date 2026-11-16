@@ -2069,7 +2069,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         setSplit: (on) => stage.setSplit(on ? stage.element.clientWidth / 2 : undefined),
         give: {
             said: () => (batched() ? (giveSaid("grade") ?? "") : undefined),
-            label: () => `Give to the other ${items.length - 1}`,
+            label: () => `give to the other ${items.length - 1}`,
             press: () => void giveAll(["grade"]),
         },
     });
@@ -2205,8 +2205,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     };
     /** What the strip says while finding. */
     const findSaid = () => ({ idle: "Find", asking: "Choosing a model", fetching: "Downloading the model", finding: "Finding", ready: "Press a thing to outline it; Alt and press to take away" })[finding.state()];
-    const subjectButton = stripButton("Subject", "The picture's subject, found by a model", () => void finding.subject(false));
-    const backgroundButton = stripButton("Background", "Everything but the picture's subject", () => void finding.subject(true));
+    const subjectButton = stripButton("subject", "The picture's subject, found by a model", () => void finding.subject(false));
+    const backgroundButton = stripButton("background", "Everything but the picture's subject", () => void finding.subject(true));
     grading.looks.addEventListener("toggle", () => grading.looks.open && void looked.fill());
     /** The surface and its deeper controls, as the grade now is. */
     const fillGrade = () => {

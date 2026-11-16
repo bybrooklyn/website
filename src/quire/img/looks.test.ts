@@ -47,7 +47,7 @@ test("a grade saved as a look is listed, given to another picture and forgotten;
     expect((await gradeOf())?.warmth).toBe(30);
     await page.tab.run("document.querySelector('.quire-img-grade-looks summary').click()");
     await page.tab.run("(() => { const field = document.querySelector('.quire-img-look-name'); field.value = 'Warm evening'; })()");
-    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'Save look').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'save look').click()");
     await page.until("[...document.querySelectorAll('.quire-img-look-apply')].some((each) => each.textContent === 'Warm evening')");
     // another picture, and the look given to it
     // with Grade open a new picture opens with Grade still open, so the crop's frame the page waits for is not on it
@@ -62,17 +62,17 @@ test("a grade saved as a look is listed, given to another picture and forgotten;
     for (let b = 0; b < 2; b++) for (let g = 0; g < 2; g++) for (let r = 0; r < 2; r++) lines.push(`${b} ${g} ${r}`);
     await Bun.write(`${folder}/swap.cube`, lines.join("\n"));
     await page.tab.files([`${folder}/swap.cube`]);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'Read .cube').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'read .cube').click()");
     await page.until("window.app.editing().steps().find((step) => step.type === 'grade')?.grade.lut?.name === 'Swap'");
     expect((await gradeOf())?.warmth).toBe(30);
     // a hostile one is refused, and the grade keeps what it had
     await Bun.write(`${folder}/bad.cube`, "LUT_3D_SIZE 9999\n");
     await page.tab.files([`${folder}/bad.cube`]);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'Read .cube').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'read .cube').click()");
     await page.until("document.querySelector('.quire-status')?.textContent?.includes('Not read') || document.body.textContent.includes('could not be read')");
     expect((await gradeOf())?.lut?.name).toBe("Swap");
     // written as a .cube: 33 a side
-    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'Write .cube').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === 'write .cube').click()");
     await page.until("Object.keys(window.downloads).some((name) => name.endsWith('.cube'))");
     const text = await page.tab.run<string>("new TextDecoder().decode(new Uint8Array(window.downloads[Object.keys(window.downloads).find((name) => name.endsWith('.cube'))]))");
     expect(text).toContain("LUT_3D_SIZE 33");

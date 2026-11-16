@@ -110,7 +110,7 @@ test("Balance on a gray patch makes it neutral, Auto lands as slider and curve v
     })()`);
     await page.until("window.app.editing().stage?.loaded()?.size.width === 600");
     await page.until("document.querySelector('.quire-img-grade-panel.open')");
-    await page.tab.run("[...document.querySelectorAll('.quire-img-grade-fix')].find((each) => each.textContent === 'Balance').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-grade-fix')].find((each) => each.textContent === 'balance').click()");
     expect(await page.tab.run("window.app.editing().stage.armed()")).toBe(true);
     const patch = await page.onScreen(300, 200);
     await page.tab.click(patch.x, patch.y);
@@ -119,7 +119,7 @@ test("Balance on a gray patch makes it neutral, Auto lands as slider and curve v
     const flat = await page.tab.run<number[]>("(async () => { const flat = await window.app.editing().flatten(); const at = (200 * 600 + 300) * 4; return [flat.data[at], flat.data[at + 1], flat.data[at + 2]]; })()");
     expect(Math.max(...flat) - Math.min(...flat)).toBeLessThanOrEqual(1);
     // Auto: warmth and tint, and the curve's ends
-    await page.tab.run("[...document.querySelectorAll('.quire-img-grade-fix')].find((each) => each.textContent === 'Auto').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-grade-fix')].find((each) => each.textContent === 'auto').click()");
     await page.until("(window.app.editing().steps().find((step) => step.type === 'grade')?.grade.curves?.all ?? []).length === 2");
     // the histogram has been drawn
     await page.until("(() => { const canvas = document.querySelector('.quire-img-grade-scope'); const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; return data.some((value) => value > 0); })()");

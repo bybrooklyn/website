@@ -7,6 +7,7 @@
 //   const more = gradeMore({ grade, preview, set, pickColor });
 //   panel.deeper.append(more.element); more.fill();
 
+import { lowered } from "../core/bench";
 import { control, icon, make } from "../core/ui";
 import { curveAt, MOST, SLIDERS, STRAIGHT, type Curves, type Grade, type OwnColor, type Wheel } from "./grade";
 import { slider } from "./grade-panel";
@@ -79,7 +80,7 @@ function curveEditor(hooks: MoreHooks) {
     channels.setAttribute("aria-label", "Curve");
     let channel: keyof Curves = "all";
     const buttons = CHANNELS.map((each) => {
-        const button = make("button", "quire-img-curve-channel", each.label);
+        const button = make("button", "quire-img-curve-channel", lowered(each.label));
         button.type = "button";
         button.setAttribute("role", "radio");
         button.title = each.key === "all" ? "The curve of all three channels together" : `The ${each.label.toLowerCase()} channel's own curve`;
@@ -239,7 +240,7 @@ function wheelControl(spec: { key: keyof Grade["wheels"]; label: string }, hooks
     canvas.setAttribute("role", "slider");
     canvas.setAttribute("aria-label", `${spec.label} wheel`);
     canvas.title = `${spec.label}: drag toward a color to push these tones toward it; a double press puts it back`;
-    element.append(canvas, make("span", "quire-img-wheel-label", spec.label));
+    element.append(canvas, make("span", "quire-img-wheel-label", lowered(spec.label)));
     let live: Wheel | undefined;
     const now = () => live ?? hooks.grade().wheels[spec.key];
     function draw() {
@@ -361,12 +362,12 @@ export function gradeMore(hooks: MoreHooks) {
     wheelRow.append(...wheels.map((each) => each.element));
     // colors picked in the picture, each with its own three sliders
     const colors = make("div", "quire-img-own-colors");
-    const pick = make("button", "quire-dialog-dismiss quire-img-grade-fix quire-img-pick-color", "Pick a color");
+    const pick = make("button", "quire-dialog-dismiss quire-img-grade-fix quire-img-pick-color", "pick a color");
     pick.type = "button";
     pick.title = "Then press a color in the picture, to shift it on its own";
     pick.addEventListener("click", () => hooks.pickColor());
     const heading = (words: string) => make("p", "quire-img-grade-heading", words);
-    element.append(tint.row, heading("Curve"), curve.element, heading("Wheels"), wheelRow, heading("Colors"), colors, pick);
+    element.append(tint.row, heading("curve"), curve.element, heading("wheels"), wheelRow, heading("colors"), colors, pick);
 
     const setColor = (index: number, change: Partial<OwnColor> | undefined, live = false) => {
         const grade = hooks.grade();
@@ -384,7 +385,7 @@ export function gradeMore(hooks: MoreHooks) {
                     swatch.style.background = swatchOf(each.hue);
                     const remove = control("Take this color away", icon("trash"), () => setColor(index, undefined));
                     const head = make("div", "quire-img-own-head");
-                    head.append(swatch, make("span", "", `Color ${index + 1}`), remove);
+                    head.append(swatch, make("span", "", `color ${index + 1}`), remove);
                     const sliders = (
                         [
                             ["shift", "Hue", "Turns this color's hue"],
@@ -413,7 +414,7 @@ export function gradeMore(hooks: MoreHooks) {
         for (const row of colors.children) (row as HTMLElement & { show?: () => void }).show?.();
         pick.disabled = list.length >= MOST.colors;
         pick.classList.toggle("pressed", hooks.picking());
-        pick.textContent = hooks.picking() ? "Press a color in the picture" : "Pick a color";
+        pick.textContent = hooks.picking() ? "press a color in the picture" : "pick a color";
     }
     return {
         element,

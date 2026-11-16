@@ -96,10 +96,10 @@ export function gradeLooks(hooks: LooksHooks) {
     const element = make("div", "quire-img-looks");
     const save = make("div", "quire-img-look-save");
     const field = make("input", "quire-field quire-img-look-name");
-    field.placeholder = "Name of the look";
+    field.placeholder = "name of the look";
     field.setAttribute("aria-label", "Name of the look");
     field.maxLength = MOST_LOOKS.name;
-    const keep = make("button", "quire-dialog-dismiss quire-img-grade-fix", "Save look");
+    const keep = make("button", "quire-dialog-dismiss quire-img-grade-fix", "save look");
     keep.type = "button";
     keep.title = "Keeps this grade as a look, in this browser, to give to other pictures";
     save.append(field, keep);
@@ -119,8 +119,8 @@ export function gradeLooks(hooks: LooksHooks) {
         return made;
     };
     files.append(
-        button("Read .cube", "Reads a .cube look into this grade, applied last", () => chooser.click()),
-        button("Write .cube", "Saves this grade as a .cube file, 33 a side, for other editors", () => {
+        button("read .cube", "Reads a .cube look into this grade, applied last", () => chooser.click()),
+        button("write .cube", "Saves this grade as a .cube file, 33 a side, for other editors", () => {
             const name = (field.value.trim() || hooks.name() || "look").slice(0, MOST_LOOKS.name);
             hooks.give(new Blob([writeCube(hooks.grade(), hooks.space(), name)], { type: "text/plain" }), `${name.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "look"}.cube`);
             hooks.say("Written", `Written as ${name}.cube, 33 a side`);
