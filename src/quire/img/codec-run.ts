@@ -134,10 +134,20 @@ function ask(job: Job): Promise<{ bytes: Uint8Array; width?: number; height?: nu
         const answer = (event: MessageEvent<{ id: number; error?: string; bytes: Uint8Array; width?: number; height?: number }>) => {
             if (event.data.id !== id) return;
             busy.removeEventListener("message", answer);
+            busy.removeEventListener("error", broken);
             if (event.data.error) failed(new Error(event.data.error));
             else done(event.data);
         };
+        // a worker that could not be loaded or stopped answers nothing: the job fails, and the next makes a fresh worker
+        const broken = () => {
+            busy.removeEventListener("message", answer);
+            busy.removeEventListener("error", broken);
+            if (workers.get(job.name) === busy) workers.delete(job.name);
+            busy.terminate();
+            failed(new Error(`the ${job.name} module's worker could not run`));
+        };
         busy.addEventListener("message", answer);
+        busy.addEventListener("error", broken);
         busy.postMessage({ ...job, id });
     });
 }
