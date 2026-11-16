@@ -1061,4 +1061,15 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   (150, 140, 166) at 235, steam (238, 244, 255) at 240, and a soft cell is drawn at 0.7 of its color.
   By a test's sum (brightness over the ground, as drawn) smoke stands 85 over the ground where it stood
   26, and steam is 167 against stone's 121, where it was 95.
+- **Keys work wherever the keyboard is in the mini.** They were heard only on the canvas, so after a
+  swatch was clicked F, the brackets and Space did nothing (Space pressed the swatch again). They are now
+  heard on the whole mini (`keyAction` in `grains.ts`): a letter picks, the brackets size the brush, and
+  Space pauses from a swatch or button rather than pressing it; in a box of text nothing is taken. On the
+  tester's steps (click water, then F, ], ], Space) the page now has fire chosen, the brush at 6 and the
+  world paused, where it had water, 4 and nothing.
+- **The phone's 10 pixels were the test's.** A downward finger drag moved the page by 10 pixels only the
+  first time: the test's browser turns touch on at the first finger, which makes the page's
+  `(pointer: coarse)` rules apply then and there (the site's name gains its finger padding, 9.6 pixels),
+  and the browser keeps the view where it was by scrolling. A second drag moves the page by 0. On a phone
+  those rules apply from the start; nothing in the mini was changed for it.
 

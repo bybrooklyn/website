@@ -109,6 +109,25 @@ export const KEYS: Record<string, string> = {
     erase: "e",
 };
 
+/** What a key pressed inside the mini asks for. */
+export type KeyAction = { pick: string } | "larger" | "smaller" | "pause";
+
+/**
+ * What a key pressed anywhere inside the mini does: a material's letter picks it, the brackets size the
+ * brush, Space pauses. `on` is where the keyboard is: the canvas, whose Space Mote already turns into
+ * pausing; a button, whose Space would otherwise press it again; a slider; or a box of text, where a
+ * letter is typed and nothing else happens.
+ */
+export function keyAction(key: string, on: "canvas" | "button" | "slider" | "text"): KeyAction | undefined {
+    if (on === "text") return undefined;
+    const lower = key.toLowerCase();
+    if (lower === "[") return "smaller";
+    if (lower === "]") return "larger";
+    if (key === " ") return on === "canvas" ? undefined : "pause";
+    if (Object.values(KEYS).includes(lower)) return { pick: lower };
+    return undefined;
+}
+
 /** How wide a cell is, in CSS pixels, before it is rounded to whole device pixels. */
 export const CELL = 1;
 

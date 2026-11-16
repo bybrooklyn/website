@@ -5,7 +5,7 @@
 // the page. `bun run wasm` builds the modules; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { engineAddress, fillOf, flagSize, HELD, inRow, KEYS, materials, MOST, start, swatchColor, worldFor, type Engine, type Material } from "./grains";
+import { engineAddress, fillOf, flagSize, HELD, inRow, keyAction, KEYS, materials, MOST, start, swatchColor, worldFor, type Engine, type Material } from "./grains";
 
 const simd = new URL("../../public/wasm/sand.wasm", import.meta.url);
 const scalar = new URL("../../public/wasm/sand-scalar.wasm", import.meta.url);
@@ -146,6 +146,21 @@ test("a world is one CSS pixel a cell in whole device pixels, and never more tha
     const big = worldFor(4000, 2400, 1);
     expect(big.columns).toBeLessThanOrEqual(MOST.columns);
     expect(big.rows).toBeLessThanOrEqual(MOST.rows);
+});
+
+test("a key works wherever the keyboard is in the mini: on the canvas, a swatch just clicked, or the slider", () => {
+    for (const on of ["canvas", "button", "slider"] as const) {
+        expect(keyAction("f", on)).toEqual({ pick: "f" });
+        expect(keyAction("F", on)).toEqual({ pick: "f" });
+        expect(keyAction("]", on)).toBe("larger");
+        expect(keyAction("[", on)).toBe("smaller");
+    }
+    // Space pauses from a swatch rather than pressing it again; on the canvas Mote's own key does it
+    expect(keyAction(" ", "button")).toBe("pause");
+    expect(keyAction(" ", "canvas")).toBeUndefined();
+    // a letter that is no material's, and anything typed into a box of text, does nothing
+    expect(keyAction("q", "button")).toBeUndefined();
+    expect(keyAction("f", "text")).toBeUndefined();
 });
 
 test("the row of materials puts like things together and every material has its own key", async () => {
