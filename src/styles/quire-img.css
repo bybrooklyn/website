@@ -147,6 +147,53 @@
     }
 }
 
+/* the handles of a mark or a cover picked: small squares on its corners and sides, a round one on each end of an arrow,
+   which grow in when it is picked and shrink away when it is let go, with a finger's reach round each; the pointer over
+   one says which way it reshapes (set from the stage, since it turns with the mark) */
+.quire-img-handle {
+    position: absolute;
+    width: 0.6rem;
+    height: 0.6rem;
+    margin: -0.3rem 0 0 -0.3rem;
+    border: 0.0625rem solid oklch(0 0 0 / 0.6);
+    border-radius: 0.15rem;
+    background: oklch(1 0 0);
+    touch-action: none;
+    opacity: 0;
+    scale: 0.3;
+    pointer-events: none;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease);
+}
+
+.quire-img-handle.end {
+    border-radius: 50%;
+}
+
+.quire-img-handle.shown {
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+}
+
+.quire-img-handle::after {
+    position: absolute;
+    inset: -0.5rem;
+    content: "";
+}
+
+/* over a mark or a cover a press would pick, the pointer says a drag moves it */
+.quire-img-stage[data-over="mark"]:not(.panning) {
+    cursor: move;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-img-handle {
+        transition: none;
+    }
+}
+
 /* typing a line of text where the picture was pressed: the words themselves, in the mark's color */
 .quire-img-writing {
     position: absolute;

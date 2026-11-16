@@ -25,7 +25,7 @@ import { maskSize, stackFor, type Stroke } from "./masks";
 import type { Space } from "./grade";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
-import { alignShare, allAt, drawMarks, moved, partOf, placeOn, ringsOf, type Place, type Ring } from "./marks";
+import { alignShare, allAt, drawMarks, gripsOf, moved, partOf, placeOn, reshaped, ringsOf, type Grip, type Place, type Ring } from "./marks";
 import { bent, cornersOf, fromLevel, keepInside, levelBox, fitInside, levelling, toLevel, turnOf, type Turn } from "./turn";
 import { apply, convex, squareToQuad, stretch, type Matrix } from "./homography";
 import { perspectiveMap, rectCorners, type Corners, type Perspective } from "./perspective";
@@ -298,7 +298,13 @@ export function createStage(hooks: StageHooks) {
         handle.dataset.corner = String(at);
         return handle;
     });
-    element.append(under, canvas, over, frame, writing, splitter, ...cornerGrips);
+    // the handles of what is picked: a rectangle's eight, or an arrow's two ends, each dragged to reshape it
+    const markGrips = Array.from({ length: 8 }, () => {
+        const handle = make("span", "quire-img-handle");
+        handle.setAttribute("aria-hidden", "true");
+        return handle;
+    });
+    element.append(under, canvas, over, frame, writing, splitter, ...cornerGrips, ...markGrips);
 
     let loaded: Loaded | undefined;
     // the turn the dial gives while it is dragged, drawn before letting go makes it a step, and the faint grid shown while it turns
@@ -538,7 +544,7 @@ export function createStage(hooks: StageHooks) {
             framedKey = key;
             hooks.framed?.(framing);
         }
-        if (!now || !loaded) return;
+        if (!now || !loaded) return placeGrips(undefined);
         const live = perspectiveNow();
         const { perspective: _kept, turn: _turned, ...flat } = now;
         // setting the corners, the original as it came, whole and at its own size (a crop or a resize among the steps would draw it smaller than
@@ -612,6 +618,7 @@ export function createStage(hooks: StageHooks) {
             }
             context.setLineDash([]);
         }
+        placeGrips(chosen && (chosen.type === "cover" || isMark(chosen)) ? chosen : undefined);
         if (cropping() && cropFrame) {
             const box = levelOnStage(cropFrame);
             Object.assign(frame.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
@@ -664,6 +671,28 @@ export function createStage(hooks: StageHooks) {
         }
     }
 
+    /**
+     * Puts the handles on what is picked, where its corners and sides (or an arrow's ends) are on the screen, each saying by the
+     * pointer what a drag on it does; they grow in when something that has them is picked and shrink away when nothing is. A
+     * text and a number have none, and no tool that keeps the press for itself shows them.
+     */
+    function placeGrips(item: (Kept & (Mark | { type: "cover"; rect: Rect; angle?: number })) | undefined) {
+        const grips = item && !cornering && tool !== "crop" && tool !== "grade" && tool !== "cutout" ? gripsOf(item) : [];
+        const onStage = grips.map((each) => pointOnStage(each.at));
+        const middle = onStage.length ? { x: onStage.reduce((sum, point) => sum + point.x, 0) / onStage.length, y: onStage.reduce((sum, point) => sum + point.y, 0) / onStage.length } : { x: 0, y: 0 };
+        markGrips.forEach((handle, at) => {
+            const grip = grips[at];
+            handle.classList.toggle("shown", !!grip);
+            if (!grip) return;
+            const point = onStage[at]!;
+            Object.assign(handle.style, { left: `${point.x}px`, top: `${point.y}px` });
+            handle.dataset.grip = grip.grip;
+            handle.classList.toggle("end", grip.grip === "from" || grip.grip === "to");
+            // a resize pointer along the way the handle faces on the screen, the item's and the picture's turns counted; an end is moved
+            const degrees = ((Math.atan2(point.y - middle.y, point.x - middle.x) * 180) / Math.PI + 360) % 180;
+            handle.style.cursor = grip.grip === "from" || grip.grip === "to" ? "move" : ["ew-resize", "nwse-resize", "ns-resize", "nesw-resize"][Math.round(degrees / 45) % 4]!;
+        });
+    }
     /** The corners set by hand on the original as it came: the shape between them darkened round, its edges, and a grid of quarters inside drawn through the map from a square, which shows how it will be squared; each handle placed over its corner. */
     function drawCorners(context: CanvasRenderingContext2D, ratio: number) {
         const corners = cornersNow();
@@ -1167,7 +1196,7 @@ export function createStage(hooks: StageHooks) {
     }
 
     // ---- dragging ----
-    type Drag = { kind: "cut"; stroke?: Stroke; from: Point } | { kind: "level" } | { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "words"; from: number } | { kind: "select"; from: number };
+    type Drag = { kind: "cut"; stroke?: Stroke; from: Point } | { kind: "level" } | { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "reshape"; id: string; grip: Grip; from: Point; steps: Kept[] } | { kind: "words"; from: number } | { kind: "select"; from: number };
     let drag: Drag | undefined;
     let spaceHeld = false;
     const fingers = new Map<number, Point>();
@@ -1306,6 +1335,12 @@ export function createStage(hooks: StageHooks) {
             drag = { kind: "pan", from: at, view };
             return;
         }
+        // a handle of what is picked reshapes it
+        const grip = (event.target as HTMLElement).dataset?.grip as Grip | undefined;
+        if (grip && picked && found.steps.some((step) => step.id === picked)) {
+            drag = { kind: "reshape", id: picked, grip, from: there, steps: found.steps };
+            return paint();
+        }
         // a mark or a cover under the pointer is picked and can be moved, whatever the tool
         // (covers only with Hide or no tool, so that an arrow can start inside one); pressed again where one
         // is picked and let go without moving, the one beneath it is picked, round to the top again
@@ -1360,7 +1395,14 @@ export function createStage(hooks: StageHooks) {
                 return paint();
             }
         }
-        if (!drag && loaded && words.length && event.pointerType !== "touch" && (tool === "read" || tool === "none")) {
+        // over a mark or a cover a press would pick, the pointer says it can be moved (a handle says on its own what it does)
+        let overMark = false;
+        if (!drag && loaded && event.pointerType !== "touch" && tool !== "crop" && tool !== "text" && tool !== "grade" && tool !== "cutout") {
+            const found = hooks.picture();
+            overMark = !!found && allAt(pickableOf(found.steps), toOriginal(at), 6 / place().across).length > 0;
+            element.dataset.over = overMark ? "mark" : "";
+        }
+        if (!overMark && !drag && loaded && words.length && event.pointerType !== "touch" && (tool === "read" || tool === "none")) {
             // the word under the pointer, lit while reading, and the pointer saying text can be pressed
             const over = wordAt(toOriginal(at));
             element.dataset.over = over === undefined ? "" : "word";
@@ -1410,7 +1452,11 @@ export function createStage(hooks: StageHooks) {
             cutLine = stroke;
         }
         else if (drag.kind === "draw") live = drawing(drag.from, there, event.shiftKey);
-        else {
+        else if (drag.kind === "reshape") {
+            const { id, grip } = drag;
+            const by = { x: there.x - drag.from.x, y: there.y - drag.from.y };
+            live = drag.steps.map((step) => (step.id === id && (step.type === "cover" || isMark(step)) ? (reshaped(step as Kept & (Mark | { type: "cover"; rect: Rect }), grip, by) as Kept) : step));
+        } else {
             const by = { x: there.x - drag.from.x, y: there.y - drag.from.y };
             const id = drag.id;
             live = drag.steps.map((step) => (step.id !== id ? step : movedStep(step, by)));
@@ -1489,10 +1535,10 @@ export function createStage(hooks: StageHooks) {
             hooks.moved();
             return paint();
         }
-        if (was.kind === "move") {
+        if (was.kind === "move" || was.kind === "reshape") {
             const still = !made || made.every((step, at) => step === was.steps[at] || JSON.stringify(step) === JSON.stringify(was.steps[at]));
             if (!still) hooks.change(made!.map((step) => (step.type === "cover" && step.id === was.id && !step.angle ? { ...step, rect: within(step.rect, hooks.picture()!.original) } : step)));
-            else if (was.beneath) {
+            else if (was.kind === "move" && was.beneath) {
                 picked = was.beneath;
                 pickedPart = undefined;
                 hooks.moved();

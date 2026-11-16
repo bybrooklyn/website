@@ -399,6 +399,60 @@ test("while a crop's frame is set, the line under the picture says the size the 
     await page.until("/^\\d+ × \\d+ px · /.test(document.querySelector('.quire-img-facts').textContent)");
 }, 30_000);
 
+test("a picked box shows handles at its corners and sides and a drag on one resizes it, the body still moves it, an arrow's end moves alone, each drag one undo, and a text has none", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await page.tab.press("b");
+    await page.tab.drag(await page.onScreen(300, 200), await page.onScreen(600, 400), 6);
+    const made = (await stepsOf()).at(-1)!;
+    expect(made.type).toBe("box");
+    await page.until("document.querySelectorAll('.quire-img-handle.shown').length === 8");
+    const handle = (grip: string) => page!.middle(`.quire-img-handle.shown[data-grip='${grip}']`);
+    expect(await page.tab.run("getComputedStyle(document.querySelector(\".quire-img-handle[data-grip='se']\")).cursor")).toBe("nwse-resize");
+    expect(await page.tab.run("getComputedStyle(document.querySelector(\".quire-img-handle[data-grip='e']\")).cursor")).toBe("ew-resize");
+    // the bottom right corner dragged out: the box grows from its top left, which stays
+    const corner = await handle("se");
+    const to = await page.onScreen(700, 500);
+    await page.tab.drag(corner, to, 6);
+    const grown = (await stepsOf()).at(-1)!;
+    expect(grown.rect!.x).toBeCloseTo(made.rect!.x, 0);
+    expect(grown.rect!.y).toBeCloseTo(made.rect!.y, 0);
+    expect(grown.rect!.width).toBeCloseTo(made.rect!.width + 100, -1);
+    expect(grown.rect!.height).toBeCloseTo(made.rect!.height + 100, -1);
+    // the body dragged (its top edge, between the handles): it moves whole, its size kept
+    const edge = await page.onScreen(grown.rect!.x + grown.rect!.width / 4, grown.rect!.y);
+    await page.tab.drag(edge, { x: edge.x + 40, y: edge.y + 30 }, 6);
+    const moved = (await stepsOf()).at(-1)!;
+    expect(moved.rect!.width).toBeCloseTo(grown.rect!.width, 5);
+    expect(moved.rect!.x).toBeGreaterThan(grown.rect!.x + 10);
+    // the pointer over the box's edge says it can be moved
+    const over = await page.onScreen(moved.rect!.x, moved.rect!.y + moved.rect!.height / 4);
+    await page.tab.move(over.x, over.y);
+    expect(await page.tab.run("document.querySelector('.quire-img-stage').dataset.over")).toBe("mark");
+    // each drag one undo: undone once, the box is as it was before it moved
+    await page.tab.press("z", { ctrl: true });
+    expect((await stepsOf()).at(-1)!.rect).toEqual(grown.rect);
+    await page.tab.press("z", { ctrl: true });
+    expect((await stepsOf()).at(-1)!.rect).toEqual(made.rect);
+    // an arrow's head dragged: its tail stays
+    await page.tab.press("a");
+    await page.tab.drag(await page.onScreen(800, 100), await page.onScreen(1000, 100), 6);
+    const arrow = (await stepsOf()).at(-1)! as unknown as { type: string; from: { x: number; y: number }; to: { x: number; y: number } };
+    await page.until("document.querySelectorAll('.quire-img-handle.shown').length === 2");
+    const head = await handle("to");
+    await page.tab.drag(head, { x: head.x, y: head.y + 80 }, 6);
+    const bent = (await stepsOf()).at(-1)! as unknown as typeof arrow;
+    expect(bent.from).toEqual(arrow.from);
+    expect(bent.to.y).toBeGreaterThan(arrow.to.y + 40);
+    // a text is only moved: no handles
+    await page.tab.press("t");
+    const at = await page.onScreen(200, 600);
+    await page.tab.click(at.x, at.y);
+    await page.tab.type("Note");
+    await page.tab.press("Enter");
+    await page.until("document.querySelectorAll('.quire-img-handle.shown').length === 0");
+}, 60_000);
+
 test("Escape leaves the crop from the tool's own controls, the dial once dragged or a shape pressed, and gives the keyboard back to the picture", async () => {
     if (!page) return;
     await page.paste("screenshot");

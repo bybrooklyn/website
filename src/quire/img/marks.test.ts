@@ -6,7 +6,7 @@
 // browser tests of the editor.
 
 import { expect, test } from "bun:test";
-import { alignShare, allAt, canvasOf, headOf, inkOfHighlight, inkOn, lensRegion, markAt, markBox, moved, partOf, ringsOf } from "./marks";
+import { alignShare, allAt, canvasOf, gripsOf, headOf, inkOfHighlight, inkOn, lensRegion, markAt, markBox, moved, partOf, reshaped, ringsOf } from "./marks";
 import type { Mark, Point, Rect } from "./steps";
 
 const arrow: Mark = { type: "arrow", from: { x: 10, y: 10 }, to: { x: 110, y: 10 }, color: "#d52d00", thickness: 4 };
@@ -120,4 +120,55 @@ test("a highlighter's ink is its color a third of the way to white", () => {
     expect(inkOfHighlight("#ffd60a")).toBe("#ffe45c");
     expect(inkOfHighlight("#000000")).toBe("#555555");
     expect(inkOfHighlight("#ffffff")).toBe("#ffffff");
+});
+
+const close = (point: Point, x: number, y: number) => {
+    expect(point.x).toBeCloseTo(x, 6);
+    expect(point.y).toBeCloseTo(y, 6);
+};
+
+test("a picked box has a handle at each corner and side, an arrow one at each end, and a text or a number none", () => {
+    expect(gripsOf(box).map((each) => [each.grip, each.at.x, each.at.y])).toEqual([
+        ["nw", 50, 50],
+        ["n", 100, 50],
+        ["ne", 150, 50],
+        ["e", 150, 80],
+        ["se", 150, 110],
+        ["s", 100, 110],
+        ["sw", 50, 110],
+        ["w", 50, 80],
+    ]);
+    expect(gripsOf(arrow).map((each) => each.grip)).toEqual(["from", "to"]);
+    expect(gripsOf(text)).toEqual([]);
+    expect(gripsOf({ type: "number", at: { x: 5, y: 5 }, color: "#000000", size: 20 })).toEqual([]);
+    // a box turned on its own: its handles are turned with it, a quarter turn putting its right side at the bottom
+    const turned = gripsOf({ ...box, angle: 90 });
+    close(turned.find((each) => each.grip === "e")!.at, 100, 130);
+});
+
+test("a handle dragged resizes from the corner or side opposite, which stays where it was, and never past a pixel", () => {
+    expect(reshaped(box, "se", { x: 20, y: 10 })).toMatchObject({ rect: { x: 50, y: 50, width: 120, height: 70 } });
+    expect(reshaped(box, "n", { x: 40, y: -10 })).toMatchObject({ rect: { x: 50, y: 40, width: 100, height: 70 } });
+    expect(reshaped(box, "w", { x: 500, y: 0 })).toMatchObject({ rect: { x: 149, width: 1 } });
+    // a cover turned a quarter: its bottom on the screen is its own right side, which a drag down moves out, its left side held
+    const cover = { type: "cover" as const, rect: { x: 0, y: 0, width: 100, height: 40 }, angle: 90 };
+    const before = gripsOf(cover).find((each) => each.grip === "w")!.at;
+    const grown = reshaped(cover, "e", { x: 0, y: 30 });
+    expect(grown.rect.width).toBeCloseTo(130, 6);
+    expect(grown.rect.height).toBeCloseTo(40, 6);
+    close(gripsOf(grown).find((each) => each.grip === "w")!.at, before.x, before.y);
+});
+
+test("an arrow's end moves alone; a highlighter keeps its direction and grows longer or thicker; a lens stays round", () => {
+    expect(reshaped(arrow, "to", { x: 5, y: 30 })).toMatchObject({ from: { x: 10, y: 10 }, to: { x: 115, y: 40 } });
+    const stroke: Mark = { type: "highlight", from: { x: 0, y: 50 }, to: { x: 100, y: 50 }, color: "#ffd60a", thickness: 20 };
+    const longer = reshaped(stroke, "e", { x: 50, y: 0 }) as Extract<Mark, { type: "highlight" }>;
+    close(longer.from, 0, 50);
+    close(longer.to, 150, 50);
+    const thicker = reshaped(stroke, "s", { x: 0, y: 10 }) as Extract<Mark, { type: "highlight" }>;
+    expect(thicker.thickness).toBeCloseTo(30, 6);
+    close(thicker.from, 0, 55);
+    const lens: Mark = { type: "magnifier", at: { x: 100, y: 100 }, from: { x: 20, y: 20 }, radius: 30, zoom: 2, color: "#000000", thickness: 4 };
+    // the right side dragged out: the lens grows round, its left side held
+    expect(reshaped(lens, "e", { x: 20, y: 0 })).toMatchObject({ at: { x: 110, y: 100 }, radius: 40, from: { x: 20, y: 20 } });
 });

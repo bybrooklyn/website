@@ -501,3 +501,84 @@ export function moved(mark: Mark, by: Point, part?: "lens" | "source"): Mark {
     if (mark.type === "magnifier") return { ...mark, ...(part !== "source" ? { at: shift(mark.at) } : {}), ...(part !== "lens" ? { from: shift(mark.from) } : {}) };
     return { ...mark, at: shift(mark.at) };
 }
+
+/** The handles a picked mark or cover is reshaped by: a rectangle's four corners and four sides (named by the way they face, as the crop's are), or an arrow's two ends. */
+export type Grip = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "from" | "to";
+
+/** The corners and sides of a rectangle, each with where it sits on it (0, a half or 1 of its width and height). */
+const SIDES: [Grip, number, number][] = [
+    ["nw", 0, 0],
+    ["n", 0.5, 0],
+    ["ne", 1, 0],
+    ["e", 1, 0.5],
+    ["se", 1, 1],
+    ["s", 0.5, 1],
+    ["sw", 0, 1],
+    ["w", 0, 0.5],
+];
+
+/** A rectangle with its corners in order, however it was dragged out. */
+const upright = (rect: Rect): Rect => ({ x: Math.min(rect.x, rect.x + rect.width), y: Math.min(rect.y, rect.y + rect.height), width: Math.abs(rect.width), height: Math.abs(rect.height) });
+
+/** The rectangle a mark or a cover is reshaped as, and its own turn about its middle: a box's, a cover's or a spotlight's own, a highlighter's stroke as long as it and as thick, a magnifier's lens as the square round it. None for a text, a number or an arrow. */
+function shapeOf(item: Mark | Cover): { rect: Rect; angle: number } | undefined {
+    if (item.type === "box" || item.type === "cover" || item.type === "spotlight") return { rect: upright(item.rect), angle: item.angle ?? 0 };
+    if (item.type === "highlight") {
+        const ring = ringsOf(item)[0] as Extract<Ring, { rect: Rect }>;
+        return { rect: ring.rect, angle: ring.angle };
+    }
+    if (item.type === "magnifier") return { rect: { x: item.at.x - item.radius, y: item.at.y - item.radius, width: item.radius * 2, height: item.radius * 2 }, angle: 0 };
+    return undefined;
+}
+
+/** Where a picked mark's or cover's handles are, in the original's pixels: a rectangle's at its corners and sides, turned with it; an arrow's at its two ends; none for a text or a number, which are only moved. */
+export function gripsOf(item: Mark | Cover): { grip: Grip; at: Point }[] {
+    if (item.type === "arrow") return [{ grip: "from", at: item.from }, { grip: "to", at: item.to }];
+    const shape = shapeOf(item);
+    if (!shape) return [];
+    const { rect, angle } = shape;
+    const middle = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    return SIDES.map(([grip, across, down]) => ({ grip, at: turnedAbout({ x: rect.x + rect.width * across, y: rect.y + rect.height * down }, middle, angle) }));
+}
+
+/**
+ * A mark or a cover reshaped by one of its handles dragged by an amount, in the original's pixels: the corner or side
+ * opposite stays where it was, the drag taken along the item's own turn, never smaller than a pixel. A highlighter keeps
+ * its line's direction (its ends move apart or together, and it grows thicker or thinner); a magnifier's lens stays round,
+ * the place it looks at following its size; an arrow's end moves alone.
+ */
+export function reshaped<T extends Mark | Cover>(item: T, grip: Grip, by: Point): T {
+    if (item.type === "arrow") return grip === "from" || grip === "to" ? { ...item, [grip]: { x: item[grip].x + by.x, y: item[grip].y + by.y } } : item;
+    const shape = shapeOf(item);
+    if (!shape || grip === "from" || grip === "to") return item;
+    const { rect, angle } = shape;
+    const pivot = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    // the drag in the item's own frame, where its sides are upright
+    const along = turnedAbout({ x: pivot.x + by.x, y: pivot.y + by.y }, pivot, -angle);
+    const move = { x: along.x - pivot.x, y: along.y - pivot.y };
+    let left = rect.x;
+    let top = rect.y;
+    let right = rect.x + rect.width;
+    let bottom = rect.y + rect.height;
+    if (grip.includes("w")) left = Math.min(right - 1, left + move.x);
+    if (grip.includes("e")) right = Math.max(left + 1, right + move.x);
+    if (grip.includes("n")) top = Math.min(bottom - 1, top + move.y);
+    if (grip.includes("s")) bottom = Math.max(top + 1, bottom + move.y);
+    if (item.type === "magnifier") {
+        // a lens stays round: a side sets its size, a corner the larger of the two, the opposite side or corner kept
+        const side = grip === "e" || grip === "w" ? right - left : grip === "n" || grip === "s" ? bottom - top : Math.max(right - left, bottom - top);
+        const x = grip.includes("w") ? right - side : grip.includes("e") ? left : pivot.x - side / 2;
+        const y = grip.includes("n") ? bottom - side : grip.includes("s") ? top : pivot.y - side / 2;
+        return { ...item, at: { x: x + side / 2, y: y + side / 2 }, radius: side / 2 };
+    }
+    // the new middle, put back where the item's turn puts it, so that the side or corner held still stays where it was
+    const width = right - left;
+    const height = bottom - top;
+    const middle = turnedAbout({ x: left + width / 2, y: top + height / 2 }, pivot, angle);
+    if (item.type === "highlight") {
+        const radians = (angle * Math.PI) / 180;
+        const half = { x: (Math.cos(radians) * width) / 2, y: (Math.sin(radians) * width) / 2 };
+        return { ...item, from: { x: middle.x - half.x, y: middle.y - half.y }, to: { x: middle.x + half.x, y: middle.y + half.y }, thickness: height };
+    }
+    return { ...item, rect: { x: middle.x - width / 2, y: middle.y - height / 2, width, height } };
+}
