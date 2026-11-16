@@ -12,8 +12,9 @@ files fetched are the site's own: the page, and imgQuire's encoders when a pictu
 `src/quire/convert/`, each file with a test beside it:
 
 - `page.ts`: the page: where files arrive, the list, the bar of what is done with them all, the right-click
-  menu and the keys. `parts.ts`: the panel's pieces (rows of choices, folds, number fields) and what a kind's
-  side of the panel gives the page.
+  menu and the keys. `parts.ts`: the column's pieces on top of the small tools' kit (rows of dots where a
+  choice this browser cannot do is faint, numbers with their unit, folds, notes) and what a kind's group of
+  the column gives the page.
 - `kinds.ts`: what a file is, from its first bytes before its name. `names.ts`: names (`photo (1).webp`),
   sizes, times and weights in plain words. `queue.ts`: a few at a time, each stoppable. `out.ts`: one zip
   made of the results' own blobs, or files written into a folder.
@@ -32,48 +33,67 @@ and writer (`read.ts`, `write.ts`, `html.ts`). Nothing under `src/quire/img/` or
 
 ## Built
 
-**The page.** The list of files is the work, at the left; the choices for each kind have their own room
-at the right, staying in view as the page scrolls. On a phone the list stays at the top with its own
-scroll, and the choices run under it. Files arrive by a drop anywhere on the page, Ctrl+V, Choose files
-(Ctrl+O), or Paste in the list's right-click menu; on a phone a Paste button. Text pasted (not a file)
-becomes a file of its own, "Pasted text". Each file is a quiet row: its name; what it is ("JPEG picture",
-"WAV sound, 44.1 kHz stereo, 3:25", "MP4 film, H.264 1920 × 1080, AAC sound, 0:42"); what it will become;
-its size before and after ("3.4 MB to 412 KB, 88% smaller"); and how it is going ("Writing WebP 50%",
-"Done", the name it leaves with). A thin bar under it fills only as steps are done: for a picture, the
-reading and each run of the encoder; for a sound, each second written; for a film, the time of the last
-picture written against its length. A row's own buttons keep their places: one that changes with the
-state (Stop, Save, Try again), Copy for text, and the cross that removes it. A refusal that comes with
-something that can be done shows that as a button on the row.
+**The page.** It opens the way a mini or a project does (`layouts/Opened.astro`), as the cut-out does: the
+site's name and the trail "tools / Convert", a small label, its name, one line saying what it does, then one
+box with a rule round it, built from every small tool's kit (`src/quire/core/bench.ts`, `quire-bench.css`).
+Its way back is the list of tools (`/tools/`). In the box the work is on the left: the place files are
+dropped, which fills the box while the list is empty and draws back to a strip over the list when files
+come, then the list, which holds its own scroll; one line under it says what was just done, else how the
+list stands ("3 files · 2 done · 4.0 MB to 500 KB"), breathing while files are worked on. On the right is a
+column written the way the Walker's column is: a small heading for each kind (pictures, text and data,
+sounds, films), a small muted label over each choice, round dots for a choice of one, a slider for the
+quality, a line to type on for "under" and for a largest side or a percent, words in the accent to press,
+thin rules between, no boxed buttons, and every label in lowercase as the site's own are; sentences (the
+drop line, the notes, the rows' status) keep their capitals. A format's own settings and the notes under
+a choice grow open and shut. While the list holds files, the groups of the kinds not in it are faint and out
+of reach, so the ones that act on these files stand out; with the list empty every group can be set. At the
+column's foot are the words for every file: convert (the main one), then stop all, save all as a zip, save
+all into a folder and clear the list, each on its own line. The column is longer than the window, so the
+work stays in view at the top while it scrolls past, and the words at its foot stay at the window's foot
+until the column ends. In a narrow window the column goes under the work and the work scrolls with the
+page. Before 16 November 2026 the page stood under the editor's top line with rows of boxed buttons; the
+owner found the small tools confusing and unlike each other and the site, approved the redone cut-out as
+the pattern, and this page was made to match it.
+
+Files arrive by a drop anywhere on the box, Ctrl+V, choose files (Ctrl+O), or paste in the list's
+right-click menu; on a phone a paste of its own beside choose files. Text pasted (not a file) becomes a
+file of its own, "Pasted text". Each file is a quiet row: its name; what it is ("JPEG picture", "WAV
+sound, 44.1 kHz stereo, 3:25", "MP4 film, H.264 1920 × 1080, AAC sound, 0:42"); what it will become; its
+size before and after ("3.4 MB to 412 KB, 88% smaller"); and how it is going ("Writing WebP 50%", "Done",
+the name it leaves with). A thin bar under it fills only as steps are done: for a picture, the reading and
+each run of the encoder; for a sound, each second written; for a film, the time of the last picture
+written against its length. A row's own words keep their places: one that changes with the state (stop,
+save, try again), copy for text, and the cross that removes it. A refusal that comes with something that
+can be done shows that as words to press on the row.
 
 Convert (Ctrl+Enter) runs every file not yet done with the choices as they are. Pictures and sounds run
-two at a time, films one, each kind in its own lane so a film does not hold up pictures. Stop all, Save
-all as a zip (Ctrl+S), Save all into a folder (Ctrl+Shift+S, where the browser allows it; elsewhere the
-button is dimmed and says why), Clear the list. Names are kept for the files in the list's order as they
+two at a time, films one, each kind in its own lane so a film does not hold up pictures. Stop all, save
+all as a zip (Ctrl+S), save all into a folder (Ctrl+Shift+S, where the browser allows it; elsewhere the
+words are faint and say why), clear the list. Names are kept for the files in the list's order as they
 are put in the queue, so two files named `photo` become `photo.webp` and `photo (1).webp` whichever
 finishes first. The zip is stored, not squeezed (pictures, sounds and films are squeezed already), made of
 the results' own blobs with small headers between, so a zip of films is not held in memory; only each
 file's checksum is worked out, reading it through once. A folder keeps what is in it: a name there already
-gets the next number in brackets. The line under the bar counts the files, those done and what they weigh
-before and after.
+gets the next number in brackets.
 
-The right-click menu on a row: Save, Copy (for text), Stop, Convert again or Try again, Remove; then
-Paste and Choose files. Shift with a right-click leaves the browser's own menu. Delete removes the row
-with the focus; the menu key or Shift+F10 opens the menu. Rows grow in from no height and shrink away;
-folds in the panel open by growing; the menu is the suite's own and grows from where it was pressed.
-Reduced motion turns the motion off.
+The right-click menu on a row, in lowercase as the page's words are: save, copy (for text), stop, convert
+again or try again, remove; then paste and choose files. Shift with a right-click leaves the browser's own
+menu. Delete removes the row with the focus; the menu key or Shift+F10 opens the menu. Rows grow in from
+no height and shrink away; folds and notes in the column open by growing; the menu is the suite's own and
+grows from where it was pressed. Reduced motion turns the motion off.
 
 **Pictures.** imgQuire's export with no editing, through its own encoders: JPEG (jpegli), WebP (libwebp),
 AVIF (libaom), JPEG XL (libjxl), and lossless PNG (oxipng), WebP and JPEG XL; HEIC is read by imgQuire's
 HEIC reader, anything else by the browser. The quality (5 to 100), or a weight to come in under, for which
 imgQuire's own search finds the highest quality under it (nine runs of the encoder at most). The size: as
 it came, a largest side in pixels, or a percent, never larger than it came. What goes with it of its
-metadata, in imgQuire's words: None, No place, All (imgQuire's `blocksOut`, its Exif turned upright as the
+metadata, in imgQuire's words: none, no place, all (imgQuire's `blocksOut`, its Exif turned upright as the
 pixels are). Pictures are read upright (`imageOrientation: "from-image"`), made smaller by the browser's
 own high quality scaling, and written in sRGB with no colour profile. A moving GIF keeps its first frame
 and says so.
 
 **Text and data.** Markdown becomes HTML (a whole small page with its title) and HTML becomes Markdown,
-through mdQuire's own reader and writer. What HTML is understood is said on the page under "What HTML is
+through mdQuire's own reader and writer. What HTML is understood is said on the page under "what HTML is
 understood": headings, paragraphs, line breaks, bulleted, numbered and checkbox lists, quotes, code blocks
 with their language, tables with their alignment, dividers, links, pictures by address, and bold, italic,
 underline, strikethrough and code, as elements or as styles. Left out: the head, scripts, styles, forms,
@@ -94,7 +114,7 @@ merge keys, a key given twice, tabs in indentation. TOML 1.0, all of it; dates a
 other formats have none, and said so. A shape one format cannot carry is refused in plain words with what
 can be done: nested data into CSV (spread into columns named like `address.city`), a list into TOML (put
 under the name `items`), an empty value into TOML (left out), a table holding a list into CSV (that list
-as the rows), a first row with a name twice (read as data). Each offer is a button on the row that
+as the rows), a first row with a name twice (read as data). Each offer is words to press on the row that
 converts that file again with it taken. A result can be copied as well as saved.
 
 **Sounds.** Read whole by the browser's own decoder (`decodeAudioData`): whatever this browser reads (in
@@ -109,7 +129,7 @@ mixing), bitrate for Opus and AAC (64 to 256 kbps), bits for WAV and FLAC. Opus 
 length: Ogg's granule positions count from the encoder's first sample and the last page is cut to the true
 length; in WebM the timestamps are in half milliseconds, so that Opus's delay of 6.5 ms is not rounded by a
 player, and the last block says the padding to drop. MP3 is read and never written: there is no MP3
-encoder with a free licence, and browsers do not write MP3. The panel says so.
+encoder with a free licence, and browsers do not write MP3. The column says so.
 
 **Films.** MP4 (and MOV) and WebM (and MKV) read a slice at a time; the pictures through the browser's
 VideoDecoder, made smaller by drawing if asked (as it came, 1080p, 720p, 480p, 360p, never larger), and
@@ -124,8 +144,8 @@ length and puts the movie box first at the end; the WebM writer closes a cluster
 a second and puts its cues at the end. A film of only sound in an MP4 or WebM is passed to the sounds.
 
 **What this browser cannot do is asked of it.** `AudioEncoder.isConfigSupported`, `VideoEncoder.isConfigSupported`
-and `VideoDecoder.isConfigSupported` for each choice; a format it cannot write is dimmed with the reason
-as its tooltip and a line in the panel ("This browser cannot write AAC, so it is not offered here."); a
+and `VideoDecoder.isConfigSupported` for each choice; a format it cannot write is faint, with the reason
+as its tooltip and a line in the column ("This browser cannot write AAC, so it is not offered here."); a
 film whose pictures it cannot read says so on its row ("This browser cannot read H.265 film.").
 
 ## Each format, read and written, and where it was proven
