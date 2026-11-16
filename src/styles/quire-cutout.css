@@ -297,3 +297,66 @@
         animation: none;
     }
 }
+
+/* many pictures: the strip of small pictures (quire-img.css) takes room of its own under the picture, which is
+   fitted into what is left and glides there; the bar gains the way to save them all, which grows in */
+.quire-cut .quire-img-thumbs {
+    align-self: stretch;
+}
+
+.quire-cut-view > canvas {
+    transition: max-height 0.45s var(--ease);
+}
+
+.quire-cut.batched .quire-cut-view > canvas {
+    max-height: calc(100dvh - 18rem);
+}
+
+.quire-cut-group-all {
+    max-width: 34rem;
+    overflow: hidden;
+    transition:
+        max-width 0.35s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-cut-group-all.away {
+    max-width: 0;
+    padding-left: 0 !important;
+    border-left-color: transparent !important;
+    opacity: 0;
+}
+
+.quire-cut-group-all > .quire-dialog-dismiss {
+    max-width: 16rem;
+    overflow: hidden;
+    white-space: nowrap;
+    transition:
+        max-width 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-cut-group-all > .quire-dialog-dismiss.away {
+    max-width: 0;
+    padding: 0;
+    opacity: 0;
+}
+
+@media (max-width: 40rem) {
+    .quire-cut-group-all:not(.away) {
+        grid-column: 1 / -1;
+        justify-self: center;
+    }
+
+    .quire-cut.batched .quire-cut-view > canvas {
+        max-height: calc(100dvh - 22rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-cut-view > canvas,
+    .quire-cut-group-all,
+    .quire-cut-group-all > .quire-dialog-dismiss {
+        transition: none;
+    }
+}
