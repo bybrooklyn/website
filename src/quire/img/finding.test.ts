@@ -63,7 +63,7 @@ test("Find asks first, fetches only when told, and presses, Alt-presses, Subject
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-img-find-dialog .quire-dialog-action').click()");
         await until("document.querySelectorAll('.quire-img-find-dialog .quire-img-read-card').length === 2");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-img-find-dialog .quire-img-read-card')].map((card) => card.textContent)")).toEqual(["Small27 MBQuick, on any machine", "Better96 MBCleaner edges, on a fast machine"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-img-find-dialog .quire-img-read-card')].map((card) => card.textContent)")).toEqual(["small27 MBQuick, on any machine", "better96 MBCleaner edges, on a fast machine"]);
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-img-find-download').click()");
         await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')", 60_000);

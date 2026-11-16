@@ -70,7 +70,7 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-img-read-dialog .quire-dialog-action').click()");
         await until("document.querySelectorAll('.quire-img-read-card').length === 3");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-img-read-card')].map((card) => card.textContent)")).toEqual(["Tiny6 MBClear screenshots, on any machine", "Small38 MBPhotographs and turned lines", "Large152 MBHard pictures, on a fast machine"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-img-read-card')].map((card) => card.textContent)")).toEqual(["tiny6 MBClear screenshots, on any machine", "small38 MBPhotographs and turned lines", "large152 MBHard pictures, on a fast machine"]);
         expect(await tab.run<string>("document.querySelector('.quire-img-read-card[aria-checked=true]').dataset.tier")).toBe("tiny");
         expect(await tab.run<string>("document.querySelector('.quire-img-read-where').textContent")).toBe("From huggingface.co: PaddlePaddle's PP-OCRv6, Apache-2.0.");
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);

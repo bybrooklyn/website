@@ -18,7 +18,7 @@ test("a brush's size and a feather run finely at their small ends, and the feath
     expect(featherPixels(100, 4000)).toBe(400);
     for (const value of [0, 10, 33.3, 80, 100]) expect(featherValue(featherPixels(value, 4000), 4000)).toBeCloseTo(value, 0);
     expect(partName("gradient", 2)).toBe("gradient 2");
-    expect(partName("paint", 1)).toBe("Painted area 1");
+    expect(partName("paint", 1)).toBe("painted area 1");
 });
 
 let page: ImgPage | undefined;
@@ -88,7 +88,7 @@ test("a gradient dragged out is a part of its own: its grade darkens the top, it
 test("Paint makes a part a stroke paints and Erase takes from, each one undo; Delete takes the part away; the document read again flattens the same", async () => {
     if (!page) return;
     await page.tab.run("document.querySelector('.quire-img-make-paint').click()");
-    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("Painted area 1");
+    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("painted area 1");
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
     await page.tab.drag(await page.onScreen(800, 1500), await page.onScreen(1600, 1500), 10);
     let painted = (await steps()).find((step) => step.kind === "paint")!;
@@ -117,7 +117,7 @@ test("Paint makes a part a stroke paints and Erase takes from, each one undo; De
     await page.tab.run(`window.app.editing().grading.isOpen() || document.querySelector('.quire-img-bar [aria-label="Grade (G)"]').click()`);
     const anchor = await page.onScreen(painted2.strokes![0]!.points[0]!, painted2.strokes![0]!.points[1]!);
     await page.tab.click(anchor.x, anchor.y);
-    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("Painted area 1");
+    expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("painted area 1");
     // Delete takes the part away
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
     await page.tab.press("Delete");
