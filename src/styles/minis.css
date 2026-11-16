@@ -40,36 +40,112 @@
     --panel-room: 24rem;
 }
 
-/* Sand's panel is a row of materials and a row of the brush and the rest; on a phone, two rows of
-   materials and the rest over three lines. */
+/* Sand's stage and its column: the world on the site's ground with rounded, softly shaded edges and a
+   floor under it, and beside it the materials and the controls in a column, as the Walker has them, so
+   that the whole stage and every material are in the first screen of a laptop. On a phone the column
+   goes under the stage. The world takes its size from the stage when it loads, so the grid is laid
+   out from the start, before the column has been made. */
 .mini-stage[data-mini="sand"] {
-    --panel-room: 9rem;
+    --frame: 0.75rem;
+    --floor: 0.5rem;
+    /* wider than the text, as the generalist is, and centred on it, so the world is a wide picture */
+    --wide: max(100%, min(66rem, 100vw - var(--strip) - 2 * var(--panel-gutter, 1.25rem) - 1rem));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 16rem;
+    grid-template-areas: "scene side";
+    align-items: start;
+    width: var(--wide);
+    max-width: none;
+    min-height: 0;
+    margin-inline: calc((100% - var(--wide)) / 2);
+    background: var(--surface);
 }
 
-@media (max-width: 40rem) {
-    .mini-stage[data-mini="sand"] {
-        --panel-room: 15.5rem;
-    }
+.post > .mini-stage[data-mini="sand"] {
+    grid-column: 1 / -1;
 }
 
-.mini-stage[data-mini="sand"] canvas {
+/* Pause, step and clear in one line across the column; the two that take the world out of the page or
+   bring one in, each on a line of its own. */
+.mote-panel .sand-across {
+    grid-column: 1 / -1;
+    gap: 0.35rem 1.4rem;
+}
+
+.mote-panel .sand-link {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-inline-start: 0;
+}
+
+.mini-stage[data-mini="sand"] > canvas {
+    grid-area: scene;
+    box-sizing: content-box;
+    width: calc(100% - 2 * var(--frame));
+    height: clamp(16rem, calc(100svh - 24.75rem), 40rem);
+    margin: var(--frame);
+    border-radius: 0.9rem 0.9rem 0.6rem 0.6rem;
+    /* the floor the world rests on: a band of stone with a lighter edge where the world meets it */
+    border-bottom: var(--floor) solid color-mix(in oklch, var(--muted) 30%, var(--surface));
+    /* the edges shaded softly into the frame, over the world's own edge */
+    box-shadow:
+        inset 0 0 1.5rem 0.2rem color-mix(in oklch, var(--surface) 80%, transparent),
+        inset 0 -0.0625rem 0 color-mix(in oklch, var(--muted) 55%, transparent);
     cursor: crosshair;
+}
+
+/* The cells' canvas, laid by the scene exactly under the one that takes the pointer, on the ground. */
+.mini-stage[data-mini="sand"] > canvas.mote-gl {
+    margin: 0;
+    border: 0;
+    border-radius: 0.9rem 0.9rem 0 0;
+    box-shadow: none;
+    background: var(--ground);
+}
+
+.mote-panel.sand-side {
+    grid-area: side;
+    align-self: stretch;
+    border-top: 0;
+    border-left: 0.0625rem solid var(--rule);
+    padding: 1rem 1rem 0.75rem;
+    position: relative;
+}
+
+@media (max-width: 46rem) {
+    .mini-stage[data-mini="sand"] {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "scene"
+            "side";
+    }
+
+    .mini-stage[data-mini="sand"] > canvas {
+        height: clamp(16rem, 58svh, 30rem);
+    }
+
+    .mote-panel.sand-side {
+        border-left: 0;
+        border-top: 0.0625rem solid var(--rule);
+    }
 }
 
 /* Each material is a small square of itself, as the engine colors it, in a target a fingertip can
    press: fourteen in a row on a wide screen, two rows of seven on a phone. */
 .sand-swatches {
+    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(auto-fill, 2.75rem);
 }
 
 /* The six flags in one row, a phone's width. */
 .sand-flag-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 3rem);
 }
 
 .sand-swatches {
-    margin: -0.5rem 0 0.4rem -0.5rem;
+    margin: -0.4rem 0 -0.2rem -0.5rem;
 }
 
 .mote-panel .sand-swatch {
@@ -124,17 +200,19 @@
 .sand-flags {
     --grow: 0.35s;
     --fade: 0.25s;
+    grid-column: 1 / -1;
+    margin-block: -0.65rem 0;
 }
 
 .sand-flags.open {
-    margin-bottom: 0.4rem;
+    margin-block: 0;
 }
 
 .sand-flag-inside {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0 1.5rem;
+    gap: 0.3rem 1.5rem;
     margin-left: -0.5rem;
 }
 
@@ -149,19 +227,8 @@
     padding-left: 0.5rem;
 }
 
-.sand-tools {
-    margin-bottom: 0;
-}
-
-.sand-size {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    color: var(--muted);
-}
-
-.sand-size input[type="range"] {
-    width: 7rem;
+.mote-panel input[type="range"].sand-size {
+    width: 100%;
 }
 
 .sand-chooser {
@@ -1512,7 +1579,8 @@
 
 /* Each part of the controls is a small label, then its controls, on one grid. */
 .mote-panel.walker-side,
-.mote-panel.walker-ground {
+.mote-panel.walker-ground,
+.mote-panel.sand-side {
     display: grid;
     grid-template-columns: 4.6rem minmax(0, 1fr);
     align-items: baseline;
@@ -1542,12 +1610,14 @@
     line-height: 1.45;
 }
 
-.walker-label {
+.walker-label,
+.sand-label {
     color: var(--muted);
     font-size: 0.85rem;
 }
 
-.walker-controls {
+.walker-controls,
+.sand-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1627,7 +1697,8 @@
 }
 
 /* The column's groups, each under a small heading with a rule above it. */
-.mote-panel .walker-group {
+.mote-panel .walker-group,
+.mote-panel .sand-group {
     grid-column: 1 / -1;
     margin: 0.55rem 0 -0.15rem;
     padding-top: 0.75rem;
@@ -1638,7 +1709,8 @@
     color: var(--ink);
 }
 
-.mote-panel .walker-group:first-of-type {
+.mote-panel .walker-group:first-of-type,
+.mote-panel .sand-group:first-of-type {
     margin-top: 0;
     padding-top: 0;
     border-top: 0;

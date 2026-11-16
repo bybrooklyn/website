@@ -64,6 +64,11 @@ export default function sand(m: Mote): Scene {
     const fit = () => {
         under.width = m.canvas.width;
         under.height = m.canvas.height;
+        // laid exactly under the canvas that takes the pointer, wherever the stage's grid puts it, and
+        // as large as its inside (its floor is a border under it)
+        const host = m.canvas.parentElement!;
+        const [inside, frame] = [m.canvas.getBoundingClientRect(), host.getBoundingClientRect()];
+        Object.assign(under.style, { left: `${inside.left - frame.left - host.clientLeft}px`, top: `${inside.top - frame.top - host.clientTop}px`, width: `${m.canvas.clientWidth}px`, height: `${m.canvas.clientHeight}px` });
         if (!engine || !grid) return;
         at = fitted(under.width, under.height, engine.width(), engine.height());
         grid.place(at);
@@ -128,7 +133,11 @@ export default function sand(m: Mote): Scene {
 
     const panel = () => {
         const box = m.panel();
-        box.classList.add("sand-panel");
+        box.classList.add("sand-panel", "sand-side");
+        /** A group's heading, across the column. */
+        const group = (words: string) => el("h3", { class: "sand-group", textContent: words });
+        /** A row of the column's grid: a small label, then its controls. */
+        const line = (words: string, ...controls: (Node | string)[]) => [el("span", { class: "sand-label", textContent: words }), el("div", { class: "sand-controls" }, ...controls)];
         const row = inRow(offered);
         const swatches: { button: HTMLButtonElement; material: Material | undefined; canvas: HTMLCanvasElement }[] = [];
         /** Draws a swatch: a square of grains of the material, as the engine colors them; pride sand in the chosen flag's stripes. */
@@ -204,7 +213,7 @@ export default function sand(m: Mote): Scene {
         }
         flags.append(el("div", {}, el("div", { class: "sand-flag-inside" }, flagRow, el("span", { class: "sand-ways" }, ...ways))));
 
-        const size = el("input", { type: "range", min: String(SIZES.least), max: String(SIZES.most), step: "1", value: String(radius), oninput: () => ((radius = Number(size.value)), m.wake()) });
+        const size = el("input", { type: "range", class: "sand-size", min: String(SIZES.least), max: String(SIZES.most), step: "1", value: String(radius), oninput: () => ((radius = Number(size.value)), m.wake()) });
         size.setAttribute("aria-label", "brush size");
         resize = (by: number) => {
             radius = Math.max(SIZES.least, Math.min(SIZES.most, radius + by));
@@ -250,7 +259,7 @@ export default function sand(m: Mote): Scene {
             button.textContent = words;
             setTimeout(() => (button.textContent = rest), SAID);
         };
-        const share = el("button", { type: "button", class: "quiet", textContent: "copy link to this world" });
+        const share = el("button", { type: "button", class: "quiet sand-link", textContent: "copy link to this world" });
         share.onclick = async () => {
             if (!engine || !bytes) return;
             const text = await pack(tokensOf(bytes, engine.stride(), engine.border(), engine.width(), engine.height(), striped()?.number ?? 0), engine.width(), engine.height(), striped()?.number ?? 0);
@@ -267,7 +276,7 @@ export default function sand(m: Mote): Scene {
         };
         const chooser = el("input", { type: "file", accept: ".sand,text/plain", class: "sand-chooser" });
         chooser.tabIndex = -1;
-        const opener = el("button", { type: "button", class: "quiet", textContent: "open a world", onclick: () => chooser.click() });
+        const opener = el("button", { type: "button", class: "quiet sand-link", textContent: "open a world", onclick: () => chooser.click() });
         const fromFile = async (file: File | undefined) => {
             const opened = file && file.size <= MOST_TEXT ? await unpack((await file.text()).trim()) : undefined;
             if (opened) open(opened);
@@ -285,7 +294,7 @@ export default function sand(m: Mote): Scene {
             void fromFile(event.dataTransfer?.files[0]);
         });
 
-        box.append(picks, flags, el("div", { class: "table-go sand-tools" }, el("label", { class: "sand-size" }, "brush ", size), pause, once, empty, share, opener, chooser));
+        box.append(group("materials"), picks, flags, group("brush"), ...line("size", size), group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty), share, opener, chooser);
         // the swatches are drawn once they have their size
         requestAnimationFrame(() => {
             for (const one of swatches) paint(one.canvas, one.material);
