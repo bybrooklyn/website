@@ -67,9 +67,22 @@ since the card refuses one of its shaders ("no matching constructor for 'i32(vec
 the owner's photographs, 4 to 6 s the first time.
 
 When the model finds nothing (a mask with next to nothing kept, or everything), the picture is left as it was and
-the page says "Nothing was found to cut out, so the picture is left as it was." (imgQuire's status says the same,
-"Nothing found"); it is not run again, since on WebAssembly a second run gives the same answer. On one of seven of
-the owner's photographs tried (a mineral on a wall, `20251109-135135`) Best found nothing.
+the page says the next step: "Nothing was found to cut out. Press the thing you want to keep." A press then cuts
+that thing out with the press model (SlimSAM, asked for once, as for choosing a subject), and each press after
+adds to it, since the press model takes a thing in parts: on a photograph of a cat in an office chair one press
+on the chest kept the white of its chest, and presses on the face, the chest and the back kept the whole cat.
+The presses that made a cut-out are kept with it on the page (`presses`), so one of many pictures keeps its own.
+imgQuire's Cut out tool still says "Nothing found" and stops there. The model is not run again on the same
+picture, since on WebAssembly a second run gives the same answer.
+
+Best finds nothing on some photographs: of eleven of the owner's tried on 16 November 2026, four (two of a tabby
+cat on a black mesh chair, colored blocks on a table, a mineral on a wall, `20251109-135135`). Its model is a
+half-size conversion, and the full-size BiRefNet lite cannot run on WebAssembly at all (it runs out of memory,
+with or without ONNX Runtime's memory arena). ISNet general-use (`imgly/isnet-general-onnx`, fp16, 88 MB, MIT by
+its card, at 1024 by 1024) was tried against it on the same eleven: it answered on every one in about 3.4 s
+against Best's 2.6 s, but was rougher where Best works (it lost a cat's tail and kept a drawer's handle) and on
+the cat in the chair kept only the head and chest. The owner chose the press over a second model, so ISNet is
+not used; its file is only in the trial folder on this machine.
 
 How the qualities came to be: until 15 November 2026 there were three, Quick, Better (ormbg, 44 MB, about 20 s on
 WebAssembly) and Best (BiRefNet lite at 1024, the rebuild for WebGPU, 123 MB, on a graphics card only). The 1024
@@ -184,8 +197,10 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
 - Best's mask is 512 on the picture's longer side, so on a large photograph its edges are softer than the 1024
   model's were (about three pixels across a sharp edge on a 12 megapixel picture); the guided filter keeps hair
   following the picture, but fine strands far apart lose some of themselves.
-- Best found nothing on one of seven photographs tried (a mineral on a wall); the brush cannot help there, since it
-  works on a cut-out, so Quick is the other way to try.
+- Best finds nothing on some photographs (four of eleven tried); the page then asks for a press on the thing
+  wanted, which cuts it out. imgQuire's Cut out tool does not yet: there it still stops at "Nothing found".
+- A press made in the wrong place cannot be taken back by itself: the remove brush paints it away, or the picture
+  is chosen again.
 - The files of the qualities taken out stay in a browser that fetched them until the site's data is cleared.
 - The brush's strokes are painted into the mask at its own size (at most 1024 a side), so on a large
   picture their edge is soft by a few pixels, then follows the picture by the guided filter.

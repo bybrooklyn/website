@@ -10,7 +10,8 @@
 // full-size PNG; save gives a PNG named from the file; keep paints the ground back in and, pressed again,
 // is put down; a color or the blurred picture fills what was clear; many pictures are cut in turn and
 // saved as one zip; and the only requests are the page's own, ONNX Runtime's and the model's one file,
-// each a GET with no body.
+// each a GET with no body. And with a stand-in for the models: where the subject model finds nothing,
+// the page says to press the thing wanted, a press cuts that thing out, and each press after adds to it.
 
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -18,7 +19,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { corePage, quire } from "../../../../scripts/core-page";
 import { CUT_TIERS } from "../parts/models";
-import { cutMenuLines, cutName } from "./page";
+import { cutMenuLines, cutName, CUT_WORDS } from "./page";
 import { packageAt } from "../../../../scripts/lib";
 import { readZip } from "../../core/zip";
 
@@ -218,3 +219,71 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await rm(folder, { recursive: true, force: true });
     }
 }, 300_000);
+
+test("in Chromium, where the model finds nothing the page says to press the thing wanted, and each press adds to what is kept", async () => {
+    const page = await corePage(
+        `
+        import { createCutoutPage } from "${quire}/img/cutout/page.ts";
+        import { encodeRuns } from "${quire}/img/masks.ts";
+        // a finder standing in for the models: the subject model finds nothing, and the press model keeps a square round each press
+        window.asked = [];
+        const found = (inside) => { const bytes = new Uint8Array(120 * 80); for (let y = 0; y < 80; y++) for (let x = 0; x < 120; x++) if (inside(x * 10, y * 10)) bytes[y * 120 + x] = 255; return { type: "found", id: 0, found: { width: 120, height: 80, runs: encodeRuns(bytes) }, ms: 1, place: "here" }; };
+        const finder = {
+            have: async () => true,
+            fetch: async () => {},
+            cancel() {},
+            matte: async (tier, picture) => { window.asked.push("matte " + tier); picture.close(); return found(() => false); },
+            select: async (tier, key, picture, presses) => { window.asked.push("select " + tier + " " + presses.length); picture?.close(); return found((x, y) => presses.some((press) => Math.abs(x - press.x) < 150 && Math.abs(y - press.y) < 150)); },
+            destroy() {},
+        };
+        window.cutout = createCutoutPage(document.querySelector("#host"), { finder: () => finder });
+        window.scene = async () => { const canvas = new OffscreenCanvas(1200, 800); const c = canvas.getContext("2d"); c.fillStyle = "#6a7f4f"; c.fillRect(0, 0, 1200, 800); c.fillStyle = "#c9b28a"; c.fillRect(180, 280, 240, 240); c.fillRect(780, 280, 240, 240); return new File([await canvas.convertToBlob({ type: "image/png" })], "two.png", { type: "image/png" }); };
+        window.alphaAt = (x, y) => { const made = window.cutout.result(); return made ? made.data[(y * made.width + x) * 4 + 3] : -1; };
+        window.ready = true;
+    `,
+        { width: 1400, height: 1000 },
+    );
+    if (!page) return;
+    const { tab } = page;
+    const until = async (expression: string, ms = 30_000) => {
+        const started = Date.now();
+        while (Date.now() - started < ms) {
+            if (await tab.run<boolean>(`!!(${expression})`)) return;
+            await tab.wait(100);
+        }
+        throw new Error(`waited for ${expression}`);
+    };
+    /** A press on the picture at a place in its own pixels. */
+    const press = async (x: number, y: number) => {
+        const box = await tab.run<{ x: number; y: number; width: number; height: number }>("(() => { const b = document.querySelector('.quire-cut-canvas').getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; })()");
+        await tab.click(box.x + (box.width * x) / 1200, box.y + (box.height * y) / 800);
+    };
+    const said = () => tab.run<string>("document.querySelector('.quire-bench-said').textContent");
+    try {
+        await until("window.ready === true");
+        await tab.run("window.scene().then((file) => { const data = new DataTransfer(); data.items.add(file); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })");
+        // the model found nothing: the picture is left as it was, and the line says the next step
+        await until("document.querySelector('.quire-bench-said').textContent.includes('Press')");
+        expect(await said()).toBe(CUT_WORDS.nothing);
+        expect(CUT_WORDS.nothing).toBe("Nothing was found to cut out. Press the thing you want to keep.");
+        expect(await tab.run("[!!window.cutout.result(), document.querySelector('.quire-cut').classList.contains('pressable'), window.asked]")).toEqual([false, true, ["matte cut-best"]]);
+        // what acts on a cut-out is still out of reach; the quality can be changed
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side > .quire-bench-group')].slice(0, 3).map((each) => each.inert)")).toEqual([true, true, false]);
+        // a press on one thing cuts it out: it is kept and the rest is gone
+        await press(300, 400);
+        await until("window.cutout.cut()?.presses?.length === 1 && window.cutout.result()");
+        expect(await said()).toBe("Kept the thing pressed.");
+        expect(await tab.run<number>("window.alphaAt(300, 400)")).toBeGreaterThan(200);
+        expect(await tab.run<number>("window.alphaAt(900, 400)")).toBeLessThan(20);
+        expect(await tab.run("[document.querySelector('.quire-cut').classList.contains('pressable'), document.querySelector('.quire-bench-side > .quire-bench-group').inert]")).toEqual([false, false]);
+        // a press on another adds it: both are kept, and what is between them is not
+        await press(900, 400);
+        await until("window.cutout.cut()?.presses?.length === 2");
+        await until("window.alphaAt(900, 400) > 200");
+        expect(await tab.run<number>("window.alphaAt(300, 400)")).toBeGreaterThan(200);
+        expect(await tab.run<number>("window.alphaAt(600, 80)")).toBeLessThan(20);
+        expect(await tab.run("window.asked")).toEqual(["matte cut-best", "select small 1", "select small 2"]);
+    } finally {
+        await page.close();
+    }
+}, 120_000);

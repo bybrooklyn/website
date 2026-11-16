@@ -111,7 +111,9 @@
     cursor: crosshair;
 }
 
-.quire-cut.cut .quire-cut-view:not([data-brush="keep"], [data-brush="remove"]) {
+/* a press on the picture does something with a cut-out (it keeps the thing pressed) and where nothing was found (it cuts that thing out) */
+.quire-cut.cut .quire-cut-view:not([data-brush="keep"], [data-brush="remove"]),
+.quire-cut.pressable .quire-cut-view {
     cursor: pointer;
 }
 

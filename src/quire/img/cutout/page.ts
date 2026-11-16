@@ -33,7 +33,8 @@ import { atOnce, blobSink, fileSink, folderOut, runEach, zipOut, type Destinatio
 import { batchStrip, type StripItem } from "../batch-strip";
 import { pixelsOf, smallLook, smallOf } from "../thumbs";
 import { createAsking } from "./asking";
-import { cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from "./cut";
+import { blank, cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from "./cut";
+import type { Press } from "../parts/segment";
 
 /** The words of the page that a visitor reads first. */
 export const CUT_WORDS = {
@@ -42,7 +43,14 @@ export const CUT_WORDS = {
     paste: "paste",
     working: "Cutting out",
     notCut: "Not cut out",
+    /** When the model finds nothing: what is said, and the next step, which is a press on the thing wanted. */
+    nothing: "Nothing was found to cut out. Press the thing you want to keep.",
 };
+
+/** A cut-out as the page holds it: with the presses that made it, when the model found nothing and it was pressed out by hand. */
+interface PressedCut extends Cut {
+    presses?: Press[];
+}
 
 /** A color offered to lay the cut-out on, named in its tooltip (the kit's). */
 export type { Swatch };
@@ -113,7 +121,9 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     let picture: ImageBitmap | undefined;
     let space: "srgb" | "p3" = "srgb";
     let profile: Uint8Array | undefined;
-    let cut: Cut | undefined;
+    let cut: PressedCut | undefined;
+    // true when the model found nothing in the picture shown: a press on the thing wanted is then the way to cut it out
+    let nothing = false;
     let result: ImageData | undefined;
     let laid: Laid = "clear";
     let color = options.colors?.[0]?.value ?? "#ffffff";
@@ -179,6 +189,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         root.classList.toggle("shown", !!picture);
         root.classList.toggle("cut", !!result);
         root.classList.toggle("clear", laid === "clear" && !!result && !holding);
+        root.classList.toggle("pressable", nothing && !result);
         box.busy(busy > 0);
         // what acts on a cut-out waits for one; the quality and another picture need only a picture, so a quality that found nothing can be changed
         for (const each of [lays.group, brushes.group, out, original]) each.inert = !result;
@@ -236,6 +247,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         picture = bitmap;
         cut = kept && { ...kept, background: laid, ...(laid === "color" ? { color } : {}) };
         result = undefined;
+        nothing = false;
         brush = undefined;
         const colored = await profileOf(new Uint8Array(await given.arrayBuffer()));
         if (file !== given) return;
@@ -257,7 +269,8 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         // one of many that could not be cut out is said again, not run again: the same model gives the same answer
         const failedBefore = entries.length > 1 ? entries[at]?.failed : undefined;
         if (failedBefore) {
-            say(`${whichSaid(at, entries.length)} · ${failedBefore === FOUND_NOTHING ? "Nothing was found to cut out, so the picture is left as it was." : `${CUT_WORDS.notCut}: ${failedBefore}`}`);
+            nothing = failedBefore === FOUND_NOTHING;
+            say(`${whichSaid(at, entries.length)} · ${nothing ? CUT_WORDS.nothing : `${CUT_WORDS.notCut}: ${failedBefore}`}`);
             return fill();
         }
         busy++;
@@ -283,8 +296,9 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
             say(`${entries.length > 1 ? `${whichSaid(at, entries.length)} · ` : ""}Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s, ${picture.width} × ${picture.height}.`);
         } catch (error) {
             const said = error instanceof Error ? error.message : String(error);
-            // a model that found nothing leaves the picture as it was, and says so plainly
-            say(said === FOUND_NOTHING ? "Nothing was found to cut out, so the picture is left as it was." : `${CUT_WORDS.notCut}: ${said}`);
+            // a model that found nothing leaves the picture as it was, and says so with the next step: a press on the thing wanted
+            nothing = said === FOUND_NOTHING;
+            say(nothing ? `${entries.length > 1 ? `${whichSaid(at, entries.length)} · ` : ""}${CUT_WORDS.nothing}` : `${CUT_WORDS.notCut}: ${said}`);
         } finally {
             busy--;
             fill();
@@ -438,7 +452,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     interface Entry {
         key: string;
         file: Blob & { name?: string };
-        cut?: Cut;
+        cut?: PressedCut;
         cutting?: Promise<Cut | undefined>;
         failed?: string;
         small?: ImageData;
@@ -744,11 +758,12 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     };
     const brushSize = () => Math.max(4, Math.round(Math.max(canvas.width, canvas.height) / 60));
     view.addEventListener("pointerdown", (event) => {
-        if (!result || event.button !== 0) return;
+        // with a cut-out, or where the model found nothing and a press is what makes one
+        if ((!result && !nothing) || event.button !== 0) return;
         event.preventDefault();
         view.setPointerCapture(event.pointerId);
         const at = placeOf(event);
-        if (brush) stroke = { size: brushSize(), soft: 0.5, ...(brush === "remove" ? { erase: true } : {}), points: [Math.round(at.x), Math.round(at.y)] };
+        if (brush && result) stroke = { size: brushSize(), soft: 0.5, ...(brush === "remove" ? { erase: true } : {}), points: [Math.round(at.x), Math.round(at.y)] };
         else pressedAt = at;
     });
     view.addEventListener("pointermove", (event) => {
@@ -781,16 +796,38 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         if (at && Math.hypot(placeOf(event).x - at.x, placeOf(event).y - at.y) < brushSize()) void pick(at);
     });
 
-    /** Keeps the thing pressed: the press-to-select model outlines it, and only what the cut-out found inside it stays. */
-    async function pick(at: { x: number; y: number }) {
-        if (!picture || !cut || !(await asking.picking(view))) return;
+    /**
+     * A press on the picture. With a cut-out the model found, it keeps the thing pressed: the press model outlines it, and only what the
+     * cut-out found inside it stays. Where the model found nothing, what is pressed is the cut-out itself, and each press after adds to
+     * it, so a thing the press model takes in parts (a cat's face, its chest, its back) is kept whole by pressing each.
+     */
+    async function pick(place: { x: number; y: number }) {
+        if (!picture || (!cut && !nothing) || !(await asking.picking(view))) return;
         busy++;
         fill();
         try {
-            const answer = await finderNow().select(PART_TIERS[0]!.id, `cut ${picture.width} ${picture.height} ${file?.size}`, await createImageBitmap(picture), [{ x: Math.round(at.x), y: Math.round(at.y), add: true }]);
-            cut = { ...cut, pick: answer.found };
-            await again();
-            say("Kept the thing pressed.");
+            const press: Press = { x: Math.round(place.x), y: Math.round(place.y), add: true };
+            const key = `cut ${picture.width} ${picture.height} ${file?.size}`;
+            if (!cut || cut.presses) {
+                const presses = [...(cut?.presses ?? []), press];
+                const answer = await finderNow().select(PART_TIERS[0]!.id, key, await createImageBitmap(picture), presses);
+                if (blank(answer.found)) say(CUT_WORDS.nothing);
+                else {
+                    const first = !cut;
+                    cut = { ...cut, found: answer.found, presses, background: laid, ...(laid === "color" ? { color } : {}) };
+                    nothing = false;
+                    // one of many is no longer one that could not be cut out
+                    const entry = entries[at];
+                    if (entries.length > 1 && entry) entry.failed = undefined;
+                    await again(first);
+                    say("Kept the thing pressed.");
+                }
+            } else {
+                const answer = await finderNow().select(PART_TIERS[0]!.id, key, await createImageBitmap(picture), [press]);
+                cut = { ...cut, pick: answer.found };
+                await again();
+                say("Kept the thing pressed.");
+            }
         } catch (error) {
             say(`Not chosen: ${error instanceof Error ? error.message : String(error)}`);
         }
