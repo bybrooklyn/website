@@ -59,9 +59,10 @@ test("a grade saved as a look is listed, given to another picture and forgotten;
     expect((await gradeOf())?.warmth).toBe(30);
     // a real press with the mouse: Chromium opens a file chooser only within a few seconds of a real input, and a press made from
     // script left the chooser shut whenever the machine was slow
+    const { tab } = page;
     const pressReal = async (words: string) => {
-        const at = await page.tab.run<{ x: number; y: number }>(`(() => { const button = [...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === ${JSON.stringify(words)}); button.scrollIntoView({ block: "center", behavior: "instant" }); const box = button.getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()`);
-        await page.tab.click(at.x, at.y);
+        const at = await tab.run<{ x: number; y: number }>(`(() => { const button = [...document.querySelectorAll('.quire-img-looks button')].find((each) => each.textContent === ${JSON.stringify(words)}); button.scrollIntoView({ block: "center", behavior: "instant" }); const box = button.getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()`);
+        await tab.click(at.x, at.y);
     };
     // a .cube read in: a table that swaps red and blue
     const lines = ["TITLE \"Swap\"", "LUT_3D_SIZE 2"];
