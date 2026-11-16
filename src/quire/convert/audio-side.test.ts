@@ -11,7 +11,7 @@ test("a sound's row says its rate, channels and length in plain units", () => {
     expect(rateSaid(48_000)).toBe("48 kHz");
     expect(channelsSaid(1)).toBe("mono");
     expect(channelsSaid(6)).toBe("6 channels");
-    expect(soundWords("FLAC sound", { rate: 44_100, channels: 2, duration: 205 })).toBe("FLAC sound, 44.1 kHz stereo 3:25");
+    expect(soundWords("FLAC sound", { rate: 44_100, channels: 2, duration: 205 })).toBe("FLAC sound, 44.1 kHz stereo, 3:25");
     expect(soundWords("MP3 sound", undefined)).toBe("MP3 sound");
 });
 

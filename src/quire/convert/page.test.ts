@@ -305,7 +305,7 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
     try {
         await tab.serve(ELSEWHERE, async () => undefined);
         await tab.run(`(() => { const data = new DataTransfer(); data.items.add(window.wavOf(2)); document.querySelector(".quire-convert").dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true })); })()`);
-        await until("window.convert.rows()[0]?.label === 'WAV sound, 44.1 kHz stereo 0:02'");
+        await until("window.convert.rows()[0]?.label === 'WAV sound, 44.1 kHz stereo, 0:02'");
         // the browser is asked what it writes; AAC, which Chromium on Linux does not write, is said so
         await until("!document.querySelector('[data-kind=audio] .quire-convert-choice[title^=\"Asking\"]')");
         const aac = await tab.run<{ cannot: boolean; title: string }>("(() => { const b = [...document.querySelectorAll('[data-kind=audio] .quire-convert-choice')].find((each) => each.textContent === 'AAC M4A'); return { cannot: b.classList.contains('cannot'), title: b.title }; })()");

@@ -501,7 +501,7 @@
         position: sticky;
         top: 3.35rem;
         z-index: 5;
-        max-height: 52dvh;
+        max-height: 60dvh;
         margin-inline: calc(var(--gutter) * -1);
         padding: 0.5rem var(--gutter) 0.4rem;
         border-bottom: 0.0625rem solid var(--rule);
@@ -544,7 +544,7 @@
 
     /* what the keyboard brings into view stops below the list, never under it */
     .quire-convert-panel :is(button, input, h2) {
-        scroll-margin-top: calc(52dvh + 4rem);
+        scroll-margin-top: calc(60dvh + 4rem);
     }
 
     .quire-convert-row-body {

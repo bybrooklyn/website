@@ -17,11 +17,8 @@ export const channelsSaid = (channels: number) => (channels === 1 ? "mono" : cha
 
 /** What a sound's row says it is: its kind, rate, channels and length, as far as its header says them. */
 export function soundWords(label: string, facts: { rate?: number; channels?: number; duration?: number } | undefined): string {
-    const parts = [label];
-    if (facts?.rate) parts.push(rateSaid(facts.rate));
-    if (facts?.channels) parts.push(channelsSaid(facts.channels));
-    if (facts?.duration) parts.push(timeSaid(facts.duration));
-    return parts.length > 1 ? `${parts[0]}, ${parts.slice(1).join(" ")}` : label;
+    const shape = [facts?.rate ? rateSaid(facts.rate) : "", facts?.channels ? channelsSaid(facts.channels) : ""].filter(Boolean).join(" ");
+    return [label, shape, facts?.duration ? timeSaid(facts.duration) : ""].filter(Boolean).join(", ");
 }
 
 /** The rate and channels a sound is written at: Opus always at 48 kHz and at most in stereo, AAC at most in stereo. */

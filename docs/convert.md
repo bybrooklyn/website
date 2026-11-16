@@ -37,7 +37,7 @@ at the right, staying in view as the page scrolls. On a phone the list stays at 
 scroll, and the choices run under it. Files arrive by a drop anywhere on the page, Ctrl+V, Choose files
 (Ctrl+O), or Paste in the list's right-click menu; on a phone a Paste button. Text pasted (not a file)
 becomes a file of its own, "Pasted text". Each file is a quiet row: its name; what it is ("JPEG picture",
-"WAV sound, 44.1 kHz stereo 3:25", "MP4 film, H.264 1920 × 1080, AAC sound, 0:42"); what it will become;
+"WAV sound, 44.1 kHz stereo, 3:25", "MP4 film, H.264 1920 × 1080, AAC sound, 0:42"); what it will become;
 its size before and after ("3.4 MB to 412 KB, 88% smaller"); and how it is going ("Writing WebP 50%",
 "Done", the name it leaves with). A thin bar under it fills only as steps are done: for a picture, the
 reading and each run of the encoder; for a sound, each second written; for a film, the time of the last
