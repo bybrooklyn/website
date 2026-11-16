@@ -32,6 +32,11 @@ export interface AppOptions {
      * and open, each of another kind saying which it is. Not given, every kind's ways are offered, in the kinds' order.
      */
     home?: string;
+    /**
+     * The address of each kind's own page, by the kind's key ("md": "/mdquire/"). On a page that is one kind's own, a document of
+     * another kind is opened on that kind's page and not here, and each page comes back to the document last open on it, not on the other.
+     */
+    pages?: Record<string, string>;
     /** The network, for the repository store; the browser's own if not given. */
     fetcher?: Fetcher;
     /** The name of the browser database. */
@@ -79,16 +84,20 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
 
     // ---- where to start ----
     let start: { store: Store; entry: Entry; found: Opened } | undefined;
+    // a page that is one kind's own remembers the document last open on it under its own name, so that imgQuire's page does not come
+    // back to what was being written on mdQuire's; what was remembered before the pages were told apart is read once more
+    const placeKey = own ? `${PLACE_KEY}:${own.key}` : PLACE_KEY;
     const remembered = (() => {
         try {
-            return JSON.parse(local()?.getItem(PLACE_KEY) ?? "null") as { place: string; id: string; name: string } | null;
+            return JSON.parse(local()?.getItem(placeKey) ?? local()?.getItem(PLACE_KEY) ?? "null") as { place: string; id: string; name: string } | null;
         } catch {
             return null;
         }
     })();
     const tryOpen = async (store: Store, entry: Entry) => {
         const found = await store.open(entry.id).catch(() => undefined);
-        if (found) start = { store, entry, found };
+        // a document of another kind is not what this page comes back to
+        if (found && (!own || kindOf(entry.name, found.main) === own)) start = { store, entry, found };
     };
     if (remembered?.place === "github" && github) await tryOpen(github, { id: remembered.id, name: remembered.name });
     if (!start && remembered?.place === "browser") await tryOpen(browser, { id: remembered.id, name: remembered.name });
@@ -98,7 +107,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         const place = keyOf(store);
         // a file or folder opened from the computer cannot be opened again without being chosen again
         try {
-            if (place === "browser" || place === "github") local()?.setItem(PLACE_KEY, JSON.stringify({ place, id: entry.id, name: entry.name }));
+            if ((place === "browser" || place === "github") && (!own || kind === own)) local()?.setItem(placeKey, JSON.stringify({ place, id: entry.id, name: entry.name }));
         } catch {
             // a browser with no room keeps working; the document is only not opened again next time
         }
@@ -160,8 +169,31 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         let main = entry.main;
         // a `.quire` in a folder says which kind it is only inside it, so it is looked into first where a kind keeps its text elsewhere than document.md
         if (!main && isQuire(entry.name) && openable.mains.length) main = (await store.open(entry.id).catch(() => undefined))?.main;
-        if (!(await into(kindOf(entry.name, main)))) return false;
+        const of = kindOf(entry.name, main);
+        if (await handOver(store, entry, of)) return false;
+        if (!(await into(of))) return false;
         return editing.open(store, main ? { ...entry, main } : entry);
+    }
+    /**
+     * On a page that is one kind's own, a document of another kind is opened on that kind's own page: it is written down as the document
+     * that page comes back to, and the browser goes there. Only what the other page can open by itself is handed on (a file or a folder
+     * chosen from the computer is opened here, as before). True when it was handed on.
+     */
+    async function handOver(store: Store, entry: Entry, of: Kind): Promise<boolean> {
+        const address = own && of !== own ? options.pages?.[of.key] : undefined;
+        const place = keyOf(store);
+        if (!address || (place !== "browser" && place !== "github")) return false;
+        // what is open here is saved first, and the writer stays if it could not be
+        if (!(await editing.ready())) return true;
+        try {
+            const storage = local();
+            if (!storage) return false;
+            storage.setItem(`${PLACE_KEY}:${of.key}`, JSON.stringify({ place, id: entry.id, name: entry.name }));
+        } catch {
+            return false;
+        }
+        location.assign(address);
+        return true;
     }
 
     if (start) remember(start.store, start.entry);
@@ -508,7 +540,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
             shelf.hide();
             return;
         }
-        local()?.removeItem(PLACE_KEY);
+        local()?.removeItem(placeKey);
         // the keyboard comes back to the row of the document left, or to the first way to start
         (row?.querySelector<HTMLElement>(".quire-shelf-open") ?? shelf.element.querySelector<HTMLElement>(".quire-shelf-word"))?.focus({ preventScroll: true });
     }

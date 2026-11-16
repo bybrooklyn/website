@@ -72,7 +72,7 @@ export async function imgPage(database: string, size = { width: 1300, height: 82
             document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
         };
         window.box = (selector) => { const box = document.querySelector(selector)?.getBoundingClientRect(); return box && { x: box.x, y: box.y, width: box.width, height: box.height }; };
-        startApp(document.querySelector("#host"), { kinds: [markdown({ sample: "# A sample\\n" }), img()], database: ${JSON.stringify(database)}, top: document.querySelector(".quire-top"), home: location.hash.slice(1) || undefined }).then((app) => (window.app = app));
+        startApp(document.querySelector("#host"), { kinds: [markdown({ sample: "# A sample\\n" }), img()], database: ${JSON.stringify(database)}, top: document.querySelector(".quire-top"), home: location.hash.slice(1) || undefined, pages: { md: location.pathname + "?md#md", img: location.pathname + "?img#img" } }).then((app) => (window.app = app));
     `,
         { body: `${TOP}<div id="host" class="quire-host"></div>`, ...size, files, ...(args ? { args } : {}) },
     );

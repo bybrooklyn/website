@@ -2,7 +2,8 @@
 // templates and its sample and no picture, and leaves a picture pasted on it alone. imgQuire's says
 // first how a picture arrives and offers a picture and a picture from a file, with none of mdQuire's
 // templates or its sample; a document of the other kind is still listed there, its row saying that it is
-// one; and a picture pasted there opens.
+// one, and pressed is opened on mdQuire's page; a picture pasted there opens; and each page comes back to
+// the document last open on it, not on the other.
 
 import { afterAll, expect, test } from "bun:test";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
@@ -21,7 +22,7 @@ const ready = "window.app && !document.querySelector('.quire-shelf').inert && do
 const pastePicture = () =>
     page!.tab.run("(async () => { const canvas = new OffscreenCanvas(300, 200); canvas.getContext('2d').fillRect(0, 0, 300, 200); const blob = await canvas.convertToBlob({ type: 'image/png' }); const data = new DataTransfer(); data.items.add(new File([blob], 'shot.png', { type: 'image/png' })); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })()");
 
-test("mdQuire's own home screen offers no picture and leaves a pasted one alone; imgQuire's leads with pictures and still lists a document", async () => {
+test("mdQuire's own home screen offers no picture and leaves a pasted one alone; imgQuire's leads with pictures, lists a document and sends it to mdQuire's page; each page comes back to its own", async () => {
     page = await imgPage(`img-home-${Date.now()}`);
     if (!page) return console.warn("home.test.ts skipped: needs a Chromium");
     const address = await page.tab.run<string>("location.href.split('#')[0].split('?')[0]");
@@ -44,16 +45,9 @@ test("mdQuire's own home screen offers no picture and leaves a pasted one alone;
     await page.tab.type("A note");
     await page.tab.wait(1500);
 
-    // as imgQuire's own page: it comes back to the document that was open, so the home screen is asked for by the trail's word
+    // as imgQuire's own page: it does not come back to what was being written on mdQuire's, so its home screen is shown
     await page.tab.open(`${address}?img#img`, 800);
-    await page.until("window.app");
-    await page.tab.wait(600);
-    if (!(await shown())) {
-        const word = await page.middle(".quire-word");
-        await page.tab.click(word.x, word.y);
-    }
     await page.until(ready);
-    // (a row's words are read as they are written, since the row is not seen while the page shrinks back into it)
     const img = await shelf();
     expect(img.lead).toBe("Paste, drop or open a picture");
     expect(img.fresh).toEqual(["picture", "from a file"]);
@@ -61,7 +55,20 @@ test("mdQuire's own home screen offers no picture and leaves a pasted one alone;
     expect(img.ways).not.toContain("see a sample");
     // the document of the other kind is listed and says that it is one
     expect(img.rows.some((row) => row.includes("document, this browser"))).toBe(true);
-    // a picture pasted here opens in the picture editor
+    // pressed, it is opened on mdQuire's own page and not here
+    const row = await page.tab.run<{ x: number; y: number }>("(() => { const row = [...document.querySelectorAll('.quire-shelf-list li')].find((each) => each.textContent.includes('document, this browser')); const box = row.querySelector('.quire-shelf-open').getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()");
+    await page.tab.click(row.x, row.y);
+    await page.until("location.hash === '#md' && window.app && document.querySelector('.quire-shelf').inert && document.querySelector('.quire-name-home')?.textContent.includes('Untitled')");
+    expect(await page.tab.run("!!window.app.editing().stage")).toBe(false);
+
+    // back on imgQuire's page the home screen is shown again, and a picture pasted there opens in the picture editor
+    await page.tab.open(`${address}?img2#img`, 800);
+    await page.until(ready);
     await pastePicture();
     await page.until("document.querySelector('.quire-shelf').inert && window.app.editing().stage?.loaded()");
-}, 90_000);
+    await page.tab.wait(1200);
+    // and mdQuire's page still comes back to its own document, not to the picture
+    await page.tab.open(`${address}?md2#md`, 800);
+    await page.until("window.app && document.querySelector('.quire-shelf').inert && document.querySelector('.quire-name-home')?.textContent.includes('Untitled')");
+    expect(await page.tab.run("!!window.app.editing().stage")).toBe(false);
+}, 120_000);

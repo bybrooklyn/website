@@ -62,5 +62,5 @@ const colors = Object.entries(accents).map(([key, value]) => ({ name: names[key]
 
 /** Starts the app on the page, with both kinds of document on its shelf; `home` is the kind whose own page it is ("md", "img"), whose ways to start are the ones offered there. */
 export function startQuire(home: "md" | "img") {
-    if (host) void startApp(host, { kinds: [markdown({ colors, sample: SAMPLE }), img()], home, top: document.querySelector<HTMLElement>(".quire-top") ?? undefined });
+    if (host) void startApp(host, { kinds: [markdown({ colors, sample: SAMPLE }), img()], home, pages: { md: "/mdquire/", img: "/imgquire/" }, top: document.querySelector<HTMLElement>(".quire-top") ?? undefined });
 }
