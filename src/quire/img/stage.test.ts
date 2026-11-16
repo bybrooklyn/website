@@ -322,6 +322,50 @@ test("a mouse's notch with Ctrl held zooms as gently as a notch of the plain whe
     expect(await zoomedBy(Array(10).fill(-2), true)).toBeCloseTo(Math.exp(0.2), 4);
 });
 
+test("a crop's shape holds while the dial levels the picture, during the drag and after it, and turning back to none keeps the frame, which Enter then applies", async () => {
+    if (!page) return;
+    // a picture cropped first, so that the next one opens after a crop that is not its own
+    await page.paste("screenshot");
+    await page.tab.drag(await page.onScreen(1200, 700), await page.onScreen(900, 500), 6);
+    await page.tab.press("Enter");
+    await page.paste("screenshot");
+    const pressShape = async (name: string) => {
+        const button = await page!.middle(`.quire-img-strip [aria-label='${name} shape']`);
+        await page!.tab.click(button.x, button.y);
+    };
+    const shapeOf = async () => {
+        const frame = await frameOf();
+        return frame.width / frame.height;
+    };
+    await pressShape("Square");
+    expect(await shapeOf()).toBeCloseTo(1, 2);
+    const dial = await page.middle(".quire-img-strip .quire-img-dial");
+    // held part way, the frame is square while the picture turns
+    await page.tab.down(dial.x, dial.y);
+    for (let at = 1; at <= 6; at++) {
+        await page.tab.move(dial.x + at * 5, dial.y);
+        await page.tab.wait(16);
+    }
+    expect(await page.tab.run<number>("window.app.editing().stage.frame().width / window.app.editing().stage.frame().height")).toBeCloseTo(1, 1);
+    await page.tab.up(dial.x + 30, dial.y);
+    expect((await page.tab.run<{ type: string; angle?: number }[]>("window.app.editing().steps()")).find((step) => step.type === "turn")?.angle).not.toBe(0);
+    expect(Math.abs((await shapeOf()) - 1)).toBeLessThan(0.02);
+    await pressShape("16:9");
+    expect(Math.abs((await shapeOf()) - 16 / 9)).toBeLessThan(0.02);
+    const wide = await frameOf();
+    // dragged back to none: the turn is gone, and the frame is the one held to 16:9, not the whole picture
+    const again = await page.middle(".quire-img-strip .quire-img-dial");
+    await page.tab.drag(again, { x: again.x - 30, y: again.y }, 6);
+    expect((await page.tab.run<{ type: string }[]>("window.app.editing().steps()")).some((step) => step.type === "turn")).toBe(false);
+    const back = await frameOf();
+    expect(Math.abs(back.width / back.height - 16 / 9)).toBeLessThan(0.02);
+    expect(back.width).toBeLessThanOrEqual(wide.width + 1);
+    await page.tab.run("document.querySelector('.quire-img-stage').focus()");
+    await page.tab.press("Enter");
+    const crop = (await page.tab.run<{ type: string; rect?: { width: number; height: number } }[]>("window.app.editing().steps()")).find((step) => step.type === "crop");
+    expect(crop?.rect).toMatchObject({ width: back.width, height: back.height });
+}, 30_000);
+
 test("Escape leaves the crop from the tool's own controls, the dial once dragged or a shape pressed, and gives the keyboard back to the picture", async () => {
     if (!page) return;
     await page.paste("screenshot");

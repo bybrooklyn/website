@@ -324,6 +324,11 @@ export function createStage(hooks: StageHooks) {
     // the crop's frame while it is being set, in the original's pixels; it becomes the crop on Enter
     let cropFrame: Rect | undefined;
     let aspect: number | undefined;
+    // the frame as it was last set by hand (dragged, nudged or held to a shape), kept while the dials turn or straighten the
+    // picture, so that the frame keeps its shape through a turn and comes back as it was when the turn goes back to none
+    let chosen: Rect | undefined;
+    // the picture's crop step as it was last seen, to know when undo or a version changed the crop itself
+    let cropSeen = "";
     // the steps drawn while a drag goes on, before letting go makes them a change
     let live: Kept[] | undefined;
     let picked: string | undefined;
@@ -1040,7 +1045,7 @@ export function createStage(hooks: StageHooks) {
         cornersLive = undefined;
         element.dataset.cornering = on ? "yes" : "";
         for (const handle of cornerGrips) handle.tabIndex = on ? 0 : -1;
-        if (!on && tool === "crop") cropFrame = shown()?.crop;
+        if (!on && tool === "crop") cropFrame = frameNow();
         glideToFit();
         paint();
         hooks.moved();
@@ -1091,11 +1096,25 @@ export function createStage(hooks: StageHooks) {
     };
     const zoom = (by: number, at: Point = { x: element.clientWidth / 2, y: element.clientHeight / 2 }) => ((view = zoomAt(view, by, at)), paint());
 
+    /** The picture's crop step as text, to be compared with the one last seen. */
+    const cropKey = () => JSON.stringify(hooks.picture()?.steps.find((step) => step.type === "crop") ?? null);
+    /**
+     * The crop's frame for the picture as it stands now, with the dials' turn and straightening while they are dragged: the frame set
+     * by hand (dragged, nudged or held to a shape) where it lies on the picture, else made smaller about its middle, its shape kept;
+     * with none set by hand, the crop the steps (or `steps`) give.
+     */
+    function frameNow(steps?: Kept[]): Rect | undefined {
+        const found = picture();
+        if (!found) return undefined;
+        if (chosen) return fitInside(chosen, turnNow());
+        return look(steps ? { ...found, steps } : found).crop;
+    }
+
     // ---- tools ----
     function setTool(next: Tool) {
         if (next === tool) return;
         if (tool === "crop") {
-            cropFrame = undefined;
+            cropFrame = chosen = undefined;
             setCornering(false);
         }
         if (tool === "text") keepWriting();
@@ -1132,7 +1151,7 @@ export function createStage(hooks: StageHooks) {
     /** Holds the frame to a shape, or lets it go free. */
     function setAspect(next: number | undefined) {
         aspect = next;
-        if (next && cropFrame && loaded) cropFrame = fitInside(shapeFrame(cropFrame, next, loaded.size), turnNow());
+        if (next && cropFrame && loaded) chosen = cropFrame = fitInside(shapeFrame(cropFrame, next, loaded.size), turnNow());
         paint();
         hooks.moved();
     }
@@ -1409,7 +1428,10 @@ export function createStage(hooks: StageHooks) {
         if (!was) return;
         const made = live;
         live = undefined;
-        if (was.kind === "frame") return hooks.moved();
+        if (was.kind === "frame") {
+            chosen = cropFrame;
+            return hooks.moved();
+        }
         if (was.kind === "cut") {
             cutLine = undefined;
             paint();
@@ -1586,7 +1608,7 @@ export function createStage(hooks: StageHooks) {
         event.preventDefault();
         const found = hooks.picture();
         if (tool === "crop" && cornering) view = { ...view, x: view.x - by.x * 10, y: view.y - by.y * 10 };
-        else if (tool === "crop" && cropFrame && loaded) cropFrame = keepInside(cropFrame, dragFrame(cropFrame, "move", by, loaded.size), turnNow());
+        else if (tool === "crop" && cropFrame && loaded) chosen = cropFrame = keepInside(cropFrame, dragFrame(cropFrame, "move", by, loaded.size), turnNow());
         else if (picked && found) {
             const id = picked;
             // the arrows move what is picked the way they point on the screen, whatever the picture's turn
@@ -1641,6 +1663,8 @@ export function createStage(hooks: StageHooks) {
             lenses.clear();
             blob = original;
             loaded = await prepare();
+            chosen = undefined;
+            cropSeen = cropKey();
             if (tool === "crop") cropFrame = shown()?.crop;
             fitView();
             shownSize = sizeNow();
@@ -1762,7 +1786,11 @@ export function createStage(hooks: StageHooks) {
         changed() {
             const was = shownTurn;
             shownTurn = shown()?.turn ?? 0;
-            if (tool === "crop") cropFrame = shown()?.crop;
+            // a crop changed by undo or a version is followed by the frame; a turn or a straightening keeps the frame set by hand
+            const crop = cropKey();
+            if (crop !== cropSeen) chosen = undefined;
+            cropSeen = crop;
+            if (tool === "crop") cropFrame = frameNow();
             // a new turn or straightening while cropping: the turned picture and its frame glide to fit the room whole
             const seenNow = JSON.stringify(shown()?.perspective ?? null);
             const straightened = seenNow !== shownPerspective;
@@ -1790,7 +1818,7 @@ export function createStage(hooks: StageHooks) {
         turning(degrees: number | undefined) {
             turning = degrees;
             const found = picture();
-            if (found && tool === "crop") cropFrame = look({ ...found, steps: degrees === undefined ? found.steps : setTurn(found.steps, degrees) }).crop;
+            if (found && tool === "crop") cropFrame = frameNow(degrees === undefined ? found.steps : setTurn(found.steps, degrees));
             if (tool === "crop") glideToFit();
             paint();
         },
@@ -1798,7 +1826,7 @@ export function createStage(hooks: StageHooks) {
         keystone(dials: { vertical: number; horizontal: number } | undefined) {
             keystoning = dials;
             const found = picture();
-            if (found && tool === "crop") cropFrame = look({ ...found, steps: dials ? setPerspective(found.steps, { ...perspectiveStep(), ...dials }) : found.steps }).crop;
+            if (found && tool === "crop") cropFrame = frameNow(dials ? setPerspective(found.steps, { ...perspectiveStep(), ...dials }) : found.steps);
             if (tool === "crop") glideToFit();
             paint();
         },

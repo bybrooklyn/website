@@ -102,7 +102,10 @@ worked out a moment after the steps stop changing.
 
 **Crop.** Handles, the frame dragged, a new frame dragged out from outside it, arrow keys (Shift for ten
 pixels), Shift on a corner or a shape from the strip to hold its shape, Enter to apply; outside dimmed. A
-frame back on the whole picture takes the crop step away.
+frame back on the whole picture takes the crop step away. A frame set by hand (dragged, nudged or held to a shape) is kept while the
+horizon's dial or the keystone dials turn the picture: where it no longer lies on the picture it is made
+smaller about its middle, its shape kept, and with the turn back to none it is as it was. A crop changed by
+undo or a version is followed by the frame instead.
 
 **Resize.** A box grown from its button: width and height linked (a link button unlinks them), Percent as
 a switch, and 50%, 1920, 1280, 1080 and 800; Enter applies and gives the keyboard to the picture, Escape
