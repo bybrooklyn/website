@@ -1,7 +1,7 @@
 # QR codes
 
 A page that makes and reads QR codes, everything in the browser: the hidden page `/qr/`, built in
-production and linked from nowhere, as `/cutout/` is. It is a small tool of the Quire suite, beside mdQuire
+production and linked from nowhere but the list of tools (`/tools/`), as `/cutout/` is. It is a small tool of the Quire suite, beside mdQuire
 and imgQuire, written from scratch with no library.
 
 ## Where the code is
@@ -22,7 +22,7 @@ and imgQuire, written from scratch with no library.
   equal by a test, since the suite imports nothing from outside `src/quire/`).
 - `style.ts`: the one SVG every look is drawn as, and `codeFor`, which raises error correction for a picture.
 - `page.ts`: the page; `src/pages/qr.astro`, `src/scripts/qr.ts` (the site's colors offered as grounds),
-  `src/styles/quire-qr.css`.
+  `src/styles/quire-qr.css`; its box and column are the small tools' kit (`src/quire/core/bench.ts`).
 
 ## Built
 
@@ -33,11 +33,11 @@ version that holds it is used, then the level is raised while it still fits that
 scored by the standard's four rules (the light outside the code counts toward the finder-like rule) and the
 least is kept.
 
-**What goes in.** Six kinds, each a form that fills the code as it is typed: Link or text; Wi-Fi
-(`WIFI:T:WPA;S:name;P:password;H:true;;`, with `\ ; , : "` escaped; no password makes it open); Contact (a
-vCard 3.0 of only the lines filled in, CR LF, `\ , ;` and line breaks escaped); Email (`mailto:` with subject
-and body percent-encoded, line breaks as CR LF); Phone (`tel:` with only digits, a leading plus, `*` and
-`#`); Message (`sms:` with `?body=`). Text too long for version 40 at the level chosen is said plainly with
+**What goes in.** Six kinds, each a form that fills the code as it is typed: link or text; wi-fi
+(`WIFI:T:WPA;S:name;P:password;H:true;;`, with `\ ; , : "` escaped; no password makes it open); contact (a
+vCard 3.0 of only the lines filled in, CR LF, `\ , ;` and line breaks escaped); email (`mailto:` with subject
+and body percent-encoded, line breaks as CR LF); phone (`tel:` with only digits, a leading plus, `*` and
+`#`); message (`sms:` with `?body=`). Text too long for version 40 at the level chosen is said plainly with
 its size and the most that fits, and the last code stays, faded, so nothing jumps.
 
 **How it looks.** Shapes: squares (each row's runs one path, so no seams), rounded squares, dots, diamonds,
@@ -46,7 +46,7 @@ inner corners of an L filled with a curve). Corners, the three finders, drawn wh
 round. Color: one color (eight deep ones offered, or any as hex digits), a gradient of two in four
 directions, a rainbow at one lightness (OKLCH 0.5 on a light ground, 0.78 on a dark one), or a flag's stripes
 (rainbow, trans, lesbian, bisexual, pansexual, nonbinary). Ground: white, the site's five light colors, any
-hex, or clear. Margin: 0 to 8 modules, in steps of one. Error correction: Low, Medium, High, Highest (L, M, Q,
+hex, or clear. Margin: 0 to 8 modules, in steps of one. Error correction: low, medium, high, highest (L, M, Q,
 H). The colors are checked by contrast (WCAG's): under 1.6 "too alike for a phone to read", under 3 "some
 phones will not read it", and a code lighter than its ground is said to be so. A flag's stripes, and the
 rainbow's colors, are deepened in even steps toward black (or toward white on a dark ground) until each
@@ -68,12 +68,12 @@ own color, the patterns whole. Either is given the highest level that fits the c
 halftone, at least 320 pixels), turned into pixels by the browser, and read by the reader; the page says
 "It reads back as written." or "It does not read back here, so phones may not read it either."
 
-**Out.** Copy (a PNG on the clipboard), Save PNG at 512, 1024, 2048 or 4096 pixels a side, Save SVG
+**Out.** copy (a PNG on the clipboard), save png at 512, 1024, 2048 or 4096 pixels a side (png size), save svg
 (pictures inside it as data, the text it holds as its title). Names: `qr-`, the kind, and a word or two of
 what it holds, in ASCII letters, digits and hyphens (`qr-link-example-com.png`, `qr-wifi-cafe-wi-fi.svg`).
 
-**The reader.** A picture comes by Ctrl+V, a drop, Choose a picture (Ctrl+O), or Paste in the code's
-right-click menu; on a phone a Paste button. It is made gray (clear counted white), shrunk by whole steps to
+**The reader.** A picture comes by Ctrl+V, a drop, choose a picture (Ctrl+O), or "paste a picture to read" in the code's
+right-click menu; on a phone a plain paste. It is made gray (clear counted white), shrunk by whole steps to
 at most 1400 pixels a side (2800 if nothing is found), and each pixel called dark or light against the mean
 of its 8 by 8 block smoothed over 5 by 5 blocks (Otsu's single threshold if that finds nothing). Finders
 are found by their 1:1:3:1:1 runs, checked down, across and along a diagonal; every three of about one
@@ -82,16 +82,36 @@ edge (`guessMap`), the version read from its own information from version 7, the
 for within 4, then 9 modules, and, where none is found or for version 1, the fourth corner is searched
 around the guess. Each module is read at its middle. A mirrored code is read turned back; light on dark is
 read by turning the picture over. Each code found is outlined on the picture and laid out by its kind, with
-Copy beside each line and Copy all; a link is shown as text and copied, never opened.
+copy beside each line and copy all; a link is shown as text and copied, never opened.
 
-**The page.** The code's square stays at the left as the page scrolls (at the top on a phone, a third of the
-height, under the site's top), the same size whatever the version. The panel: Make or Read; what it holds;
-shape, corners, color, ground, margin, picture, error correction. Parts open by growing from no height,
-the forms' room takes the height of the one shown, Make and Read fade one into the other; the menu is the
-suite's and grows from where it was pressed. Keys: 1 to 6 pick a kind, M and R make or read, arrows move
-within a row of choices, Ctrl+C copies, Ctrl+S saves a PNG, Ctrl+Shift+S an SVG, Ctrl+O chooses a picture,
-Ctrl+V pastes one, the menu key or Shift+F10 opens the code's menu. Shift with a right-click leaves the
-browser's. Reduced motion turns the motion off.
+**The page.** It opens the way a mini or a project does (`layouts/Opened.astro`), as the cut-out does: the
+site's name and the trail "tools / QR codes", a small label, its name, one line saying what it does, then one
+box with a rule round it, built from the small tools' kit (`src/quire/core/bench.ts`, `quire-bench.css`). Its
+way back is the list of tools (`/tools/`). In the box the code's square is on the left, the same size whatever
+the version, with one line under it: what the code is (its version, size and error correction, and any note on
+its colors or picture), then, after a small dot, whether it reads back; while reading a picture it says so, then
+what was found. The code and its line stay in view while the longer column scrolls past them (at the top on a
+phone, the square a third of the height, the column scrolling under it). The column, written as the Walker's is:
+a small heading for each group, round dots for a choice of one, small pictures for a choice drawn as one (the
+kit's `pictured`: drawn quietly in the muted ink, the one chosen in the accent with a short rule under it),
+lines to type on, words in the accent to press, thin rules between, no boxed buttons, every label in lowercase.
+The groups are make or read; what it holds (link or text, wi-fi, contact, email, phone, message, and the lines
+of the one chosen under it); shape; corners; color (one color, gradient, rainbow, flag, with the colors, from and
+to and the direction, or the flags under it); ground (white, the site's colors, clear, and a line for hex
+digits); margin (less and more, in modules); picture (none, in the middle, as the code, then choose a picture,
+its size or how it shows); error correction (low, medium, high, highest); png size; then copy, save png and save
+svg at the foot. What acts on a code is there from the start and faint until there is one. Read in place of make
+has choose a picture (and on a phone, where there is no right-click and no keys, a plain paste), then each code
+found as a group of its own, its kind for a heading, a row for each line with copy beside it, copy all, and its
+version and error correction. Parts grow open and shut, make and read fade one into the other while the
+column's room goes to the height of the one shown; the menu is the suite's, in lowercase, and grows from where
+it was pressed. Before 16 November 2026 the page stood under the editor's top line with boxed buttons, boxed
+fields and capitalized labels; the owner found the small tools unlike each other and unlike the rest of the
+site, and chose this frame, the column, lowercase and the same words under headings, as the cut-out has.
+
+Keys: 1 to 6 pick a kind, M and R make or read, arrows move within a row of choices, Ctrl+C copies, Ctrl+S
+saves a PNG, Ctrl+Shift+S an SVG, Ctrl+O chooses a picture, Ctrl+V pastes one, the menu key or Shift+F10
+opens the code's menu. Shift with a right-click leaves the browser's. Reduced motion turns the motion off.
 
 **Nothing leaves the browser.** The page's test holds that it fetches nothing over the network.
 
@@ -136,7 +156,7 @@ browser's. Reduced motion turns the motion off.
 - vCard lines end in CR LF as the standard says, and are not folded at 75 characters.
 - `sms:` with `?body=`, not the older `SMSTO:`; the reader reads both.
 - A flag's light stripes are deepened rather than refused, so the trans flag's white is drawn gray.
-- The page's words, listed in the report that built it.
+- The page's words, listed in the report that built it and in the one that brought it to the kit.
 
 ## Known weak spots
 
