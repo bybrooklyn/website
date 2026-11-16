@@ -100,13 +100,13 @@ test("Repair JPEG with a model and Enlarge with a model are asked first, make st
         await until("document.querySelector('.quire-img-press-menu:popover-open')");
         await line("Repair JPEG with");
         await until("document.querySelector('.quire-restore-dialog .quire-img-read-card[data-tier=\"repair-best\"]')");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-restore-dialog .quire-img-read-card-name')].map((each) => each.textContent)")).toEqual(["Instant", "Better", "Best"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-restore-dialog .quire-img-read-card-name')].map((each) => each.textContent)")).toEqual(["instant", "better", "best"]);
         expect(await tab.run<string>("document.querySelector('.quire-restore-dialog .quire-img-read-card[aria-checked=\"true\"]').dataset.tier")).toBe("plain");
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-restore-dialog .quire-img-read-card[data-tier=\"repair-best\"]').click()");
         // kept already (put there above), so it says so and the button repairs with no download
         expect(await tab.run<string>("document.querySelector('.quire-restore-dialog .quire-img-read-card[data-tier=\"repair-best\"] .quire-img-read-card-size').textContent")).toBe("On this device");
-        expect(await tab.run<string>("document.querySelector('.quire-restore-dialog .quire-dialog-action').textContent")).toBe("Repair");
+        expect(await tab.run<string>("document.querySelector('.quire-restore-dialog .quire-dialog-action').textContent")).toBe("repair");
         const started = Date.now();
         await tab.run("document.querySelector('.quire-restore-dialog .quire-dialog-action').click()");
         await until("window.app.editing().steps().some((step) => step.type === 'repair' && step.model === 'repair-best' && step.made)", 120_000);
@@ -149,14 +149,14 @@ test("Repair JPEG with a model and Enlarge with a model are asked first, make st
         await until("window.app.editing().stage?.loaded()?.size.width === 320");
         await tab.run("document.querySelector('.quire-img-bar [aria-label=\"Resize\"]').click()");
         await until("document.querySelector('.quire-img-resize.open')");
-        expect(await tab.run<string>("document.querySelector('.quire-img-enlarge-way').textContent")).toBe("Enlarge: Filter");
+        expect(await tab.run<string>("document.querySelector('.quire-img-enlarge-way').textContent")).toBe("enlarge: filter");
         await tab.run("document.querySelector('.quire-img-enlarge-way').click()");
         await until("document.querySelector('.quire-restore-dialog .quire-img-read-card[data-tier=\"enlarge-small\"]')");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-restore-dialog .quire-img-read-card-name')].map((each) => each.textContent)")).toEqual(["Filter", "Sharp"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-restore-dialog .quire-img-read-card-name')].map((each) => each.textContent)")).toEqual(["filter", "sharp"]);
         await tab.run("document.querySelector('.quire-restore-dialog .quire-img-read-card[data-tier=\"enlarge-small\"]').click()");
-        expect(await tab.run<string>("document.querySelector('.quire-restore-dialog .quire-dialog-action').textContent")).toBe("Download and enlarge");
+        expect(await tab.run<string>("document.querySelector('.quire-restore-dialog .quire-dialog-action').textContent")).toBe("download and enlarge");
         await tab.run("document.querySelector('.quire-restore-dialog .quire-dialog-action').click()");
-        await until("!document.querySelector('.quire-restore-dialog') && document.querySelector('.quire-img-enlarge-way').textContent === 'Enlarge: Sharp'", 60_000);
+        await until("!document.querySelector('.quire-restore-dialog') && document.querySelector('.quire-img-enlarge-way').textContent === 'enlarge: sharp'", 60_000);
         await tab.run("[...document.querySelectorAll('.quire-img-resize button')].find((each) => each.textContent === '200%').click()");
         await until("window.app.editing().steps().some((step) => step.type === 'resize' && step.width === 640 && step.model === 'enlarge-small')");
         const enlarged = await tab.run<{ psnr: number; width: number }>(`(async () => { const flat = await window.app.editing().flatten(); return { psnr: (${psnr})(flat.data, window.clean), width: flat.width }; })()`);

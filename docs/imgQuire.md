@@ -264,7 +264,7 @@ the screenshot (6 things) and nothing else was (`read/real.test.ts`, `reading.te
 surface opens where Export and Facts do, one of the three at a time, the picture gliding into the room left
 beside it (on a phone a sheet at the foot, opening at 22rem or 46 percent of the height if less, which its head
 drags as short as 150 pixels or as tall as 80 percent of the window, the picture above refitting as it goes; its
-foot fades over its last 2.25rem, so a row it cuts never shows as a half row). From the top: what is being graded ("Whole picture", or a
+foot fades over its last 2.25rem, so a row it cuts never shows as a half row). From the top: what is being graded ("whole picture", or a
 part's name), a small histogram (red, green and blue as fine lines over the luminance, quiet) that follows the
 grade as it moves, pressed for a waveform and back; Auto, Balance and Reset; the six sliders Light, Contrast,
 Shadows, Highlights, Warmth and Color; More, folded (Tint, the curve, the wheels, colors on their own); Looks,
@@ -720,7 +720,7 @@ private storage, in a folder of its own, and again before it is used), and run i
   PNG it would be 2.3 to 2.6 and 0.35. A step from before, `{"type": "repair"}`, reads and draws as it did; a model's
   result missing from the document falls back to the instant repair and says so.
 - **Enlarging** is in Resize: the sizes gain 200% and 400%, and a quiet button under them says the way a picture
-  made larger is enlarged, "Enlarge: Filter" or "Enlarge: Sharp", and opens the same dialog with two cards, Filter
+  made larger is enlarged, "enlarge: filter" or "enlarge: sharp", and opens the same dialog with two cards, Filter
   (the resize's own filter, no download) and Sharp (Swin2SR lightweight, 8 MB, "Faithful edges, a minute or two a
   megapixel"). A resize larger than the picture then names the model (`"model": "enlarge-small"`); one that makes
   it smaller ignores it. When the picture is exported or copied (and for the weight under it), the picture as it
@@ -848,6 +848,12 @@ so, with the reason, and the rest went on.
 - **The first second:** the picture with a crop frame already on it, a small bar of tools above
   (crop, resize, hide, mark, export), and its size in pixels and bytes under it.
 - **Machines:** built for a mouse and keyboard first, made usable on a phone afterwards.
+- **Letters.** Every label on the page is lowercase, as the site's own labels and the small tools' are: words on
+  the strip and in the panels, panel headings, the words beside switches, the cards and buttons of dialogs.
+  Names keep their capitals inside a label (JPEG, WebP, PNG, Exif, Display P3, sRGB), and units theirs (px, KB).
+  The menu bar's menus, every line of a menu, tooltips, status lines, notes and the titles and text of dialogs
+  keep a first capital, as sentences and menus have. A label made from another word (a model's name on the
+  strip, the line naming what is graded, a facts row) is made small by `lowered` in `core/bench.ts`.
 - **The file is non-destructive from the first day.** The original is never changed. Every crop, grade,
   mark and hidden area is a step that can be changed or removed later. The file is a `.quire` zip holding
   the original and the steps. Export flattens.

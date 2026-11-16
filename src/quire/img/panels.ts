@@ -4,6 +4,7 @@
 // resizing, a small box of fields grown from its button; and a strip for the tool in hand, its few choices as icons.
 // Each grows from what opened it and gives the keyboard back there when it closes.
 
+import { lowered } from "../core/bench";
 import { control, icon, make, still, tipAway } from "../core/ui";
 import { switchButton } from "../core/dialog";
 import { FORMATS, readWeight, weightSaid, type Settings } from "./export";
@@ -12,9 +13,9 @@ import type { Edits, Facts, Keep } from "./metadata";
 
 /** What of the metadata an export keeps, as its three buttons say it, each with its tooltip. */
 export const KEEPS: { key: Keep; label: string; tip: string }[] = [
-    { key: "none", label: "None", tip: "Nothing about the picture goes with it" },
-    { key: "noplace", label: "No place", tip: "Camera, date and the rest, but not where it was taken" },
-    { key: "all", label: "All", tip: "Everything the picture says about itself, where it was taken too" },
+    { key: "none", label: "none", tip: "Nothing about the picture goes with it" },
+    { key: "noplace", label: "no place", tip: "Camera, date and the rest, but not where it was taken" },
+    { key: "all", label: "all", tip: "Everything the picture says about itself, where it was taken too" },
 ];
 
 /** How a Display P3 picture's colors go out, as its two buttons say it: kept with its profile, or made sRGB. */
@@ -25,11 +26,11 @@ export const COLOR_CHOICES: { srgb: boolean; label: string; tip: string }[] = [
 
 /** The fields she may change, in the order the facts show them. */
 export const FIELDS: { key: keyof Edits; label: string }[] = [
-    { key: "caption", label: "Caption" },
-    { key: "alt", label: "Alt text" },
-    { key: "author", label: "Author" },
-    { key: "copyright", label: "Copyright" },
-    { key: "date", label: "Date taken" },
+    { key: "caption", label: "caption" },
+    { key: "alt", label: "alt text" },
+    { key: "author", label: "author" },
+    { key: "copyright", label: "copyright" },
+    { key: "date", label: "date taken" },
 ];
 
 /**
@@ -38,18 +39,18 @@ export const FIELDS: { key: keyof Edits; label: string }[] = [
  * "Everything", folded until she opens it.
  */
 export function factsPanel(hooks: { closed?(): void; facts(): Facts & { size: string }; edits(): Edits; setEdit(key: keyof Edits, value: string): void }) {
-    const side = sidePanel("Facts", "quire-img-export quire-img-facts-panel", () => hooks.closed?.());
+    const side = sidePanel("facts", "quire-img-export quire-img-facts-panel", () => hooks.closed?.());
     const rows = make("dl", "quire-img-fact-rows");
     const fields = make("div", "quire-img-fields");
     const more = make("details", "quire-img-everything");
-    const summary = make("summary", "", "Everything");
+    const summary = make("summary", "", "everything");
     const all = make("dl", "quire-img-fact-rows");
     more.append(summary, all);
     side.body.append(rows, fields, more);
     function fill() {
         const facts = hooks.facts();
-        const pairs = [["Size", facts.size], ...facts.rows] as [string, string][];
-        rows.replaceChildren(...pairs.flatMap(([label, value]) => [make("dt", "", label), make("dd", "", value)]));
+        const pairs = [["size", facts.size], ...facts.rows] as [string, string][];
+        rows.replaceChildren(...pairs.flatMap(([label, value]) => [make("dt", "", lowered(label)), make("dd", "", value)]));
         const edits = hooks.edits();
         fields.replaceChildren(
             ...FIELDS.map((field) => {
@@ -66,7 +67,8 @@ export function factsPanel(hooks: { closed?(): void; facts(): Facts & { size: st
                 return row;
             }),
         );
-        all.replaceChildren(...facts.everything.flatMap(([label, value]) => [make("dt", "", label), make("dd", "", value)]));
+        // an XMP name (dc:creator, aux:Lens) is written as the file has it; the other names are labels like the rows above
+        all.replaceChildren(...facts.everything.flatMap(([label, value]) => [make("dt", "", label.includes(":") ? label : lowered(label)), make("dd", "", value)]));
         more.classList.toggle("away", !facts.everything.length);
     }
     return { ...side, fill };
@@ -214,7 +216,7 @@ export interface BatchOut {
 
 /** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save; in a batch, the settings given to all and every picture saved together. */
 export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean; note?(): { text: string; actions: { label: string; press(): void }[] } | undefined; batch?(): BatchOut | undefined; giveAll?(): void; saveAll?(how: "zip" | "folder"): void; stopAll?(): void }) {
-    const side = sidePanel("Export", "quire-img-export", () => hooks.closed?.());
+    const side = sidePanel("export", "quire-img-export", () => hooks.closed?.());
     const formats = make("div", "quire-img-formats");
     formats.setAttribute("role", "radiogroup");
     formats.setAttribute("aria-label", "Format");
@@ -225,13 +227,13 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     quality.setAttribute("aria-label", "Quality");
     const qualityShown = make("span", "quire-img-quality-number");
     const under = make("input", "quire-field quire-img-under");
-    under.placeholder = "No limit";
+    under.placeholder = "no limit";
     under.setAttribute("aria-label", "Under");
     const lossy = make("div", "quire-img-lossy");
     const qualityRow = make("label", "quire-img-row");
-    qualityRow.append(make("span", "", "Quality"), quality, qualityShown);
+    qualityRow.append(make("span", "", "quality"), quality, qualityShown);
     const underRow = make("label", "quire-img-row");
-    underRow.append(make("span", "", "Under"), under);
+    underRow.append(make("span", "", "under"), under);
     lossy.append(qualityRow, underRow);
     const pair = make("div", "quire-img-pair");
     const before = make("figure", "quire-img-sample");
@@ -245,10 +247,10 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     pair.append(before, after);
     const result = make("p", "quire-img-result");
     const actions = make("div", "quire-img-actions");
-    const save = make("button", "quire-dialog-dismiss", "Save");
+    const save = make("button", "quire-dialog-dismiss", "save");
     save.type = "button";
     save.addEventListener("click", () => hooks.save());
-    const copy = make("button", "quire-dialog-action", "Copy");
+    const copy = make("button", "quire-dialog-action", "copy");
     copy.type = "button";
     copy.addEventListener("click", () => hooks.copy());
     actions.append(save, copy);
@@ -268,14 +270,14 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     all.setAttribute("aria-label", "All pictures");
     all.inert = true;
     const own = make("p", "quire-img-all-said");
-    const give = make("button", "quire-dialog-dismiss quire-img-give-button", "Give to all");
+    const give = make("button", "quire-dialog-dismiss quire-img-give-button", "give to all");
     give.type = "button";
     give.addEventListener("click", () => hooks.giveAll?.());
     const giveSaid = make("p", "quire-img-give-said");
-    const zip = make("button", "quire-dialog-dismiss", "Save all as a zip");
+    const zip = make("button", "quire-dialog-dismiss", "save all as a zip");
     zip.type = "button";
     zip.addEventListener("click", () => hooks.saveAll?.("zip"));
-    const folder = make("button", "quire-dialog-dismiss", "Save all into a folder");
+    const folder = make("button", "quire-dialog-dismiss", "save all into a folder");
     folder.type = "button";
     folder.addEventListener("click", () => hooks.saveAll?.("folder"));
     const ways = make("div", "quire-img-all-ways");
@@ -283,7 +285,7 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     const going = make("div", "quire-img-all-going away");
     going.setAttribute("role", "status");
     const goingSaid = make("span", "quire-img-all-said");
-    const stop = make("button", "quire-dialog-dismiss", "Stop");
+    const stop = make("button", "quire-dialog-dismiss", "stop");
     stop.type = "button";
     stop.addEventListener("click", () => hooks.stopAll?.());
     going.append(goingSaid, stop);
@@ -309,7 +311,7 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     function fill() {
         const settings = hooks.settings();
         keeping.replaceChildren(
-            make("span", "quire-img-format-row", "Metadata"),
+            make("span", "quire-img-format-row", "metadata"),
             ...KEEPS.map((each) => {
                 const button = control(each.tip, each.label, () => (hooks.setKeep(each.key), fill()), "quire-button quire-img-format");
                 button.setAttribute("role", "radio");
@@ -320,10 +322,10 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
         );
         const said = hooks.note?.();
         note.classList.toggle("away", !said);
-        note.replaceChildren(...(said ? [make("p", "", said.text), ...said.actions.map((each) => control(each.label, each.label, () => (each.press(), fill()), "quire-button quire-img-format"))] : []));
+        note.replaceChildren(...(said ? [make("p", "", said.text), ...said.actions.map((each) => control(each.label, lowered(each.label), () => (each.press(), fill()), "quire-button quire-img-format"))] : []));
         colors.classList.toggle("away", !hooks.wide?.());
         colors.replaceChildren(
-            make("span", "quire-img-format-row", "Colors"),
+            make("span", "quire-img-format-row", "colors"),
             ...COLOR_CHOICES.map((each) => {
                 const on = (settings.srgb === true) === each.srgb;
                 const button = control(each.tip, each.label, () => changed({ srgb: each.srgb }), "quire-button quire-img-format");
@@ -336,7 +338,7 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
         // two rows of one set: the lossy formats, then those that keep every pixel, each row under its word
         formats.replaceChildren(
             ...[true, false].flatMap((lossy) => [
-                make("span", "quire-img-format-row", lossy ? "Lossy" : "Lossless"),
+                make("span", "quire-img-format-row", lossy ? "lossy" : "lossless"),
                 ...FORMATS.filter((format) => format.lossy === lossy).map((format) => {
                     const button = control(`${format.label}: ${format.tip}`, format.short, () => changed({ format: format.key }), "quire-button quire-img-format");
                     button.setAttribute("role", "radio");
@@ -357,9 +359,9 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
         all.inert = !batch;
         if (batch) {
             own.textContent = `These settings are this picture's own. Each of the ${batch.count} pictures is saved with its own.`;
-            give.textContent = `Give to the other ${batch.count - 1}`;
+            give.textContent = `give to the other ${batch.count - 1}`;
             giveSaid.textContent = batch.give;
-            zip.textContent = `Save all ${batch.count} as a zip`;
+            zip.textContent = `save all ${batch.count} as a zip`;
             folder.classList.toggle("away", !batch.folder);
             folder.inert = !batch.folder;
             going.classList.toggle("away", !batch.running);
@@ -389,8 +391,8 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
             canvas.dataset.space = space;
             draw(canvas.getContext("2d", { colorSpace: space })!);
         }
-        beforeSaid.textContent = `Original · ${weightSaid(found.originalBytes)}`;
-        afterSaid.textContent = `Export · ${weightSaid(found.bytes)}${found.exported ? "" : " · this browser cannot show it"}`;
+        beforeSaid.textContent = `original · ${weightSaid(found.originalBytes)}`;
+        afterSaid.textContent = `export · ${weightSaid(found.bytes)}${found.exported ? "" : " · this browser cannot show it"}`;
     }
     return { ...side, fill, shows, copyButton: copy };
 }
@@ -413,7 +415,7 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
     let percent = false;
     const link = control("Keep the shape", icon("link"), () => ((linked = !linked), link.classList.toggle("pressed", linked), follow(width)));
     link.classList.add("pressed");
-    const unit = switchButton("Percent", false, (on) => {
+    const unit = switchButton("percent", false, (on) => {
         const size = hooks.size();
         percent = on;
         width.value = String(on ? 100 : size.width);
@@ -604,7 +606,7 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
         } else if (kind === "perspective" && keystone && upright && across && corners) {
             const had = [upright.element, across.element].find((each) => document.activeElement === each);
             queueMicrotask(() => had?.focus({ preventScroll: true }));
-            strip.replaceChildren(keystones, make("span", "quire-img-strip-rule"), corners, words("Auto", () => keystone.auto(), "Straighten the upright lines, and the level ones where they are clear"), make("span", "quire-img-strip-rule"), control("Done (Escape)", icon("tick"), () => keystone.setOpen(false)));
+            strip.replaceChildren(keystones, make("span", "quire-img-strip-rule"), corners, words("auto", () => keystone.auto(), "Straighten the upright lines, and the level ones where they are clear"), make("span", "quire-img-strip-rule"), control("Done (Escape)", icon("tick"), () => keystone.setOpen(false)));
             upright.show();
             across.show();
             corners.classList.toggle("pressed", keystone.cornering());
@@ -642,7 +644,7 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
             const said = make("span", "quire-img-strip-said", grading.said);
             said.setAttribute("role", "status");
             const parts: HTMLElement[] = [said, ...(grading.controls ?? [])];
-            if (grading.cancel) parts.push(make("span", "quire-img-strip-rule"), words("Cancel", () => grading.cancel?.(), "Do not, after all (Escape)"));
+            if (grading.cancel) parts.push(make("span", "quire-img-strip-rule"), words("cancel", () => grading.cancel?.(), "Do not, after all (Escape)"));
             const before = new Set([...strip.children].map((each) => each.textContent));
             strip.replaceChildren(...parts);
             if (!still()) for (const part of parts) if (part.textContent && !before.has(part.textContent) && part !== said) part.classList.add("grows");
@@ -651,9 +653,9 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
             const said = make("span", "quire-img-strip-said", readSaid(read));
             said.setAttribute("role", "status");
             const parts: HTMLElement[] = [said];
-            if (read.state === "failed" && hooks.readAgain) parts.push(words("Try again", () => hooks.readAgain?.(), "Read the text again"));
-            if (read.state === "read" && read.private && hooks.hideAll) parts.push(words("Hide all", () => hooks.hideAll?.(), "Cover everything that looks private, as one step", true));
-            parts.push(make("span", "quire-img-strip-rule"), words(read.model, (button) => hooks.chooseModel?.(button), "Model"));
+            if (read.state === "failed" && hooks.readAgain) parts.push(words("try again", () => hooks.readAgain?.(), "Read the text again"));
+            if (read.state === "read" && read.private && hooks.hideAll) parts.push(words("hide all", () => hooks.hideAll?.(), "Cover everything that looks private, as one step", true));
+            parts.push(make("span", "quire-img-strip-rule"), words(lowered(read.model), (button) => hooks.chooseModel?.(button), "Model"));
             // what is new in the strip grows in, rather than appearing
             const before = new Set([...strip.children].map((each) => each.textContent));
             strip.replaceChildren(...parts);

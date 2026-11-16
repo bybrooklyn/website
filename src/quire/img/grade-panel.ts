@@ -9,6 +9,7 @@
 //   const panel = gradePanel({ grade, set, preview, ... });
 //   panel.open(button); panel.fill(); panel.counts(counts);
 
+import { lowered } from "../core/bench";
 import { control, icon, make } from "../core/ui";
 import { giveRow, sidePanel, type GiveHooks } from "./panels";
 import { SLIDERS, type Grade } from "./grade";
@@ -63,7 +64,7 @@ export function slider(spec: { key: string; label: string; tip: string; low?: nu
     const low = spec.low ?? -100;
     const row = make("div", low === 0 ? "quire-img-slider from-zero" : "quire-img-slider");
     row.dataset.key = spec.key;
-    const label = make("span", "quire-img-slider-label", spec.label);
+    const label = make("span", "quire-img-slider-label", lowered(spec.label));
     label.title = spec.tip;
     const track = make("span", "quire-img-slider-track");
     track.tabIndex = 0;
@@ -229,7 +230,7 @@ export function drawCounts(canvas: HTMLCanvasElement, counts: Counts | undefined
 
 /** Builds the Grade surface. `more` is filled by the deeper controls, `parts` by the parts' own. */
 export function gradePanel(hooks: GradeHooks) {
-    const side = sidePanel("Grade", "quire-img-export quire-img-grade-panel", () => hooks.closed?.());
+    const side = sidePanel("grade", "quire-img-export quire-img-grade-panel", () => hooks.closed?.());
     const target = make("p", "quire-img-grade-target");
     // the histogram, small, and the two ways to see the original beside it
     const top = make("div", "quire-img-grade-top");
@@ -291,9 +292,9 @@ export function gradePanel(hooks: GradeHooks) {
         made.addEventListener("click", press);
         return made;
     };
-    const auto = button("Auto", "Sets the levels and takes out a color cast, as slider and curve values to tune", () => hooks.auto());
-    const balance = button("Balance", "Then press something in the picture that should be gray", () => hooks.balance());
-    const reset = button("Reset", "Puts every control of this grade back to zero", () => {
+    const auto = button("auto", "Sets the levels and takes out a color cast, as slider and curve values to tune", () => hooks.auto());
+    const balance = button("balance", "Then press something in the picture that should be gray", () => hooks.balance());
+    const reset = button("reset", "Puts every control of this grade back to zero", () => {
         const now = hooks.grade();
         hooks.set({ ...now, light: 0, contrast: 0, shadows: 0, highs: 0, warmth: 0, tint: 0, color: 0, curves: { all: [{ x: 0, y: 0 }, { x: 1, y: 1 }], red: [{ x: 0, y: 0 }, { x: 1, y: 1 }], green: [{ x: 0, y: 0 }, { x: 1, y: 1 }], blue: [{ x: 0, y: 0 }, { x: 1, y: 1 }] }, wheels: { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 } }, colors: [], lut: undefined });
     });
@@ -312,13 +313,13 @@ export function gradePanel(hooks: GradeHooks) {
     list.append(...sliders.map((each) => each.row));
     // More, folded: the deeper controls
     const more = make("details", "quire-img-everything quire-img-grade-more");
-    const summary = make("summary", "", "More");
+    const summary = make("summary", "", "more");
     const deeper = make("div", "quire-img-grade-deeper");
     more.append(summary, deeper);
     // Looks, folded too: saved, applied, and read and written as .cube files
     const looks = make("details", "quire-img-everything quire-img-grade-more quire-img-grade-looks");
     const looksBody = make("div", "quire-img-grade-deeper");
-    looks.append(make("summary", "", "Looks"), looksBody);
+    looks.append(make("summary", "", "looks"), looksBody);
     const parts = make("div", "quire-img-grade-parts");
     const space = make("p", "quire-img-grade-space");
     side.body.append(target, top, fixes, ...(giving ? [giving.row] : []), list, more, looks, parts, space);
@@ -343,7 +344,7 @@ export function gradePanel(hooks: GradeHooks) {
     head.addEventListener("pointercancel", sheetDone);
 
     function fill() {
-        target.textContent = hooks.target();
+        target.textContent = lowered(hooks.target());
         for (const each of sliders) each.show();
         balance.classList.toggle("pressed", hooks.balancing());
         split.classList.toggle("pressed", hooks.split());

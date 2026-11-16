@@ -14,6 +14,7 @@ import { copyDocument, type Store } from "../core/store";
 import { packQuire, type Parts } from "../core/quire-file";
 import { openDialog } from "../core/dialog";
 import { createHistoryPanel, snapshotParts } from "../core/versions";
+import { lowered } from "../core/bench";
 import { control, enterGivesBack, fieldForm, flowMenu, icon, make, ruled, RULE, type MenuItem } from "../core/ui";
 import type { Heading } from "../core/menu-row";
 import { pressLines } from "./press-menu";
@@ -130,7 +131,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     const frame = createFrame(host, { top: context.top, name: context.start?.entry.name ?? "Untitled", onName: context.onName });
     const room = make("div", "quire-img-room");
     const empty = make("div", "quire-img-empty");
-    const choose = make("button", "quire-dialog-action", "Choose a picture");
+    const choose = make("button", "quire-dialog-action", "choose a picture");
     choose.type = "button";
     const chooser = make("input");
     chooser.type = "file";
@@ -684,9 +685,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
             openDialog(stage.element, {
                 title: "Copy the picture",
                 body: [make("p", "", "Copy it as it looks, or as the export is set? This is asked once; Edit, Copy as changes it.")],
-                others: [{ label: "As the export is set", press: (dialog) => ((chosen = "export"), keep(KEYS.copy, "export"), void dialog.close()) }],
-                dismiss: "Cancel",
-                action: { label: "As it looks", press: (_, dialog) => ((chosen = "looks"), keep(KEYS.copy, "looks"), void dialog.close()) },
+                others: [{ label: "as the export is set", press: (dialog) => ((chosen = "export"), keep(KEYS.copy, "export"), void dialog.close()) }],
+                dismiss: "cancel",
+                action: { label: "as it looks", press: (_, dialog) => ((chosen = "looks"), keep(KEYS.copy, "looks"), void dialog.close()) },
                 returnTo: stage.element,
                 onClose: () => answer(chosen),
             });
@@ -782,13 +783,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
         back: () => buttons.resize.focus({ preventScroll: true }),
         done: () => stage.element.focus({ preventScroll: true }),
         enlarge: {
-            said: () => `Enlarge: ${restoreModelOf(enlargeWay)?.name ?? "Filter"}`,
+            said: () => `enlarge: ${lowered(restoreModelOf(enlargeWay)?.name ?? "filter")}`,
             choose: (from) => void chooseEnlarge(from),
         },
         // in a batch, this picture's size given to the others
         give: {
             said: () => (batched() ? (giveSaid("resize") ?? "") : undefined),
-            label: () => `Give to the other ${items.length - 1}`,
+            label: () => `give to the other ${items.length - 1}`,
             press: () => void giveAll(["resize"]),
         },
     });
@@ -861,7 +862,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         readAgain: () => void reading.start(buttons.read),
         cut: () => cutStrip(),
         // a model running: how far, and Stop, which leaves the picture as it was
-        busy: () => (running ? { said: running.share === undefined ? running.said : `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("Stop", batchRunning ? "Stop: each picture is left done or as it was (Escape)" : "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
+        busy: () => (running ? { said: running.share === undefined ? running.said : `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("stop", batchRunning ? "Stop: each picture is left done or as it was (Escape)" : "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
         grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
     });
     /** The mark picked, if what is picked is a mark. */
@@ -1002,7 +1003,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (kind === "number") {
             if (mark?.type !== "number") return { colors: true, weights: lines, extra: [] };
             numberField.value = String(numbersOf(history.now()).get(mark.id) ?? 1);
-            return { colors: true, weights: lines, extra: [[numberField, ...(mark.value !== undefined ? [markWords("In order", "Number it in order again", false, () => numberInOrder())] : [])]] };
+            return { colors: true, weights: lines, extra: [[numberField, ...(mark.value !== undefined ? [markWords("in order", "Number it in order again", false, () => numberInOrder())] : [])]] };
         }
         if (kind === "magnifier") {
             const zoom = (mark?.type === "magnifier" ? mark.zoom : pen.zoom) ?? PEN.zoom;
@@ -1782,7 +1783,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const cut = picture ? look(picture).cutout : undefined;
         if (cutBusy) return { said: cutAsking.tier().wait ? `Cutting out, usually ${cutAsking.tier().wait}` : "Cutting out", controls: [] };
         // where the model found nothing, the strip says the next step in the status's own words
-        if (!cut) return { said: cutNothing ? NOTHING_SAID.slice(NOTHING_SAID.indexOf("Press")).replace(/\.$/, "") : "Not cut out", controls: [stripButton("Cut out", "Run the model again", () => void startCut())] };
+        if (!cut) return { said: cutNothing ? NOTHING_SAID.slice(NOTHING_SAID.indexOf("Press")).replace(/\.$/, "") : "Not cut out", controls: [stripButton("cut out", "Run the model again", () => void startCut())] };
         const pressed = (button: HTMLElement, on: boolean) => (button.classList.toggle("pressed", on), button);
         const swatches = COLORS.map((each) => {
             const mark = make("span", "quire-img-swatch");
@@ -1792,17 +1793,17 @@ export function mountEditor(host: HTMLElement, context: Context) {
         return {
             said: cutBrush === "keep" ? "Paint what should stay" : cutBrush === "remove" ? "Paint what should go" : "Press a thing to keep it",
             controls: [
-                pressed(stripButton("Clear", "Nothing behind it, exported with transparency", () => setLaid("clear")), cut.background === "clear"),
+                pressed(stripButton("clear", "Nothing behind it, exported with transparency", () => setLaid("clear")), cut.background === "clear"),
                 ...swatches,
-                pressed(stripButton("Blur", "The old background behind it, blurred", () => setLaid("blur")), cut.background === "blur"),
+                pressed(stripButton("blur", "The old background behind it, blurred", () => setLaid("blur")), cut.background === "blur"),
                 make("span", "quire-img-strip-rule"),
-                pressed(stripButton("Keep", "Paint what should stay", () => ((cutBrush = cutBrush === "keep" ? undefined : "keep"), refresh())), cutBrush === "keep"),
-                pressed(stripButton("Remove", "Paint what should go", () => ((cutBrush = cutBrush === "remove" ? undefined : "remove"), refresh())), cutBrush === "remove"),
+                pressed(stripButton("keep", "Paint what should stay", () => ((cutBrush = cutBrush === "keep" ? undefined : "keep"), refresh())), cutBrush === "keep"),
+                pressed(stripButton("remove", "Paint what should go", () => ((cutBrush = cutBrush === "remove" ? undefined : "remove"), refresh())), cutBrush === "remove"),
                 make("span", "quire-img-strip-rule"),
-                stripButton(cutAsking.tier().name, "Quality", () => void cutAsking.choose(buttons.cutout).then((chosen) => void (chosen && startCut()))),
-                stripButton("Take away", "Bring the background back", () => commit(history.now().filter((each) => each.type !== "cutout"))),
+                stripButton(lowered(cutAsking.tier().name), "Quality", () => void cutAsking.choose(buttons.cutout).then((chosen) => void (chosen && startCut()))),
+                stripButton("take away", "Bring the background back", () => commit(history.now().filter((each) => each.type !== "cutout"))),
                 // in a batch, the others cut out the same way, one after another
-                ...(batched() ? [make("span", "quire-img-strip-rule"), stripButton(`Give to the other ${items.length - 1}`, giveSaid("cutout") ?? "", () => void giveAll(["cutout"]))] : []),
+                ...(batched() ? [make("span", "quire-img-strip-rule"), stripButton(`give to the other ${items.length - 1}`, giveSaid("cutout") ?? "", () => void giveAll(["cutout"]))] : []),
             ],
         };
     }
@@ -2068,7 +2069,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         setSplit: (on) => stage.setSplit(on ? stage.element.clientWidth / 2 : undefined),
         give: {
             said: () => (batched() ? (giveSaid("grade") ?? "") : undefined),
-            label: () => `Give to the other ${items.length - 1}`,
+            label: () => `give to the other ${items.length - 1}`,
             press: () => void giveAll(["grade"]),
         },
     });
@@ -2204,8 +2205,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     };
     /** What the strip says while finding. */
     const findSaid = () => ({ idle: "Find", asking: "Choosing a model", fetching: "Downloading the model", finding: "Finding", ready: "Press a thing to outline it; Alt and press to take away" })[finding.state()];
-    const subjectButton = stripButton("Subject", "The picture's subject, found by a model", () => void finding.subject(false));
-    const backgroundButton = stripButton("Background", "Everything but the picture's subject", () => void finding.subject(true));
+    const subjectButton = stripButton("subject", "The picture's subject, found by a model", () => void finding.subject(false));
+    const backgroundButton = stripButton("background", "Everything but the picture's subject", () => void finding.subject(true));
     grading.looks.addEventListener("toggle", () => grading.looks.open && void looked.fill());
     /** The surface and its deeper controls, as the grade now is. */
     const fillGrade = () => {
@@ -2649,7 +2650,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         ];
         const list = make("dl", "quire-img-keys");
         for (const [key, said] of rows) list.append(make("dt", "", key), make("dd", "", said));
-        openDialog(stage.element, { title: "Keyboard shortcuts", body: [list], dismiss: "Close", returnTo: stage.element });
+        openDialog(stage.element, { title: "Keyboard shortcuts", body: [list], dismiss: "close", returnTo: stage.element });
     }
 
     frame.keys((event) => {

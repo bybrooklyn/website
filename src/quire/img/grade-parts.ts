@@ -29,7 +29,7 @@ export const featherValue = (pixels: number, long: number): number => Math.round
 
 /** What a part is called on the surface: its kind, and its number among the parts of that kind. */
 export function partName(kind: Shape["kind"], number: number): string {
-    return `${kind === "gradient" ? "Gradient" : kind === "paint" ? "Painted area" : "Found"} ${number}`;
+    return `${kind === "gradient" ? "gradient" : kind === "paint" ? "painted area" : "found"} ${number}`;
 }
 
 /** What the parts need of the editor. */
@@ -56,7 +56,7 @@ export interface PartsHooks {
 /** Builds the parts' section. */
 export function gradeParts(hooks: PartsHooks) {
     const element = make("div", "quire-img-parts");
-    const heading = make("p", "quire-img-grade-heading", "Parts");
+    const heading = make("p", "quire-img-grade-heading", "parts");
     const makers = make("div", "quire-img-grade-fixes");
     const button = (label: string, tip: string, press: () => void, className = "") => {
         const made = make("button", `quire-dialog-dismiss quire-img-grade-fix ${className}`, label);
@@ -65,15 +65,15 @@ export function gradeParts(hooks: PartsHooks) {
         made.addEventListener("click", press);
         return made;
     };
-    const gradient = button("Gradient", "Then drag across the picture, from where the grade is whole to where it is gone, as for a sky", () => hooks.gradient(), "quire-img-make-gradient");
-    const paint = button("Paint", "A new part painted with a soft brush", () => hooks.paint(), "quire-img-make-paint");
-    const find = button("Find", "Press a thing in the picture and a model outlines it; or Subject or Background", () => hooks.find?.(), "quire-img-make-find");
+    const gradient = button("gradient", "Then drag across the picture, from where the grade is whole to where it is gone, as for a sky", () => hooks.gradient(), "quire-img-make-gradient");
+    const paint = button("paint", "A new part painted with a soft brush", () => hooks.paint(), "quire-img-make-paint");
+    const find = button("find", "Press a thing in the picture and a model outlines it; or Subject or Background", () => hooks.find?.(), "quire-img-make-find");
     makers.append(gradient, paint, find);
     // the picked part's own controls
     const own = make("div", "quire-img-part");
     const head = make("div", "quire-img-part-head");
     const name = make("span", "quire-img-part-name");
-    const back = button("Whole picture", "Grade the whole picture again (Escape)", () => hooks.whole(), "quire-img-part-back");
+    const back = button("whole picture", "Grade the whole picture again (Escape)", () => hooks.whole(), "quire-img-part-back");
     head.append(name, back);
     const featherSlider = slider(
         { key: "feather", label: "Feather", tip: "How soft the part's edge is", low: 0 },
@@ -83,11 +83,11 @@ export function gradeParts(hooks: PartsHooks) {
             set: (value) => hooks.setShape({ feather: featherPixels(value, hooks.long()) }),
         },
     );
-    const invert = switchButton("Inside out", false, (on) => hooks.setShape({ invert: on || undefined }));
+    const invert = switchButton("inside out", false, (on) => hooks.setShape({ invert: on || undefined }));
     invert.title = "Grade everything but the part";
-    const brushOn = switchButton("Brush", false, (on) => hooks.setBrush({ ...hooks.brush(), on }));
+    const brushOn = switchButton("brush", false, (on) => hooks.setBrush({ ...hooks.brush(), on }));
     brushOn.title = "Paint on the picture to add to this part";
-    const erase = switchButton("Erase", false, (on) => hooks.setBrush({ ...hooks.brush(), erase: on }));
+    const erase = switchButton("erase", false, (on) => hooks.setBrush({ ...hooks.brush(), erase: on }));
     erase.title = "The brush takes away from the part";
     const switches = make("div", "quire-img-part-switches");
     switches.append(invert, brushOn, erase);
@@ -101,7 +101,7 @@ export function gradeParts(hooks: PartsHooks) {
     );
     const brushRows = make("div", "quire-img-part-brush");
     brushRows.append(size.row, soft.row);
-    const remove = button("Remove part", "Takes this part and its grade away (Delete)", () => hooks.remove(), "quire-img-part-remove");
+    const remove = button("remove part", "Takes this part and its grade away (Delete)", () => hooks.remove(), "quire-img-part-remove");
     own.append(head, featherSlider.row, switches, brushRows, remove);
     element.append(heading, makers, own);
 

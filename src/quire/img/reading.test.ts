@@ -70,7 +70,7 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-img-read-dialog .quire-dialog-action').click()");
         await until("document.querySelectorAll('.quire-img-read-card').length === 3");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-img-read-card')].map((card) => card.textContent)")).toEqual(["Tiny6 MBClear screenshots, on any machine", "Small38 MBPhotographs and turned lines", "Large152 MBHard pictures, on a fast machine"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-img-read-card')].map((card) => card.textContent)")).toEqual(["tiny6 MBClear screenshots, on any machine", "small38 MBPhotographs and turned lines", "large152 MBHard pictures, on a fast machine"]);
         expect(await tab.run<string>("document.querySelector('.quire-img-read-card[aria-checked=true]').dataset.tier")).toBe("tiny");
         expect(await tab.run<string>("document.querySelector('.quire-img-read-where').textContent")).toBe("From huggingface.co: PaddlePaddle's PP-OCRv6, Apache-2.0.");
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
@@ -124,7 +124,7 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
 
         // Hide all covers what is left that looks private, as one step
         expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toBe("6 words, 1 looks private");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'Hide all').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'hide all').click()");
         await until("window.app.editing().steps().length === 3");
         expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toBe("6 words");
         await tab.press("z", { ctrl: true });
@@ -196,7 +196,7 @@ test("a phone number is hidden by one cover edge to edge, by Hide all or by pres
         expect(await tint(group)).toBeGreaterThan(0);
 
         // Hide all: one cover, from the first group's edge to the last's
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'Hide all').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'hide all').click()");
         await until("window.app.editing().steps().length === 1");
         const [all] = await covers(page);
         expect([all!.rect.x, all!.rect.x + all!.rect.width]).toEqual([phone.x, phone.right]);
