@@ -417,9 +417,11 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
             height.value = String(size.height);
             if (enlarging) enlarging.textContent = hooks.enlarge!.said();
             const button = from.getBoundingClientRect();
-            box.style.left = `${Math.max(8, Math.min(innerWidth - 300, button.left))}px`;
+            // held inside the window by its own width (its sizes run to two rows), with the window's gutter of 8 pixels
+            const left = Math.max(8, Math.min(innerWidth - (box.offsetWidth || 300) - 8, button.left));
+            box.style.left = `${left}px`;
             box.style.top = `${button.bottom + 6}px`;
-            box.style.transformOrigin = `${Math.max(0, button.left + button.width / 2 - Math.max(8, Math.min(innerWidth - 300, button.left)))}px 0`;
+            box.style.transformOrigin = `${Math.max(0, button.left + button.width / 2 - left)}px 0`;
             box.inert = false;
             box.classList.add("open");
             width.focus();
