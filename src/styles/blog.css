@@ -124,6 +124,12 @@
     margin-inline: auto;
 }
 
+/* On a main page (about, setup, license) the text starts at the page's left edge, where every page with the
+   navigation starts: home, the lists, photos. In the opened panel it stays in the middle of the panel. */
+body:not(.opened) .post {
+    margin-inline: 0;
+}
+
 .post-header {
     max-width: 52rem;
     margin-bottom: calc(var(--line) * 1.5);
