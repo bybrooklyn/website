@@ -86,10 +86,17 @@ test("each choice of part models runs on the site's ONNX Runtime, on WebAssembly
         // the page reads every model file before it sets its functions down, which on a busy machine outlasts the page's opening
         for (let waited = 0; waited < 600 && !(await page.tab.run<boolean>("typeof window.card === 'function'")); waited++) await page.tab.wait(100);
         const card = await page.tab.run<boolean>("window.card()");
+        // a model's run is started and then asked after: the browser is given thirty seconds for any one answer, and on a busy machine
+        // a run takes longer than that
+        const later = async <T>(start: string): Promise<T> => {
+            await page.tab.run(`(() => { window.answer = undefined; (${start}).then((made) => (window.answer = made), (error) => (window.answer = { message: String(error) })); })()`);
+            for (let waited = 0; waited < 1700 && !(await page.tab.run<boolean>("window.answer !== undefined")); waited++) await page.tab.wait(100);
+            return page.tab.run<T>("window.answer");
+        };
         const figure = { x: 520 / 1200, y: 200 / 800, width: 160 / 1200, height: 560 / 800 };
         for (const tier of PART_TIERS) {
             for (const prefer of card ? ["wasm", "webgpu"] : ["wasm"]) {
-                const one = await page.tab.run<{ type: string; found: { width: number; height: number; runs: string }; ms: number; again: number; place: string; message?: string }>(`window.find("${tier.id}", "${prefer}", "select", [{ x: 600, y: 420, add: true }])`);
+                const one = await later<{ type: string; found: { width: number; height: number; runs: string }; ms: number; again: number; place: string; message?: string }>(`window.find("${tier.id}", "${prefer}", "select", [{ x: 600, y: 420, add: true }])`);
                 expect(one.message).toBeUndefined();
                 // on the card only the image encoder runs there; the rest is on WebAssembly, where it runs right
                 expect(one.place).toBe(prefer === "webgpu" ? "encode webgpu, decode wasm, matte wasm" : "encode wasm, decode wasm, matte wasm");
@@ -99,13 +106,13 @@ test("each choice of part models runs on the site's ONNX Runtime, on WebAssembly
                 console.log(`${tier.name} (${tier.credit}) on ${prefer}: a press on the figure, ${one.ms} ms with its encoding, ${one.again} ms after; the coat ${Math.round(coat.inside * 100)}% in, the far sky ${Math.round(far.inside * 100)}% in`);
                 expect(coat.inside).toBeGreaterThan(0.8);
                 expect(far.inside).toBeLessThan(0.1);
-                const sky = await page.tab.run<{ found: { width: number; height: number; runs: string } }>(`window.find("${tier.id}", "${prefer}", "select", [{ x: 200, y: 150, add: true }, { x: 1000, y: 150, add: true }, { x: 600, y: 420, add: false }])`);
+                const sky = await later<{ found: { width: number; height: number; runs: string } }>(`window.find("${tier.id}", "${prefer}", "select", [{ x: 200, y: 150, add: true }, { x: 1000, y: 150, add: true }, { x: 600, y: 420, add: false }])`);
                 const skyShares = shares(sky.found, { x: 0, y: 0, width: 1, height: 0.5 });
                 const inFigure = shares(sky.found, { x: 530 / 1200, y: 320 / 800, width: 140 / 1200, height: 120 / 800 });
                 expect(skyShares.inside).toBeGreaterThan(0.85);
                 expect(inFigure.inside).toBeLessThan(0.1);
                 console.log(`  the sky pressed twice and the figure taken away: the sky ${Math.round(skyShares.inside * 100)}% in, the coat ${Math.round(inFigure.inside * 100)}% in`);
-                const matte = await page.tab.run<{ type: string; found: { width: number; height: number; runs: string }; ms: number; message?: string }>(`window.find("${tier.id}", "${prefer}", "matte", [])`);
+                const matte = await later<{ type: string; found: { width: number; height: number; runs: string }; ms: number; message?: string }>(`window.find("${tier.id}", "${prefer}", "matte", [])`);
                 expect(matte.message).toBeUndefined();
                 expect([matte.found.width, matte.found.height]).toEqual([512, 341]);
                 const subject = shares(matte.found, figure);
