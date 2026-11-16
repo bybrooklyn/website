@@ -9,6 +9,7 @@
 //   reading.start(button);   // asks first if no model is kept, then reads
 
 import { filledButton, openDialog, type Dialog } from "../core/dialog";
+import { lowered } from "../core/bench";
 import { make } from "../core/ui";
 import { createReader, type Reader } from "./read/engine";
 import { HOST, megabytes, sizeOf, tierOf, TIERS, type Tier } from "./read/models";
@@ -162,7 +163,7 @@ export function createReading(hooks: ReadingHooks) {
             card.type = "button";
             card.dataset.tier = each.id;
             card.setAttribute("role", "radio");
-            card.append(make("span", "quire-img-read-card-name", each.name), make("span", "quire-img-read-card-size", kept.get(each.id) ? "On this device" : megabytes(sizeOf(each))), make("span", "quire-img-read-card-who", each.who));
+            card.append(make("span", "quire-img-read-card-name", lowered(each.name)), make("span", "quire-img-read-card-size", kept.get(each.id) ? "On this device" : megabytes(sizeOf(each))), make("span", "quire-img-read-card-who", each.who));
             card.addEventListener("click", () => pick(each));
             return card;
         });
@@ -194,11 +195,11 @@ export function createReading(hooks: ReadingHooks) {
         const parts: HTMLElement[] = [line("quire-img-read-plain", INTRO), group, line("quire-img-read-where", `From ${new URL(HOST).host}: PaddlePaddle's PP-OCRv6, Apache-2.0.`)];
         if (failure) parts.push(line("quire-img-read-warn", `The last try failed: ${failure}`));
         dialog.body.replaceChildren(...parts);
-        const quiet = make("button", "quire-dialog-dismiss", "Not now");
+        const quiet = make("button", "quire-dialog-dismiss", "not now");
         quiet.type = "button";
         quiet.addEventListener("click", () => void dialog.close());
         const go = filledButton(
-            "Download and read",
+            "download and read",
             (pressed) => {
                 failure = "";
                 dialog.change(() => downloading(dialog), pressed);
@@ -221,7 +222,7 @@ export function createReading(hooks: ReadingHooks) {
         bar.setAttribute("aria-label", "Downloading the model");
         bar.append(make("i"));
         count = make("p", "quire-img-read-count");
-        const cancel = make("button", "quire-dialog-dismiss", "Cancel");
+        const cancel = make("button", "quire-dialog-dismiss", "cancel");
         cancel.type = "button";
         cancel.addEventListener("click", () => readerNow().cancel());
         row.append(bar, count, cancel);
@@ -238,8 +239,8 @@ export function createReading(hooks: ReadingHooks) {
             title: "Read text",
             className: "quire-img-read-dialog",
             body: [line("quire-img-read-plain", INTRO)],
-            dismiss: "Not now",
-            action: { label: "Choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
+            dismiss: "not now",
+            action: { label: "choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
             returnTo: hooks.stage.element,
             onClose: () => {
                 asking = bar = count = undefined;

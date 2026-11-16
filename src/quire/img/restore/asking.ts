@@ -10,6 +10,7 @@
 //   const way = await asking.choose(button);     the model's id, "" for the way with no model, or undefined when let go
 
 import { filledButton, openDialog, type Dialog } from "../../core/dialog";
+import { lowered } from "../../core/bench";
 import { make } from "../../core/ui";
 import { graphicsCard } from "../../core/onnx";
 import { HOST, megabytes } from "../read/models";
@@ -24,8 +25,8 @@ const JOBS = {
         title: "Repair JPEG",
         intro: "A model repairs more than the instant way does. It is downloaded once from Hugging Face and kept in this browser. It runs on your own machine, and the picture never leaves it.",
         plain: { name: "Instant", who: "Blocks and ringing taken out, in a moment" },
-        go: "Download and repair",
-        use: "Repair",
+        go: "download and repair",
+        use: "repair",
         models: () => REPAIR_MODELS,
     },
     enlarge: {
@@ -33,8 +34,8 @@ const JOBS = {
         title: "Enlarge",
         intro: "A model enlarges a picture more sharply than a filter does. It is downloaded once from Hugging Face and kept in this browser. It runs on your own machine, and the picture never leaves it.",
         plain: { name: "Filter", who: "The resize filter, smooth and quick" },
-        go: "Download and enlarge",
-        use: "Enlarge",
+        go: "download and enlarge",
+        use: "enlarge",
         models: () => ENLARGE_MODELS,
     },
 } as const;
@@ -122,7 +123,7 @@ export function createRestoreAsking(hooks: { restorer(): Restorer; returnTo(): H
                     button.type = "button";
                     button.dataset.tier = each.id || "plain";
                     button.setAttribute("role", "radio");
-                    button.append(make("span", "quire-img-read-card-name", each.name), make("span", "quire-img-read-card-size", each.size), make("span", "quire-img-read-card-who", each.who));
+                    button.append(make("span", "quire-img-read-card-name", lowered(each.name)), make("span", "quire-img-read-card-size", each.size), make("span", "quire-img-read-card-who", each.who));
                     button.addEventListener("click", () => pick(each.id));
                     return button;
                 });
@@ -152,7 +153,7 @@ export function createRestoreAsking(hooks: { restorer(): Restorer; returnTo(): H
                 bar = count = undefined;
                 const parts = bodyOf(failure);
                 dialog.body.replaceChildren(...parts);
-                const quiet = make("button", "quire-dialog-dismiss", "Not now");
+                const quiet = make("button", "quire-dialog-dismiss", "not now");
                 quiet.type = "button";
                 quiet.addEventListener("click", () => void dialog.close());
                 action = filledButton(label(), go, "quire-dialog-action quire-restore-go");
@@ -168,7 +169,7 @@ export function createRestoreAsking(hooks: { restorer(): Restorer; returnTo(): H
                 bar.setAttribute("aria-label", "Downloading the model");
                 bar.append(make("i"));
                 count = make("p", "quire-img-read-count");
-                const cancel = make("button", "quire-dialog-dismiss", "Cancel");
+                const cancel = make("button", "quire-dialog-dismiss", "cancel");
                 cancel.type = "button";
                 cancel.addEventListener("click", () => hooks.restorer().cancel());
                 row.append(bar, count, cancel);
@@ -198,7 +199,7 @@ export function createRestoreAsking(hooks: { restorer(): Restorer; returnTo(): H
                 title: job.title,
                 className: "quire-img-read-dialog quire-img-find-dialog quire-restore-dialog",
                 body: bodyOf(),
-                dismiss: "Not now",
+                dismiss: "not now",
                 action: { label: label(), press: (pressed) => go(pressed) },
                 returnTo: hooks.returnTo(),
                 onClose: () => {

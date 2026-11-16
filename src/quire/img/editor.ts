@@ -14,6 +14,7 @@ import { copyDocument, type Store } from "../core/store";
 import { packQuire, type Parts } from "../core/quire-file";
 import { openDialog } from "../core/dialog";
 import { createHistoryPanel, snapshotParts } from "../core/versions";
+import { lowered } from "../core/bench";
 import { control, enterGivesBack, fieldForm, flowMenu, icon, make, ruled, RULE, type MenuItem } from "../core/ui";
 import type { Heading } from "../core/menu-row";
 import { pressLines } from "./press-menu";
@@ -684,9 +685,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
             openDialog(stage.element, {
                 title: "Copy the picture",
                 body: [make("p", "", "Copy it as it looks, or as the export is set? This is asked once; Edit, Copy as changes it.")],
-                others: [{ label: "As the export is set", press: (dialog) => ((chosen = "export"), keep(KEYS.copy, "export"), void dialog.close()) }],
-                dismiss: "Cancel",
-                action: { label: "As it looks", press: (_, dialog) => ((chosen = "looks"), keep(KEYS.copy, "looks"), void dialog.close()) },
+                others: [{ label: "as the export is set", press: (dialog) => ((chosen = "export"), keep(KEYS.copy, "export"), void dialog.close()) }],
+                dismiss: "cancel",
+                action: { label: "as it looks", press: (_, dialog) => ((chosen = "looks"), keep(KEYS.copy, "looks"), void dialog.close()) },
                 returnTo: stage.element,
                 onClose: () => answer(chosen),
             });
@@ -782,7 +783,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         back: () => buttons.resize.focus({ preventScroll: true }),
         done: () => stage.element.focus({ preventScroll: true }),
         enlarge: {
-            said: () => `Enlarge: ${restoreModelOf(enlargeWay)?.name ?? "Filter"}`,
+            said: () => `enlarge: ${lowered(restoreModelOf(enlargeWay)?.name ?? "filter")}`,
             choose: (from) => void chooseEnlarge(from),
         },
         // in a batch, this picture's size given to the others
@@ -2649,7 +2650,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         ];
         const list = make("dl", "quire-img-keys");
         for (const [key, said] of rows) list.append(make("dt", "", key), make("dd", "", said));
-        openDialog(stage.element, { title: "Keyboard shortcuts", body: [list], dismiss: "Close", returnTo: stage.element });
+        openDialog(stage.element, { title: "Keyboard shortcuts", body: [list], dismiss: "close", returnTo: stage.element });
     }
 
     frame.keys((event) => {

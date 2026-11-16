@@ -9,6 +9,7 @@
 //   finding.start(button);
 
 import { filledButton, openDialog, type Dialog } from "../core/dialog";
+import { lowered } from "../core/bench";
 import { make } from "../core/ui";
 import { megabytes } from "./read/models";
 import { HOST } from "./read/models";
@@ -137,7 +138,7 @@ export function createFinding(hooks: FindingHooks) {
             card.type = "button";
             card.dataset.tier = each.id;
             card.setAttribute("role", "radio");
-            card.append(make("span", "quire-img-read-card-name", each.name), make("span", "quire-img-read-card-size", kept.get(each.id) ? "On this device" : megabytes(partSize(each))), make("span", "quire-img-read-card-who", each.who));
+            card.append(make("span", "quire-img-read-card-name", lowered(each.name)), make("span", "quire-img-read-card-size", kept.get(each.id) ? "On this device" : megabytes(partSize(each))), make("span", "quire-img-read-card-who", each.who));
             card.addEventListener("click", () => pick(each));
             return card;
         });
@@ -167,10 +168,10 @@ export function createFinding(hooks: FindingHooks) {
         const parts: HTMLElement[] = [make("p", "quire-img-read-plain", FIND_INTRO), group, make("p", "quire-img-read-where", `From ${new URL(HOST).host}: ${PART_TIERS.map((each) => each.credit).join("; ")}, Apache-2.0.`)];
         if (failure) parts.push(make("p", "quire-img-read-warn", `The last try failed: ${failure}`));
         dialog.body.replaceChildren(...parts);
-        const quiet = make("button", "quire-dialog-dismiss", "Not now");
+        const quiet = make("button", "quire-dialog-dismiss", "not now");
         quiet.type = "button";
         quiet.addEventListener("click", () => void dialog.close());
-        const go = filledButton("Download and find", (pressed) => {
+        const go = filledButton("download and find", (pressed) => {
             dialog.change(() => downloading(dialog), pressed);
             void fetchThenReady(dialog);
         }, "quire-dialog-action quire-img-find-download");
@@ -186,7 +187,7 @@ export function createFinding(hooks: FindingHooks) {
         bar.setAttribute("aria-label", "Downloading the model");
         bar.append(make("i"));
         count = make("p", "quire-img-read-count");
-        const cancel = make("button", "quire-dialog-dismiss", "Cancel");
+        const cancel = make("button", "quire-dialog-dismiss", "cancel");
         cancel.type = "button";
         cancel.addEventListener("click", () => finderNow().cancel());
         row.append(bar, count, cancel);
@@ -220,8 +221,8 @@ export function createFinding(hooks: FindingHooks) {
             title: "Find a thing",
             className: "quire-img-read-dialog quire-img-find-dialog",
             body: [make("p", "quire-img-read-plain", FIND_INTRO)],
-            dismiss: "Not now",
-            action: { label: "Choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
+            dismiss: "not now",
+            action: { label: "choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
             returnTo: hooks.returnTo(),
             onClose: () => {
                 asking = bar = count = undefined;
