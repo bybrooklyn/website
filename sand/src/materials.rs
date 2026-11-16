@@ -137,6 +137,12 @@ pub const EMBER: u8 = 16;
 pub const ASH: u8 = 17;
 /// Sand in the colors of a flag: sand in every way but its shade, which is a stripe's color.
 pub const PRIDE: u8 = 18;
+/// Oil that is burning: it keeps itself hot, gives off flames for a few seconds, and burns away.
+pub const BURNING_OIL: u8 = 19;
+/// What lava that meets water, or hardens floating on molten lava, becomes: loose stone that falls and
+/// settles, rather than a fixed slab. Lighter than lava, so a crust of it floats on a pool; heavier than
+/// water, so it sinks in a lake.
+pub const ROCK: u8 = 20;
 
 /// The shade a material with `glow` 3 is given picks its color: a stripe's number times 4, with
 /// the lowest two bits a slight shade of its own, so stripes of 64 colors can be poured.
@@ -151,20 +157,22 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "water", kind: Kind::Liquid, density: 100, slide: 0, roll: 0, spread: 5, fall: 4, pace: 0, level: 1, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [52, 118, 214, 235], vary: [10, 16, 18], paint: true },
     Material { name: "stone", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 120, 126, 255], vary: [22, 22, 22], paint: true },
     Material { name: "dirt", kind: Kind::Powder, density: 150, slide: 2, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [118, 84, 56, 255], vary: [26, 20, 16], paint: true },
-    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 1, conduct: 12, made: 120, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [206, 214, 224, 150], vary: [18, 18, 18], paint: true },
+    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 1, conduct: 2, made: 160, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [238, 244, 255, 240], vary: [10, 10, 8], paint: true },
     Material { name: "wall", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
     Material { name: "void", kind: Kind::Void, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
     Material { name: "wood", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 78, 44, 255], vary: [22, 16, 10], paint: true },
     Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [92, 62, 30, 240], vary: [14, 10, 6], paint: true },
     Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 2, fall: 3, pace: 96, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [226, 92, 28, 255], vary: [58, 110, 40], paint: true },
     Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [176, 218, 240, 245], vary: [14, 12, 8], paint: true },
-    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [70, 68, 72, 170], vary: [20, 20, 20], paint: true },
-    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: 0, conduct: 32, made: 230, latent: 0, warms: -4, toward: 0, airy: true, glow: 1, color: [236, 116, 34, 255], vary: [40, 200, 80], paint: true },
+    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 140, 166, 235], vary: [24, 24, 24], paint: true },
+    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: 0, conduct: 1, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [236, 116, 34, 255], vary: [40, 200, 80], paint: true },
     Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [116, 214, 64, 230], vary: [20, 30, 14], paint: true },
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [84, 58, 40, 255], vary: [18, 14, 10], paint: false },
     Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [196, 70, 26, 255], vary: [70, 80, 30], paint: false },
     Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
     Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [40, 40, 40], paint: true },
+    Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [214, 92, 30, 245], vary: [60, 90, 30], paint: false },
+    Material { name: "rock", kind: Kind::Powder, density: 190, slide: 1, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [96, 92, 104, 255], vary: [22, 22, 22], paint: false },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -217,7 +225,20 @@ pub struct Reaction {
     pub hot: u8,
     /// Whether the cell must be at rest, not falling: lava hardens where it lands, not in the air.
     pub resting: bool,
+    /// For a line of a cell at rest, what must hold it up: `ANY_GROUND`, `SOLID_GROUND` (a solid) or
+    /// `AFLOAT` (loose ground: a powder, or a liquid at least as heavy as it). Lava hardening on solid
+    /// ground makes stone; on loose ground, such as molten lava or the rock it has already made, loose
+    /// rock, which floats on lava as a crust and falls when what holds it up is gone, where a fixed slab
+    /// of stone would be left hanging.
+    pub ground: u8,
 }
+
+/// A line of a cell at rest happens whatever holds it up.
+pub const ANY_GROUND: u8 = 0;
+/// A line of a cell at rest happens only where a solid holds it up.
+pub const SOLID_GROUND: u8 = 1;
+/// A line of a cell at rest happens only where loose ground holds it up: a powder, or a liquid at least as heavy.
+pub const AFLOAT: u8 = 2;
 
 /// The chance of a line that happens every time its cell is visited and can.
 pub const ALWAYS: u16 = 1024;
@@ -225,12 +246,12 @@ pub const ALWAYS: u16 = 1024;
 /// A line of `REACTIONS`, written short.
 #[allow(clippy::too_many_arguments)]
 const fn line(a: u8, b: u8, above: u8, below: u8, a_becomes: u8, b_becomes: u8, chance: u16, heat: Heat, hot: u8) -> Reaction {
-    Reaction { a, b, above, below, a_becomes, b_becomes, chance, heat, hot, resting: false }
+    Reaction { a, b, above, below, a_becomes, b_becomes, chance, heat, hot, resting: false, ground: ANY_GROUND }
 }
 
-/// A line of `REACTIONS` for a cell at rest only.
-const fn resting(line: Reaction) -> Reaction {
-    Reaction { resting: true, ..line }
+/// A line of `REACTIONS` for a cell at rest only, held up by `ground`.
+const fn resting(line: Reaction, ground: u8) -> Reaction {
+    Reaction { resting: true, ground, ..line }
 }
 
 /// Every reaction, those of one material together. A cell tries its lines in order each step and
@@ -249,23 +270,31 @@ pub const REACTIONS: &[Reaction] = &[
     // lava lights what burns where it touches it
     line(WOOD, LAVA, 0, 255, EMBER, SAME, 64, Heat::Kept, 0),
     // a flame licking wood lights it now and then, however cool the wood still is
-    line(WOOD, FIRE, 0, 255, EMBER, SAME, 48, Heat::Kept, 0),
-    // oil hot enough, with air beside it, bursts into flame; a flame lights the oil it touches
-    line(OIL, OPEN, 85, 255, FIRE, SAME, 512, Heat::Kept, 230),
-    line(OIL, LAVA, 0, 255, FIRE, SAME, 256, Heat::Kept, 230),
-    // lava that cools hardens where it comes to rest; water on it hardens it and boils away
-    resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0)),
-    line(LAVA, WATER, 0, 255, STONE, STEAM, 640, Heat::Shared, 0),    // ice that warms melts
+    line(WOOD, FIRE, 0, 255, EMBER, SAME, 192, Heat::Kept, 0),
+    // oil hot enough, with air beside it, catches fire; so does oil a flame or lava touches, now and
+    // then, so a flame may lick a slick a few times before it catches
+    line(OIL, OPEN, 85, 255, BURNING_OIL, SAME, 512, Heat::Kept, 200),
+    line(OIL, LAVA, 0, 255, BURNING_OIL, SAME, 256, Heat::Kept, 200),
+    line(OIL, FIRE, 0, 255, BURNING_OIL, SAME, 192, Heat::Kept, 200),
+    // water hardens the lava it touches now and then, into loose rock that sinks and settles, and boils
+    // away; lava, heavier, sinks through the water as it does
+    line(LAVA, WATER, 0, 255, ROCK, STEAM, 64, Heat::Shared, 0),
+    // lava that cools hardens where it comes to rest; beside water, into loose rock that sinks
+    resting(line(LAVA, WATER, 0, 100, ROCK, SAME, ALWAYS, Heat::Kept, 0), ANY_GROUND),
+    resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0), SOLID_GROUND),
+    // on loose ground (molten lava, sand, rock), into loose rock, which floats on lava as a crust
+    resting(line(LAVA, ALONE, 0, 100, ROCK, SAME, ALWAYS, Heat::Kept, 0), AFLOAT),
+    // ice that warms melts
     line(ICE, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
     // smoke thins to nothing
     line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 12, Heat::Kept, 0),
     // a flame that has cooled dies, some of it to smoke; water puts it out with a hiss of steam
     line(FIRE, ALONE, 0, 60, EMPTY, SAME, ALWAYS, Heat::Kept, 0),
-    line(FIRE, ALONE, 0, 90, SMOKE, SAME, 160, Heat::Kept, 0),
+    line(FIRE, ALONE, 0, 90, SMOKE, SAME, 40, Heat::Kept, 0),
     line(FIRE, WATER, 0, 255, EMPTY, STEAM, 640, Heat::Shared, 0),
-    line(FIRE, OIL, 0, 255, SAME, FIRE, ALWAYS, Heat::Kept, 230),
     // acid eats stone, wood and dirt, a cell for a cell, and goes up in fumes
     line(ACID, STONE, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
+    line(ACID, ROCK, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
     line(ACID, WOOD, 0, 255, SMOKE, EMPTY, 32, Heat::Kept, 0),
     line(ACID, DIRT, 0, 255, SMOKE, EMPTY, 40, Heat::Kept, 0),
     line(ACID, WET_DIRT, 0, 255, SMOKE, EMPTY, 40, Heat::Kept, 0),
@@ -279,7 +308,13 @@ pub const REACTIONS: &[Reaction] = &[
     line(EMBER, WATER, 0, 255, WOOD, STEAM, 512, Heat::Shared, 0),
     line(EMBER, ALONE, 0, 255, SMOKE, SAME, 4, Heat::Kept, 0),
     line(EMBER, ALONE, 0, 255, ASH, SAME, 2, Heat::Kept, 0),
-    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 256, Heat::Kept, 230),
+    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 128, Heat::Kept, 230),
+    // burning oil gives off flames into the air above and beside it for a few seconds, its heat
+    // and creeping into the oil beside it, and burns away to nothing or now and then to smoke
+    line(BURNING_OIL, EMPTY, 0, 255, SAME, FIRE, 160, Heat::Kept, 230),
+    line(BURNING_OIL, OIL, 0, 255, SAME, BURNING_OIL, 24, Heat::Kept, 185),
+    line(BURNING_OIL, ALONE, 0, 255, SMOKE, SAME, 2, Heat::Kept, 0),
+    line(BURNING_OIL, ALONE, 0, 255, EMPTY, SAME, 6, Heat::Kept, 0),
 ];
 
 /// The reactions of `a` beside `b` (with `b` a material), in the order they are tried.
@@ -520,6 +555,8 @@ mod tests {
             (EMBER, "ember"),
             (ASH, "ash"),
             (PRIDE, "pride sand"),
+            (BURNING_OIL, "burning oil"),
+            (ROCK, "rock"),
         ];
         for (number, name) in named {
             assert_eq!(MATERIALS[number as usize].name, name);
@@ -558,7 +595,7 @@ mod tests {
     #[test]
     fn the_reactions_named_in_the_plan_are_lines_of_the_table() {
         let one = |a: u8, b: u8| reactions(a, b).next().map(|line| (line.a_becomes, line.b_becomes));
-        assert_eq!(one(LAVA, WATER), Some((STONE, STEAM)), "lava and water make stone and steam");
+        assert_eq!(one(LAVA, WATER), Some((ROCK, STEAM)), "lava and water make rock and steam");
         assert_eq!(one(FIRE, WATER), Some((EMPTY, STEAM)), "water puts out fire with steam");
         assert_eq!(one(DIRT, WATER), Some((WET_DIRT, EMPTY)), "dirt and water make wet dirt");
         assert_eq!(one(WOOD, EMPTY), Some((EMBER, SAME)), "wood burns where air reaches it");
@@ -577,7 +614,7 @@ mod tests {
         for (m, by) in changes(burn) {
             sum[m as usize] += by;
         }
-        assert_eq!((sum[LAVA as usize], sum[WATER as usize], sum[STONE as usize], sum[STEAM as usize]), (-1, -1, 1, 1));
+        assert_eq!((sum[LAVA as usize], sum[WATER as usize], sum[ROCK as usize], sum[STEAM as usize]), (-1, -1, 1, 1));
         let flame = reactions(EMBER, EMPTY).next().unwrap();
         let mut sum = [0i32; 32];
         for (m, by) in changes(flame) {
@@ -659,6 +696,21 @@ mod tests {
         assert_eq!(PALETTE[1024 + EMBER as usize * 4 + 3], DRAW_LIGHT);
         assert_eq!(PALETTE[1024 + SMOKE as usize * 4 + 3], DRAW_SOFT);
         assert_eq!(PALETTE[1024 + SAND as usize * 4 + 3], 0);
+    }
+
+    #[test]
+    fn smoke_reads_on_the_page_and_steam_reads_as_light_not_as_stone() {
+        // a soft cell is drawn at 0.7 of its color over the page's dark ground, as cells.ts does
+        // (`SOFT_SHARP`), the rest of it spread as haze; a stone is drawn whole
+        let luma = |c: [u8; 4]| 0.2126 * c[0] as f64 + 0.7152 * c[1] as f64 + 0.0722 * c[2] as f64;
+        let ground = luma([16, 10, 26, 255]);
+        let drawn = |m: u8| {
+            let c = MATERIALS[m as usize].color;
+            ground + (luma(c) - ground) * c[3] as f64 / 255.0 * 0.7
+        };
+        assert!(drawn(SMOKE) > ground + 60.0, "smoke {:.0} on a ground of {ground:.0}", drawn(SMOKE));
+        assert!(drawn(STEAM) > luma(MATERIALS[STONE as usize].color) + 30.0, "steam {:.0}, stone {:.0}", drawn(STEAM), luma(MATERIALS[STONE as usize].color));
+        assert!(drawn(STEAM) > luma(MATERIALS[ROCK as usize].color) + 30.0);
     }
 
     #[test]

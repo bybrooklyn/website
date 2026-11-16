@@ -49,6 +49,9 @@ export const LIGHT = 2;
 /** It is drawn faint and spread softly into the air around it. */
 export const SOFT = 4;
 
+/** How strongly a soft cell is drawn itself, from 0 to 1; the rest of it is the haze spread around it. */
+export const SOFT_SHARP = 0.7;
+
 /**
  * The weights of a blur across `taps` texels either side of the middle, as a bell curve of spread
  * `sigma`, each pair of neighbours read as one sample between them (the graphics card blends two
@@ -198,8 +201,9 @@ void main() {
     uint mode;
     vec4 cell = colorOf(texelFetch(cells, at, 0), mode);
     vec4 sharp = vec4(cell.rgb * cell.a, cell.a);
-    // a soft cell is only faint itself: most of it is in the haze around it
-    if ((mode & 4u) != 0u) sharp *= 0.4;
+    // a soft cell is fainter itself, the rest of it in the haze around it; strong enough that a wisp of
+    // steam reads as light and not as a grey grain
+    if ((mode & 4u) != 0u) sharp *= ${SOFT_SHARP.toFixed(2)};
     vec2 uv = inside / grid;
     vec4 haze = texture(soft, uv);
     vec4 out4 = sharp + haze * (1.0 - sharp.a);

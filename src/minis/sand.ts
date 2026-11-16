@@ -13,12 +13,12 @@ import { cells, cellUnder, fitted, type Place } from "../mote/cells";
 import { el, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { colorRow, FLAGS, place as stripesOf } from "./flags";
-import { engineAddress, fillOf, flagSize, inRow, KEYS, materials, start, STEPS_PER_SECOND, swatchColor, worldFor, type Engine, type Material } from "./grains";
+import { brushCells, engineAddress, fillOf, flagSize, inRow, keyAction, KEYS, materials, start, STEPS_PER_SECOND, swatchColor, worldFor, type Engine, type Material } from "./grains";
 import { LINK_MOST, MOST_TEXT, pack, tokensOf, unpack, writeTokens, type Opened } from "./worlds";
 
 export const label = "A box of sand, water, fire, lava and more, poured with the pointer.";
 
-/** The brush's size: how many cells either side of the line it pours. */
+/** The brush's size on its slider: how many of the first page's cells either side of the line it pours (`brushCells`). */
 const SIZES = { least: 0, most: 24, first: 4 };
 /** How long a pointer must stay in one cell before pride sand pours there as from a brush held still, in seconds. */
 const STOPPED = 0.2;
@@ -103,9 +103,10 @@ export default function sand(m: Mote): Scene {
         }
         forgetLink();
         const still = from[0] === to[0] && from[1] === to[1];
-        if (!poured) engine.paint(0, from[0], from[1], to[0], to[1], radius, 100, 0);
-        else if (!poured.striped) engine.paint(poured.number, from[0], from[1], to[0], to[1], radius, fillOf(poured, still, radius), 0);
-        else if (!whole) engine.paint_striped(poured.number, from[0], from[1], to[0], to[1], radius, fillOf(poured, still, radius), stripesOf(flag).first, stripesOf(flag).count);
+        const cells = brushCells(radius);
+        if (!poured) engine.paint(0, from[0], from[1], to[0], to[1], cells, 100, 0);
+        else if (!poured.striped) engine.paint(poured.number, from[0], from[1], to[0], to[1], cells, fillOf(poured, still, cells), 0);
+        else if (!whole) engine.paint_striped(poured.number, from[0], from[1], to[0], to[1], cells, fillOf(poured, still, cells), stripesOf(flag).first, stripesOf(flag).count);
         else if (!laid) {
             // a whole flag, once a press, with its middle under the pointer
             laid = true;
@@ -312,12 +313,17 @@ export default function sand(m: Mote): Scene {
     let resize = (by: number) => void (radius = Math.max(SIZES.least, Math.min(SIZES.most, radius + by)));
     let pick = (_key: string) => false;
 
-    // the keyboard, only while the mini has it, as Mote's own keys are: a letter picks a material, the brackets size the brush
-    m.canvas.addEventListener("keydown", (event) => {
+    // The keyboard, only while the mini has it, but wherever in it: on the canvas or on a swatch or button
+    // just pressed. A letter picks a material, the brackets size the brush, Space pauses.
+    m.canvas.parentElement!.addEventListener("keydown", (event) => {
         if (event.metaKey || event.ctrlKey || event.altKey || m.preview) return;
-        const key = event.key.toLowerCase();
-        if (key === "[" || key === "]") resize(key === "]" ? 1 : -1);
-        else if (!pick(key)) return;
+        const target = event.target as HTMLElement;
+        const on = target === m.canvas ? "canvas" : target instanceof HTMLInputElement ? (target.type === "range" ? "slider" : "text") : "button";
+        const action = keyAction(event.key, on);
+        if (!action) return;
+        if (action === "larger" || action === "smaller") resize(action === "larger" ? 1 : -1);
+        else if (action === "pause") setPaused(!paused);
+        else if (!pick(action.pick)) return;
         event.preventDefault();
     });
     // the wheel sizes the brush too, but only while the mini has the keyboard, so that it never stops the page scrolling past
@@ -382,7 +388,7 @@ export default function sand(m: Mote): Scene {
             const y = (at.top / ratio()) + (row - (high >> 1)) * cell;
             m.ctx.rect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(wide * cell) - 1, Math.round(high * cell) - 1);
         } else {
-            m.ctx.arc(m.pointer.x, m.pointer.y, Math.max(2, (radius + 0.5) * cell), 0, Math.PI * 2);
+            m.ctx.arc(m.pointer.x, m.pointer.y, Math.max(2, (brushCells(radius) + 0.5) * cell), 0, Math.PI * 2);
         }
         m.ctx.strokeStyle = m.color("--muted");
         m.ctx.lineWidth = 1;

@@ -277,20 +277,22 @@ One line each in `MATERIALS`. Conduct is in 32nds of the most; `made` is the tem
 | water | liquid | 100 | 32 | 40 | levels; stores 8 |
 | stone | solid | 255 | 24 | 40 | |
 | dirt | powder | 150 | 12 | 40 | slides at about 63 degrees |
-| steam | gas | 4 | 12 | 120 | levels under a ceiling; stores 28; airy |
+| steam | gas | 4 | 2 | 160 | levels under a ceiling; stores 28; airy |
 | wood | solid | 255 | 24 | 40 | |
 | oil | liquid | 80 | 16 | 40 | levels; floats on water |
 | lava | liquid | 200 | 8 | 250 | creeps (moves sideways 96 steps in 256); hardens where it rests; shade follows heat |
 | ice | solid | 255 | 32 | 0 | |
 | smoke | gas | 3 | 10 | 90 | does not level: rises, drifts and thins; airy |
-| fire | fire (new kind) | 1 | 32 | 230 | rises and wavers; cools 4 a step; shade follows heat; airy |
+| fire | fire (new kind) | 1 | 1 | 230 | rises and wavers; cools 2 a step; shade follows heat; airy |
 | acid | liquid | 110 | 28 | 40 | levels; sinks under water |
 | wet dirt | powder | 170 | 12 | 40 | slides at about 72 degrees; stores 8; not offered to the brush |
 | ember (burning wood) | solid | 255 | 20 | 200 | warms 16 a step up to 200; shade flickers with heat; not offered |
 | ash | powder | 40 | 6 | 40 | floats; airy; not offered |
+| rock | powder | 190 | 24 | 40 | loose stone that lava makes in water or on loose ground: floats on lava, sinks in water, piles; not offered |
+| burning oil | liquid | 80 | 16 | 185 | warms 16 a step up to 185; shade flickers with heat; not offered |
 
 Fire is a new kind: each step it moves up, or up and to a side by chance (a quarter of the time each
-way), so a flame wavers; when it cannot rise it moves to a side now and then. It never levels. A falling
+way; an eighth since the owner's play, below), so a flame wavers; when it cannot rise it moves to a side now and then. It never levels. A falling
 cell passes through it as through a lighter gas.
 
 ### The reactions as built
@@ -307,17 +309,20 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | dirt | water | any | wet dirt | air | 96 | shared |
 | steam | alone | 56 or less | water | | always | kept (gives back 20) |
 | wood | anything airy | 90 or more | burning wood | as it was | 384 | kept |
+| wood | fire | any | burning wood | as it was | 192 | kept |
 | wood | lava | any | burning wood | as it was | 64 | kept |
-| oil | anything airy | 85 or more | fire | as it was | 512 | the flame starts at 230 or more |
-| oil | lava | any | fire | as it was | 256 | the flame starts at 230 or more |
-| lava, at rest | alone | 100 or less | stone | | always | kept |
-| lava | water | any | stone | steam | 640 | shared |
+| oil | anything airy | 85 or more | burning oil | as it was | 512 | it starts at 185 or more |
+| oil | lava | any | burning oil | as it was | 256 | it starts at 185 or more |
+| oil | fire | any | burning oil | as it was | 96 | it starts at 185 or more |
+| lava, at rest on a solid | alone | 100 or less | stone | | always | kept |
+| lava, at rest on a powder or on lava | alone | 100 or less | rock | | always | kept |
+| lava | water | any | rock | steam | 64 | shared |
+| lava, at rest | water | 100 or less | rock | | always | kept |
 | ice | alone | 28 or more | water | | always | kept (stores 8) |
 | smoke | alone | any | air | | 12 | kept |
 | fire | alone | 60 or less | air | | always | kept |
-| fire | alone | 90 or less | smoke | | 160 | kept |
+| fire | alone | 90 or less | smoke | | 40 | kept |
 | fire | water | any | air | steam | 640 | shared |
-| fire | oil | any | as it was | fire | always | the flame starts at 230 or more |
 | acid | stone | any | smoke | air | 24 | kept |
 | acid | wood | any | smoke | air | 32 | kept |
 | acid | dirt | any | smoke | air | 40 | kept |
@@ -327,7 +332,10 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | burning wood | water | any | wood | steam | 512 | shared |
 | burning wood | alone | any | smoke | | 4 | kept |
 | burning wood | alone | any | ash | | 2 | kept |
-| burning wood | air | any | as it was | fire | 256 | the flame starts at 230 or more |
+| burning wood | air | any | as it was | fire | 128 | the flame starts at 230 or more |
+| burning oil | air | any | as it was | fire | 160 | the flame starts at 230 or more |
+| burning oil | alone | any | smoke | | 2 | kept |
+| burning oil | alone | any | air | | 6 | kept |
 
 What each line does to the counts follows from it (`changes` in `materials.rs`): wood becomes burning wood
 one for one, burning wood becomes smoke or ash one for one, smoke thins to nothing and fire dies to nothing
@@ -563,7 +571,7 @@ burning wood give light; steam and smoke are soft. Each frame that anything chan
    cells' color.
 2. **Blur** both across, then down: four samples each way, each pair of texels read as one between them,
    a bell of spread 2.6 half-texels, about twelve cells.
-3. **Draw** the cells sharp; a soft cell only faint (0.4) over its blurred haze; the light added over
+3. **Draw** the cells sharp; a soft cell at 0.7 of its color (`SOFT_SHARP`, it was 0.4) over its blurred haze; the light added over
    everything, kept a color the page can blend (as opaque as it is bright).
 
 A single hot cell gives little light, as it is averaged over four; a mass of fire or lava glows round
@@ -940,8 +948,9 @@ The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a 
   minutes.
 - Wet dirt dries only where it is hot and touches air, or where lava presses on it; dirt under a lake
   soaks only its top layer, as water does not pass through wet dirt.
-- A flame lights any oil it touches, every time, so a slick goes up in one front; a
-  slower burn would need a chance on that line.
+- Oil catches only where flames touch it or its own heat reaches 85 with air beside it: fire dragged
+  with two rows of air between it and a lake does not light it, as heat in this world goes up and not
+  down. The last thin layer of a slick on water, cooled by the water, may not catch.
 - A world sprinkled everywhere with single drops makes the first steps slow while the pass looks at each
   drop as a body (the slowest step of a sprinkled world of water is about 16 ms natively).
 - Sand poured faster than about twelve grains a step from one point still stands as a column under the
@@ -958,3 +967,109 @@ The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a 
 - The world is made once, for the size the mini has when it loads; a resize keeps it and fits it again in
   whole pixels, cutting its edges if the canvas has grown smaller than it.
 - With no WebGL 2 the page says so and draws nothing.
+
+## Reworked after the owner's play
+
+The owner found fire did not really work and the mini quite broken; a tester then played it by hand on the
+page and counted grains (the counts below are from those scenes, stepped natively one step a frame on the
+same strokes, a world of 358 by 278, and checked on the page). What changed, a commit each:
+
+- **Flames live.** A flame was made at 230 but passed heat at 32, so it gave its heat to the air in a few
+  steps: one flame alone lived 6 to 9 steps, and a dragged line of 757 flames was 7 flames 16 steps later.
+  Fire now passes heat at 2 and cools 2 a step, wavers to a side an eighth of the time each way (it was a
+  quarter), and turns to smoke as it dies 40 times in 1024 a step (it was 160). One flame lives 24 to 37
+  steps, about 32 on average, rising about 31 cells, and a third end as smoke. Burning wood gives off
+  flames 128 times in 1024 a step (it was 256), as each lives four times as long.
+- **A flame touching wood lights it** 192 times in 1024 a step (it was 48). A wooden house with fire drawn
+  three cells from its wall had nothing burnt in 45 seconds; it now burns down to ash in about 40.
+  A flame lives long enough to drift: fire now crosses gaps of up to about nine cells between burning
+  columns (eleven now and then, thirteen in none of six seeds), and the test holds that a firebreak of
+  fifteen is not crossed where it held seven.
+- **Oil burns as a moving fire.** A flame touching oil turned it into one short flame every time, so a
+  lake of 5,684 cells either never caught or went up in one flash (half gone 81 steps after fire touched
+  it). Oil now becomes burning oil (material 19, not offered): a liquid that keeps itself at 185 and gives
+  off flames into the air beside it, 160 times in 1024 a step, burning away in about two seconds a cell
+  (6 in 1024 a step to nothing, 2 to smoke). A flame lights the oil it touches 96 times in 1024 a step,
+  and burning oil's heat lights the oil beside it that has air above. The same lake lit at one end burns
+  as a front: 151 cells gone after 5 seconds, 741 after 10, half after 19. Fire dragged with two rows of
+  air between it and the surface still does not light it (heat here goes up, not down). Burning oil on
+  water boils some of the water under it: the test's slick of 1,083 cells on 3,743 of water leaves about
+  330 of oil, the last layer cooled by the water, and 3,200 of water.
+- **Fire stays bounded**: held on stone, sand and dirt for two seconds, none of them changes; poured into
+  water, it is out and every cell of water is still water or steam.
+- **The ice beside lava** (`ice_holds_in_still_air...`) melts to about half in 1,500 steps and then slows as
+  the lava crusts; how near half it comes moves by a cell or two with any change to the chances, so the
+  test now holds two fifths. Lava poured three cells from an ice column of 302 cells leaves 34 of it; the
+  tester's pour, 25 cells away, crusted before it reached the ice and left 239.
+- **Lava sinks in water and hisses.** Lava poured into a cup of water hardened at once into a raft of
+  stone resting on the water (858 cells of stone over water, steam at most 81). Water now hardens the
+  lava it touches 64 times in 1024 a step (it was 640), into rock (material 20, not offered): stone in
+  colour and weight, but loose, a powder that sinks and piles. Lava that cools beside water hardens into
+  rock too, and lava hardens on its own only where it rests on something that holds it up (a solid, a
+  powder or a liquid at least as heavy), so lava sinking through water no longer hardens hanging in it.
+  The same pour now sinks, makes steam up to 317 cells at once, and leaves 607 rock heaped on the floor
+  of the cup and 24 cells of stone with water somewhere under them.
+- **A bubble rises.** Steam or smoke under a liquid rises through it a cell a step, and water no longer
+  spreads sideways into a bubble with liquid over it: water beside a bubble had pushed it from side to
+  side for ever, so steam made under water stayed there. Water boiling over lava now bubbles up and
+  condenses under the lid (the sealed box boiled 1,879 cells' worth, with at most 25 steam at once,
+  where steam had gathered under the water in a layer of up to 426).
+- **Ash and flames no longer dam water.** A heap of burnt wood's ash held water 7 to 11 rows higher on
+  one side for good, as no liquid could enter a cell of powder. A falling or sliding liquid now takes the
+  place of a powder lighter than 80 (only ash; sand and dirt are far heavier, so powders still never pass
+  each other), water pressed from above pushes aside ash with nothing over it, and water beside a grain
+  of ash with liquid over it leaves it to rise. The levelling pass carries a liquid into flames as into
+  air. Water poured beside the tester's heap now stands at row 271 on both sides with no ash under water,
+  where it stood at 265 on one side and never reached the other. Water poured on a burning block still
+  leaves embers burning where the water beside them boils away as fast as it comes (31 after 20 seconds).
+- **Steam poured with the brush reaches a roof.** Made at 120 and passing heat at 12, it cooled to 56 and
+  rained within a second and a half: 2,432 cells under a roof were all water 90 steps later, none ever
+  under the roof. It is now made at 160 and passes heat at 2. The same pour reaches the roof at once
+  (1,021 cells in the rows under it), 3,069 are still steam after 90 steps, and it rains over about
+  fifteen seconds. Steam boiled from water is made at 60 as before, and boils and condenses as it did.
+- **Grains twice as fine each way, four times as many.** A cell is now one CSS pixel (`CELL` in
+  `grains.ts`), rounded to whole device pixels as before: at 1288 by 828 the world is 717 by 513 cells
+  (367,821) where it was 358 by 256 (91,648). Measured on the page in headless Chromium with a busy
+  world (a lake over a fifth of the world, a forest burning across the left half, sand held pouring into
+  the lake): one CSS pixel a cell, a step takes 8.9 to 11.2 ms on the page's thread, and the page steps
+  41 to 60 times a second while drawing 14 to 27 frames a second; two CSS pixels, 3.1 ms, 60 steps and
+  48 to 55 frames; two thirds of a CSS pixel (three times as fine, 1076 by 769 at 1.5 device pixels a
+  CSS pixel, past `MOST`), 12.8 ms, 34 to 37 steps and 11 to 12 frames. So one CSS pixel a cell. The
+  frames are the software drawing of headless Chromium; the step is inside its budget. The brush's
+  slider is in the first page's cells and pours `FINER` (2) times as many cells either side; a held pour
+  is 40 grains of powder and 36 of lava a step (ten and nine, times four); the flag brush lays a block
+  twice as many cells high. A world opened from a link or file made at the old size opens at its own
+  size, drawn at two device pixels a cell in the middle of the canvas, as any smaller world does.
+  Things fall, spread and burn the same number of cells a step, so on the screen they move half as far
+  in a second as before.
+- **Flames for the finer grains**: fire passes heat at 1 (it was 2), so one flame lives 35 to 54 steps,
+  about 48, and rises about 47 cells, as tall on the screen as about 23 of the old cells.
+- **No stone left hanging.** On the page, a poured stream of lava stood as a column above the water as
+  it sank, and its outside hardened into a shell of stone on lava that then sank away, leaving 435
+  cells of stone standing on the water. Lava now hardens into stone only where a solid holds it up; on
+  loose ground (a powder, rock, or molten lava) it hardens into rock, which is lighter than lava (190), so
+  a crust of it floats on a pool, and falls when what held it up is gone. The test pool still crusts from
+  its open edges first and hardens through in 4,000 to 5,100 steps. The owner's scene (sand hills, water
+  between, lava poured from above at the left) ends with 2,536 cells of rock heaped on the slope under
+  the water and none of stone, where the old page left 769 of stone as a raft on the water. A burning
+  cell of oil creeps into the oil beside it 24 times in 1024 a step, so a slick keeps burning where a
+  hole has opened in its top, and a flame touching oil lights it 192 times in 1024 (it was 96), as a
+  flame touches the surface only for the step it passes.
+- **Smoke and steam can be seen.** Smoke was (70, 68, 72) at 170 of 255, drawn at 0.4 of that over the
+  dark ground (about (16, 10, 26)): a faint smudge. Steam drawn the same way came out darker than stone,
+  so a wisp of it rising from lava over water read as grey grains of rock floating. Smoke is now
+  (150, 140, 166) at 235, steam (238, 244, 255) at 240, and a soft cell is drawn at 0.7 of its color.
+  By a test's sum (brightness over the ground, as drawn) smoke stands 85 over the ground where it stood
+  26, and steam is 167 against stone's 121, where it was 95.
+- **Keys work wherever the keyboard is in the mini.** They were heard only on the canvas, so after a
+  swatch was clicked F, the brackets and Space did nothing (Space pressed the swatch again). They are now
+  heard on the whole mini (`keyAction` in `grains.ts`): a letter picks, the brackets size the brush, and
+  Space pauses from a swatch or button rather than pressing it; in a box of text nothing is taken. On the
+  tester's steps (click water, then F, ], ], Space) the page now has fire chosen, the brush at 6 and the
+  world paused, where it had water, 4 and nothing.
+- **The phone's 10 pixels were the test's.** A downward finger drag moved the page by 10 pixels only the
+  first time: the test's browser turns touch on at the first finger, which makes the page's
+  `(pointer: coarse)` rules apply then and there (the site's name gains its finger padding, 9.6 pixels),
+  and the browser keeps the view where it was by scrolling. A second drag moves the page by 0. On a phone
+  those rules apply from the start; nothing in the mini was changed for it.
+

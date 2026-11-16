@@ -109,8 +109,44 @@ export const KEYS: Record<string, string> = {
     erase: "e",
 };
 
-/** How many grains of powder, and cells of lava, a brush held still pours in a step, whatever its size. */
-export const HELD = { powder: 10, lava: 9 };
+/** What a key pressed inside the mini asks for. */
+export type KeyAction = { pick: string } | "larger" | "smaller" | "pause";
+
+/**
+ * What a key pressed anywhere inside the mini does: a material's letter picks it, the brackets size the
+ * brush, Space pauses. `on` is where the keyboard is: the canvas, whose Space Mote already turns into
+ * pausing; a button, whose Space would otherwise press it again; a slider; or a box of text, where a
+ * letter is typed and nothing else happens.
+ */
+export function keyAction(key: string, on: "canvas" | "button" | "slider" | "text"): KeyAction | undefined {
+    if (on === "text") return undefined;
+    const lower = key.toLowerCase();
+    if (lower === "[") return "smaller";
+    if (lower === "]") return "larger";
+    if (key === " ") return on === "canvas" ? undefined : "pause";
+    if (Object.values(KEYS).includes(lower)) return { pick: lower };
+    return undefined;
+}
+
+/** How wide a cell is, in CSS pixels, before it is rounded to whole device pixels. */
+export const CELL = 1;
+
+/**
+ * How many cells across the world has where the first page, at two CSS pixels a cell, had one. The
+ * brush, the held pour and the flag are scaled by it, so that a gesture pours as large a part of the
+ * picture as it did with coarser grains.
+ */
+export const FINER = 2 / CELL;
+
+/** How many cells either side of its line a brush of `size` on the slider pours: its size in the first page's cells, scaled. */
+export const brushCells = (size: number): number => Math.round(size * FINER);
+
+/**
+ * How many grains of powder, and cells of lava, a brush held still pours in a step, whatever its size:
+ * ten grains and nine cells of the first page's size, so as many times more as a cell is now smaller in
+ * area. A small brush pours less, as a brush never pours more than 45 cells in 100.
+ */
+export const HELD = { powder: Math.round(10 * FINER * FINER), lava: Math.round(9 * FINER * FINER) };
 
 /**
  * How many cells in 100 a stroke fills: what falls is poured, so it trickles; stone is laid solid.
@@ -135,13 +171,12 @@ export function fillOf(material: Pick<Material, "kind" | "striped" | "light">, s
 /** The largest world the engine is asked for, as the plan sets for a desktop. */
 export const MOST = { columns: 1024, rows: 576 };
 
-/** How wide a cell is, in CSS pixels, before it is rounded to whole device pixels. */
-export const CELL = 2;
-
 /**
  * How many cells across and down a world has for a canvas `wide` by `high` CSS pixels at `ratio`
  * device pixels to a CSS pixel: `cell` CSS pixels a cell, rounded to whole device pixels so grains
- * are square and sharp, or larger where that would make more than `MOST`.
+ * are square and sharp, or larger where that would make more than `MOST`. One CSS pixel a cell was
+ * chosen by measuring a busy world (a lake, a forest fire and a pour) on the page: twice as fine each
+ * way as the first page's two, it held sixty steps a second; three times as fine did not.
  */
 export function worldFor(wide: number, high: number, ratio: number, cell = CELL): { columns: number; rows: number } {
     const [across, down] = [Math.floor(wide * ratio), Math.floor(high * ratio)];
@@ -150,12 +185,13 @@ export function worldFor(wide: number, high: number, ratio: number, cell = CELL)
 }
 
 /**
- * The block of pride sand the flag brush lays for a brush of `radius`, in cells: two high to three
- * wide, as most flags are, from 8 cells high for the smallest brush to 104 for the largest, and
- * never more than half the world's height or its width.
+ * The block of pride sand the flag brush lays for a brush of `size` on the slider, in cells: two high
+ * to three wide, as most flags are, from 8 of the first page's cells high for the smallest brush to
+ * 104 for the largest (`finer` times as many cells now), and never more than half the world's height
+ * or its width.
  */
-export function flagSize(radius: number, columns: number, rows: number): { wide: number; high: number } {
-    const high = Math.max(2, Math.min(8 + 4 * radius, Math.floor(rows / 2), Math.floor((columns * 2) / 3)));
+export function flagSize(size: number, columns: number, rows: number, finer = FINER): { wide: number; high: number } {
+    const high = Math.max(2, Math.min(Math.round((8 + 4 * size) * finer), Math.floor(rows / 2), Math.floor((columns * 2) / 3)));
     return { wide: Math.round((high * 3) / 2), high };
 }
 
