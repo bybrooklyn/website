@@ -578,7 +578,9 @@ textarea.quire-img-writing {
     justify-content: flex-end;
     gap: 0.4rem;
     position: sticky;
-    bottom: 0;
+    /* down in the body's own padding, so that nothing scrolled under the row shows below it (with a batch's lines the panel is taller than a
+       window 828 high, and a strip of the preview had shown under Save and Copy) */
+    bottom: -1.1rem;
     margin: auto -1.1rem -1.1rem;
     padding: 0.6rem 1.1rem 1.1rem;
     background: var(--surface);
