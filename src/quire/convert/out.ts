@@ -5,8 +5,8 @@
 // reading it through once. A folder keeps what is in it: a name already there gets the next number in
 // brackets, as two results of one name do, and nothing is overwritten.
 //
-//   const zip = await zipOf([{ name: "photo.webp", blob }]);
-//   const written = await intoFolder(await pickFolder(), [{ name: "photo.webp", blob }]);
+//   zip = await zipOf([{ name: "photo.webp", blob }]);
+//   written = await intoFolder(await pickFolder(), [{ name: "photo.webp", blob }]);
 
 import { outName } from "./names";
 

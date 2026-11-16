@@ -1,5 +1,5 @@
 // What getting many results out is held to: the zip reads back with the suite's own zip reader, file
-// for file and byte for byte, its checksums are the suite's CRC-32, read in pieces; a folder keeps what
+// for file and byte for byte, its check values are the suite's CRC-32, read in pieces; a folder keeps what
 // was in it, a name already there getting the next number in brackets; and the 4 GB a zip holds is said.
 
 import { expect, test } from "bun:test";

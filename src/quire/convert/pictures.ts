@@ -6,7 +6,7 @@
 // handed in by the page script (src/scripts/convert.ts) as an engine, since one kind of the suite never
 // imports another.
 //
-//   const done = await convertPicture(file, engine, { format: "webp", quality: 0.85, size: { by: "side", value: 2048 }, keep: "noplace" }, signal, told);
+//   `done = await convertPicture(file, engine, { format: "webp", quality: 0.85, size: { by: "side", value: 2048 }, keep: "all" }, signal, told);`
 
 /** A format a picture can be written in, as imgQuire's export table gives it. */
 export interface PictureFormat {

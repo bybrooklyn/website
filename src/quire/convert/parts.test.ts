@@ -1,6 +1,6 @@
 // What the panel's pieces are held to, in Chromium: a row of choices has one pressed, the arrow keys
 // move along it passing over a choice this browser cannot do, which a press does not take and whose
-// reason is its tooltip; a fold shut cannot be reached by the keyboard; a number field brings a value
+// reason is shown when the pointer rests on it; a fold shut cannot be reached by the keyboard; a number field brings a value
 // outside its bounds inside them; and a refusal can carry an offer.
 
 import { expect, test } from "bun:test";

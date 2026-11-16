@@ -1,6 +1,6 @@
 // The small pieces the converter's panel is built of, the same for every kind so that the same press
 // does the same thing everywhere: a row of choices (one pressed at a time, the arrow keys moving along
-// it, a choice this browser cannot do shown dimmed with the reason as its tooltip), a part that folds
+// it, a choice this browser cannot do shown dimmed with the reason shown when the pointer rests on it), a part that folds
 // open by growing from no height, a titled section, a field with its unit, and what a kind's side of
 // the panel gives the page.
 

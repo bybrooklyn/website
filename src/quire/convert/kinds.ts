@@ -4,7 +4,7 @@
 // brand tells an M4A apart here, and the page asks the container itself for the rest (a WebM of only
 // sound is found when its tracks are read).
 //
-//   kindOf(firstBytes, "photo.jpg", "image/jpeg")   { kind: "picture", format: "jpeg", label: "JPEG picture" }
+//   `kindOf(firstBytes, "photo.jpg", "image/jpeg")` gives `{ kind: "picture", format: "jpeg", label: "JPEG picture" }`
 
 /** The four kinds the converter works on, and what it cannot. */
 export type Kind = "picture" | "text" | "audio" | "video" | "unknown";
@@ -97,7 +97,7 @@ export function kindOf(head: Uint8Array, name = "", type = ""): Found {
     if (starts(head, 0, 0, 1, 0) && ending === "ico") return found("picture", "ico");
     if (ascii(head, 0, 4) === "fLaC") return found("audio", "flac");
     if (ascii(head, 0, 4) === "OggS") {
-        // the first page's packet names its codec: OpusHead, a Vorbis header, or a FLAC mapping
+        // the first page's packet names its format: OpusHead, a Vorbis header, or a FLAC mapping
         const first = ascii(head, 28, 36);
         return first.startsWith("OpusHead") ? found("audio", "opus") : found("audio", "ogg");
     }
@@ -107,7 +107,7 @@ export function kindOf(head: Uint8Array, name = "", type = ""): Found {
         return (head[1]! & 0xf6) === 0xf0 ? found("audio", "aac") : found("audio", "mp3");
     }
     if (starts(head, 0x1a, 0x45, 0xdf, 0xa3)) {
-        // the document type, a few bytes in: webm or matroska
+        // the document type, a few bytes in: WebM or Matroska
         const text = ascii(head, 0, Math.min(head.length, 64));
         return text.includes("webm") ? found(ending === "weba" || type.startsWith("audio/") ? "audio" : "video", "webm") : found(ending === "mka" || type.startsWith("audio/") ? "audio" : "video", "mkv");
     }

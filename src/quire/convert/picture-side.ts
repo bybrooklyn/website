@@ -1,4 +1,4 @@
-// The pictures' side of the converter's panel: the format (imgQuire's, the lossy ones then those that
+// The pictures' side of the converter's panel: the format (imgQuire's, those that lose a little then those that
 // keep every pixel), the quality or a weight to come in under, the size (as it came, a largest side, or
 // a share), and what of the metadata goes with it, in imgQuire's words. A picture the browser cannot
 // read (a TIFF in Chromium, say) is said so in its row when it is tried.

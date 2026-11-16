@@ -2,7 +2,7 @@
 // STREAMINFO carries the MD5 of its samples, so that a reader can tell they came back whole. It is fed
 // piece by piece, so a long sound is never held at once.
 //
-//   const sum = createMd5(); sum.update(bytes); sum.update(more); const digest = sum.digest();
+//   sum = createMd5(); sum.update(bytes); sum.update(more); digest = sum.digest();
 
 /** How far each step turns its word, four to a round. */
 const TURNS = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];

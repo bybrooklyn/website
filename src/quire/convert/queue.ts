@@ -3,8 +3,8 @@
 // jobs start in the order they were added, and each can be stopped, waiting or running. A running job
 // is told through its signal and is expected to give up at its next step; it counts as stopped at once.
 //
-//   const queue = createQueue({ picture: 2, video: 1 });
-//   const job = queue.add("picture", async (signal) => { ... });
+//   queue = createQueue({ picture: 2, video: 1 });
+//   job = queue.add("picture", async (signal) => { ... });
 //   job.stop();
 
 /** Where a job is: waiting its turn, running, finished, stopped, or failed. */

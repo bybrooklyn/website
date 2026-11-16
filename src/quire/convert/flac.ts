@@ -6,14 +6,14 @@
 //
 // Each frame tries the four ways of carrying two channels (each alone, left and side, right and side,
 // mid and side) and keeps the smallest. Each channel is written as a constant, verbatim, a fixed
-// predictor of order 0 to 4, or a linear predictor (a Welch window, autocorrelation, Levinson and Durbin,
-// coefficients quantized to 14 bits with the error carried on) of order 2, 4, 6, 8 or 12, whichever is
+// predictor of order 0 to 4, or a linear predictor (a Welch window, the correlation of the sound with itself, Levinson and Durbin,
+// coefficients rounded to 14 bits with the error carried on) of order 2, 4, 6, 8 or 12, whichever is
 // estimated smallest; the leftover is Rice coded in partitions whose number is searched, with an escape
 // to plain bits where that is smaller. Wasted bits are not looked for.
 //
-//   const flac = createFlacEncoder({ sampleRate: 48000, channels: 2, bits: 16 });
-//   const frames = [...flac.push([left, right]), ...]; const { head, frames: last } = flac.end();
-//   const file = new Blob([head, ...frames, ...last], { type: "audio/flac" });
+//   encoder = createFlacEncoder({ sampleRate: 48000, channels: 2, bits: 16 });
+//   frames = [...encoder.push([left, right]), ...]; { head, frames: last } = encoder.end();
+//   file = new Blob([head, ...frames, ...last], { type: "audio/flac" });
 
 import { createMd5 } from "./md5";
 import { toInteger } from "./wav";

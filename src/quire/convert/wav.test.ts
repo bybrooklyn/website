@@ -1,5 +1,5 @@
 // What the WAV reader and writer are held to: a sound written at 16, 24 and 32 bits and as float reads
-// back within the step of its bits; 8 bit and 64 bit float files read; other codings, and a sound too big
+// back within the step of its bits; 8 bit and 64 bit float files read; other kinds of coding, and a sound too big
 // for WAV, refused in plain words; and in Chromium, the browser's own decodeAudioData reads what was
 // written, mono, stereo and six channels, giving the same integers (it scales positive 16 bit samples by
 // the largest integer and negative ones by the smallest, so they are turned back the same way).

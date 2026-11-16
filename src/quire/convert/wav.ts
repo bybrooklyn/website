@@ -5,9 +5,9 @@
 // as Microsoft asks. Reading takes 8, 16, 24 and 32 bit PCM and 32 and 64 bit float, extensible or not,
 // and refuses any other coding in plain words.
 //
-//   const blocks = [wavSamples(left_and_right, 16)]; ...
-//   const file = new Blob([wavHeader({ sampleRate: 48000, channels: 2, bits: 16, frames }), ...blocks]);
-//   const { sampleRate, channels } = readWav(bytes);
+//   blocks = [wavSamples(left_and_right, 16)]; ...
+//   file = new Blob([wavHeader({ sampleRate: 48000, channels: 2, bits: 16, frames }), ...blocks]);
+//   { sampleRate, channels } = readWav(bytes);
 
 /** The most a WAV file can hold: its RIFF size is 32 bits. */
 export const WAV_MOST = 0xffffffff;
@@ -30,7 +30,7 @@ export function wavHeader(options: { sampleRate: number; channels: number; bits:
     const extensible = channels > 2 || bits === 24;
     const align = channels * (bits / 8);
     const data = frames * align;
-    // fmt is 16 bytes for PCM, 18 for float (with its fact chunk of 12), 40 for extensible
+    // the format chunk is 16 bytes for PCM, 18 for float (with its fact chunk of 12), 40 for extensible
     const fmt = extensible ? 40 : float ? 18 : 16;
     const fact = float && !extensible ? 12 : 0;
     const head = 12 + 8 + fmt + fact + 8;
