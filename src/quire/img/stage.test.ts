@@ -278,3 +278,21 @@ test("a picture made another size is fitted and centered again, as one opened is
         expect(await settledPlace()).toBe(await fittedPlace());
     }
 }, 60_000);
+
+test("Escape while typing a text keeps what was typed and leaves the typing, as a press elsewhere does; an empty text is still let go", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await page.tab.press("t");
+    const at = await page.onScreen(300, 400);
+    await page.tab.click(at.x, at.y);
+    await page.tab.type("Look here");
+    await page.tab.press("Escape");
+    const steps = await page.tab.run<{ type: string; text?: string }[]>("window.app.editing().steps()");
+    expect(steps.map((step) => [step.type, step.text])).toEqual([["text", "Look here"]]);
+    expect(await page.tab.run("document.activeElement === document.querySelector('.quire-img-stage')")).toBe(true);
+    // pressed where nothing is, Escape with nothing typed makes nothing
+    const empty = await page.onScreen(800, 600);
+    await page.tab.click(empty.x, empty.y);
+    await page.tab.press("Escape");
+    expect((await page.tab.run<unknown[]>("window.app.editing().steps()")).length).toBe(1);
+}, 30_000);

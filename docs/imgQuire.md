@@ -114,7 +114,7 @@ opened is: it is drawn first where the old one lay, at the same size on the scre
 again for the next. The covers are painted into each piece of the original before anything is sampled,
 so nothing they hide reaches the result through any resize; tests check the bytes.
 
-**Mark.** A (arrow), B (box), T (text, typed where pressed, Enter to keep): six colors and three
+**Mark.** A (arrow), B (box), T (text, typed where pressed, Enter to keep, and Escape or a press elsewhere keeps it too): six colors and three
 thicknesses in the strip, which also change a picked mark. Every mark, and every cover, is picked by a
 press and moved by a drag or the arrows, and removed with Delete.
 

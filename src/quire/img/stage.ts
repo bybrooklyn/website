@@ -1547,13 +1547,9 @@ export function createStage(hooks: StageHooks) {
         hooks.change(next);
     }
     writing.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && !event.shiftKey) {
+        // Escape leaves the typing as a press elsewhere does, keeping what was typed: words are never thrown away by a key
+        if ((event.key === "Enter" && !event.shiftKey) || event.key === "Escape") {
             event.preventDefault();
-            keepWriting();
-            element.focus({ preventScroll: true });
-        } else if (event.key === "Escape") {
-            event.preventDefault();
-            writing.value = "";
             keepWriting();
             element.focus({ preventScroll: true });
         }
