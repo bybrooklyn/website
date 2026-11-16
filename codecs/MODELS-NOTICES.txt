@@ -1,0 +1,24 @@
+
+
+================ Models imgQuire offers to repair and enlarge pictures ================
+
+These are not in this folder and are never served by this site. When they are chosen, the visitor's browser
+downloads each from Hugging Face at the commit named here and keeps it in its own storage.
+
+Better, for repairing a JPEG: SCUNet (real-world, PSNR) by Kai Zhang, Yawei Li, Jingyun Liang, Jiezhang Cao,
+Yulun Zhang, Hao Tang, Deng-Ping Fan, Radu Timofte and Luc Van Gool, from https://github.com/cszn/SCUNet,
+licensed under the Apache License 2.0 there. Converted to ONNX at half precision by colpona:
+https://huggingface.co/colpona/dejpeg-models, commit 3cc3250ce83e61bffdc1c6ffcfb27161951f5e9f,
+scunet/scunet_color_real_psnr_fp16.onnx (that repository is tagged Apache-2.0 as a whole).
+
+Best, for repairing a JPEG: FBCNN (colour) by Jiaxi Jiang, Kai Zhang and Radu Timofte, from
+https://github.com/jiaxi-jiang/FBCNN, licensed under the Apache License 2.0 there. Converted to ONNX at half
+precision by colpona: https://huggingface.co/colpona/dejpeg-models, commit
+3cc3250ce83e61bffdc1c6ffcfb27161951f5e9f, fbcnn/fbcnn_color_fp16.onnx.
+
+Sharp, for enlarging: Swin2SR (lightweight, twice as large) by Marcos V. Conde, Ui-Jin Choi, Maxime Burchi and
+Radu Timofte, from https://github.com/mv-lab/swin2sr, licensed under the Apache License 2.0 there. Converted to
+ONNX by Xenova: https://huggingface.co/Xenova/swin2SR-lightweight-x2-64, commit
+92a21aca5713f20faf9a87590cdfbdce2e34112c, onnx/model_fp16.onnx (tagged Apache-2.0).
+
+The Apache License 2.0 is at https://www.apache.org/licenses/LICENSE-2.0.
