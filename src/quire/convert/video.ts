@@ -314,5 +314,5 @@ export async function convertFilm(file: Blob, choice: FilmChoice, signal: AbortS
     const blob = writer.end();
     told(1);
     const soundWords = soundPlan.kind === "carry" ? `${codecLabel(soundPlan.out.codec)} sound carried over` : soundPlan.kind === "encode" ? `${codecLabel(soundPlan.codec)} sound` : "no sound";
-    return { blob, facts: `${picture.width} × ${picture.height}${size.width !== picture.width || size.height !== picture.height ? ` to ${size.width} × ${size.height}` : ""}, ${Math.round(bitrate / 100_000) / 10} Mbps, ${soundWords}`, notes };
+    return { blob, facts: `${size.width} × ${size.height}, ${Math.round(bitrate / 100_000) / 10} Mbps, ${soundWords}`, notes };
 }

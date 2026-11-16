@@ -66,7 +66,7 @@ export function audioSide(): Side {
             const notes: string[] = [];
             const came = facts.get(item.file);
             if (came?.channels && came.channels > 2 && buffer.numberOfChannels === 2 && !now.channels) notes.push(`Mixed from ${came.channels} channels to stereo, as ${format.label} is written here with two at most.`);
-            return { blob, facts: `${rateSaid(buffer.sampleRate)} ${channelsSaid(buffer.numberOfChannels)}, ${timeSaid(buffer.duration)}`, notes };
+            return { blob, became: `${format.label}, ${rateSaid(buffer.sampleRate)} ${channelsSaid(buffer.numberOfChannels)}, ${timeSaid(buffer.duration)}`, notes };
         },
     };
     const changed = () => side.changed?.();

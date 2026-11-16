@@ -147,8 +147,10 @@ export type Becoming = { label: string; ending: string } | { cannot: string };
 /** What a conversion made: the bytes, and what to say about it. */
 export interface Made {
     blob: Blob;
-    /** What changed, in a few words: "4032 × 3024 to 2048 × 1536", "48 kHz stereo, 3:25". */
+    /** What changed in the file's own size, in a few words, put after what it is: "4032 × 3024 to 2048 × 1536". */
     facts?: string;
+    /** What it became, in a few words, put in place of what it was to become: "Opus in Ogg, 48 kHz stereo, 3:25". */
+    became?: string;
     notes: string[];
     /** The text made, for text and data, so that it can be copied. */
     text?: string;

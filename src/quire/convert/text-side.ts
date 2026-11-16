@@ -70,7 +70,7 @@ export function textSide(markdown?: MarkdownEngine): Side {
                 const made = convertText(text, from, to, { ...options, ...(item.options as DataOptions), title: stemOf(item.name) }, markdown);
                 told(1);
                 const lines = made.text.split("\n").length;
-                return { blob: new Blob([made.text], { type: `${made.type};charset=utf-8` }), text: made.text, notes: made.notes, facts: `${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"}` };
+                return { blob: new Blob([made.text], { type: `${made.type};charset=utf-8` }), text: made.text, notes: made.notes, became: `${TEXT_FORMATS[to].label}, ${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"}` };
             } catch (error) {
                 if (error instanceof DataError && error.offer) throw new Offered(error.message, { label: error.offer.words, options: optionsFor(error.offer) });
                 throw error;

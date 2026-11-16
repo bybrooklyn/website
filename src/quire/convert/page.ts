@@ -239,7 +239,7 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
         else if (state === "cannot") state = "ready";
         row.state = state;
         row.element.dataset.state = state;
-        if (state !== "done") row.becomes.textContent = "cannot" in becoming ? "" : `to ${becoming.label}`;
+        if (state !== "done" && state !== "stopped" && state !== "failed") row.becomes.textContent = "cannot" in becoming ? "" : `to ${becoming.label}`;
         if (state === "cannot" && "cannot" in becoming) showNotes(row, [becoming.cannot]);
         else if (state === "ready") showNotes(row, []);
         row.status.textContent = words ?? STATE_WORDS[state];
@@ -306,6 +306,7 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
                 setShare(row, 1);
                 row.sizes.textContent = `${sizeSaid(row.item.file.size)} to ${sizeSaid(made.blob.size)}, ${changeSaid(row.item.file.size, made.blob.size)}`;
                 if (made.facts) row.what.textContent = `${row.item.found.label}, ${made.facts}`;
+                if (made.became) row.becomes.textContent = `to ${made.became}`;
                 setState(row, "done");
                 row.status.textContent = name;
                 row.status.title = `Leaves as ${name}`;

@@ -53,8 +53,9 @@ export function videoSide(): Side {
         },
         async run(item: Item, signal, told): Promise<Made> {
             told(0, "Reading");
+            const format = FILM_FORMATS.find((each) => each.key === key)!;
             const done = await convertFilm(item.file, { ...choice }, signal, told);
-            return { blob: done.blob, facts: done.facts, notes: done.notes };
+            return { blob: done.blob, became: `${format.label}, ${done.facts}`, notes: done.notes };
         },
     };
     const changed = () => side.changed?.();

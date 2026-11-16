@@ -1,9 +1,13 @@
 // What the converter's page is held to: its right-click menu and the line under the list; and in
-// Chromium with imgQuire's real encoders (served from the site's own files), pictures dropped, chosen,
-// pasted and pasted from the menu each become a row, convert a few at a time to the format and size
-// chosen with their own names and a number for a second of one name, a picture stopped stays stopped,
-// a file of no kind the converter knows says so, one result saves alone, all leave as one zip that
-// reads back, and nothing is fetched but the page's own files.
+// Chromium, with imgQuire's real encoders served from the site's own files: pictures dropped, pasted and
+// pasted from the menu each become a row and convert a few at a time to the format and size chosen, with
+// their own names and a number for a second of one name; a phone's HEIC photograph is read; a picture
+// stopped stays stopped; a file of no kind the converter knows says so; one result saves alone and all
+// leave as one zip that reads back; nothing is fetched but the page's own files. Text pasted and dropped
+// converts both ways, a shape one format cannot carry is refused with an offer that works, and a result
+// is copied. A sound says its rate and length and converts to FLAC and Opus, and what this browser cannot
+// write is said beside the choice. A film says what it holds, converts smaller with a bar that only rises,
+// and can be stopped.
 
 import { expect, test } from "bun:test";
 import type { Browser } from "../../../scripts/browser";
@@ -202,16 +206,24 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         const inside = await readZip(new Uint8Array(zip));
         expect([...inside.keys()]).toEqual(["photo.webp", "photo (1).webp", "screenshot.webp", "Pasted picture.webp"]);
         for (const bytes of inside.values()) expect(new TextDecoder().decode(bytes.subarray(8, 12))).toBe("WEBP");
+        // a phone's HEIC photograph, read by imgQuire's HEIC reader
+        const heic = Buffer.from(await Bun.file(`${import.meta.dir}/../img/fixture.heic`).arrayBuffer()).toString("base64");
+        await tab.run(`window.convert.add(new File([Uint8Array.from(atob("${heic}"), (c) => c.charCodeAt(0))], "IMG_0001.HEIC"), "IMG_0001.HEIC")`);
+        await until("window.convert.rows().length === 6 && window.convert.rows()[5].label === 'HEIC picture'");
+        await pressText("Convert");
+        await until("window.convert.rows()[5].state === 'done'");
+        expect(await tab.run("window.convert.rows()[5].made.name")).toBe("IMG_0001.webp");
+        expect(await tab.run("window.convert.rows()[5].made.facts")).toBe("96 × 64");
         // a large picture as AVIF, stopped while it is written, stays stopped
         await pressText("AVIF");
         await tab.run("(async () => window.convert.add(await window.picture(3000, 2000, 'big.png'), 'big.png'))()");
-        await until("window.convert.rows().length === 6");
+        await until("window.convert.rows().length === 7");
         await pressText("Convert");
-        await until("window.convert.rows()[5].state === 'running'");
+        await until("window.convert.rows()[6].state === 'running'");
         await tab.run("document.querySelector('.quire-convert-row:last-child .quire-convert-row-main').click()");
-        expect(await tab.run<string>("window.convert.rows()[5].state")).toBe("stopped");
+        expect(await tab.run<string>("window.convert.rows()[6].state")).toBe("stopped");
         await tab.wait(1500);
-        expect(await tab.run<string>("window.convert.rows()[5].state")).toBe("stopped");
+        expect(await tab.run<string>("window.convert.rows()[6].state")).toBe("stopped");
         // nothing was fetched but the page's own encoder files and worker
         const away = tab.requests.filter((request) => !/^http:\/\/localhost:\d+\/(quire\/codecs\/[a-z]+\.wasm|codec-run\.ts|page\.html)?$/.test(request.url) && !request.url.startsWith("blob:") && !request.url.startsWith("data:"));
         expect(away).toEqual([]);
@@ -308,14 +320,14 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
         await pressText("Convert");
         await until("window.convert.rows()[0].state === 'done'");
         expect(await tab.run("window.convert.rows()[0].made.name")).toBe("tone.flac");
-        expect(await tab.run("window.convert.rows()[0].made.facts")).toBe("44.1 kHz stereo, 0:02");
+        expect(await tab.run("window.convert.rows()[0].made.became")).toBe("FLAC, 44.1 kHz stereo, 0:02");
         await pressText("Opus Ogg");
-        expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to FLAC");
+        expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to FLAC, 44.1 kHz stereo, 0:02");
         await tab.run("(() => { const row = document.querySelector('.quire-convert-row'); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
         await until("document.querySelector('.quire-menu:popover-open')");
         await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
         await until("window.convert.rows()[0].state === 'done' && window.convert.rows()[0].made.name === 'tone.opus'");
-        expect(await tab.run("window.convert.rows()[0].made.facts")).toBe("48 kHz stereo, 0:02");
+        expect(await tab.run("window.convert.rows()[0].made.became")).toBe("Opus in Ogg, 48 kHz stereo, 0:02");
         expect(tab.errors).toEqual([]);
     } finally {
         await page.close();
@@ -345,9 +357,9 @@ test("in Chromium, a film dropped says what it holds, converts to WebM smaller a
         const shares = await tab.run<number[]>("window.shares");
         expect(shares.every((share, index) => index === 0 || share >= shares[index - 1]!)).toBe(true);
         expect(shares.at(-1)).toBe(100);
-        const row = await tab.run<{ made: { name: string; facts: string } }>("window.convert.rows()[0]");
+        const row = await tab.run<{ made: { name: string; became: string } }>("window.convert.rows()[0]");
         expect(row.made.name).toBe("holiday.webm");
-        expect(row.made.facts).toBe("320 × 240, 0.5 Mbps, Opus sound carried over");
+        expect(row.made.became).toBe("WebM VP9, 320 × 240, 0.5 Mbps, Opus sound carried over");
         // a longer film stopped while it runs stays stopped, and can be tried again
         await tab.run(`(async () => window.convert.add(await window.filmOf(12), "long.mp4"))()`);
         await until("window.convert.rows().length === 2 && window.convert.rows()[1].label.startsWith('MP4 film')");
