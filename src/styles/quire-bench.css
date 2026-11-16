@@ -1,0 +1,225 @@
+/* The box every small tool's page is built from (src/quire/core/bench.ts: the cut-out, the QR codes, the
+   converter), drawn as a mini is: one box with a rule round it, the work on the left with one line under
+   it, and a column of controls on the right, written the way the Walker's column is (minis.css): a small
+   heading for each group, round dots for a choice of one, words in the accent to press, thin rules
+   between, and no boxed buttons. What is a tool's own (its work, and anything only it has) is in that
+   tool's stylesheet. The dialog and the menus are the editor's own (quire.css). */
+
+/* the editor's own things on a tool's page (its dialog and menus) are given the two sizes its buttons
+   are drawn with, which the editor's pages set on their body */
+.quire-dialog,
+.quire-menu,
+.quire-bench {
+    --press: 2.1rem;
+    --inset: 0.5rem;
+}
+
+.quire-bench-host {
+    margin-bottom: var(--line);
+}
+
+/* the box takes the page's whole width, the room a post keeps for its contents list included, so the work has it */
+.post > .quire-bench-host {
+    grid-column: 1 / -1;
+}
+
+.quire-bench {
+    /* how tall the work's room is: what a window has left under the page's name and its line, so the whole box and the line under the
+       work are in the first screen */
+    --tall: clamp(18rem, calc(100svh - 27rem), 36rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--ground);
+    font-family: var(--font-text);
+    font-size: 1rem;
+}
+
+.quire-bench-work {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* one line under the work, in the small type a mini's status has: what is being done while it is, and
+   what was done after, each in the other's place */
+.quire-bench-status {
+    display: grid;
+    min-height: 2.5rem;
+    padding: 0.65rem 1rem;
+    border-top: 0.0625rem solid var(--rule);
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.quire-bench-status > p {
+    grid-area: 1 / 1;
+    margin: 0;
+    color: var(--muted);
+    transition: opacity 0.2s ease;
+}
+
+.quire-bench.busy .quire-bench-said {
+    opacity: 0;
+}
+
+.quire-bench-working {
+    opacity: 0;
+}
+
+.quire-bench-working.shown {
+    opacity: 1;
+    animation: quire-bench-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes quire-bench-breathe {
+    50% {
+        color: var(--ink);
+    }
+}
+
+/* ---- the column: groups under small headings, a thin rule between them ---- */
+.quire-bench-side {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    border-left: 0.0625rem solid var(--rule);
+}
+
+.quire-bench-group {
+    transition: opacity 0.25s ease;
+}
+
+.quire-bench-group + .quire-bench-group {
+    margin-top: 0.85rem;
+    padding-top: 0.8rem;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+/* what has nothing to act on yet is there, and faint */
+.quire-bench-side [inert] {
+    opacity: 0.4;
+}
+
+.quire-bench-heading {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    color: var(--ink);
+}
+
+/* a second row of a group (a row of dots under another) keeps a step from the one over it */
+.quire-bench-choices + .quire-bench-choices {
+    margin-top: 0.45rem;
+}
+
+.quire-bench-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.85rem;
+}
+
+.quire-bench-choices label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.quire-bench-choices input {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* a thing to press is a word in the accent, underlined as a link is (as in a mini's panel) */
+.quire-bench-press {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    text-align: start;
+    text-decoration: underline 0.06em color-mix(in oklch, var(--accent) 45%, transparent);
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+    transition:
+        color 0.15s ease,
+        text-decoration-color 0.15s ease,
+        opacity 0.2s ease,
+        scale 0.2s var(--ease);
+}
+
+.quire-bench-press:hover:not(:disabled) {
+    text-decoration-color: var(--accent);
+}
+
+.quire-bench-press:active:not(:disabled) {
+    scale: 0.96;
+}
+
+/* two side by side are a clear step apart, so that they read as two */
+.quire-bench-press + .quire-bench-press {
+    margin-inline-start: 1.1rem;
+}
+
+/* the lesser ones are quiet until pointed at */
+.quire-bench-press.quiet {
+    color: var(--muted);
+    text-decoration-color: transparent;
+}
+
+.quire-bench-press.quiet:hover:not(:disabled) {
+    color: var(--ink);
+    text-decoration-color: var(--muted);
+}
+
+.quire-bench-press:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* words that stand one under another, each on its own line */
+.quire-bench-stack {
+    display: grid;
+    justify-items: start;
+    gap: 0.35rem;
+}
+
+.quire-bench-stack > .quire-bench-press {
+    margin-inline-start: 0;
+}
+
+/* a narrow window: the column goes under the work, its rule across the top */
+@media (max-width: 44rem) {
+    .quire-bench {
+        --tall: clamp(14rem, 50svh, 26rem);
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .quire-bench-side {
+        border-top: 0.0625rem solid var(--rule);
+        border-left: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-bench-working.shown {
+        animation: none;
+    }
+
+    .quire-bench-group,
+    .quire-bench-status > p {
+        transition: none;
+    }
+}

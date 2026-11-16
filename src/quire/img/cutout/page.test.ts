@@ -102,14 +102,14 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         expect(await menuLines()).toEqual(["pasteCtrl+V", "choose a picture"].map((each) => expect.stringContaining(each.replace("Ctrl+V", ""))) as unknown as string[]);
         await tab.press("Escape");
         // the column is there from the start, faint and out of reach until it has something to act on; its words are lowercase
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-heading')].map((each) => each.textContent)")).toEqual(["background", "touch up", "quality"]);
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-side label, .quire-cut-side .quire-cut-press')].map((each) => each.textContent)")).toEqual(["clear", "color", "blur", "keep", "remove", "quick", "best", "copy", "save", "hold to see the original", "choose another picture", "save all 0 as a zip", "save all into a folder", "stop"]);
-        expect(await tab.run<boolean[]>("[...document.querySelectorAll('.quire-cut-side > .quire-cut-group')].map((each) => each.inert || [...each.children].every((child) => child.inert))")).toEqual([true, true, true, true, true, true]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-heading')].map((each) => each.textContent)")).toEqual(["background", "touch up", "quality"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-side label, .quire-bench-side .quire-bench-press')].map((each) => each.textContent)")).toEqual(["clear", "color", "blur", "keep", "remove", "quick", "best", "copy", "save", "hold to see the original", "choose another picture", "save all 0 as a zip", "save all into a folder", "stop"]);
+        expect(await tab.run<boolean[]>("[...document.querySelectorAll('.quire-bench-side > .quire-bench-group')].map((each) => each.inert || [...each.children].every((child) => child.inert))")).toEqual([true, true, true, true, true, true]);
         // 1. a file chosen by a press on Choose a picture: the dialog first, nothing fetched until told
         const png = await tab.run<number[]>("window.scene(1200, 800, 'field.png').then(async (file) => [...new Uint8Array(await file.arrayBuffer())])");
         await Bun.write(`${folder}/field.png`, new Uint8Array(png));
         await tab.files([`${folder}/field.png`]);
-        const chooseAt = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-cut-empty .quire-cut-press').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()");
+        const chooseAt = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-cut-empty .quire-bench-press').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()");
         await tab.click(chooseAt.x, chooseAt.y);
         await until("document.querySelector('.quire-cut-dialog')");
         expect(await tab.run<string>("document.querySelector('.quire-cut-dialog').textContent")).toContain("the picture never leaves it");
@@ -136,19 +136,19 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await until("window.copied.length === 1");
         expect(await tab.run("window.copied[0]")).toEqual({ width: 1200, height: 800 });
         // Save: a PNG named from the file
-        await tab.run("[...document.querySelectorAll('.quire-cut-out .quire-cut-press')].find((each) => each.textContent === 'save').click()");
+        await tab.run("[...document.querySelectorAll('.quire-cut-out .quire-bench-press')].find((each) => each.textContent === 'save').click()");
         await until("window.downloads['field-cut-out.png'] > 1000");
         // with a cut-out the whole column is in reach, and the dots say what is on: clear behind it, no brush, quick
-        expect(await tab.run<boolean>("[...document.querySelectorAll('.quire-cut-side > .quire-cut-group:not(.quire-cut-all)')].some((each) => each.inert || [...each.children].some((child) => child.inert))")).toBe(false);
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-choices input:checked')].map((each) => each.value)")).toEqual(["clear", "cut-quick"]);
+        expect(await tab.run<boolean>("[...document.querySelectorAll('.quire-bench-side > .quire-bench-group:not(.quire-cut-all)')].some((each) => each.inert || [...each.children].some((child) => child.inert))")).toBe(false);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-choices input:checked')].map((each) => each.value)")).toEqual(["clear", "cut-quick"]);
         // best, whose model is not kept, asks for that one model alone; told not now, quick is still the quality and its dot is back
-        await tab.run("document.querySelector('.quire-cut-choices input[value=\"cut-best\"]').click()");
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"cut-best\"]').click()");
         await until("document.querySelector('.quire-cut-dialog')");
         expect(await tab.run("document.querySelectorAll('.quire-cut-dialog .quire-img-read-card').length")).toBe(0);
         expect(await tab.run<string>("document.querySelector('.quire-cut-dialog').textContent")).toContain("98 MB");
         await tab.run("document.querySelector('.quire-cut-dialog .quire-dialog-dismiss').click()");
         await until("!document.querySelector('.quire-cut-dialog')");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-choices input:checked')].map((each) => each.value)")).toEqual(["clear", "cut-quick"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-choices input:checked')].map((each) => each.value)")).toEqual(["clear", "cut-quick"]);
         expect(tab.requests.filter((each) => each.url.includes("birefnet"))).toEqual([]);
         // 2. a drop: cut with no dialog
         await tab.run("window.scene(1500, 1000, 'dropped.png').then((file) => { const data = new DataTransfer(); data.items.add(file); document.querySelector('.quire-cut-room').dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true })); })");
@@ -164,7 +164,7 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('paste')).click()");
         await until("window.seen()?.width === 1000", 60_000);
         // Keep painted on the ground brings it back
-        await tab.run("document.querySelector('.quire-cut-choices input[value=\"keep\"]').click()");
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"keep\"]').click()");
         expect(await tab.run("document.querySelector('.quire-cut-view').dataset.brush")).toBe("keep");
         const box = await tab.run<{ x: number; y: number; width: number; height: number }>("(() => { const b = document.querySelector('.quire-cut-canvas').getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; })()");
         await tab.drag({ x: box.x + box.width * 0.07, y: box.y + box.height * 0.12 }, { x: box.x + box.width * 0.1, y: box.y + box.height * 0.13 }, 6);
@@ -173,16 +173,16 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         // a stroke of the brush is drawn at once, with no fade
         expect(await tab.run("!!document.querySelector('.quire-cut-leaving')")).toBe(false);
         // the brush pressed again is put down, and its dot is empty
-        await tab.run("document.querySelector('.quire-cut-choices input[value=\"keep\"]').click()");
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"keep\"]').click()");
         expect(await tab.run("document.querySelector('.quire-cut-view').dataset.brush")).toBe("");
-        expect(await tab.run("document.querySelector('.quire-cut-choices input[value=\"keep\"]').checked")).toBe(false);
+        expect(await tab.run("document.querySelector('.quire-bench-choices input[value=\"keep\"]').checked")).toBe(false);
         // a color behind it, then the old picture blurred: nothing clear is left
-        await tab.run("document.querySelector('.quire-cut-choices input[value=\"color\"]').click()");
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"color\"]').click()");
         await until("window.seen() && window.seen().head[3] === 255 && window.cutout.cut().background === 'color'");
         seen = await tab.run("window.seen()");
-        await tab.run("document.querySelector('.quire-cut-choices input[value=\"blur\"]').click()");
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"blur\"]').click()");
         await until("window.cutout.cut()?.background === 'blur'");
-        await tab.run("document.querySelector('.quire-cut-choices input[value=\"clear\"]').click()");
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"clear\"]').click()");
         // many pictures at once: a strip of small pictures, each cut out in turn, and all saved as one zip under their own names
         await tab.run("Promise.all([window.scene(800, 600, 'walk.png'), window.scene(600, 800, 'walk.jpg'), window.scene(700, 500, 'shore.png')]).then((files) => { const data = new DataTransfer(); for (const file of files) data.items.add(file); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })");
         await until("window.cutout.many().count === 3 && window.cutout.many().cut === 3", 120_000);

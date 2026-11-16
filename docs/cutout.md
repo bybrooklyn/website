@@ -17,7 +17,9 @@ its working name.
 - `asking.ts`: the first-use dialog (the qualities as cards in one step, fetched only when told), a quality
   taken by name, and the dialog for the model that picks a subject by a press.
 - `page.ts`: the page, one picture or many; `src/pages/cutout.astro`, `src/scripts/cutout.ts` (the site's
-  colors offered), `src/styles/quire-cutout.css`. Many pictures use imgQuire's batch pieces: the strip
+  colors offered), `src/styles/quire-cutout.css`. Its box, its column of controls and the line under the
+  picture are the parts every small tool is built from (`src/quire/core/bench.ts`, `quire-bench.css`), so that
+  the tools are one design. Many pictures use imgQuire's batch pieces: the strip
   (`batch-strip.ts`), the names and the zip or folder (`batch.ts`, `batch-out.ts`) and the small copies
   (`thumbs.ts`).
 - The models run in the part models' worker (`parts/finder.ts`), pinned in `parts/models.ts`
