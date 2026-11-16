@@ -46,11 +46,11 @@ test("fitting the width fills the room, never past twice or below a quarter, and
 
 test("page setup offers the three papers, both orientations and three margins with their sizes, each on when it is what the page has, and says only what changes", () => {
     const groups = setupChoices({ size: "Letter", orientation: "landscape", margins: 25 });
-    expect(groups.map((group) => group.label)).toEqual(["Paper", "Orientation", "Margins"]);
-    expect(groups.flatMap((group) => group.choices.filter((choice) => choice.on).map((choice) => choice.label))).toEqual(["Letter", "Landscape", "Normal"]);
-    expect(groups[2]!.choices.map((choice) => `${choice.label} ${choice.note}`)).toEqual(["Narrow 12.7 mm", "Normal 25 mm", "Wide 38 mm"]);
+    expect(groups.map((group) => group.label)).toEqual(["paper", "orientation", "margins"]);
+    expect(groups.flatMap((group) => group.choices.filter((choice) => choice.on).map((choice) => choice.label))).toEqual(["letter", "landscape", "normal"]);
+    expect(groups[2]!.choices.map((choice) => `${choice.label} ${choice.note}`)).toEqual(["narrow 12.7 mm", "normal 25 mm", "wide 38 mm"]);
     expect(groups[0]!.choices.find((choice) => choice.label === "A5")!.change).toEqual({ size: "A5" });
-    expect(groups[2]!.choices.find((choice) => choice.label === "Narrow")!.change).toEqual({ margins: 12.7 });
+    expect(groups[2]!.choices.find((choice) => choice.label === "narrow")!.change).toEqual({ margins: 12.7 });
 });
 
 test("print is given the header, footer and page number in the page's margin boxes, quoted safely", () => {

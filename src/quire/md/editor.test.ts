@@ -1278,7 +1278,7 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     await tab.type("My book");
     await tab.press("Tab");
     await tab.type("Draft");
-    await press("dialog.quire-dialog[open] .quire-switch", "Page numbers");
+    await press("dialog.quire-dialog[open] .quire-switch", "page numbers");
     expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-switch').getAttribute('aria-pressed')")).toBe("true");
     expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBeUndefined();
     // Enter in a field answers it, as OK does
@@ -2009,8 +2009,8 @@ used("page setup, from File, gives a .quire document's sheet its paper, way up a
     // a dialog: the choices are rows of buttons, and nothing changes until OK
     expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title')?.textContent")).toBe("Page setup");
     await press("dialog.quire-dialog[open] .quire-setup-choice", "A5");
-    await press("dialog.quire-dialog[open] .quire-setup-choice", "Landscape");
-    expect(await tab.run("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-setup-choice[aria-checked=true]')].map((each) => each.firstChild.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "landscape");
+    expect(await tab.run("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-setup-choice[aria-checked=true]')].map((each) => each.firstChild.textContent)")).toEqual(["A5", "landscape", "normal"]);
     expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
     await press("dialog.quire-dialog[open] button", "OK");
     await tab.wait(400);
@@ -2026,7 +2026,7 @@ used("page setup, from File, gives a .quire document's sheet its paper, way up a
     // Cancel, or Escape, leaves the page as it was
     await menuLine("File", "Page setup");
     await tab.wait(650);
-    await press("dialog.quire-dialog[open] .quire-setup-choice", "Letter");
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "letter");
     await tab.press("Escape");
     await tab.wait(400);
     expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");

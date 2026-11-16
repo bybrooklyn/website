@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withoutSpeech } from "../../../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../../../scripts/browser";
+import { settingLabel } from "./view";
 
 const here = import.meta.dir;
 const root = `${here}/../../../..`;
@@ -147,6 +148,12 @@ async function clickWord(words: string, nth = 0) {
 }
 
 const TEXT = "Teh cat sat on teh mat. It was the the best.\n\nA [link](#nowhere) here.\n";
+
+test("the settings name each rule in lowercase, names and the X and Y of a framing keeping their capitals", () => {
+    expect(settingLabel("Words not in the dictionary")).toBe("words not in the dictionary");
+    expect(settingLabel("A \"not X, but Y\" framing")).toBe("a \"not X, but Y\" framing");
+    expect(settingLabel("Markdown tidiness")).toBe("Markdown tidiness");
+});
 
 used("a writer who never set checking sees misspellings underlined from the first document, in American, and nothing else", async () => {
     await tab.run(`q.reset(${JSON.stringify(TEXT + "\nThe colour of it.\n")})`);
@@ -286,7 +293,7 @@ used("Personal dictionary lists her words: one removed is marked again, and a te
     await tab.wait(500);
     const words = () => tab.run<string[]>("[...document.querySelectorAll('dialog.quire-own-dialog[open] .quire-own-text')].map((word) => word.textContent)");
     expect(await words()).toEqual(["Iroh"]);
-    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-own-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Download as text", "Add from a text file", "Done"]);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-own-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["download as text", "add from a text file", "done"]);
     await press("dialog.quire-own-dialog[open] .quire-own-remove");
     expect(await words()).toEqual([]);
     expect(await tab.run<string>("document.querySelector('dialog.quire-own-dialog[open] .quire-own-none').textContent")).toBe("No words yet. Right-click a word marked as misspelled and choose Add to dictionary.");
@@ -295,11 +302,11 @@ used("Personal dictionary lists her words: one removed is marked again, and a te
     // a file of words, one to a line, is added to the list
     await Bun.write(`${folder}/words.txt`, "wgpu\nIroh\n\nnot a word\n");
     await tab.files([`${folder}/words.txt`]);
-    await press("dialog.quire-own-dialog[open] .quire-dialog-actions button", "Add from a text file");
+    await press("dialog.quire-own-dialog[open] .quire-dialog-actions button", "add from a text file");
     await until("document.querySelectorAll('dialog.quire-own-dialog[open] .quire-own-text').length === 2");
     expect(await words()).toEqual(["Iroh", "wgpu"]);
     expect(await tab.run<string>("document.querySelector('dialog.quire-own-dialog[open] .quire-own-count').textContent")).toBe("2 words added.");
-    await press("dialog.quire-own-dialog[open] .quire-dialog-actions button", "Done");
+    await press("dialog.quire-own-dialog[open] .quire-dialog-actions button", "done");
     await until("!document.querySelector('dialog.quire-own-dialog[open]')");
     await until("q.marked().spelling === 1");
     await tab.files([]);
@@ -351,11 +358,11 @@ used("the settings switch a kind off, and it stays off", async () => {
     // the settings are a dialog
     await until("!!document.querySelector('dialog.quire-check-settings[open]')");
     await tab.wait(600);
-    await press("dialog.quire-check-settings[open] .quire-check-switch", "All of writing");
+    await press("dialog.quire-check-settings[open] .quire-check-switch", "all of writing");
     await until("q.marked().prose === 0");
     expect((await marked()).spelling).toBe(1);
     expect(await tab.run("JSON.parse(localStorage.getItem('quire-check')).settings.kinds.prose")).toBe(false);
-    await press("dialog.quire-check-settings[open] .quire-check-switch", "All of writing");
+    await press("dialog.quire-check-settings[open] .quire-check-switch", "all of writing");
     await until("q.marked().prose === 1");
     await tab.press("Escape");
     await until("!document.querySelector('dialog.quire-check-settings')");

@@ -24,9 +24,9 @@ export const PAPERS: Record<Page["size"], [number, number]> = {
 
 /** The margins offered, by name, in millimetres. */
 export const MARGINS: [string, number][] = [
-    ["Narrow", 12.7],
-    ["Normal", 25],
-    ["Wide", 38],
+    ["narrow", 12.7],
+    ["normal", 25],
+    ["wide", 38],
 ];
 
 /** A page's width and height in millimetres, turned for landscape. */
@@ -188,18 +188,18 @@ export interface SetupChoice {
     on: boolean;
 }
 
-/** Page setup's three groups, as its dialog shows them: the paper, its orientation and the margins, each choice on when it is what the page has. */
+/** Page setup's three groups, as its dialog shows them, in lowercase but for the papers A4 and A5, whose names are written so: the paper, its orientation and the margins, each choice on when it is what the page has. */
 export function setupChoices(page: Page): { label: string; choices: SetupChoice[] }[] {
     return [
-        { label: "Paper", choices: (Object.keys(PAPERS) as Page["size"][]).map((size) => ({ label: size, change: { size }, on: page.size === size })) },
+        { label: "paper", choices: (Object.keys(PAPERS) as Page["size"][]).map((size) => ({ label: size === "Letter" ? "letter" : size, change: { size }, on: page.size === size })) },
         {
-            label: "Orientation",
+            label: "orientation",
             choices: [
-                { label: "Portrait", change: { orientation: "portrait" }, on: page.orientation === "portrait" },
-                { label: "Landscape", change: { orientation: "landscape" }, on: page.orientation === "landscape" },
+                { label: "portrait", change: { orientation: "portrait" }, on: page.orientation === "portrait" },
+                { label: "landscape", change: { orientation: "landscape" }, on: page.orientation === "landscape" },
             ],
         },
-        { label: "Margins", choices: MARGINS.map(([label, margins]) => ({ label, note: `${margins} mm`, change: { margins }, on: Math.abs(page.margins - margins) < 0.5 })) },
+        { label: "margins", choices: MARGINS.map(([label, margins]) => ({ label, note: `${margins} mm`, change: { margins }, on: Math.abs(page.margins - margins) < 0.5 })) },
     ];
 }
 
