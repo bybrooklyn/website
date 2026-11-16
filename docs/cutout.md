@@ -16,8 +16,10 @@ its working name.
   the same on the processor.
 - `asking.ts`: the first-use dialog (the qualities as cards, fetched only when told) and the one for the
   model that picks a subject by a press.
-- `page.ts`: the page; `src/pages/cutout.astro`, `src/scripts/cutout.ts` (the site's colors offered),
-  `src/styles/quire-cutout.css`.
+- `page.ts`: the page, one picture or many; `src/pages/cutout.astro`, `src/scripts/cutout.ts` (the site's
+  colors offered), `src/styles/quire-cutout.css`. Many pictures use imgQuire's batch pieces: the strip
+  (`batch-strip.ts`), the names and the zip or folder (`batch.ts`, `batch-out.ts`) and the small copies
+  (`thumbs.ts`).
 - The models run in the part models' worker (`parts/finder.ts`), pinned in `parts/models.ts`
   (`CUT_TIERS`), fetched and kept as the text models are.
 
@@ -90,6 +92,21 @@ strip: Clear, the mark colors, Blur, Keep, Remove, the quality, Take away. Expor
 in PNG, WebP, AVIF and JPEG XL; with JPEG it says "JPEG has no transparency: what is clear comes out white."
 and offers Lay it on a color or Use PNG.
 
+**Many at once.** Several pictures pasted, dropped or chosen together sit in imgQuire's strip of small pictures
+under the one shown (`batch-strip.ts`, taking room of its own, the picture fitted into what is left). The first is
+cut out as one picture is; the rest are cut out one after another behind it, one model run at a time, each decoded
+only while it is cut and let go, its mask kept; the line under the bar says "Cutting out 3 of 12", then "All 12 cut
+out." A press on a small picture, Page Down and Page Up, or Home and End show another, which keeps its own mask,
+strokes and subject pressed; Clear, Color and Blur are the page's, for every picture, and a new quality cuts them all
+again. The bar gains Save all 12 as a zip and Save all into a folder (where the browser has `showDirectoryPicker`),
+with Stop while they are saved: each cut-out laid as the page lays them, as a PNG at full size with its colour
+profile, under its picture's own name with `.png` (the second of one name `photo (1).png`), never over a file in the
+folder, two at a time, by the same code as imgQuire's Export all (`batch-out.ts`, `batch.ts`). A small picture's
+right-click menu holds Save this one, Copy this one, Add pictures, Paste and Take out; one of many saved alone keeps
+its own name as in the zip. One picture alone works as it always has (`field-cut-out.png`). Measured with the real
+Quick model (`page.test.ts`): three pictures pasted at once were all cut out, Page Down showed the second, and Save
+all gave one zip of `walk.png`, `walk (1).png` and `shore.png`, each at its own full size.
+
 **Nothing leaves the browser.** The tests hold that the only requests are the page's own files, ONNX
 Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cutout/tool.test.ts`).
 
@@ -107,9 +124,7 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
 
 ## Open
 
-- Many pictures at once as a zip: not built. The page holds one picture and its cut-out; a batch wants a
-  list of pictures, a way to see and fix each, and an export of all, which is imgQuire's batch slice.
-- The page's words are hers to approve (listed in the report that built it).
+- The page's words are hers to approve (listed in the reports that built it, the batch's too).
 
 ## Known weak spots
 
@@ -135,6 +150,10 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
   over 8 of the mask's pixels, so a background that changes quickly behind fine hair can leave some of
   itself.
 - Saving uses the browser's PNG encoder (quick), not oxipng; the files are larger than they could be.
+- Many at once: the background a cut-out is laid on and the quality are the page's for every picture, not each
+  picture's; what is shown is held in this tab only, so leaving the page loses the masks and strokes; a picture
+  that cannot be cut out is said in its small picture's label and in the line under the bar, and left out of Save
+  all, which says how many could not be.
 - Tried in Chromium only; not on a real phone.
 
 ## How to run and test
