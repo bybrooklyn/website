@@ -15,7 +15,7 @@
 //
 //   createQrPage(host, { grounds: [{ name: "Violet", value: "#b48cff" }, ...] });
 
-import { bench, count, dots, group, pictured, row, slide, swatches, typed, word, type Swatch } from "../core/bench";
+import { bench, count, dots, group, lowered, pictured, row, slide, type Swatch, swatches, typed, word } from "../core/bench";
 import { flowMenu, make, RULE, still, type MenuItem } from "../core/ui";
 import { normalHex, FLAGS, isHex } from "./colors";
 import { contactText, describe, emailText, EMPTY_CONTACT, fileName, messageText, phoneText, wifiText, type Contact, type Kind, type Wifi } from "./content";
@@ -35,7 +35,7 @@ export interface PageOptions {
 /** The kinds, in the order they are offered, with their names and the key that picks each. */
 export const KINDS: { kind: Kind; label: string; key: string }[] = [
     { kind: "text", label: "link or text", key: "1" },
-    { kind: "wifi", label: "wi-fi", key: "2" },
+    { kind: "wifi", label: "Wi-Fi", key: "2" },
     { kind: "contact", label: "contact", key: "3" },
     { kind: "email", label: "email", key: "4" },
     { kind: "phone", label: "phone", key: "5" },
@@ -76,10 +76,10 @@ export const QR_WORDS = {
     margin: "margin",
     picture: "picture",
     level: "error correction",
-    sizes: "png size",
+    sizes: "PNG size",
     copy: "copy",
-    png: "save png",
-    svg: "save svg",
+    png: "save PNG",
+    svg: "save SVG",
     choose: "choose a picture",
     chooseAnother: "choose another picture",
     paste: "paste",
@@ -87,14 +87,14 @@ export const QR_WORDS = {
     copyOne: "copy",
 };
 
-/** The lines of the code's right-click menu, in lowercase as the page's own controls are: copy, save as svg, save as png, then paste a picture to read; with no code, only the last. */
+/** The lines of the code's right-click menu, each with a first capital as the lines of menus are: Copy, Save as SVG, Save as PNG, then Paste a picture to read; with no code, only the last. */
 export function qrMenuLines(state: { code: boolean }, run: { copy(): void; svg(): void; png(): void; paste(): void }): MenuItem[] {
-    const paste: MenuItem = { label: "paste a picture to read", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
+    const paste: MenuItem = { label: "Paste a picture to read", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
     if (!state.code) return [paste];
     return [
-        { label: "copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
-        { label: "save as svg", icon: "download", hint: "Ctrl+Shift+S", key: "svg", run: run.svg },
-        { label: "save as png", icon: "download", hint: "Ctrl+S", key: "png", run: run.png },
+        { label: "Copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
+        { label: "Save as SVG", icon: "download", hint: "Ctrl+Shift+S", key: "svg", run: run.svg },
+        { label: "Save as PNG", icon: "download", hint: "Ctrl+S", key: "png", run: run.png },
         RULE,
         paste,
     ];
@@ -288,8 +288,8 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         const security = dots<Wifi["security"]>(
             "security",
             [
-                { value: "WPA", text: "wpa" },
-                { value: "WEP", text: "wep" },
+                { value: "WPA", text: "WPA" },
+                { value: "WEP", text: "WEP" },
                 { value: "nopass", text: "none" },
             ],
             (value) => ((wifi = { ...wifi, security: value }), security.show(value), changed()),
@@ -773,13 +773,13 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
     /** What one code holds, as a group of the column: its kind for a heading, a row for each of its lines with copy beside it, then copy all and its facts. */
     function card(each: Found, index: number): HTMLElement {
         const said = describe(each.text);
-        const title = said.title.toLowerCase();
+        const title = lowered(said.title);
         const rows = said.lines.map((line) => {
             const value = make("span", said.link && line.value === said.link ? "quire-qr-value quire-qr-link" : "quire-qr-value", line.value);
-            const copyOne = word(QR_WORDS.copyOne, () => void copyText(line.value, `Copied the ${line.label.toLowerCase()}.`), true);
-            copyOne.title = `Copy the ${line.label.toLowerCase()}`;
-            copyOne.setAttribute("aria-label", `Copy the ${line.label.toLowerCase()}`);
-            const made = widely(line.label.toLowerCase(), value, copyOne);
+            const copyOne = word(QR_WORDS.copyOne, () => void copyText(line.value, `Copied the ${lowered(line.label)}.`), true);
+            copyOne.title = `Copy the ${lowered(line.label)}`;
+            copyOne.setAttribute("aria-label", `Copy the ${lowered(line.label)}`);
+            const made = widely(lowered(line.label), value, copyOne);
             made.classList.add("quire-qr-line");
             return made;
         });

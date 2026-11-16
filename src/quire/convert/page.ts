@@ -15,7 +15,7 @@
 //
 //   createConvertPage(host, [pictureSide(engine), textSide(markdown), audioSide(), videoSide()]);
 
-import { bench, stack, word } from "../core/bench";
+import { bench, raised, stack, word } from "../core/bench";
 import { flowMenu, make, RULE, type MenuItem } from "../core/ui";
 import { kindOf, type Found, type Kind } from "./kinds";
 import { changeSaid, outName, sizeSaid } from "./names";
@@ -53,19 +53,19 @@ export const STATE_WORDS: Record<RowState, string> = {
     cannot: "Cannot convert",
 };
 
-/** The lines of the list's right-click menu, in lowercase as the page's own words to press are: for a file, what can be done with it; then paste and choose files. */
+/** The lines of the list's right-click menu, each with a first capital as the lines of menus are: for a file, what can be done with it; then Paste and Choose files. */
 export function menuLines(row: { state: RowState; text: boolean } | undefined, run: { save(): void; copy(): void; stop(): void; again(): void; remove(): void; paste(): void; choose(): void }): MenuItem[] {
     const always: MenuItem[] = [
-        { label: WORDS.paste, icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste },
-        { label: WORDS.choose, icon: "file", hint: "Ctrl+O", key: "choose", run: run.choose },
+        { label: raised(WORDS.paste), icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste },
+        { label: raised(WORDS.choose), icon: "file", hint: "Ctrl+O", key: "choose", run: run.choose },
     ];
     if (!row) return always;
     const lines: MenuItem[] = [];
-    if (row.state === "done") lines.push({ label: ROW_WORDS.save, icon: "download", key: "save", run: run.save });
-    if (row.state === "done" && row.text) lines.push({ label: ROW_WORDS.copy, icon: "copy", key: "copy", run: run.copy });
-    if (row.state === "waiting" || row.state === "running") lines.push({ label: ROW_WORDS.stop, icon: "close", key: "stop", run: run.stop });
-    if (row.state === "done" || row.state === "stopped" || row.state === "failed") lines.push({ label: row.state === "done" ? "convert again" : ROW_WORDS.again, icon: "redo", key: "again", run: run.again });
-    lines.push({ label: "remove", icon: "trash", hint: "Delete", key: "remove", run: run.remove });
+    if (row.state === "done") lines.push({ label: raised(ROW_WORDS.save), icon: "download", key: "save", run: run.save });
+    if (row.state === "done" && row.text) lines.push({ label: raised(ROW_WORDS.copy), icon: "copy", key: "copy", run: run.copy });
+    if (row.state === "waiting" || row.state === "running") lines.push({ label: raised(ROW_WORDS.stop), icon: "close", key: "stop", run: run.stop });
+    if (row.state === "done" || row.state === "stopped" || row.state === "failed") lines.push({ label: row.state === "done" ? "Convert again" : raised(ROW_WORDS.again), icon: "redo", key: "again", run: run.again });
+    lines.push({ label: "Remove", icon: "trash", hint: "Delete", key: "remove", run: run.remove });
     return [...lines, RULE, ...always];
 }
 

@@ -33,7 +33,7 @@ version that holds it is used, then the level is raised while it still fits that
 scored by the standard's four rules (the light outside the code counts toward the finder-like rule) and the
 least is kept.
 
-**What goes in.** Six kinds, each a form that fills the code as it is typed: link or text; wi-fi
+**What goes in.** Six kinds, each a form that fills the code as it is typed: link or text; Wi-Fi
 (`WIFI:T:WPA;S:name;P:password;H:true;;`, with `\ ; , : "` escaped; no password makes it open); contact (a
 vCard 3.0 of only the lines filled in, CR LF, `\ , ;` and line breaks escaped); email (`mailto:` with subject
 and body percent-encoded, line breaks as CR LF); phone (`tel:` with only digits, a leading plus, `*` and
@@ -68,7 +68,7 @@ own color, the patterns whole. Either is given the highest level that fits the c
 halftone, at least 320 pixels), turned into pixels by the browser, and read by the reader; the page says
 "It reads back as written." or "It does not read back here, so phones may not read it either."
 
-**Out.** copy (a PNG on the clipboard), save png at 512, 1024, 2048 or 4096 pixels a side (png size), save svg
+**Out.** copy (a PNG on the clipboard), save PNG at 512, 1024, 2048 or 4096 pixels a side (PNG size), save SVG
 (pictures inside it as data, the text it holds as its title). Names: `qr-`, the kind, and a word or two of
 what it holds, in ASCII letters, digits and hyphens (`qr-link-example-com.png`, `qr-wifi-cafe-wi-fi.svg`).
 
@@ -94,17 +94,18 @@ what was found. The code and its line stay in view while the longer column scrol
 phone, the square a third of the height, the column scrolling under it). The column, written as the Walker's is:
 a small heading for each group, round dots for a choice of one, small pictures for a choice drawn as one (the
 kit's `pictured`: drawn quietly in the muted ink, the one chosen in the accent with a short rule under it),
-lines to type on, words in the accent to press, thin rules between, no boxed buttons, every label in lowercase.
-The groups are make or read; what it holds (link or text, wi-fi, contact, email, phone, message, and the lines
+lines to type on, words in the accent to press, thin rules between, no boxed buttons, every label in lowercase,
+names keeping their capitals (PNG, SVG, Wi-Fi, WPA).
+The groups are make or read; what it holds (link or text, Wi-Fi, contact, email, phone, message, and the lines
 of the one chosen under it); shape; corners; color (one color, gradient, rainbow, flag, with the colors, from and
 to and the direction, or the flags under it); ground (white, the site's colors, clear, and a line for hex
 digits); margin (less and more, in modules); picture (none, in the middle, as the code, then choose a picture,
-its size or how it shows); error correction (low, medium, high, highest); png size; then copy, save png and save
-svg at the foot. What acts on a code is there from the start and faint until there is one. Read in place of make
+its size or how it shows); error correction (low, medium, high, highest); PNG size; then copy, save PNG and save
+SVG at the foot. What acts on a code is there from the start and faint until there is one. Read in place of make
 has choose a picture (and on a phone, where there is no right-click and no keys, a plain paste), then each code
 found as a group of its own, its kind for a heading, a row for each line with copy beside it, copy all, and its
 version and error correction. Parts grow open and shut, make and read fade one into the other while the
-column's room goes to the height of the one shown; the menu is the suite's, in lowercase, and grows from where
+column's room goes to the height of the one shown; the menu is the suite's, each line with a first capital as menus have, and grows from where
 it was pressed. Before 16 November 2026 the page stood under the editor's top line with boxed buttons, boxed
 fields and capitalized labels; the owner found the small tools unlike each other and unlike the rest of the
 site, and chose this frame, the column, lowercase and the same words under headings, as the cut-out has.

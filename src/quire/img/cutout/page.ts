@@ -10,7 +10,8 @@
 // arriving is shown at once with a line under it saying it is being cut out; the first time, the
 // quality is asked for and fetched only when she says so. A press on the picture keeps the thing
 // pressed when there are several; the backslash held shows the picture as it came. A right-click opens
-// a menu of the same (Shift leaves the browser's). Many pictures at once sit in a strip of small
+// a menu of the same, its lines with a first capital as menus have them (Shift leaves the browser's).
+// Many pictures at once sit in a strip of small
 // pictures under the one shown (batch-strip.ts), each cut out in turn behind it, and are saved together
 // as one zip or into a folder under their own names, by the same code as imgQuire's Export all
 // (batch-out.ts). Nothing leaves the browser: the only requests are for the page, ONNX Runtime and the
@@ -74,17 +75,17 @@ export function cutName(name: string | undefined): string {
     return `${stem}-cut-out.png`;
 }
 
-/** The lines of the right-click menu, in lowercase as the page's own controls are: paste and choose a picture with nothing shown; copy, save and paste, then keep and remove, with a cut-out. */
+/** The lines of the right-click menu, each with a first capital as the lines of menus are: Paste and Choose a picture with nothing shown; Copy, Save and Paste, then Keep and Remove, with a cut-out. */
 export function cutMenuLines(state: { cut: boolean; brush?: "keep" | "remove" }, run: { copy(): void; save(): void; paste(): void; choose(): void; brush(which: "keep" | "remove"): void }): MenuItem[] {
-    const paste: MenuItem = { label: "paste", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
-    if (!state.cut) return [paste, { label: "choose a picture", icon: "image", key: "choose", run: run.choose }];
+    const paste: MenuItem = { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
+    if (!state.cut) return [paste, { label: "Choose a picture", icon: "image", key: "choose", run: run.choose }];
     return [
-        { label: "copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
-        { label: "save", icon: "download", hint: "Ctrl+S", key: "save", run: run.save },
+        { label: "Copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
+        { label: "Save", icon: "download", hint: "Ctrl+S", key: "save", run: run.save },
         paste,
         RULE,
-        { label: "keep", icon: "pen", key: "keep", pressed: state.brush === "keep", run: () => run.brush("keep") },
-        { label: "remove", icon: "clear", key: "remove", pressed: state.brush === "remove", run: () => run.brush("remove") },
+        { label: "Keep", icon: "pen", key: "keep", pressed: state.brush === "keep", run: () => run.brush("keep") },
+        { label: "Remove", icon: "clear", key: "remove", pressed: state.brush === "remove", run: () => run.brush("remove") },
     ];
 }
 
@@ -598,10 +599,10 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         Object.assign(entryAnchor.style, { left: `${x}px`, top: `${y}px`, height: "0px" });
         if (!entryAnchor.isConnected) document.body.append(entryAnchor);
         const adding: MenuItem[] = [
-            { label: "add pictures", icon: "plus", key: "add-pictures", run: () => ((addingByChooser = true), chooser.click()) },
-            { label: "paste", icon: "paste", hint: "Ctrl+V", key: "paste-into", run: () => void pasteInto() },
+            { label: "Add pictures", icon: "plus", key: "add-pictures", run: () => ((addingByChooser = true), chooser.click()) },
+            { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste-into", run: () => void pasteInto() },
         ];
-        const lines = index < 0 ? adding : ruled([{ label: "save this one", icon: "download", key: "save-one", run: () => void showEntry(index).then(() => save()) }, { label: "copy this one", icon: "copy", key: "copy-one", run: () => void showEntry(index).then(() => copy()) }], adding, [{ label: "take out", icon: "trash", key: "take-out", disabled: !!saving, run: () => void takeOut(index) }]);
+        const lines = index < 0 ? adding : ruled([{ label: "Save this one", icon: "download", key: "save-one", run: () => void showEntry(index).then(() => save()) }, { label: "Copy this one", icon: "copy", key: "copy-one", run: () => void showEntry(index).then(() => copy()) }], adding, [{ label: "Take out", icon: "trash", key: "take-out", disabled: !!saving, run: () => void takeOut(index) }]);
         entryMenu.open(entryAnchor, lines, keyboard);
         if (!keyboard) entryMenu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
     }

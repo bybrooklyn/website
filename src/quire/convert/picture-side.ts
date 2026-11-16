@@ -3,7 +3,7 @@
 // a share), and what of the metadata goes with it, in imgQuire's words. A picture the browser cannot
 // read (a TIFF in Chromium, say) is said so in its row when it is tried.
 
-import { group, slide, typed } from "../core/bench";
+import { group, lowered, slide, typed } from "../core/bench";
 import { make } from "../core/ui";
 import { readWeight, sizeSaid } from "./names";
 import { choices, fold, note, numberField, type Becoming, type Item, type Made, type Side } from "./parts";
@@ -58,7 +58,7 @@ export function pictureSide(engine: PictureEngine): Side {
         fillQuality();
         changed();
     };
-    for (const [label, list] of [["lossy", lossyFormats], ["lossless", losslessFormats]] as const) formatRows.push(choices(label, list.map((each) => ({ value: each.key, label: each.label.replace(/ lossless$/, "").toLowerCase(), tip: each.tip })), choice.format, pick));
+    for (const [label, list] of [["lossy", lossyFormats], ["lossless", losslessFormats]] as const) formatRows.push(choices(label, list.map((each) => ({ value: each.key, label: each.label.replace(/ lossless$/, ""), tip: each.tip })), choice.format, pick));
 
     const quality = slide("quality", { min: 5, max: 100 }, (value) => {
         choice.quality = value / 100;
@@ -106,7 +106,7 @@ export function pictureSide(engine: PictureEngine): Side {
             changed();
         },
     );
-    const keeps = choices<Keep>("metadata", KEEPS.map((each) => ({ value: each.key, label: each.label.toLowerCase(), tip: each.tip })), choice.keep, (value) => ((choice.keep = value), changed()));
+    const keeps = choices<Keep>("metadata", KEEPS.map((each) => ({ value: each.key, label: lowered(each.label), tip: each.tip })), choice.keep, (value) => ((choice.keep = value), changed()));
 
     side.element = group("pictures", formatRows[0]!.element, formatRows[1]!.element, lossyFold.element, sizes.element, sideFold.element, shareFold.element, keeps.element);
     side.element.dataset.kind = "picture";

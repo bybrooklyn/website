@@ -43,7 +43,8 @@ list stands ("3 files · 2 done · 4.0 MB to 500 KB"), breathing while files are
 column written the way the Walker's column is: a small heading for each kind (pictures, text and data,
 sounds, films), a small muted label over each choice, round dots for a choice of one, a slider for the
 quality, a line to type on for "under" and for a largest side or a percent, words in the accent to press,
-thin rules between, no boxed buttons, and every label in lowercase as the site's own are; sentences (the
+thin rules between, no boxed buttons, and every label in lowercase as the site's own are, names keeping their
+capitals (JPEG, WebP, CSV, Opus Ogg, HTML, kHz); sentences (the
 drop line, the notes, the rows' status) keep their capitals. A format's own settings and the notes under
 a choice grow open and shut. While the list holds files, the groups of the kinds not in it are faint and out
 of reach, so the ones that act on these files stand out; with the list empty every group can be set. At the
@@ -76,8 +77,8 @@ the results' own blobs with small headers between, so a zip of films is not held
 file's checksum is worked out, reading it through once. A folder keeps what is in it: a name there already
 gets the next number in brackets.
 
-The right-click menu on a row, in lowercase as the page's words are: save, copy (for text), stop, convert
-again or try again, remove; then paste and choose files. Shift with a right-click leaves the browser's own
+The right-click menu on a row, each line with a first capital as menus have: Save, Copy (for text), Stop, Convert
+again or Try again, Remove; then Paste and Choose files. Shift with a right-click leaves the browser's own
 menu. Delete removes the row with the focus; the menu key or Shift+F10 opens the menu. Rows grow in from
 no height and shrink away; folds and notes in the column open by growing; the menu is the suite's own and
 grows from where it was pressed. Reduced motion turns the motion off.

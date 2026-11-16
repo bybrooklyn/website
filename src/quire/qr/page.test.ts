@@ -1,4 +1,4 @@
-// What the QR code page is held to: its menu, in lowercase as every label of the page is; its words for a
+// What the QR code page is held to: its menu, each line with a first capital as menus have; its words for a
 // code's size and for text too long; and in Chromium, the column built only from the small tools' kit
 // (core/bench.ts), its headings in order and every heading, label, choice and word to press in lowercase,
 // with no boxed button and what acts on a code faint until there is one; the code changing as a link is
@@ -15,19 +15,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { corePage, quire } from "../../../scripts/core-page";
 import { encode } from "./encode";
+import { lowered } from "../core/bench";
 import { factsOf, KINDS, LEVEL_WORDS, qrMenuLines, QR_WORDS, tooLongWords } from "./page";
 
-test("the right-click menu holds copy, save as svg, save as png and paste a picture to read, in lowercase, and only the last with no code", () => {
+test("the right-click menu holds Copy, Save as SVG, Save as PNG and Paste a picture to read, each with a first capital as menus have, and only the last with no code", () => {
     const run = { copy() {}, svg() {}, png() {}, paste() {} };
-    expect(qrMenuLines({ code: true }, run).map((each) => each.label || "-")).toEqual(["copy", "save as svg", "save as png", "-", "paste a picture to read"]);
-    expect(qrMenuLines({ code: false }, run).map((each) => each.label)).toEqual(["paste a picture to read"]);
+    expect(qrMenuLines({ code: true }, run).map((each) => each.label || "-")).toEqual(["Copy", "Save as SVG", "Save as PNG", "-", "Paste a picture to read"]);
+    expect(qrMenuLines({ code: false }, run).map((each) => each.label)).toEqual(["Paste a picture to read"]);
 });
 
-test("the words for a code's size and for text too long are plain, and every label of the column is lowercase", () => {
+test("the words for a code's size and for text too long are plain, and every label of the column is lowercase but for names (PNG, SVG, Wi-Fi)", () => {
     expect(factsOf(encode("hello", { level: "M" }))).toBe("Version 1, 21 by 21 modules, error correction highest.");
     expect(tooLongWords("a".repeat(3000), "M")).toBe("Too long for a QR code: about 3,000 bytes, and one holds at most 2,331 at this error correction. Shorten it, or lower the error correction.");
     expect(KINDS.map((each) => each.key)).toEqual(["1", "2", "3", "4", "5", "6"]);
-    for (const label of [...Object.values(QR_WORDS), ...KINDS.map((each) => each.label), ...LEVEL_WORDS.map((each) => each.label)]) expect(label).toBe(label.toLowerCase());
+    for (const label of [...Object.values(QR_WORDS), ...KINDS.map((each) => each.label), ...LEVEL_WORDS.map((each) => each.label)]) expect(label).toBe(lowered(label));
+    expect([QR_WORDS.sizes, QR_WORDS.png, QR_WORDS.svg, KINDS[1]!.label]).toEqual(["PNG size", "save PNG", "save SVG", "Wi-Fi"]);
 });
 
 test("in Chromium, the page is built from the kit, makes codes as they are typed, styles them, saves them, and reads pictures four ways, fetching nothing", async () => {
@@ -90,15 +92,15 @@ test("in Chromium, the page is built from the kit, makes codes as they are typed
         expect(await tab.run<string>("document.querySelector('.quire-qr-code .quire-qr-empty').textContent")).toBe("Type a link or some text, and its code appears here.");
         // the column is the kit's: its headings in order, every label in lowercase, every choice a round dot or a small picture, every
         // field a line to type on, every button a word to press or a color, and what acts on a code there and faint until there is one
-        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side .quire-bench-heading')].filter((each) => !each.closest('.quire-qr-read')).map((each) => each.textContent)")).toEqual(["make or read", "what it holds", "shape", "corners", "color", "ground", "margin", "picture", "error correction", "png size"]);
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side .quire-bench-heading')].filter((each) => !each.closest('.quire-qr-read')).map((each) => each.textContent)")).toEqual(["make or read", "what it holds", "shape", "corners", "color", "ground", "margin", "picture", "error correction", "PNG size"]);
         const words = await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-side :is(.quire-bench-heading, .quire-bench-label, .quire-bench-choices label, .quire-bench-press)')].map((each) => each.textContent.trim()).filter(Boolean)");
         expect(words.length).toBeGreaterThan(60);
-        expect(words.filter((each) => each !== each.toLowerCase())).toEqual([]);
+        expect(words.filter((each) => each !== lowered(each))).toEqual([]);
         expect(await tab.run("[...document.querySelectorAll('.quire-qr button')].filter((each) => !each.matches('.quire-bench-press, .quire-bench-swatch')).length")).toBe(0);
         expect(await tab.run("[...document.querySelectorAll('.quire-qr input[type=radio]')].filter((each) => !each.closest('.quire-bench-choices')).length")).toBe(0);
         expect(await tab.run("[...document.querySelectorAll('.quire-qr :is(textarea, input:not([type=radio], [type=range], [type=file]))')].filter((each) => !each.matches('.quire-bench-typed')).length")).toBe(0);
         expect(await tab.run("[...document.querySelectorAll('.quire-bench-pictured')].map((each) => each.getAttribute('aria-label'))")).toEqual(["shape", "corners", "direction", "flag"]);
-        expect(await tab.run("[document.querySelector('.quire-qr-out').inert, [...document.querySelectorAll('.quire-qr-out .quire-bench-press')].map((each) => [each.textContent, each.classList.contains('quiet')])]")).toEqual([true, [["copy", false], ["save png", true], ["save svg", true]]]);
+        expect(await tab.run("[document.querySelector('.quire-qr-out').inert, [...document.querySelectorAll('.quire-qr-out .quire-bench-press')].map((each) => [each.textContent, each.classList.contains('quiet')])]")).toEqual([true, [["copy", false], ["save PNG", true], ["save SVG", true]]]);
         // typing a link: the code follows each letter, its square the same size throughout
         await press(".quire-qr-form[data-kind=text] textarea");
         const boxSize = () => tab.run<string>("(() => { const b = document.querySelector('.quire-qr-box').getBoundingClientRect(); return b.width + 'x' + b.height; })()");
@@ -117,15 +119,15 @@ test("in Chromium, the page is built from the kit, makes codes as they are typed
         await tab.press("c", { ctrl: true });
         await until("window.copied.length === 1");
         expect(await tab.run("window.copied[0]")).toEqual({ width: 1024, height: 1024 });
-        // save png and save svg name their files by what the code holds
-        await pressText("save png");
-        await pressText("save svg");
+        // save PNG and save SVG name their files by what the code holds
+        await pressText("save PNG");
+        await pressText("save SVG");
         await until("window.downloads['qr-link-example-com.png'] > 100 && window.downloads['qr-link-example-com.svg'] > 100");
         // the right-click menu on the code
         const boxAt = await centerOf("document.querySelector('.quire-qr-box')");
         await tab.run(`document.querySelector('.quire-qr-box').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: ${boxAt.x}, clientY: ${boxAt.y} }))`);
         await until("document.querySelector('.quire-menu:popover-open')");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].map((each) => each.querySelector('.quire-menu-label')?.textContent ?? each.textContent)")).toEqual(expect.arrayContaining([expect.stringContaining("copy"), expect.stringContaining("save as svg"), expect.stringContaining("save as png"), expect.stringContaining("paste a picture to read")]));
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].map((each) => each.querySelector('.quire-menu-label')?.textContent ?? each.textContent)")).toEqual(expect.arrayContaining([expect.stringContaining("Copy"), expect.stringContaining("Save as SVG"), expect.stringContaining("Save as PNG"), expect.stringContaining("Paste a picture to read")]));
         await tab.press("Escape");
         // each shape, a flag and a dark ground: each still reads back, the small picture chosen
         for (const tip of ["Dots", "Joined", "Bars"]) {
@@ -172,7 +174,7 @@ test("in Chromium, the page is built from the kit, makes codes as they are typed
         await until("window.qr.found().length === 2");
         expect(await tab.run("[document.querySelector('.quire-qr').classList.contains('reading'), document.querySelector('input[value=read]').checked]")).toEqual([true, true]);
         await until("document.querySelector('.quire-bench-said').textContent === 'Found 2 codes.'");
-        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-qr-card > .quire-bench-heading')].map((each) => each.textContent)")).toEqual(["1. link", "2. wi-fi"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-qr-card > .quire-bench-heading')].map((each) => each.textContent)")).toEqual(["1. link", "2. Wi-Fi"]);
         expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-qr-card')[1].querySelectorAll('.quire-qr-line')].map((each) => each.querySelector('.quire-bench-label').textContent + ': ' + each.querySelector('.quire-qr-value').textContent)")).toEqual(["network: Cafe", "password: latte", "security: WPA"]);
         // a link is shown and copied, never opened
         expect(await tab.run("document.querySelectorAll('.quire-qr-card a').length")).toBe(0);
@@ -199,7 +201,7 @@ test("in Chromium, the page is built from the kit, makes codes as they are typed
         await tab.run("window.picture(['from the menu'], 'menu.png').then((file) => (window.clipboardPicture = file))");
         await tab.run(`document.querySelector('.quire-qr-box').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: ${boxAt.x}, clientY: ${boxAt.y} }))`);
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('paste a picture')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Paste a picture')).click()");
         await until("window.qr.found()[0]?.text === 'from the menu'");
         // a picture with no code in it
         await tab.run("(async () => { const c = new OffscreenCanvas(200, 200); c.getContext('2d').fillRect(0, 0, 100, 100); const file = new File([await c.convertToBlob()], 'none.png', { type: 'image/png' }); window.qr.read(file); })()");

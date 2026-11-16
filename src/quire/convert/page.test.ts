@@ -1,4 +1,4 @@
-// What the converter's page is held to: its right-click menu and its words to press in lowercase, the
+// What the converter's page is held to: its right-click menu's lines with a first capital, its words to press in lowercase, the
 // line under the list, and which groups of the column apply; in Chromium, that it is the small tools'
 // kit (one box, the work and the column, lowercase headings, labels and words, round dots, no boxed
 // buttons, the words for every file at the column's foot, the groups of kinds not in the list faint);
@@ -15,6 +15,7 @@
 import { expect, test } from "bun:test";
 import type { Browser } from "../../../scripts/browser";
 import { corePage, quire } from "../../../scripts/core-page";
+import { lowered } from "../core/bench";
 import { readZip } from "../core/zip";
 import { kindsInUse, menuLines, ROW_WORDS, summaryOf, WORDS } from "./page";
 
@@ -23,12 +24,12 @@ const PUBLIC = `${import.meta.dir}/../../../public`;
 /** Every address but this machine's own, for `serve` to refuse: the page's own files come from the test's server. */
 export const ELSEWHERE = ["https://", ..."abcdefghijkmnpqrstuvwxyz0123456789".split("").map((letter) => `http://${letter}`), ..."abcdefghijklmnpqrstuvwxyz".split("").map((letter) => `http://l${letter}`)];
 
-test("the right-click menu offers what can be done with the file pressed, then paste and choose files, every line in lowercase", () => {
+test("the right-click menu offers what can be done with the file pressed, then Paste and Choose files, every line with a first capital as menus have", () => {
     const run = { save() {}, copy() {}, stop() {}, again() {}, remove() {}, paste() {}, choose() {} };
-    expect(menuLines(undefined, run).map((each) => each.label)).toEqual(["paste", "choose files"]);
-    expect(menuLines({ state: "done", text: true }, run).map((each) => each.label || "-")).toEqual(["save", "copy", "convert again", "remove", "-", "paste", "choose files"]);
-    expect(menuLines({ state: "running", text: false }, run).map((each) => each.label || "-")).toEqual(["stop", "remove", "-", "paste", "choose files"]);
-    expect(menuLines({ state: "failed", text: false }, run).map((each) => each.label || "-")).toEqual(["try again", "remove", "-", "paste", "choose files"]);
+    expect(menuLines(undefined, run).map((each) => each.label)).toEqual(["Paste", "Choose files"]);
+    expect(menuLines({ state: "done", text: true }, run).map((each) => each.label || "-")).toEqual(["Save", "Copy", "Convert again", "Remove", "-", "Paste", "Choose files"]);
+    expect(menuLines({ state: "running", text: false }, run).map((each) => each.label || "-")).toEqual(["Stop", "Remove", "-", "Paste", "Choose files"]);
+    expect(menuLines({ state: "failed", text: false }, run).map((each) => each.label || "-")).toEqual(["Try again", "Remove", "-", "Paste", "Choose files"]);
 });
 
 test("the line under the list counts the files, those done and what they weigh before and after", () => {
@@ -45,7 +46,7 @@ test("the groups of the column that apply are those of the kinds in the list, or
 });
 
 test("the words a visitor presses are lowercase, and the sentences keep their capitals", () => {
-    for (const each of [WORDS.choose, WORDS.paste, WORDS.convert, WORDS.stop, WORDS.zip, WORDS.folder, WORDS.clear, ...Object.values(ROW_WORDS)]) expect(each).toBe(each.toLowerCase());
+    for (const each of [WORDS.choose, WORDS.paste, WORDS.convert, WORDS.stop, WORDS.zip, WORDS.folder, WORDS.clear, ...Object.values(ROW_WORDS)]) expect(each).toBe(lowered(each));
     expect(WORDS.empty.startsWith("Drop files here")).toBe(true);
 });
 
@@ -172,12 +173,13 @@ test("in Chromium, the page is the kit's box: lowercase group headings, labels a
     const { tab } = page;
     const { until } = driver(tab);
     try {
-        // the format names a label keeps as they are written: a unit, and HTML within words
-        const lower = "(text) => text.replace(/HTML|kHz|Mbps/g, '') === text.replace(/HTML|kHz|Mbps/g, '').toLowerCase()";
+        // every label is lowercase but for names, which are written as they are properly written (JPEG, WebP, HTML, kHz)
         expect(await tab.run("[...document.querySelector('.quire-convert').children].map((each) => each.className)")).toEqual(["quire-bench-work", "quire-bench-side"]);
         expect(await tab.run("[...document.querySelectorAll('.quire-bench-side > .quire-bench-group')].map((each) => each.querySelector(':scope > .quire-bench-heading')?.textContent ?? '')")).toEqual(["pictures", "text and data", "sounds", "films", ""]);
         expect(await tab.run("[...document.querySelectorAll('.quire-bench-side .quire-bench-label')].map((each) => each.textContent)")).toEqual(["lossy", "lossless", "quality", "under", "size", "largest side", "percent", "metadata", "data into", "separator", "first row", "numbers", "into", "rate", "channels", "bitrate", "bits", "into", "size", "bitrate"]);
-        expect(await tab.run(`[...document.querySelectorAll('.quire-convert :is(.quire-bench-heading, .quire-bench-label, .quire-bench-choices label, .quire-bench-press:not(.quire-convert-offer))')].map((each) => each.textContent).filter((text) => !(${lower})(text))`)).toEqual([]);
+        const words = await tab.run<string[]>("[...document.querySelectorAll('.quire-convert :is(.quire-bench-heading, .quire-bench-label, .quire-bench-choices label, .quire-bench-press:not(.quire-convert-offer))')].map((each) => each.textContent)");
+        expect(words.filter((each) => each !== lowered(each))).toEqual([]);
+        for (const name of ["JPEG", "WebP", "AVIF", "JPEG XL", "PNG", "CSV", "JSON", "YAML", "TOML", "WAV", "FLAC", "Opus WebM", "Opus Ogg", "AAC M4A", "MP4", "WebM VP9", "WebM AV1", "what HTML is understood"]) expect(words).toContain(name);
         // every choice of one is a row of round dots, and every thing to press is the kit's word
         expect(await tab.run("[...document.querySelectorAll('.quire-bench-side [role=radiogroup]')].every((each) => each.classList.contains('quire-bench-choices') && each.querySelectorAll('input[type=radio]').length > 1)")).toBe(true);
         expect(await tab.run("[...document.querySelectorAll('.quire-convert button')].filter((each) => !each.classList.contains('quire-bench-press')).length")).toBe(0);
@@ -234,7 +236,7 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         const workAt = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-convert-drop').getBoundingClientRect(); return { x: b.x + 20, y: b.y + 20 }; })()");
         await tab.run(`document.querySelector('.quire-convert-drop').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: ${workAt.x}, clientY: ${workAt.y} }))`);
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('paste')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Paste')).click()");
         await until("window.convert.rows().length === 5");
         expect(await tab.run<string>("window.convert.rows()[4].name")).toBe("Pasted picture.png");
         // choose a largest side of 256 and convert all
@@ -265,7 +267,7 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         expect(await tab.run("window.convert.rows()[5].made.name")).toBe("IMG_0001.webp");
         expect(await tab.run("window.convert.rows()[5].made.facts")).toBe("96 × 64");
         // a large picture as AVIF, stopped while it is written, stays stopped
-        await pressText("avif");
+        await pressText("AVIF");
         await tab.run("(async () => window.convert.add(await window.picture(3000, 2000, 'big.png'), 'big.png'))()");
         await until("window.convert.rows().length === 7");
         await pressText("convert");
@@ -320,7 +322,7 @@ test("in Chromium, text pasted and dropped converts both ways, a shape that cann
         expect(rows[5]!.state).toBe("failed");
         expect(rows[5]!.notes[0]).toContain("anchor or an alias");
         // into CSV: the nested people are refused with an offer, and the offer converts them
-        await pressText("csv", ".quire-bench-side");
+        await pressText("CSV", ".quire-bench-side");
         await pressText("convert");
         await until("window.convert.rows()[3].state === 'failed' && window.convert.rows()[4].state === 'done'");
         expect(await tab.run("window.convert.rows()[3].notes")).toEqual(['CSV holds one plain value in each field, and the column "address" holds nested data in row 1.', "Spread nested values into columns named like address.city."]);
@@ -328,10 +330,10 @@ test("in Chromium, text pasted and dropped converts both ways, a shape that cann
         await until("window.convert.rows()[3].state === 'done'");
         expect(await tab.run("window.convert.rows()[3].made.text")).toBe("name,address.city\r\nAda,London\r\nGrace,New York\r\n");
         // into TOML: a list is refused and put under a name when the offer is taken
-        await pressText("toml", ".quire-bench-side");
+        await pressText("TOML", ".quire-bench-side");
         await tab.run("(() => { const row = document.querySelectorAll('.quire-convert-row')[4]; row.scrollIntoView({ block: 'center', behavior: 'instant' }); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('convert again')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
         await until("window.convert.rows()[4].state === 'failed'");
         expect(await tab.run("window.convert.rows()[4].notes")).toEqual(["TOML needs named values at the top, and this is a list.", "Put the list under the name items."]);
         await pressText("Put the list under the name items.");
@@ -358,7 +360,7 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
         await until("window.convert.rows()[0]?.label === 'WAV sound, 44.1 kHz stereo, 0:02'");
         // the browser is asked what it writes; AAC, which Chromium on Linux does not write, is said so
         await until("!document.querySelector('[data-kind=audio] .quire-bench-choices label[title^=\"Asking\"]')");
-        const aac = await tab.run<{ cannot: boolean; title: string }>("(() => { const b = [...document.querySelectorAll('[data-kind=audio] .quire-bench-choices label')].find((each) => each.textContent === 'aac m4a'); return { cannot: b.classList.contains('cannot'), title: b.title }; })()");
+        const aac = await tab.run<{ cannot: boolean; title: string }>("(() => { const b = [...document.querySelectorAll('[data-kind=audio] .quire-bench-choices label')].find((each) => each.textContent === 'AAC M4A'); return { cannot: b.classList.contains('cannot'), title: b.title }; })()");
         const writesAac = await tab.run<boolean>("AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }).then((answer) => answer.supported)");
         expect(aac.cannot).toBe(!writesAac);
         const notes = await tab.run<string[]>("[...document.querySelectorAll('[data-kind=audio] .quire-convert-note')].map((each) => each.textContent)");
@@ -371,11 +373,11 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
         await until("window.convert.rows()[0].state === 'done'");
         expect(await tab.run("window.convert.rows()[0].made.name")).toBe("tone.flac");
         expect(await tab.run("window.convert.rows()[0].made.became")).toBe("FLAC, 44.1 kHz stereo, 0:02");
-        await pressText("opus ogg");
+        await pressText("Opus Ogg");
         expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to FLAC, 44.1 kHz stereo, 0:02");
         await tab.run("(() => { const row = document.querySelector('.quire-convert-row'); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('convert again')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
         await until("window.convert.rows()[0].state === 'done' && window.convert.rows()[0].made.name === 'tone.opus'");
         expect(await tab.run("window.convert.rows()[0].made.became")).toBe("Opus in Ogg, 48 kHz stereo, 0:02");
         expect(tab.errors).toEqual([]);
@@ -395,7 +397,7 @@ test("in Chromium, a film dropped says what it holds, converts to WebM smaller a
         await until("window.convert.rows()[0]?.label.startsWith('MP4 film, H.264')");
         expect(await tab.run("window.convert.rows()[0].label")).toBe("MP4 film, H.264 320 × 240, Opus sound, 0:04");
         await until("!document.querySelector('[data-kind=video] .quire-bench-choices label[title^=\"Asking\"]')");
-        await pressText("webm vp9");
+        await pressText("WebM VP9");
         await pressText("360p");
         await pressText("0.5");
         expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to WebM VP9, 360p at most, 0.5 Mbps");

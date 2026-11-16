@@ -32,7 +32,7 @@ trail "tools / Cut-out", a small label, its name, one line saying what it does, 
 it. Its way back is the list of tools (`/tools/`, unlisted as the tools are). In the box the picture is on the left and a
 column of controls on the right, written the way the Walker's column is: a small heading for each group, round
 dots for a choice of one, words in the accent to press, thin rules between, no boxed buttons, and every label
-in lowercase as the site's own are. The groups are background (clear, color, blur; the site's colors grow out
+in lowercase as the site's own are, names keeping their capitals (a format, an acronym, a product: PNG, WebP, Wi-Fi, GitHub), and the lines of a menu keeping a first capital as menus have (`lowered` and `raised` in `core/bench.ts`). The groups are background (clear, color, blur; the site's colors grow out
 under "color"), touch up (keep, remove: a brush, pressed again to put it down), quality (quick, best), then
 copy (the main one) and save, then hold to see the original (as the backslash is) and choose another picture.
 The column is there from the start, faint and out of reach until it has something to act on, so nothing appears

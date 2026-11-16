@@ -1,5 +1,6 @@
-// What the cut-out's page is held to: its right-click menu holds paste and choose a picture when empty,
-// and copy, save, paste, keep and remove with a cut-out, in lowercase as every label of the page is; and
+// What the cut-out's page is held to: its right-click menu holds Paste and Choose a picture when empty,
+// and Copy, Save, Paste, Keep and Remove with a cut-out, each with a first capital as menus have, while
+// every label on the page is lowercase; and
 // in Chromium with the real Quick model (Hugging Face answered from the trial copies, ONNX Runtime from
 // the site's build, the model in its own worker), the column of controls is there from the start and out
 // of reach until it has something to act on; a picture chosen is cut out once she has said to fetch the
@@ -26,12 +27,12 @@ import { readZip } from "../../core/zip";
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
 const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 
-test("the right-click menu holds paste and choose a picture when empty, and copy, save, paste, keep and remove with a cut-out, in lowercase", () => {
+test("the right-click menu holds Paste and Choose a picture when empty, and Copy, Save, Paste, Keep and Remove with a cut-out, each with a first capital as menus have", () => {
     const run = { copy() {}, save() {}, paste() {}, choose() {}, brush() {} };
-    expect(cutMenuLines({ cut: false }, run).map((each) => each.label)).toEqual(["paste", "choose a picture"]);
+    expect(cutMenuLines({ cut: false }, run).map((each) => each.label)).toEqual(["Paste", "Choose a picture"]);
     const lines = cutMenuLines({ cut: true, brush: "keep" }, run);
-    expect(lines.map((each) => each.label || "-")).toEqual(["copy", "save", "paste", "-", "keep", "remove"]);
-    expect(lines.find((each) => each.label === "keep")!.pressed).toBe(true);
+    expect(lines.map((each) => each.label || "-")).toEqual(["Copy", "Save", "Paste", "-", "Keep", "Remove"]);
+    expect(lines.find((each) => each.label === "Keep")!.pressed).toBe(true);
     expect(cutName("Harbour at dusk.jpg")).toBe("Harbour-at-dusk-cut-out.png");
     expect(cutName(undefined)).toBe("picture-cut-out.png");
 });
@@ -100,7 +101,7 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         // a right-click on the empty page: Paste and Choose a picture
         await tab.run("document.querySelector('.quire-cut-room').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 300 }))");
         await until("document.querySelector('.quire-menu:popover-open')");
-        expect(await menuLines()).toEqual(["pasteCtrl+V", "choose a picture"].map((each) => expect.stringContaining(each.replace("Ctrl+V", ""))) as unknown as string[]);
+        expect(await menuLines()).toEqual(["PasteCtrl+V", "Choose a picture"].map((each) => expect.stringContaining(each.replace("Ctrl+V", ""))) as unknown as string[]);
         await tab.press("Escape");
         // the column is there from the start, faint and out of reach until it has something to act on; its words are lowercase
         expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-heading')].map((each) => each.textContent)")).toEqual(["background", "touch up", "quality"]);
@@ -131,9 +132,9 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         // the right-click menu on the cut-out
         await tab.run("document.querySelector('.quire-cut-view').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 300 }))");
         await until("document.querySelector('.quire-menu:popover-open')");
-        expect((await menuLines()).map((each) => each.replace(/Ctrl\+.$/, ""))).toEqual(["copy", "save", "paste", "keep", "remove"]);
+        expect((await menuLines()).map((each) => each.replace(/Ctrl\+.$/, ""))).toEqual(["Copy", "Save", "Paste", "Keep", "Remove"]);
         // Copy from the menu: the full-size PNG on the clipboard
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('copy')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('Copy')).click()");
         await until("window.copied.length === 1");
         expect(await tab.run("window.copied[0]")).toEqual({ width: 1200, height: 800 });
         // Save: a PNG named from the file
@@ -164,7 +165,7 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await tab.run("window.scene(1000, 700, 'clip.png').then((file) => (window.clipboardPicture = file))");
         await tab.run("document.querySelector('.quire-cut-view').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 300 }))");
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('paste')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('Paste')).click()");
         await until("window.seen()?.width === 1000", 60_000);
         // Keep painted on the ground brings it back
         await tab.run("document.querySelector('.quire-bench-choices input[value=\"keep\"]').click()");

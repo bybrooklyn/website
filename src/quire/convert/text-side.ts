@@ -79,7 +79,7 @@ export function textSide(markdown?: MarkdownEngine): Side {
         },
     };
     const changed = () => side.changed?.();
-    const into = choices<TextFormat>("data into", (["csv", "json", "yaml", "toml"] as TextFormat[]).map((value) => ({ value, label: TEXT_FORMATS[value].label.toLowerCase() })), data, (value) => ((data = value), changed()));
+    const into = choices<TextFormat>("data into", (["csv", "json", "yaml", "toml"] as TextFormat[]).map((value) => ({ value, label: TEXT_FORMATS[value].label })), data, (value) => ((data = value), changed()));
     const separators = choices<"find" | Separator>(
         "separator",
         [

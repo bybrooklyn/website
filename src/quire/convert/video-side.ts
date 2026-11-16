@@ -65,7 +65,7 @@ export function videoSide(): Side {
         if (!abilities[coding]) return `This browser cannot write ${coding === "h264" ? "H.264" : coding === "vp9" ? "VP9" : "AV1"} film.`;
         return undefined;
     };
-    const options = () => FILM_FORMATS.map((each) => ({ value: each.key, label: each.label.toLowerCase(), tip: each.tip, cannot: cannotOf(each.coding) }));
+    const options = () => FILM_FORMATS.map((each) => ({ value: each.key, label: each.label, tip: each.tip, cannot: cannotOf(each.coding) }));
     const formats = choices<string>("into", options(), key, (value) => {
         key = value;
         const format = FILM_FORMATS.find((each) => each.key === value)!;

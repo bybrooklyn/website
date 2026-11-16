@@ -74,7 +74,7 @@ export function audioSide(): Side {
         if (format === "aac-m4a" && !abilities.aac) return "This browser cannot write AAC.";
         return undefined;
     };
-    const formatOptions = () => AUDIO_FORMATS.map((each) => ({ value: each.key, label: each.short.toLowerCase(), tip: `${each.label}: ${each.tip}`, cannot: cannotOf(each.key) }));
+    const formatOptions = () => AUDIO_FORMATS.map((each) => ({ value: each.key, label: each.short, tip: `${each.label}: ${each.tip}`, cannot: cannotOf(each.key) }));
     const formats = choices<AudioFormat>("into", formatOptions(), choice.format, (value) => {
         choice.format = value;
         fill();

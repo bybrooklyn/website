@@ -3,7 +3,8 @@
 // left with one line under it saying what is being done and what was done; and on the right a column of
 // controls written the way the Walker's column is (src/styles/minis.css): a small heading for each
 // group, round dots for a choice of one, words in the accent to press, thin rules between. No boxed
-// buttons, and every label in lowercase, as the site's labels are. A group with nothing to act on yet is
+// buttons, and every label in lowercase, as the site's labels are, names keeping their capitals (`lowered`;
+// the lines of a menu keep a first capital, `raised`). A group with nothing to act on yet is
 // made `inert`, which draws it faint, so nothing appears from nowhere. Besides those there is a row (a
 // small muted label, then what it names), a line to type on, a slider, a number with less and more
 // either side of it, and a row of colors. Their look is quire-bench.css.
@@ -16,6 +17,23 @@
 //   box.say("Cut out in 2.2 s.");
 
 import { make } from "./ui";
+
+/** Names that keep their capital in a label though only their first letter is one; others are known by a capital inside them. */
+const NAMES = ["Markdown", "Opus", "Ogg", "Mbps", "Google", "Drive", "Hugging", "Face", "Chrome", "Chromium", "Firefox", "Safari"];
+
+/**
+ * A label in the site's lowercase: every word made small but for names, which are written as they are properly written. A name is a
+ * word with a capital after its first letter (PNG, WebP, Wi-Fi, GitHub, mdQuire, kHz) or one of the few listed that have only a first
+ * capital (Markdown, Opus). So "Save PNG" is "save PNG" and "Network name" is "network name".
+ */
+export function lowered(text: string): string {
+    return text.replace(/[A-Za-z][A-Za-z0-9.'-]*/g, (word) => (NAMES.includes(word) || /[A-Z]/.test(word.slice(1)) ? word : word.toLowerCase()));
+}
+
+/** A line of a menu from a label: its first letter a capital, as the lines of menus are written ("choose files" is "Choose files"). */
+export function raised(text: string): string {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 /** A word to press, in the accent and underlined as the site's are; a `quiet` one is muted until pointed at. */
 export function word(text: string, press: (button: HTMLButtonElement) => void, quiet = false): HTMLButtonElement {
