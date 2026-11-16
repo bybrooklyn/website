@@ -736,6 +736,15 @@ her with their files, sizes and licences.
   reachable from the menus or the keys (removing, bringing forward and sending back what is picked).
 - **A panel never covers the picture.** A surface that stays open makes room: the picture is fitted into
   what is left and glides there. A popover (the resize box, a menu) may lie over it while it is open.
+- **Batches, as chosen on 15 November 2026** (not built yet). Many pictures dropped at once sit in a strip of
+  small pictures under the one being worked on, which makes room for it; a press on one works on it and the
+  arrow keys step through, the line under it saying which of how many. A change belongs to its own picture
+  until it is given on: Give to all hands a change of a kind that fits any picture (the look, the resize, the
+  repair, the cut-out, the export's settings) to every picture in the batch as one undo step; crops, marks
+  and hidden areas are never handed on. A finished batch leaves as one zip, or, where the browser allows a
+  folder to be chosen, as files written straight into it, and any one picture can still be copied or saved
+  alone. Exported files keep their own names with the new ending; two of one name become `photo.webp` and
+  `photo (1).webp`, and nothing is overwritten.
 
 ## Chosen features
 

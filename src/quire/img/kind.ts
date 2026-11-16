@@ -22,6 +22,8 @@ export function img(): Kind {
         starts: () => [{ key: "picture", label: "picture", name: "Untitled", text: "", quire: false, said: "Picture", icon: "image" }],
         files: { description: "Pictures", accept: PICTURES, chooser: [...Object.keys(PICTURES), ".heic", ".heif", ".jxl"].join(",") },
         row: "picture",
+        lead: "Paste, drop or open a picture",
+        none: "Nothing here yet. A picture you bring in is kept in this browser as you work on it.",
         // a phone's HEIC often comes with no type at all, so its name counts too
         takes: (file) => file.type in PICTURES || /\.(heic|heif)$/i.test(file.name),
         mount: mountEditor,

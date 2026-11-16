@@ -32,8 +32,12 @@ export interface Kind {
     quiet?(): Template[];
     /** What the file choosers offer for it: a description and the endings by type for a browser's file picker, and the same for a file input (`chooser`, as its accept says it). */
     files: { description: string; accept: Record<string, string[]>; chooser: string };
-    /** A word said in its shelf rows beside the place, for a kind that is not the first ("note"); none for the first. */
+    /** A word said in its shelf rows beside the place, on a page that is not its own ("picture" on mdQuire's, "document" on imgQuire's); on a page of no one kind, for a kind that is not the first. */
     row?: string;
+    /** A line said first on the home screen of a page that is this kind's own: how its documents arrive ("Paste, drop or open a picture"). */
+    lead?: string;
+    /** What the home screen of its own page says when nothing is kept yet, in place of the app's words about writing. */
+    none?: string;
     /** True for a file it makes a new document of when one is chosen, or pasted or dropped on the home screen (imgQuire takes pictures). */
     takes?(file: { name: string; type: string }): boolean;
     /** Mounts its editor on the app's element, in the frame. */

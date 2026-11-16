@@ -1,0 +1,748 @@
+/* The QR code page (src/quire/qr/page.ts): the code in its square at the left, staying in view as the page
+   scrolls, and the panel of what it holds and how it looks beside it; on a phone the square stays at the
+   top and the panel runs under it. The menus are the suite's own (quire.css); what is new is laid out
+   here. Nothing that stays open covers the code. */
+
+.quire-qr-page main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.quire-qr-host {
+    display: flex;
+    flex: 1;
+    justify-content: center;
+}
+
+.quire-qr {
+    display: grid;
+    grid-template-columns: minmax(16rem, 30rem) minmax(18rem, 34rem);
+    gap: 2.5rem;
+    align-items: start;
+    width: 100%;
+    max-width: calc(var(--page) + var(--gutter) * 2);
+    padding: 1.5rem var(--gutter) 4rem;
+    box-sizing: border-box;
+    font-family: var(--font-text);
+    color: var(--ink);
+}
+
+/* ---- the stage: the code, what it is, and getting it out ---- */
+
+.quire-qr-stage {
+    position: sticky;
+    top: 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.quire-qr-box {
+    position: relative;
+    width: 100%;
+    max-width: min(30rem, calc(100dvh - 16rem));
+    aspect-ratio: 1;
+    border-radius: var(--quire-round);
+    outline: 0.125rem dashed transparent;
+    outline-offset: 0.35rem;
+    transition: outline-color 0.15s ease;
+}
+
+.quire-qr-box:focus-visible {
+    outline: 0.125rem solid var(--accent);
+}
+
+.quire-qr.dropping .quire-qr-box {
+    outline-color: var(--accent);
+}
+
+/* the code and the picture read share the square, one fading out as the other comes */
+.quire-qr-code,
+.quire-qr-read-view {
+    position: absolute;
+    inset: 0;
+    transition:
+        opacity 0.25s ease,
+        scale 0.35s var(--ease);
+}
+
+.quire-qr-read-view,
+.quire-qr.reading .quire-qr-code {
+    opacity: 0;
+    scale: 0.97;
+    pointer-events: none;
+}
+
+.quire-qr.reading .quire-qr-read-view {
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+}
+
+.quire-qr-ground {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--quire-round-small);
+    transition:
+        background 0.2s ease,
+        opacity 0.25s ease;
+}
+
+.quire-qr-ground.clear {
+    background: repeating-conic-gradient(oklch(0.34 0.02 300) 0 25%, oklch(0.27 0.02 300) 0 50%) 0 0 / 1rem 1rem;
+}
+
+.quire-qr.blank .quire-qr-ground {
+    border: 0.0625rem dashed var(--rule);
+    background: color-mix(in oklch, var(--ink) 3%, transparent) !important;
+}
+
+.quire-qr-svg,
+.quire-qr-svg > svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition: opacity 0.25s ease;
+}
+
+.quire-qr.stale .quire-qr-svg,
+.quire-qr.stale .quire-qr-middle,
+.quire-qr.stale .quire-qr-through {
+    opacity: 0.3;
+}
+
+.quire-qr-through,
+.quire-qr-middle {
+    position: absolute;
+    object-fit: cover;
+    opacity: 0;
+    scale: 0.94;
+    transition:
+        opacity 0.25s ease,
+        scale 0.35s var(--ease);
+    pointer-events: none;
+}
+
+.quire-qr-through.shown,
+.quire-qr-middle.shown {
+    opacity: 1;
+    scale: 1;
+}
+
+.quire-qr-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 1.05rem;
+    line-height: 1.5;
+    text-align: center;
+    opacity: 0;
+    scale: 0.97;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease);
+    pointer-events: none;
+}
+
+.quire-qr.blank .quire-qr-code .quire-qr-empty,
+.quire-qr:not(.has-picture) .quire-qr-read-view .quire-qr-empty {
+    opacity: 1;
+    scale: 1;
+}
+
+.quire-qr-read-image,
+.quire-qr-read-marks {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.quire-qr-read-image {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.quire-qr.has-picture .quire-qr-read-image {
+    opacity: 1;
+}
+
+.quire-qr-mark polygon {
+    fill: color-mix(in oklch, var(--accent) 16%, transparent);
+    stroke: var(--accent);
+    stroke-linejoin: round;
+}
+
+.quire-qr-mark text {
+    fill: var(--accent);
+    font-family: var(--font-text);
+    font-weight: 700;
+}
+
+.quire-qr-mark {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: quire-qr-mark 0.4s var(--ease) var(--delay) backwards;
+}
+
+@keyframes quire-qr-mark {
+    from {
+        opacity: 0;
+        scale: 1.08;
+    }
+}
+
+.quire-qr-said,
+.quire-qr-verdict {
+    max-width: 30rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.quire-qr-verdict {
+    min-height: 1.3rem;
+}
+
+/* while reading, the maker's words fade, keeping their room so nothing moves */
+.quire-qr-said,
+.quire-qr-verdict {
+    transition: opacity 0.25s ease;
+}
+
+.quire-qr.reading :is(.quire-qr-said, .quire-qr-verdict) {
+    opacity: 0;
+}
+
+.quire-qr-read-view {
+    border-radius: var(--quire-round-small);
+    outline: 0.0625rem dashed transparent;
+    outline-offset: -0.0625rem;
+}
+
+.quire-qr.reading:not(.has-picture) .quire-qr-read-view {
+    outline-color: var(--rule);
+}
+
+.quire-qr-verdict.bad {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.quire-qr-verdict.bad::before,
+.quire-qr-verdict.good::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.45rem;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: 0.05rem;
+}
+
+.quire-qr-verdict.good::before {
+    background: color-mix(in oklch, var(--ink) 45%, transparent);
+}
+
+.quire-qr-out,
+.quire-qr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    transition: opacity 0.25s ease;
+}
+
+.quire-qr-out[inert] {
+    opacity: 0.35;
+}
+
+.quire-qr-sizes {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+/* ---- buttons ---- */
+
+.quire-qr :is(.quire-qr-main, .quire-qr-plain, .quire-qr-choice) {
+    min-height: 2.25rem;
+    padding: 0 0.85rem;
+    border: 0;
+    border-radius: var(--quire-round-small);
+    font: inherit;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+.quire-qr :is(.quire-qr-main, .quire-qr-plain, .quire-qr-choice, .quire-qr-swatch):active {
+    scale: 0.95;
+}
+
+.quire-qr-main {
+    min-width: 6rem;
+    background: var(--accent);
+    color: var(--ground);
+    font-weight: 600;
+}
+
+.quire-qr-plain,
+.quire-qr-choice {
+    background: color-mix(in oklch, var(--ink) 7%, transparent);
+    color: var(--ink);
+}
+
+.quire-qr-plain:hover,
+.quire-qr-choice:hover {
+    background: color-mix(in oklch, var(--ink) 13%, transparent);
+}
+
+.quire-qr-choice.pressed {
+    background: color-mix(in oklch, var(--accent) 24%, transparent);
+    color: var(--accent);
+}
+
+.quire-qr-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.quire-qr-choice {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+}
+
+.quire-qr-sample {
+    width: 1.55rem;
+    height: 1.55rem;
+    fill: currentColor;
+}
+
+.quire-qr-flag-mark {
+    display: block;
+    width: 1.9rem;
+    height: 1.2rem;
+    border-radius: 0.2rem;
+    box-shadow: inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.5);
+}
+
+/* a phone has no right-click and no keys to paste with: there, and only there, a plain Paste button */
+.quire-qr-paste {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .quire-qr-paste {
+        display: inline-flex;
+        align-items: center;
+    }
+}
+
+/* ---- the panel ---- */
+
+.quire-qr-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
+}
+
+.quire-qr-modes .quire-qr-choice {
+    min-width: 6rem;
+    font-weight: 600;
+}
+
+/* Make and Read share one place, the one not chosen faded out; the room takes the height of the one shown */
+.quire-qr-parts,
+.quire-qr-forms {
+    display: grid;
+    transition: height 0.35s var(--ease);
+    overflow: clip;
+    overflow-clip-margin: 0.4rem;
+}
+
+.quire-qr-make,
+.quire-qr-read,
+.quire-qr-form {
+    grid-area: 1 / 1;
+    align-self: start;
+    transition:
+        opacity 0.25s ease,
+        translate 0.35s var(--ease),
+        visibility 0s linear 0s;
+}
+
+.quire-qr-make,
+.quire-qr-read {
+    display: flex;
+    flex-direction: column;
+    gap: 1.35rem;
+}
+
+.quire-qr.reading .quire-qr-make,
+.quire-qr:not(.reading) .quire-qr-read,
+.quire-qr-form:not(.shown) {
+    opacity: 0;
+    translate: 0 0.5rem;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        translate 0.3s var(--ease),
+        visibility 0s linear 0.3s;
+}
+
+.quire-qr-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    border-radius: var(--quire-round);
+    outline: 0.125rem dashed transparent;
+    outline-offset: 0.3rem;
+    transition: outline-color 0.15s ease;
+}
+
+.quire-qr-section.dropping {
+    outline-color: var(--accent);
+}
+
+.quire-qr-heading {
+    margin: 0;
+    color: var(--muted);
+    font-family: var(--font-text);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.quire-qr-form {
+    display: grid;
+    gap: 0.6rem;
+}
+
+.quire-qr-form-wide {
+    grid-template-columns: 1fr 1fr;
+}
+
+.quire-qr-whole {
+    grid-column: 1 / -1;
+}
+
+.quire-qr-pair {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.25rem;
+}
+
+.quire-qr-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.quire-qr-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-qr-input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 0.0625rem solid var(--field-edge);
+    border-radius: var(--quire-round-small);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    resize: vertical;
+    transition: border-color 0.15s ease;
+}
+
+.quire-qr-input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* a shut fold takes no room, not even the section's gap before it */
+.quire-qr-fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-top: -0.55rem;
+    opacity: 0;
+    transition:
+        grid-template-rows 0.35s var(--ease),
+        margin-top 0.35s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-qr-fold.open {
+    grid-template-rows: 1fr;
+    margin-top: 0;
+    opacity: 1;
+}
+
+.quire-qr-fold-in {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.quire-qr-fold-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.2rem 0.15rem;
+}
+
+.quire-qr-colors {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.quire-qr-swatch {
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    transition:
+        box-shadow 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+.quire-qr-swatch.pressed {
+    box-shadow: inset 0 0 0 0.125rem var(--accent);
+}
+
+.quire-qr-swatch-mark {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 0.0625rem oklch(0.6 0 0 / 0.6);
+}
+
+.quire-qr-clear .quire-qr-swatch-mark {
+    background: repeating-conic-gradient(oklch(0.6 0.02 300) 0 25%, oklch(0.35 0.02 300) 0 50%) 0 0 / 0.55rem 0.55rem;
+}
+
+.quire-qr-hex {
+    width: 6.2rem;
+    margin-left: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    font-family: var(--font-code);
+    font-size: 0.85rem;
+}
+
+.quire-qr-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.quire-qr-step {
+    min-width: 2.25rem;
+    padding: 0 !important;
+    font-size: 1.1rem !important;
+}
+
+.quire-qr-number {
+    min-width: 2.2rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.quire-qr-unit {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-qr-range {
+    width: 12rem;
+    accent-color: var(--accent);
+}
+
+.quire-qr-picture-now {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* ---- what was read ---- */
+
+.quire-qr-read-said {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.quire-qr-results {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.quire-qr-card {
+    padding: 0.8rem 1rem 0.7rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round);
+    background: var(--surface);
+    animation: quire-qr-card 0.35s var(--ease) var(--delay) backwards;
+}
+
+@keyframes quire-qr-card {
+    from {
+        opacity: 0;
+        translate: 0 0.5rem;
+    }
+}
+
+.quire-qr-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.quire-qr-card-title {
+    margin: 0;
+    font-family: var(--font-text);
+    font-size: 1rem;
+}
+
+.quire-qr-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0;
+}
+
+.quire-qr-line {
+    display: grid;
+    grid-template-columns: 7rem 1fr auto;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.3rem 0;
+    border-top: 0.0625rem solid color-mix(in oklch, var(--rule) 60%, transparent);
+}
+
+.quire-qr-line-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-qr-value {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.quire-qr-link {
+    font-family: var(--font-code);
+    font-size: 0.9rem;
+}
+
+.quire-qr-copy-one {
+    min-height: 1.9rem !important;
+    padding: 0 0.6rem !important;
+    font-size: 0.85rem !important;
+}
+
+.quire-qr-card-facts {
+    margin: 0.4rem 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* ---- a phone: the code at the top, staying in view, and the panel under it ---- */
+
+@media (max-width: 52rem) {
+    .quire-qr {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+        padding-top: 0.75rem;
+    }
+
+    /* right under the top, which is 3.35rem tall on a phone */
+    .quire-qr-stage {
+        top: 3.35rem;
+        z-index: 5;
+        align-items: center;
+        margin-inline: calc(var(--gutter) * -1);
+        padding: 0.5rem var(--gutter) 0.6rem;
+        border-bottom: 0.0625rem solid var(--rule);
+        background: var(--ground);
+    }
+
+    .quire-qr-box {
+        width: min(100%, 30dvh);
+    }
+
+    /* what the keyboard or a scroll brings into view stops below the code, never under it */
+    .quire-qr-panel :is(button, input, textarea, h3) {
+        scroll-margin-top: calc(30dvh + 14rem);
+    }
+
+    .quire-qr-said,
+    .quire-qr-verdict {
+        text-align: center;
+    }
+
+    .quire-qr-said {
+        font-size: 0.8rem;
+    }
+
+    .quire-qr-out {
+        justify-content: center;
+    }
+
+    .quire-qr-sizes {
+        justify-content: center;
+    }
+
+    .quire-qr-form-wide {
+        grid-template-columns: 1fr;
+    }
+
+    .quire-qr-line {
+        grid-template-columns: 1fr auto;
+    }
+
+    .quire-qr-line-label {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-qr *,
+    .quire-qr *::before {
+        transition-duration: 0s !important;
+        animation: none !important;
+    }
+}

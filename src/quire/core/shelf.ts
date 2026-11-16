@@ -81,6 +81,12 @@ export interface ShelfOptions {
     documents(): Promise<Listed[]>;
     /** Other ways in, quietly under the documents: opening a file, a folder, connecting a repository. */
     ways?: () => { label: string; run: (from: HTMLElement) => void }[];
+    /** A line said first, above "new": how this page's documents arrive. */
+    lead?: string;
+    /** More words in the "new" row after the templates' own, each with what it does (a picture from a file). */
+    more?: () => { label: string; run: (from: HTMLElement) => void }[];
+    /** What is said when there are no documents, in place of the words about writing. */
+    none?: string;
 }
 
 /** Builds the shelf. */
@@ -175,16 +181,17 @@ export function createShelf(options: ShelfOptions) {
     async function refresh() {
         count = 0;
         const label = (text: string) => make("h2", "label quire-shelf-label", text);
+        const lead = options.lead ? [next(make("p", "quire-shelf-lead", options.lead))] : [];
         const fresh = next(make("div", "quire-shelf-new"));
-        fresh.append(label("new"), words("quire-shelf-kinds", options.templates.map((template) => ({ label: template.label, run: (from: HTMLElement) => options.start(template, from) }))));
+        fresh.append(label("new"), words("quire-shelf-kinds", [...options.templates.map((template) => ({ label: template.label, run: (from: HTMLElement) => options.start(template, from) })), ...(options.more?.() ?? [])]));
         const listed = await options.documents().catch(() => [] as Listed[]);
-        const parts: HTMLElement[] = [fresh, next(label("recent"))];
+        const parts: HTMLElement[] = [...lead, fresh, next(label("recent"))];
         if (listed.length) {
             const list = make("ul", "quire-shelf-list");
             const now = Date.now();
             for (const each of listed) list.append(row(each, now));
             parts.push(list);
-        } else parts.push(next(make("p", "quire-shelf-none", "Nothing here yet. What you write is kept in this browser as you type.")));
+        } else parts.push(next(make("p", "quire-shelf-none", options.none ?? "Nothing here yet. What you write is kept in this browser as you type.")));
         const ways = options.ways?.() ?? [];
         if (ways.length) parts.push(next(words("quire-shelf-ways", ways)));
         inner.replaceChildren(...parts);

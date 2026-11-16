@@ -27,6 +27,7 @@ export function markdown(options: MarkdownOptions = {}): Kind {
         starts: templates,
         quiet: () => (options.sample ? [{ key: "sample", label: "see a sample", name: "A sample", text: options.sample, quire: true }] : []),
         files: { description: "Markdown and .quire documents", accept: { "text/markdown": [".md", ".mdx", ".markdown", ".txt"], "application/zip": [".quire"] }, chooser: ".md,.mdx,.markdown,.txt,.quire,text/markdown,text/plain" },
+        row: "document",
         mount: (host, context) => mountEditor(host, context, options),
     };
 }
