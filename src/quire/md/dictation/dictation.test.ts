@@ -81,9 +81,9 @@ async function listening() {
     await press(".quire-dictation-download");
     await until("window.dictation.state() === 'listening'", "listening", 8000);
 }
-/** Presses the first launch's "Choose" and waits for the three cards. */
+/** Presses the first launch's "choose" and waits for the three cards. */
 async function choose() {
-    await until("document.querySelector('dialog.quire-dialog .quire-dialog-action')?.textContent === 'Choose'", "the Choose button");
+    await until("document.querySelector('dialog.quire-dialog .quire-dialog-action')?.textContent === 'choose'", "the choose button");
     await press("dialog.quire-dialog .quire-dialog-action");
     await until("document.querySelectorAll('.quire-dictation-card').length === 3 && document.querySelector('.quire-dictation-download')", "the three cards");
 }
@@ -104,7 +104,7 @@ test.skipIf(!ready)("the first press opens a dialog in the middle of the screen 
     expect(await run("window.dictationTest.downloaded().length")).toBe(0);
     expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
     // Not now closes it, back into the microphone, and nothing was downloaded
-    await run("[...document.querySelectorAll('.quire-dialog-dismiss')].find((each) => each.textContent === 'Not now').click()");
+    await run("[...document.querySelectorAll('.quire-dialog-dismiss')].find((each) => each.textContent === 'not now').click()");
     await until("!document.querySelector('dialog.quire-dialog')", "closed");
     expect(await state()).toBe("off");
     expect(await run<string>("document.activeElement.className")).toContain("quire-dictate");
@@ -115,7 +115,7 @@ test.skipIf(!ready)("Choose becomes the three models as cards, each with its siz
     await press(button("Start dictation"));
     await choose();
     const cards = await run<{ name: string; size: string; who: string; checked: string | null }[]>("[...document.querySelectorAll('.quire-dictation-card')].map((each) => ({ name: each.querySelector('.quire-dictation-card-name').firstChild.textContent, size: each.querySelector('.quire-dictation-card-size').textContent, who: each.querySelector('.quire-dictation-card-who').textContent, checked: each.getAttribute('aria-checked') }))");
-    expect(cards.map((each) => [each.name, each.size])).toEqual([["Accurate", "402 MB"], ["Light", "208 MB"], ["Tiny", "55 MB"]]);
+    expect(cards.map((each) => [each.name, each.size])).toEqual([["accurate", "402 MB"], ["light", "208 MB"], ["tiny", "55 MB"]]);
     for (const each of cards) expect(each.who.length).toBeGreaterThan(5);
     // the page chose tiny before it opened
     expect(cards.map((each) => each.checked)).toEqual(["false", "false", "true"]);
@@ -141,7 +141,7 @@ test.skipIf(!ready)("the three models are offered with their sizes in the panel 
     expect(sizes).toEqual(["402 MB", "208 MB", "55 MB"]);
     await press('.quire-dictation-tier:nth-child(2)');
     expect(await run("localStorage.getItem('mdquire-dictation-tier')")).toBe("light");
-    expect(await run<string>("document.querySelector('.quire-dictation-tier[aria-checked=true] .quire-dictation-tier-name').textContent")).toBe("Light");
+    expect(await run<string>("document.querySelector('.quire-dictation-tier[aria-checked=true] .quire-dictation-tier-name').textContent")).toBe("light");
 });
 
 test.skipIf(!ready)("a download shows its progress in the dialog, can be cancelled there, and then carries on", async () => {
@@ -316,9 +316,9 @@ test.skipIf(!ready)("custom words and shortcuts correct what is written, and are
     await fresh();
     await press(button("Dictation settings"));
     await until("document.querySelector('.quire-dictation-action')", "the panel");
-    await run("[...document.querySelectorAll('.quire-dictation-action')].find((each) => each.textContent === 'Custom words').click()");
-    await until("[...document.querySelectorAll('.quire-dictation-action')].some((each) => each.textContent === 'Add a word')", "the words view");
-    await run("[...document.querySelectorAll('.quire-dictation-action')].find((each) => each.textContent === 'Add a word').click()");
+    await run("[...document.querySelectorAll('.quire-dictation-action')].find((each) => each.textContent === 'custom words').click()");
+    await until("[...document.querySelectorAll('.quire-dictation-action')].some((each) => each.textContent === 'add a word')", "the words view");
+    await run("[...document.querySelectorAll('.quire-dictation-action')].find((each) => each.textContent === 'add a word').click()");
     await run(`(() => {
         const [word, sounds] = document.querySelector('.quire-dictation-line').querySelectorAll('.quire-dictation-field');
         word.value = 'Dearest'; word.dispatchEvent(new Event('input'));

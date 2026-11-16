@@ -38,7 +38,7 @@ export function createOutline(surface: Surface, top: () => number = () => 0, onC
     const nav = make("nav", "quire-outline");
     nav.setAttribute("aria-label", "Outline");
     const head = make("div", "quire-outline-head");
-    head.append(make("span", "quire-outline-title", "Outline"));
+    head.append(make("span", "quire-outline-title", "outline"));
     const closer = control("Close the outline", icon("close"), () => panel.close());
     closer.classList.add("quire-outline-close");
     head.append(closer);

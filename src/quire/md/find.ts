@@ -120,7 +120,7 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
     replacement.placeholder = "Replace with";
     replacement.setAttribute("aria-label", "Replace with");
     replacement.spellcheck = false;
-    inner.append(replacement, control("Replace this one", "Replace", () => replaceOne(), "quire-button quire-choice"), control("Replace all", "Replace all", () => replaceAll(), "quire-button quire-choice"));
+    inner.append(replacement, control("Replace this one", "replace", () => replaceOne(), "quire-button quire-choice"), control("Replace all", "replace all", () => replaceAll(), "quire-button quire-choice"));
     replaceLine.append(inner);
     lines.append(findLine, replaceLine);
     bar.append(lines);

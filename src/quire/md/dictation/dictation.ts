@@ -14,6 +14,7 @@
 // download's progress is shown there and can be cancelled. The model, the microphone and the recognizing are in other files
 // and are given in `options`, so that the browser tests can give a made-up one.
 
+import { lowered } from "../../core/bench";
 import { filledButton, openDialog, switchButton, type Dialog } from "../../core/dialog";
 import { closeOthers, flowMenu, make, type Menu, type MenuItem } from "../../core/ui";
 import type { Surface } from "../surface";
@@ -442,7 +443,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             if (view === "words") return;
             const wanted = tier();
             const parts: HTMLElement[] = [];
-            parts.push(make("h2", "quire-dictation-title", "Dictation"));
+            parts.push(make("h2", "quire-dictation-title", "dictation"));
 
             // which model
             const choices = make("div", "quire-dictation-tiers");
@@ -454,7 +455,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 choice.setAttribute("role", "radio");
                 choice.setAttribute("aria-checked", String(each.id === tierId));
                 choice.disabled = state === "downloading" || state === "loading" || state === "listening";
-                choice.append(make("span", "quire-dictation-tier-name", each.name), make("span", "quire-dictation-tier-size", cached.get(each.id) ? "on this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-tier-note", each.note));
+                choice.append(make("span", "quire-dictation-tier-name", lowered(each.name)), make("span", "quire-dictation-tier-size", cached.get(each.id) ? "on this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-tier-note", each.note));
                 choice.addEventListener("click", () => {
                     tierId = each.id;
                     remember(KEPT.tier, tierId);
@@ -470,7 +471,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 bar.setAttribute("role", "progressbar");
                 bar.append(make("i"));
                 text = make("p", "quire-dictation-count");
-                parts.push(bar, text, action("Cancel", () => provider.cancel()));
+                parts.push(bar, text, action("cancel", () => provider.cancel()));
                 updateProgress();
             } else if (state === "loading") {
                 parts.push(line("quire-dictation-plain", "Getting the model ready. The first time on a device takes longer."));
@@ -483,7 +484,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             if (message) parts.push(line("quire-dictation-warn", message));
 
             // spoken commands
-            const toggleCommands = switchButton("Spoken punctuation and commands", commands, (on) => {
+            const toggleCommands = switchButton("spoken punctuation and commands", commands, (on) => {
                 commands = on;
                 remember(KEPT.commands, commands ? "on" : "off");
                 render();
@@ -493,7 +494,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
 
             const row = make("div", "quire-dictation-row");
             row.append(
-                action("Custom words", () => {
+                action("custom words", () => {
                     view = "words";
                     renderWords();
                 }),
@@ -522,7 +523,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         function renderWords() {
             const parts: HTMLElement[] = [];
             const head = make("div", "quire-dictation-head");
-            head.append(make("h2", "quire-dictation-title", "Custom words"), action("Back", () => ((view = "main"), render())));
+            head.append(make("h2", "quire-dictation-title", "custom words"), action("back", () => ((view = "main"), render())));
             parts.push(head);
             parts.push(line("quire-dictation-hint", "Words and names to prefer, and what the recognizer tends to write instead, separated by commas. Shortcuts write out a longer text for a short phrase you say."));
             const keep = () => {
@@ -546,7 +547,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 return each;
             };
             const remove = (run: () => void) => {
-                const each = make("button", "quire-button quire-dictation-remove", "Remove");
+                const each = make("button", "quire-button quire-dictation-remove", "remove");
                 each.type = "button";
                 each.setAttribute("aria-label", "Remove this line");
                 each.addEventListener("click", () => {
@@ -556,7 +557,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 });
                 return each;
             };
-            parts.push(make("h3", "quire-dictation-sub", "Words to prefer"));
+            parts.push(make("h3", "quire-dictation-sub", "words to prefer"));
             for (const entry of custom.words) {
                 const row = make("div", "quire-dictation-line");
                 row.append(
@@ -567,12 +568,12 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 parts.push(row);
             }
             parts.push(
-                action("Add a word", () => {
+                action("add a word", () => {
                     custom.words.push({ word: "", sounds: [] });
                     renderWords();
                 }),
             );
-            parts.push(make("h3", "quire-dictation-sub", "Shortcuts"));
+            parts.push(make("h3", "quire-dictation-sub", "shortcuts"));
             for (const entry of custom.shortcuts) {
                 const row = make("div", "quire-dictation-line");
                 row.append(
@@ -583,7 +584,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 parts.push(row);
             }
             parts.push(
-                action("Add a shortcut", () => {
+                action("add a shortcut", () => {
                     custom.shortcuts.push({ say: "", write: "" });
                     renderWords();
                 }),
@@ -609,7 +610,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             });
         };
 
-        /** Asks before the first download: a line and a "Choose" button, which becomes the three models. */
+        /** Asks before the first download: a line and a "choose" button, which becomes the three models. */
         function askFirst(from: HTMLElement) {
             closeOthers();
             setState("asking");
@@ -618,8 +619,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 title: "Dictation",
                 className: "quire-dictation-dialog",
                 body: [intro()],
-                dismiss: "Not now",
-                action: { label: "Choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
+                dismiss: "not now",
+                action: { label: "choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
                 onClose: () => {
                     asking = askBar = askCount = undefined;
                     if (state === "asking") setState("off");
@@ -640,9 +641,9 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 choice.type = "button";
                 choice.dataset.tier = each.id;
                 choice.setAttribute("role", "radio");
-                const name = make("span", "quire-dictation-card-name", each.name);
-                if (each.id === suits) name.append(make("span", "quire-dictation-card-tag", "Suits this machine"));
-                choice.append(name, make("span", "quire-dictation-card-size", cached.get(each.id) ? "On this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-card-who", each.who));
+                const name = make("span", "quire-dictation-card-name", lowered(each.name));
+                if (each.id === suits) name.append(make("span", "quire-dictation-card-tag", "suits this machine"));
+                choice.append(name, make("span", "quire-dictation-card-size", cached.get(each.id) ? "on this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-card-who", each.who));
                 choice.addEventListener("click", () => pick(each.id));
                 return choice;
             });
@@ -676,11 +677,11 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             if (message) parts.push(line("quire-dictation-warn", message));
             dialog.body.replaceChildren(...parts);
             askBar = askCount = undefined;
-            const quiet = make("button", "quire-dialog-dismiss", "Not now");
+            const quiet = make("button", "quire-dialog-dismiss", "not now");
             quiet.type = "button";
             quiet.addEventListener("click", () => void dialog.close());
             const go = filledButton(
-                "Download and start",
+                "download and start",
                 (pressed) => {
                     dialog.change(() => downloading(dialog), pressed);
                     void download();
@@ -702,7 +703,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             askBar.setAttribute("aria-label", "Downloading the speech model");
             askBar.append(make("i"));
             askCount = make("p", "quire-dictation-count");
-            const cancel = make("button", "quire-dialog-dismiss quire-dictation-cancel", "Cancel");
+            const cancel = make("button", "quire-dialog-dismiss quire-dictation-cancel", "cancel");
             cancel.type = "button";
             cancel.addEventListener("click", () => provider.cancel());
             row.append(askBar, askCount, cancel);

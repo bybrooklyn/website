@@ -16,6 +16,7 @@
 //
 //   const pictures = createPictureTools(surface, { keep, margin });   // pictures.destroy()
 
+import { lowered } from "../core/bench";
 import { insetOf, DIALOG, switchButton } from "../core/dialog";
 import { blockAt, removeBlock, setAlign, setImage, type Align, type Image } from "./document";
 import { type Box, control, dots, EASE, enterGivesBack, flowMenu, icon, make, type MenuItem, MOTION, springCurve, still } from "../core/ui";
@@ -262,7 +263,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
     const inside = make("div", "quire-picture-in");
     panel.append(skin, inside);
     const head = make("div", "quire-picture-head");
-    head.append(make("h2", "quire-picture-title", "Picture"), control("Close", icon("close"), () => closePanel(true)));
+    head.append(make("h2", "quire-picture-title", "picture"), control("Close", icon("close"), () => closePanel(true)));
     const facts = make("dl", "quire-picture-facts");
     let fields = 0;
     /** A labelled line of the panel: its name, and what is in it. */
@@ -285,23 +286,23 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
     const caption = field("Words under the picture", (value) => change((path) => (doc) => setImage(doc, path, { caption: value || undefined })));
     const described = field("What the picture shows", (value) => change((path) => (doc) => setImage(doc, path, { alt: value })));
     const sides = new Map(SIDES.map(([align, words]) => [align, control(words, icon(align), () => sitAt(align))] as const));
-    const sizes = new Map(SIZES.map(([name, width]) => [width, control(name === "Original" ? "Original size" : `${name} width`, name, () => change((path) => (doc) => setImage(doc, path, { width })), "quire-button quire-picture-size")] as const));
+    const sizes = new Map(SIZES.map(([name, width]) => [width, control(name === "Original" ? "Original size" : `${name} width`, lowered(name), () => change((path) => (doc) => setImage(doc, path, { width })), "quire-button quire-picture-size")] as const));
     /** Text flows round the picture, or stops; never for a centred picture, which has no side for the text to be on. */
     function toggleWrap() {
         change((path) => (doc) => (pictureOf(path)?.align === "center" ? doc : setImage(doc, path, { wrap: !pictureOf(path)?.wrap })));
     }
-    // a switch, drawn as every switch is: pressed with a tick when on, named the same as the menu's line
-    const wrap = switchButton("Wrap text", false, toggleWrap);
+    // a switch, drawn as every switch is: pressed with a tick when on, named as the menu's line is, in the page's lowercase
+    const wrap = switchButton("wrap text", false, toggleWrap);
     wrap.classList.add("quire-picture-wrap");
-    line("Caption", caption);
-    line("Description", described);
-    line("Alignment", ...sides.values());
-    line("Size", ...sizes.values());
+    line("caption", caption);
+    line("description", described);
+    line("alignment", ...sides.values());
+    line("size", ...sizes.values());
     // why it cannot be pressed for a centred picture, said beside it
     const wrapNote = make("span", "quire-picture-note", "Left or right only");
-    line("Wrap text", wrap, wrapNote);
+    line("wrap text", wrap, wrapNote);
     const actions = make("div", "quire-picture-actions");
-    actions.append(control("Replace", "Replace", () => chooser.click(), "quire-button quire-picture-action"), control("Remove", "Remove", removePicked, "quire-button quire-picture-action"));
+    actions.append(control("Replace", "replace", () => chooser.click(), "quire-button quire-picture-action"), control("Remove", "remove", removePicked, "quire-button quire-picture-action"));
     inside.append(head, facts, actions, chooser);
 
     const moving: Animation[] = [];

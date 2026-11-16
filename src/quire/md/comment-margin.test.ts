@@ -42,7 +42,7 @@ test("words selected and a note added from Insert sit in the margin beside their
     expect(await tab.run("document.activeElement.className")).toBe("quire-note-field");
     await tab.type("Too quick?");
     // the comment's buttons are in every dialog's order, named as Docs names them
-    expect(await tab.run("[...document.querySelectorAll('.quire-note-form button')].map((each) => each.textContent)")).toEqual(["Cancel", "Comment"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-note-form button')].map((each) => each.textContent)")).toEqual(["cancel", "comment"]);
     await page!.press(".quire-note-keep");
     await tab.wait(400);
     expect(await page!.md()).toBe(TEXT);

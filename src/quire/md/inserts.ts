@@ -14,6 +14,7 @@ import { blockAt, insertBlock, outline, removeBlock, type Block, type Document, 
 import type { State } from "./history";
 import { handle } from "./keys";
 import type { Surface } from "./surface";
+import { lowered } from "../core/bench";
 import { make } from "../core/ui";
 
 // ---- the date ----
@@ -101,7 +102,7 @@ export function specialGrid(choose: (char: string) => void): HTMLElement {
         const found = findSpecials(search.value);
         if (found.length === 0) groups.append(make("p", "quire-specials-none", "Nothing by that name"));
         for (const { group, chars } of found) {
-            groups.append(make("p", "quire-specials-group", group));
+            groups.append(make("p", "quire-specials-group", lowered(group)));
             const grid = make("div", "quire-specials-grid");
             for (const each of chars) {
                 const button = make("button", "quire-special", each.char);
