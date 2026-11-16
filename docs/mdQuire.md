@@ -237,8 +237,8 @@ three dots and the microphone are at the right. An "About mdQuire" line is in He
 browser tab shows an italic Q on a dark rounded square
 (`public/mdquire/icon.svg`). The caret is one plain line, drawn in the same frame as the letter typed.
 
-**The bar** (`bar.ts`). Undo, redo, print, spelling, paint format; zoom; the style ("Normal text" for a
-paragraph, as Format says, also in a list or a callout); the typeface; the size as a number between minus
+**The bar** (`bar.ts`). Undo, redo, print, spelling, paint format; zoom; the style ("normal text" for a
+paragraph, the line Format calls Normal text, also in a list or a callout); the typeface; the size as a number between minus
 and plus; bold, italic, underline, strikethrough, text color, highlight; link, picture; alignment; line
 spacing; the lists; indent less and more; clear formatting. Alignment is one button showing the cursor's
 alignment, and the lists one button showing the cursor's list, pressed when it is in one. Pressed, such a
@@ -279,7 +279,7 @@ menu (the documents list, what checking found, special characters). Something to
 a side panel that starts below the bar: version history, comments, the picture, the outline, and the
 changed elsewhere panel, which comes by itself and so leaves the keyboard in the text. Every dialog is
 answered one way: the filled button at the right, a quiet cancel to its left, other quiet ways before
-that, and one that leaves something behind (Leave without saving, Forget) alone at the far left. Enter in
+that, and one that leaves something behind (leave without saving, forget) alone at the far left. Enter in
 a field does what the filled button does; Escape steps back one level, from a dialog, from a version
 shown in the history to its list, and from the list out. A form that changes the document (Page setup,
 Header and footer) changes nothing until OK, and the change is one undo. Deleting asks once more in the
@@ -383,7 +383,7 @@ the down arrow on its last line, with no line of text after it, makes one and go
 a quiet button, always shown once set and shown as Plain text while the caret is in a block without one,
 whose menu lists the languages highlighted with a field that narrows them and offers any other word as
 written (`block-menus.ts`). A callout's kind is a menu of the five. A folding section's arrow folds it
-away in the editor only, never saved, and a caret that lands inside unfolds it; "Closed for readers" is
+away in the editor only, never saved, and a caret that lands inside unfolds it; "closed for readers" is
 the choice of its own written to the file, and a new section starts in its summary. A table has a menu
 from a right-click, the menu key or its strip's dots: rows above and below, columns left and right,
 removing the row, the column or the table, the sorts and the alignments, with what cannot act there
