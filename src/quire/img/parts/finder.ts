@@ -109,7 +109,9 @@ async function madeFor(given: PartTier, shelf: Shelf, prefer?: "webgpu" | "wasm"
 function inputOf(picture: ImageBitmap, way: Way): { planes: Float32Array; fit: Fit } {
     const fit = fitOf(way, picture.width, picture.height);
     const canvas = new OffscreenCanvas(fit.input.width, fit.input.height);
-    const context = canvas.getContext("2d")!;
+    // drawn on the processor, since its pixels are read straight back: a canvas kept on a graphics card that is busy with other programs
+    // has read back empty
+    const context = canvas.getContext("2d", { willReadFrequently: true })!;
     context.imageSmoothingQuality = "high";
     context.drawImage(picture, 0, 0, fit.filled.width, fit.filled.height);
     const pixels = context.getImageData(0, 0, fit.input.width, fit.input.height).data;

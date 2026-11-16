@@ -50,7 +50,8 @@ const workerScript = (only: string) => `
     // a figure (head, strands of hair, a coat) on a green ground, at any size
     const scene = (width, height) => {
         const canvas = new OffscreenCanvas(width, height);
-        const c = canvas.getContext("2d");
+        // drawn on the processor: on a graphics card busy with other programs the scene has come out empty
+        const c = canvas.getContext("2d", { willReadFrequently: true });
         c.scale(width / 1200, height / 800);
         c.fillStyle = "#3f9a3c"; c.fillRect(0, 0, 1200, 800);
         c.fillStyle = "#b8452e"; c.beginPath(); c.moveTo(450, 800); c.lineTo(500, 470); c.lineTo(700, 470); c.lineTo(750, 800); c.fill();

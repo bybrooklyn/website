@@ -83,6 +83,8 @@ test("each choice of part models runs on the site's ONNX Runtime, on WebAssembly
     );
     if (!page) return;
     try {
+        // the page reads every model file before it sets its functions down, which on a busy machine outlasts the page's opening
+        for (let waited = 0; waited < 600 && !(await page.tab.run<boolean>("typeof window.card === 'function'")); waited++) await page.tab.wait(100);
         const card = await page.tab.run<boolean>("window.card()");
         const figure = { x: 520 / 1200, y: 200 / 800, width: 160 / 1200, height: 560 / 800 };
         for (const tier of PART_TIERS) {
