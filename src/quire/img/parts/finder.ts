@@ -188,7 +188,7 @@ export async function serve(ask: Ask, tools: { shelf(): Promise<Shelf>; say(answ
                 state.made = undefined;
                 throw Object.assign(new Error("the graphics card gave the model no answer"), { again: true });
             }
-            return tools.say({ type: "found", id: ask.id, found: foundOf(values, width, height, cropOf(fit, width, height), fit.picture, tier.matte === "birefnet", ask.side), ms: Math.round(performance.now() - started), place: made.place });
+            return tools.say({ type: "found", id: ask.id, found: foundOf(values, width, height, cropOf(fit, width, height), fit.picture, false, ask.side), ms: Math.round(performance.now() - started), place: made.place });
         }
         // a picture's encoding is made once and kept, so each press after the first is only the decoder
         if (!state.encoded || state.encoded.key !== ask.key || state.encoded.tier !== tier.id) {

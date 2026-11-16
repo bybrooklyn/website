@@ -458,8 +458,10 @@ as the page `/cutout/`, its result a step. Asked once in the reading dialog's fa
 worker Find uses; the stage then shows the cut-out's pixels in place of the original's, on a checkerboard
 where clear, everything else drawn over them; the strip lays it on nothing, one of the mark colors or the old
 picture blurred, paints Keep and Remove, changes the quality and takes it away, and a press keeps the thing
-pressed. A JPEG export says it has no transparency and offers a color or PNG. What it is and what was
-measured are in [cutout](cutout.md).
+pressed. A JPEG export says it has no transparency and offers a color or PNG. Its two qualities are Quick
+(MODNet) and Best (ormbg, called Better until 15 November 2026, when BiRefNet, the Best before it, was taken out
+because the owner's graphics card could not give it the memory it needed beside her other programs). What it is
+and what was measured are in [cutout](cutout.md).
 
 **Since the horizon.** Round a turned picture the room shows through: the crop's dimming only darkens what
 is drawn and adds nothing where there is no picture (the corners used to be a black box), and when the turn

@@ -265,8 +265,11 @@ took 81 percent of the figure and nothing else. SAM 2.1's ONNX copy says no lice
 
 ### For the cut-out: verified on the site's build (14 November 2026)
 
-The cut-out offers three qualities, quietly, as reading text does: Quick, MODNet fp16 (13 MB); Better, ormbg int8
-(44 MB), where it starts; Best, BiRefNet lite fp16 (123 MB), only where there is a graphics card. The owner
+The cut-out offers two qualities, quietly, as reading text does: Quick, MODNet fp16 (13 MB), and Best, ormbg int8
+(44 MB), where it starts. Until 15 November 2026 there were three: Quick, Better (ormbg) and Best, BiRefNet lite
+fp16 (123 MB) on a graphics card only. On the owner's machine BiRefNet could not get the card's memory it needed
+while her other programs were open, so Best mostly ended with "the graphics card was too busy to finish"; she chose
+to take BiRefNet out and call ormbg Best. What follows is kept as what was tried. The owner
 allowed exactly two more files to be fetched to this machine once, with their small config files, into
 `~/.cache/quire-model-trials/parts/`; each was checked against its listing's digest:
 
@@ -275,7 +278,7 @@ allowed exactly two more files to be fetched to this machine once, with their sm
 | `onnx-community/BiRefNet_lite-ONNX` | de15b22ba131738a16dff04aab8bdf8dc32e3ac1 | onnx/model_fp16.onnx | 114,538,221 | d39b897c…8bfec402 |
 | `wonfy/BiRefNet_lite-ONNX-webgpu` | c40eaa22fb1af9edcf75c7b79d25ed8a8e901140 | onnx/model_fp16.onnx | 123,210,389 | 2290313b…e9cff2d7 |
 
-The full digests are in `src/quire/img/parts/models.ts` (`BIREFNET_FILES`). The rebuild's card says MIT, names
+The full digests were in `src/quire/img/parts/models.ts` (`BIREFNET_FILES`) until BiRefNet was taken out; they are in that file's history. The rebuild's card says MIT, names
 `ZhengPeng7/BiRefNet_lite` as its base and `onnx-community/BiRefNet_lite-ONNX` as where it started, says the weights
 are unchanged and only the graph rewritten (constants folded, wide Concat and Split nodes made trees, Sum nodes
 made chains of Add, the deformable convolutions' GatherND made a Gather with no int64 left, so every node uses at
@@ -293,7 +296,7 @@ and 12 megapixels (the model's own work is the same; times warm):
 | BiRefNet lite, stock fp16 | out of memory (`std::bad_alloc` in OrtRun) | out of memory in its operators that fall back to the processor | |
 | BiRefNet lite, rebuild fp16 | out of memory (`std::bad_alloc`) | 0.86 s (2.5 s the first time), 0.90 s at 12 MP | 94, 0 |
 
-So the rebuild is the one offered, on the card only. Whether it gives the stock export's mask within a small
+So the rebuild was the one offered, on the card only, until it was taken out. Whether it gives the stock export's mask within a small
 bound could not be checked here, since the stock file runs nowhere on the site's runtime, and no other runtime
 is on this machine; its card's own comparison (fp16 against the fp32 stock on the processor: at most 0.07
 percent of pixels moved by more than 1/255) is its maker's claim. Once, with the machine busy with another

@@ -38,12 +38,20 @@ Choose another picture. A press on the picture keeps the thing pressed when ther
 opens a menu in the site's family: Paste and Choose a picture when empty; Copy, Save, Paste, then Keep and
 Remove with a cut-out; Shift leaves the browser's own.
 
-**The qualities.** Quick, MODNet (13 MB, made for people); Better, ormbg (44 MB); Best, BiRefNet lite's
-rebuild for WebGPU (123 MB), offered only where there is a graphics card. Each card says its time in plain
-words: "Under a second a picture, people only", "About 20 seconds a picture, most things", "About a second a
-picture, hair and fine edges". With nothing remembered, the dialog comes with Best picked where a graphics
-card gives WebGPU, and Better where there is none (with Quick beside it); a quality chosen on a past visit
-wins (`quire-cutout`). While Better works the line says "Cutting out, usually about 20 seconds".
+**The qualities.** Two, standing two in a row as cards of their usual size: Quick, MODNet (13 MB, made for
+people), and Best, ormbg (44 MB). Each card says its time in plain words: "Under a second a picture, people
+only", "About 20 seconds a picture, most things". With nothing remembered, the dialog comes with Best picked;
+a quality chosen on a past visit wins (`quire-cutout`). While Best works the line says "Cutting out, usually
+about 20 seconds". Both run on WebAssembly, so nothing in the cut-out runs on the graphics card.
+
+Until 15 November 2026 there were three: Quick, Better (ormbg) and Best (BiRefNet lite's rebuild for WebGPU,
+123 MB, offered only where there was a graphics card). On the owner's machine BiRefNet could not get the card's
+memory it needed while her other programs were open, so Best mostly ended with "the graphics card was too busy";
+asked, she chose to take BiRefNet out and to call ormbg Best. A choice a browser kept as the old Better
+(`cut-better`) or the old Best (`cut-best`) now reads as the new Best, whose id is `cut-best`. BiRefNet's file,
+where a browser had fetched it, is left in the browser's private storage, unused: nothing reads or fetches it
+any more, and the store has no way to take one model's files out without a way to clear the rest being built
+for it; clearing the site's data takes it away.
 
 **Edges.** The model's mask is found at its own size and kept at most 1024 a side, and applied at full size:
 a guided filter in the picture's colors (radius 2, epsilon 1e-4) fits at each place of the mask the plane
@@ -77,8 +85,8 @@ size), warm:
 | Quality | WebAssembly | WebGPU |
 |---|---|---|
 | Quick (MODNet) | 0.6 s | runs on WebAssembly: 0.6 s |
-| Better (ormbg) | 19.5 s | runs on WebAssembly: 19.5 s |
-| Best (BiRefNet lite) | does not run: out of memory | 0.86 s (2 MP), 0.90 s (12 MP); 2.5 s the first time |
+| Best (ormbg) | 19.5 s | runs on WebAssembly: 19.5 s |
+| BiRefNet lite, Best until 15 November 2026, taken out | does not run: out of memory | 0.86 s (2 MP), 0.90 s (12 MP); 2.5 s the first time, when the card had the memory |
 
 and the edges worked out and the cut-out laid at full size, 12 megapixels: 1.3 s (the color guide and the
 stretch at the mask's size on the processor, the full-size pass through WebGL2 on software drawing, in
@@ -128,20 +136,14 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
 
 ## Known weak spots
 
-- Better takes about 20 s, since ormbg runs on WebAssembly only; Best needs a graphics card. On a machine
-  with no card the choice is Quick (made for people) or a slow Better.
-- Best's rebuild (wonfy/BiRefNet_lite-ONNX-webgpu, MIT, a third party's rewrite of the stock graph with
-  the same weights) could not be checked against the stock export here: the stock file runs out of memory on
-  the site's runtime both on WebAssembly and on the card. Its card says its fp16 file differs from the fp32
-  stock one by at most 0.07 percent of pixels; that is its maker's claim.
-- Best beside another browser drawing hard on the same graphics card: a buffer of the model fails to be made,
-  every buffer after it is invalid ("Invalid Buffer is invalid due to a previous error"), and ONNX Runtime goes
-  on giving answers of nothing (all kept) or of part nothing, run after run, without a word. Reproduced three
-  times in about sixty runs beside the drawing tests. The card's errors are now watched for each run (error scopes for
-  memory, validation and internal errors, the device's loss and errors no one caught), such a run is no
-  answer named by its cause, and the cut-out runs it once more by itself in a fresh worker (a fresh runtime
-  and hold on the card) before telling the person "the graphics card was too busy to finish". A mask all kept
-  or all gone is refused the same way. A wrong mask that raised no error on the card would still not be caught.
+- Best takes about 20 s, since ormbg runs on WebAssembly only; the choice is Quick (made for people) or a slow
+  Best. Nothing quicker for hair and fine edges is offered since BiRefNet was taken out.
+- The graphics card's errors are still watched for any run of a model on the card (error scopes, the device's
+  loss, errors no one caught), with the run made once more in a fresh worker and "the graphics card was too busy
+  to finish" said after a second failure; with both qualities on WebAssembly the cut-out no longer reaches that,
+  but Find's image encoders run on the card through the same worker, and a mask all kept or all gone is still
+  refused and run once more. Why it was built: BiRefNet beside another browser drawing hard on the same card gave
+  answers of nothing, run after run, without a word.
 - The brush's strokes are painted into the mask at its own size (at most 1024 a side), so on a large
   picture their edge is soft by a few pixels, then follows the picture by the guided filter.
 - A press keeps what the cut-out found inside the thing pressed (its outline by SlimSAM, widened a little);
