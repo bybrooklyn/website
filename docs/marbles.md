@@ -1071,29 +1071,45 @@ either, as on a phone. Before this a wide screen had four short rows with nothin
 
 ## Races from a starting gate, built
 
-On 15 November 2026, in the draft Marbles: `race.ts` starts a race from a line behind a starting gate,
-`table.ts` puts the line and the gate on a hopper's chute (`line`, `open`), `share.ts` carries the last race
-in a link, `marbles.ts` shows the line's number and runs it again, `runs.ts` gives every moving and sounding
-piece a nearer opening spot, and `runs.test.ts` says what a stuck marble is. Mote is unchanged.
+On 15 November 2026, in the draft Marbles: `race.ts` runs a race from a line behind a starting gate,
+`table.ts` puts the line and the gate on a hopper's chute and lets the line through (`line`, `release`,
+`PACE`), `share.ts` carries the last race in a link, `marbles.ts` shows the line's number and runs it again,
+`runs.ts` gives every moving and sounding piece a nearer opening spot, and `runs.test.ts` says what a stuck
+marble is. Mote is unchanged.
 
 Before this a race let its marbles go one after another, 0.35 s apart, each timed from its own letting go. On
 one lane with nothing to mix them every marble took the same time to the hundredth, and the result said
-photo finish every time. The choice made: let them go together from a starting gate, so that the order they
-arrive in is the result.
+photo finish every time. A start together was built first and measured (below, under what was tried): it
+lost a quarter of the marbles on runs made for marbles that come one at a time. The choice made after it:
+the gate lets the line through one marble at a time at the hopper's own pace, every clock started when it
+first opens.
 
-**How a race starts.** The racers stand in a line on the hopper's own chute, touching, a millimetre apart as
-they are put there, the line's middle where the hopper's marble waits to be let go (9 cm up the chute from
-the joint), moved down the chute as far as it must for the line to fit; the hopper's own marbles are taken
-away. In front of the line a steel plate stands across the chute, 2.5 mm through, a driven body in the
-physics like a lift's car, in a still frame of two posts and a bar: the gate. The line stands for half a
-second, each marble coming to rest against the one before, then the plate rises 3.6 cm in 0.15 s, easing in
-and out, straight up into its frame out of their way, and they go. With several hoppers the line is dealt
-among them in the run's order and every gate rises at the same step. A marble's time runs from that step to
-the moment it first comes into any tray, found to a fraction of a step as before, so the order is the order
-they arrive. A marble that falls, stops for 1.5 s or is still going after 90 s does not finish and the
-result says which. A new table for the run, stepped exactly as the test steps it: the same race to the bit
-twice, and in Chromium as in Bun (`race.test.ts`, every made run with a tray, four and eight marbles); in
-the built page on the graphics card the times came out as Bun's.
+**How a race goes.** The racers wait in a line behind a gate on the hopper's chute, in an order drawn from a
+number. The front marble waits exactly where a hopper's own marble waits to be let go (9 cm up the chute from
+the joint); the rest wait up the chute behind it a marble's width apart and, past the chute's top end, stacked
+up inside the hopper's box; all of them are held still, as a hopper holds its marbles. The gate is a steel
+plate across the chute just before the front marble, 2.5 mm through, a driven body in the physics like a
+lift's car, in a still frame of two posts and a bar. The line stands for half a second; then the plate rises
+3.6 cm in 0.06 s, stays up while the front marble rolls clear, comes down behind it at 0.2 s, and the line
+moves up one place from 0.1 s to 0.35 s, so that the next marble waits where the first did. At 0.35 s the gate
+lets the next through, and so on to the last. With several hoppers the line is dealt among them in the run's
+order, their gates first open at the same step and keep step.
+
+**The pace** is 0.35 s, a hopper's own: the 0.3 s its next marble takes to come out of the box to the mouth
+and a twentieth more (`PACE` is `COMING` and 0.05). It is the gap the old race let its marbles go at, which
+the made runs were tested with (all but the trapdoor's odd marble arrived), and each marble leaves from the
+place and at the speed (from rest) a marble let go by hand does, so it goes down the run as the run was
+built for. A race of eight takes from 4.9 s (a first run) to 16.5 s (every moving and sounding piece) from the
+press to the result, of which the line's last marble waits 2.45 s for its turn: not long to watch, so no
+second pace is offered; were one wanted, 0.5 s would give each piece more room at the cost of a second more.
+
+**Timing.** Every racer's time runs from the gate's first opening to the moment it first comes into any
+tray, found to a fraction of a step as before, so a marble further back has its wait on its clock, the order
+is the order they arrive, and on one lane the times differ by the pace and by nothing else. A marble that
+falls, stops for 1.5 s, or is still going 90 s after it was let through does not finish and the result says
+which. A new table for the run, stepped exactly as the test steps it: the same race to the bit twice, and in
+Chromium as in Bun (`race.test.ts`, every made run with a tray, four and eight marbles); in the built page on
+the graphics card the times came out as Bun's, and a link carrying a race gave the same race to the bit.
 
 **The line's order.** Drawn from a number from 1 to 999 (`lineOf`, a shuffle by a small generator of whole
 numbers, the same in every browser). Race them, or X, draws a new number; the number is shown in a box
@@ -1113,52 +1129,51 @@ are not called a photo finish.
 stands where: the line is the same bodies in the same places whatever the number, so the race is the same
 race under other names, and what follows holds for every number. "Order not the line's" counts the races in
 which two or more finished and those that did were not in the order they stood; where places change is
-found from the order in which the marbles first come onto each piece.
+found from the order in which the marbles first come onto each piece, and by the tray they end in.
 
 | Run | Finished, of 2 3 4 5 6 7 8 | Order not the line's | Where places change |
 |---|---|---|---|
-| a first run | all, every count (35 of 35) | 0 of 7 | nowhere |
-| every kind of piece | 1 1 2 3 4 3 5 (19) | 4 of 5 | the funnel; once the S bend and curves before it |
-| a tune on chime bars | 2 0 4 4 1 5 7 (23) | 0 of 5 | nowhere |
-| sorting by switch and seesaw | 0 3 4 3 5 3 0 (18) | 4 of 5 | the seesaw, which tips its marbles out together |
-| a race through a funnel | 2 3 3 4 5 6 8 (31) | 5 of 7 | the funnel |
-| a tall bent run | 2 3 4 4 6 7 6 (32) | 0 of 7 | nowhere |
-| every moving and sounding piece | 0 1 2 2 2 1 0 (8) | 1 of 3 | after the chime bar, and at the lift |
+| a first run | all (35 of 35) | 0 of 7 | nowhere |
+| every kind of piece | all (35) | 6 of 7 | the funnel |
+| a tune on chime bars | all (35) | 0 of 7 | nowhere |
+| sorting by switch and seesaw | 0 0 2 4 4 4 6 (20) | 4 of 5 | the switch's two ways, the seesaw and the trapdoor |
+| a race through a funnel | all (35) | 5 of 7 | the funnel |
+| a tall bent run | all (35) | 0 of 7 | nowhere |
+| every moving and sounding piece | 1 2 4 5 6 7 7 (32) | 5 of 6 | the switch's two ways, of different lengths |
 
-Races of four and eight: a first run, four 2.14 to 2.28 s, eight 2.90 to 4.17 s, all in the line's order;
-every kind of piece, four two finish 8.05 and 11.59 s, the other two stop at the loop, eight five finish
-8.92 to 15.15 s, two stop at the loop and one falls, places changed in both; a tune, four 7.94 to 9.29 s in
-line, eight seven finish 7.51 to 9.71 s in line and one stops on a chime bar; sorting, four all finish 2.51
-to 3.68 s, places changed, eight none finish (they stop on the straight before the switch, at the switch
-and in the seesaw); the funnel, four three finish 3.92 to 9.75 s in line and one stops on the curve before
-the funnel, eight all finish 4.28 to 12.37 s, places changed; the tall bent run, four 10.75 to 12.11 s, eight
-six finish 12.01 to 13.41 s and two stop on a bent slope, both in line; every moving and sounding piece, four
-two finish 13.70 and 14.28 s, one stops at the bell and one waits on the trapdoor, eight none finish.
+227 of 245 finish, as many as the old start, and every marble that does not finish waits in the seesaw for
+more or on the trapdoor for a pair: no marble is lost on any run, and none at a chime bar, the bell or the
+drum. Races of four and eight:
 
-For comparison, the same races let go 0.35 s apart as before: every marble finished on every run but
-sorting (where some always wait in the seesaw or on the trapdoor) and every moving and sounding piece
-(seven of eight, the last waiting on the trapdoor): 227 of 245 against 166 of 245 now.
+| Run | Four | Eight |
+|---|---|---|
+| a first run | 1.98 to 3.03 s, in line | 1.98 to 4.43 s, in line |
+| every kind of piece | 7.64 to 13.37 s, places changed | 7.64 to 12.64 s, places changed |
+| a tune on chime bars | 8.64 to 9.69 s, in line | 8.64 to 11.09 s, in line |
+| sorting by switch and seesaw | two finish, 3.52 and 3.62 s; two wait in the seesaw | six finish, 3.52 to 4.91 s, places changed; two wait in the seesaw |
+| a race through a funnel | 7.11 to 12.60 s, places changed | 6.79 to 14.47 s, places changed |
+| a tall bent run | 11.95 to 13.00 s, in line | 11.95 to 14.40 s, in line |
+| every moving and sounding piece | 9.87 to 15.37 s, places changed | seven finish, 8.95 to 15.96 s, places changed; the last waits on the trapdoor |
 
-**The sounding runs.** They lose more marbles now, not fewer. In a groove one marble wide, marbles that
-start touching stay together: each keeps the gap in time it had, which is a twentieth of a second or less,
-where the tune and every moving and sounding piece were built for marbles seconds apart. On the tune, two or
-three that reach a chime bar's glass tube together drop onto the bar and each other and are left at rest on
-it or the slope after (all three of a race of three, five of six). On every moving and sounding piece, a
-line of five or more comes slowly along the level long straight to its gate, and the marbles behind the
-first cannot swing it open, so they wait there or on the straight (all eight of eight, six of seven); two
-or three that get through together stop on the chime bar or the bell; and an odd marble on the trapdoor's
-side waits there for a pair, as it always did. The races let go 0.35 s apart had lost none at the chime
-bars, the bell or the drum in Bun; the losses reported before were the trapdoor's last marble waiting for a
-pair.
+On a run of one lane (a first run, the tune, the tall bent run) the line decides it: every marble is a pace
+behind the one before, and the result says the line decided it.
 
-**Other ways the start was tried**, each measured over the same 49 races (with a plate that rose 4.6 cm
-and no frame; the line as built gave 171 then): a gate at the foot of the chute with the line above it, 162
-finished, the line's front too low to carry it over a level straight; a plate before every marble, all
-rising together, so that they start apart, 160; that line centred on the hopper's waiting place, 171; the
-touching line kept as high up the chute as it fits, worse, marbles starting above the waiting place leave
-the bends of the tall bent run. Plates that swung up rather than rose knocked the marbles they swung toward.
-The counts move by a few marbles with any small change to the start, as the gate's rise from 4.6 to 3.6 cm
-moved 171 to 166: which marble stops where is chaotic, the losses as a whole are not.
+**What was tried first: a start together.** The same line, touching, its middle where the hopper's marble
+waits and moved down the chute as far as it had to for the line to fit; the gate rose once and they all went
+at once, every clock from then. 166 of 245 finished against 227: in a groove one marble wide marbles that
+start touching stay together, each keeping the gap in time it had, a twentieth of a second or less, where
+the tune and every moving and sounding piece were built for marbles seconds apart. Two or three reaching a
+chime bar's glass tube together were left at rest on the bar or the slope after it (all three of a race of
+three on the tune, five of six); on every moving and sounding piece a line of five or more came slowly along
+the level long straight to its gate piece and the marbles behind the first could not swing it open (all
+eight of eight); it finished 8 of 35. By run, of 2 to 8 marbles: a first run 35, every kind of piece 19, the
+tune 23, sorting 18, the funnel 31, the tall bent run 32, every moving and sounding piece 8. Variants of it,
+each over the same 49 races: a gate at the foot of the chute with the line above it, 162, the front too low
+to carry over a level straight; a plate before every marble, all rising together, 160; that line centred on
+the hopper's waiting place, 171; the line as high up the chute as it fits, worse, marbles starting above the
+waiting place leave the bends of the tall bent run. Plates that swung up rather than rose knocked the
+marbles they swung toward. Which marble stopped where moved by a few with any small change to the start; the
+losses as a whole did not.
 
 **The opening view.** Every moving and sounding piece opens framed on its start, the hopper to the drum
 (its first nine pieces), as the fit button frames pieces from the spots' own way of looking (turn 0.75, tip
@@ -1172,30 +1187,29 @@ anywhere else, fails it.
 
 **Words a visitor sees, new or changed:** the button *same line*; the box labelled *line*, and for a
 reader *the number the line is drawn by*; *Line 417.* (the number), *No marble passed another: the line
-decided it.* and *Places changed on the way.* under the result; *A race came with this run: same line runs it.* when a link brings one; in
-the keys list *X race the marbles, in a new line* and *Shift+X race them again in the same line*.
+decided it.* and *Places changed on the way.* under the result; *A race came with this run: same line runs
+it.* when a link brings one; in the keys list *X race the marbles, in a new line* and *Shift+X race them
+again in the same line*.
 
 **Weak, said plainly.**
 
-- Starting together loses marbles on runs made for marbles that come one at a time: 166 of 245 finish
-  where 227 did. Every moving and sounding piece finishes 8 of 35 and none of a race of eight.
+- Only the front marble of the line is seen: the hopper's box hides the chute above the place a hopper's
+  marble waits, so the rest of the line waits inside it, and comes out a place at a time.
 - On one lane the line decides the order and the number decides the line: a race there is a draw, said so.
 - A number renames the racers but does not change the race: on the funnel the same place in the line wins
   for a given count whatever the number.
-- With eight racers on one hopper the line reaches down to 2.5 cm from the joint, so its front starts
-  lower and slower than a marble let go by hand; and the last three stand inside the hopper's box, unseen
-  until the gate opens.
+- On sorting and every moving and sounding piece a marble left over waits in the seesaw or on the trapdoor
+  and the result says it stopped: the run holds it, as it always did.
 - Measured in Bun; the pictures were looked at in headless Chromium on the graphics card only.
 
 **Choices left.**
 
-- Starting together, given what it costs on the sounding runs; or the alternative below.
-- The alternative kept in mind: the number also moves each marble of the line by up to a millimetre, so that
-  on a run that mixes the race itself differs from number to number, not only the names; or, for runs made
-  for marbles one at a time, the gate letting them through one by one at the hopper's own pace with every
-  clock started when it first opens.
+- The pace, 0.35 s, a hopper's own; 0.5 s if each piece should have more room.
+- The line seen only at its front, the rest waiting in the hopper's box.
+- The alternative kept in mind: the number also moves each marble of the line by up to a millimetre, so
+  that on a run that mixes the race itself differs from number to number, not only the names.
 - The line drawn from a number shown, numbers 1 to 999, a new one on race them.
-- The gate as a steel plate that rises in a frame, half a second of standing before it does.
+- The gate as a steel plate that rises in a frame, half a second of standing before it first does.
 - The nearer opening view of every moving and sounding piece, framed from the hopper to the drum.
 
 ## Open
