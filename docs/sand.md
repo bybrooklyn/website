@@ -571,7 +571,7 @@ burning wood give light; steam and smoke are soft. Each frame that anything chan
    cells' color.
 2. **Blur** both across, then down: four samples each way, each pair of texels read as one between them,
    a bell of spread 2.6 half-texels, about twelve cells.
-3. **Draw** the cells sharp; a soft cell only faint (0.4) over its blurred haze; the light added over
+3. **Draw** the cells sharp; a soft cell at 0.7 of its color (`SOFT_SHARP`, it was 0.4) over its blurred haze; the light added over
    everything, kept a color the page can blend (as opaque as it is bright).
 
 A single hot cell gives little light, as it is averaged over four; a mass of fire or lava glows round
@@ -1055,4 +1055,10 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   cell of oil creeps into the oil beside it 24 times in 1024 a step, so a slick keeps burning where a
   hole has opened in its top, and a flame touching oil lights it 192 times in 1024 (it was 96), as a
   flame touches the surface only for the step it passes.
+- **Smoke and steam can be seen.** Smoke was (70, 68, 72) at 170 of 255, drawn at 0.4 of that over the
+  dark ground (about (16, 10, 26)): a faint smudge. Steam drawn the same way came out darker than stone,
+  so a wisp of it rising from lava over water read as grey grains of rock floating. Smoke is now
+  (150, 140, 166) at 235, steam (238, 244, 255) at 240, and a soft cell is drawn at 0.7 of its color.
+  By a test's sum (brightness over the ground, as drawn) smoke stands 85 over the ground where it stood
+  26, and steam is 167 against stone's 121, where it was 95.
 

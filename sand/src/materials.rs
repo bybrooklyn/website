@@ -157,14 +157,14 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "water", kind: Kind::Liquid, density: 100, slide: 0, roll: 0, spread: 5, fall: 4, pace: 0, level: 1, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [52, 118, 214, 235], vary: [10, 16, 18], paint: true },
     Material { name: "stone", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 120, 126, 255], vary: [22, 22, 22], paint: true },
     Material { name: "dirt", kind: Kind::Powder, density: 150, slide: 2, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [118, 84, 56, 255], vary: [26, 20, 16], paint: true },
-    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 1, conduct: 2, made: 160, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [206, 214, 224, 150], vary: [18, 18, 18], paint: true },
+    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 1, conduct: 2, made: 160, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [238, 244, 255, 240], vary: [10, 10, 8], paint: true },
     Material { name: "wall", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
     Material { name: "void", kind: Kind::Void, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
     Material { name: "wood", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 78, 44, 255], vary: [22, 16, 10], paint: true },
     Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [92, 62, 30, 240], vary: [14, 10, 6], paint: true },
     Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 2, fall: 3, pace: 96, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [226, 92, 28, 255], vary: [58, 110, 40], paint: true },
     Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [176, 218, 240, 245], vary: [14, 12, 8], paint: true },
-    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [70, 68, 72, 170], vary: [20, 20, 20], paint: true },
+    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 140, 166, 235], vary: [24, 24, 24], paint: true },
     Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: 0, conduct: 1, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [236, 116, 34, 255], vary: [40, 200, 80], paint: true },
     Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [116, 214, 64, 230], vary: [20, 30, 14], paint: true },
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [84, 58, 40, 255], vary: [18, 14, 10], paint: false },
@@ -696,6 +696,21 @@ mod tests {
         assert_eq!(PALETTE[1024 + EMBER as usize * 4 + 3], DRAW_LIGHT);
         assert_eq!(PALETTE[1024 + SMOKE as usize * 4 + 3], DRAW_SOFT);
         assert_eq!(PALETTE[1024 + SAND as usize * 4 + 3], 0);
+    }
+
+    #[test]
+    fn smoke_reads_on_the_page_and_steam_reads_as_light_not_as_stone() {
+        // a soft cell is drawn at 0.7 of its color over the page's dark ground, as cells.ts does
+        // (`SOFT_SHARP`), the rest of it spread as haze; a stone is drawn whole
+        let luma = |c: [u8; 4]| 0.2126 * c[0] as f64 + 0.7152 * c[1] as f64 + 0.0722 * c[2] as f64;
+        let ground = luma([16, 10, 26, 255]);
+        let drawn = |m: u8| {
+            let c = MATERIALS[m as usize].color;
+            ground + (luma(c) - ground) * c[3] as f64 / 255.0 * 0.7
+        };
+        assert!(drawn(SMOKE) > ground + 60.0, "smoke {:.0} on a ground of {ground:.0}", drawn(SMOKE));
+        assert!(drawn(STEAM) > luma(MATERIALS[STONE as usize].color) + 30.0, "steam {:.0}, stone {:.0}", drawn(STEAM), luma(MATERIALS[STONE as usize].color));
+        assert!(drawn(STEAM) > luma(MATERIALS[ROCK as usize].color) + 30.0);
     }
 
     #[test]
