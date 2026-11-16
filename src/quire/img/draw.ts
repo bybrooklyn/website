@@ -415,7 +415,9 @@ export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
         backend.draw(images, fills, scene.cropping ? undefined : place(look.crop), graded);
     }
     /** The picture as it looks, at full size: its pixels, the covers painted in before resampling so that nothing they hide is read, and the marks drawn over, each magnifier's lens flattened the same way at the size it is drawn. */
-    async function flatten(look: Look, most = PIECE, grading?: Grading, space: Space = "srgb"): Promise<ImageData> {
+    async function flatten(look: Look, most = PIECE, grading?: Grading, space: Space = "srgb", made?: ImageData): Promise<ImageData> {
+        // the picture's pixels made already at the look's size (a model's enlargement): only the marks are drawn over them
+        if (made && made.width === look.width && made.height === look.height) return marked(look, made, most, grading, space);
         const result = new ImageData(look.width, look.height);
         backend.grading(grading);
         const stepX = look.crop.width / look.width;
@@ -448,6 +450,10 @@ export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
             part.close();
             for (let row = 0; row < piece.out.height; row++) result.data.set(pixels.subarray(row * piece.out.width * 4, (row + 1) * piece.out.width * 4), ((piece.out.y + row) * look.width + piece.out.x) * 4);
         }
+        return marked(look, result, most, grading, space);
+    }
+    /** The marks drawn over a look's pixels, each magnifier's lens flattened from the original at the size it is drawn. */
+    async function marked(look: Look, result: ImageData, most: number, grading: Grading | undefined, space: Space): Promise<ImageData> {
         if (look.marks.length) {
             // the marks drawn in the result's own space, so that a mark on a Display P3 picture is the color picked, the browser turning its sRGB color into P3 numbers
             const p3 = space === "p3" && !grading?.convert;

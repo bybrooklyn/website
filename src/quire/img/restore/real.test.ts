@@ -132,7 +132,7 @@ test("each restoring model runs where the table says, and comes nearer the clean
         const wait = async (limit: number) => {
             const began = Date.now();
             while (!(await page.tab.run<boolean>("!!window.done")) && Date.now() - began < limit) await page.tab.wait(250);
-            return page.tab.run<Record<string, number | string> | undefined>("window.done");
+            return page.tab.run<Record<string, number | string | boolean> | undefined>("window.done");
         };
         // a browser just started gives no graphics adapter for its first moments, so the card is asked for after a little while
         await page.tab.wait(2500);
