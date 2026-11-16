@@ -98,13 +98,14 @@ fn keep(list: &mut [(u64, u32)], count: &mut usize, rank: u64, cell: u32) {
     *count = (*count + 1).min(PER_BODY);
 }
 
-/// Whether a cell of this kind can move into a cell holding `cell`: a liquid into an empty cell or a
-/// gas, a gas into an empty cell.
+/// Whether a cell of this kind can move into a cell holding `cell`: a liquid into an empty cell, a
+/// gas or a flame, a gas into an empty cell.
 #[inline(always)]
 fn open(kind: Kind, cell: u32) -> bool {
     match TABLE[material(cell) as usize].kind {
         Kind::Empty => true,
-        Kind::Gas => kind == Kind::Liquid,
+        // a liquid levels across flames as across air: a burning patch does not dam it
+        Kind::Gas | Kind::Fire => kind == Kind::Liquid,
         _ => false,
     }
 }
@@ -333,3 +334,17 @@ impl World {
         levels.count += 1;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::materials::{FIRE, STEAM, STONE};
+
+    #[test]
+    fn a_liquid_levels_into_air_gas_and_flames_and_a_gas_only_into_air() {
+        for (m, liquid, gas) in [(0u8, true, true), (STEAM, true, false), (FIRE, true, false), (STONE, false, false)] {
+            assert_eq!((open(Kind::Liquid, m as u32), open(Kind::Gas, m as u32)), (liquid, gas), "{m}");
+        }
+    }
+}
+

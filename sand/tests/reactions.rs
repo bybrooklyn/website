@@ -308,6 +308,22 @@ fn fire_stays_bounded_water_puts_it_out_and_stone_sand_and_dirt_do_not_burn() {
 }
 
 #[test]
+fn ash_does_not_dam_water_it_floats_up_through_it_and_the_water_finds_one_level() {
+    let top = |w: &World, x0: i32, x1: i32| (x0..=x1).filter_map(|x| (0..60).find(|&y| w.at(x, y) == WATER)).collect::<Vec<i32>>();
+    // a wall of ash with water held on one side of it
+    let mut world = World::new(80, 60, 22);
+    fill_rows(&mut world, ASH, 38, 42, 20, 59);
+    fill_rows(&mut world, WATER, 0, 37, 20, 59);
+    run(&mut world, 600);
+    let (left, right) = (top(&world, 2, 30), top(&world, 50, 77));
+    let under = (0..80).flat_map(|x| (1..60).map(move |y| (x, y))).filter(|&(x, y)| world.at(x, y) == ASH && (0..y).any(|y| world.at(x, y) == WATER)).count();
+    println!("ash: water tops left {:?} right {:?}; ash with water over it {under}", (left.iter().min(), left.iter().max()), (right.iter().min(), right.iter().max()));
+    // the highest water each side within a cell (floating ash lies over some of it)
+    assert!(right.len() == 28 && (left.iter().min().unwrap() - right.iter().min().unwrap()).abs() <= 1, "one level both sides\n{}", picture(&world, 0, 0, 79, 59));
+    assert_eq!(under, 0, "the ash floats on top\n{}", picture(&world, 0, 0, 79, 59));
+}
+
+#[test]
 fn acid_poured_on_stone_eats_a_pit_and_is_used_up() {
     let mut world = World::new(160, 100, 9);
     fill_rows(&mut world, STONE, 0, 159, 60, 99);

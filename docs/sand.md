@@ -1013,4 +1013,12 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   side for ever, so steam made under water stayed there. Water boiling over lava now bubbles up and
   condenses under the lid (the sealed box boiled 1,879 cells' worth, with at most 25 steam at once,
   where steam had gathered under the water in a layer of up to 426).
+- **Ash and flames no longer dam water.** A heap of burnt wood's ash held water 7 to 11 rows higher on
+  one side for good, as no liquid could enter a cell of powder. A falling or sliding liquid now takes the
+  place of a powder lighter than 80 (only ash; sand and dirt are far heavier, so powders still never pass
+  each other), water pressed from above pushes aside ash with nothing over it, and water beside a grain
+  of ash with liquid over it leaves it to rise. The levelling pass carries a liquid into flames as into
+  air. Water poured beside the tester's heap now stands at row 271 on both sides with no ash under water,
+  where it stood at 265 on one side and never reached the other. Water poured on a burning block still
+  leaves embers burning where the water beside them boils away as fast as it comes (31 after 20 seconds).
 
