@@ -181,6 +181,13 @@ test("a cut-out step reads back from steps.json with its mask, strokes and backg
     const bad = readSteps('{"quire": 1, "original": {"name": "a.png", "width": 10, "height": 10}, "steps": [{"type": "cutout", "found": {"width": 4, "height": 4, "runs": "AAAA"}, "background": "sky"}]}')!;
     expect(bad.steps).toEqual([]);
     expect(bad.dropped).toBe(1);
+    // a cut-out pressed out by hand keeps its presses, so another press adds to them; what is no press is left out
+    const pressed = { original, steps: [{ id: "s1", type: "cutout", found, presses: [{ x: 3, y: 4, add: true }, { x: 7, y: 2, add: false }], background: "clear" }] as Kept[] };
+    expect(readSteps(writeSteps(pressed))!.steps).toEqual(pressed.steps);
+    expect(look(readSteps(writeSteps(pressed))!).cutout?.presses).toEqual([{ x: 3, y: 4, add: true }, { x: 7, y: 2, add: false }]);
+    const wildPresses = readSteps(JSON.stringify({ quire: 1, original: { name: "a.png", width: 10, height: 10 }, steps: [{ type: "cutout", found, background: "clear", presses: [{ x: 1, y: 2 }, { x: "no", y: 2 }, null, ...Array.from({ length: 80 }, () => ({ x: 5, y: 5, add: true }))] }] }))!;
+    const kept = (wildPresses.steps[0] as { presses: { x: number; y: number; add: boolean }[] }).presses;
+    expect([kept.length, kept[0]]).toEqual([62, { x: 1, y: 2, add: true }]);
 });
 
 test("a perspective straightens the picture before it is turned, keeps its dials and corners in steps.json, bounded, and a file from before reads as it did", () => {

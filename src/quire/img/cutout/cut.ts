@@ -7,6 +7,7 @@
 //
 //   const pixels = await cutOut(bitmap, { found, background: "clear" });
 
+import type { Press } from "../parts/segment";
 import { decodeRuns, stamp, type Found, type Stroke } from "../masks";
 import { boxMean, lowOf, type Background, type Low } from "./refine";
 import { renderCut, type Behind } from "./render";
@@ -17,14 +18,22 @@ export const CUT_SIDE = 1024;
 /** What a cut-out is laid on, as kept: nothing, a color, or the old picture blurred. */
 export type Laid = "clear" | "color" | "blur";
 
-/** A cut-out as the document keeps it: the mask found, the brush's strokes (an erasing stroke removes), the subject pressed (a mask of it, if one was), what it is laid on and its color. */
+/**
+ * A cut-out as the document keeps it: the mask found, the brush's strokes (an erasing stroke removes), the subject pressed (a mask of
+ * it, if one was), what it is laid on and its color. Where the model found nothing and the thing wanted was pressed out by hand, the
+ * mask is the press model's and `presses` are the presses that made it, so that another press adds to them.
+ */
 export interface Cut {
     found: Found;
     strokes?: Stroke[];
     pick?: Found;
+    presses?: Press[];
     background: Laid;
     color?: string;
 }
+
+/** What is said when the model finds nothing: that, and the next step, a press on the thing wanted. */
+export const NOTHING_SAID = "Nothing was found to cut out. Press the thing you want to keep.";
 
 /** True when a mask is no answer: all of it kept or all of it gone (or its runs do not read). */
 export function blank(found: Found): boolean {

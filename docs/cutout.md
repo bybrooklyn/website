@@ -71,9 +71,11 @@ the page says the next step: "Nothing was found to cut out. Press the thing you 
 that thing out with the press model (SlimSAM, asked for once, as for choosing a subject), and each press after
 adds to it, since the press model takes a thing in parts: on a photograph of a cat in an office chair one press
 on the chest kept the white of its chest, and presses on the face, the chest and the back kept the whole cat.
-The presses that made a cut-out are kept with it on the page (`presses`), so one of many pictures keeps its own.
-imgQuire's Cut out tool still says "Nothing found" and stops there. The model is not run again on the same
-picture, since on WebAssembly a second run gives the same answer.
+The presses that made a cut-out are kept with it (`presses` in the cut-out, and in imgQuire's `cutout` step in
+`steps.json`, at most 64), so one of many pictures keeps its own and a document opened again can be pressed
+further. imgQuire's Cut out tool does the same: its status says the sentence, its strip says "Press the thing
+you want to keep", the press makes the step, and each press after is one undo. The model is not run again on
+the same picture, since on WebAssembly a second run gives the same answer.
 
 Best finds nothing on some photographs: of eleven of the owner's tried on 16 November 2026, four (two of a tabby
 cat on a black mesh chair, colored blocks on a table, a mineral on a wall, `20251109-135135`). Its model is a
@@ -197,8 +199,8 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
 - Best's mask is 512 on the picture's longer side, so on a large photograph its edges are softer than the 1024
   model's were (about three pixels across a sharp edge on a 12 megapixel picture); the guided filter keeps hair
   following the picture, but fine strands far apart lose some of themselves.
-- Best finds nothing on some photographs (four of eleven tried); the page then asks for a press on the thing
-  wanted, which cuts it out. imgQuire's Cut out tool does not yet: there it still stops at "Nothing found".
+- Best finds nothing on some photographs (four of eleven tried); the page and imgQuire's tool then ask for a
+  press on the thing wanted, which cuts it out.
 - A press made in the wrong place cannot be taken back by itself: the remove brush paints it away, or the picture
   is chosen again.
 - The files of the qualities taken out stay in a browser that fetched them until the site's data is cleared.

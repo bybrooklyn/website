@@ -42,7 +42,7 @@ import { createFinding } from "./finding";
 import { createFinder } from "./parts/finder";
 import { PART_TIERS } from "./parts/models";
 import { createAsking } from "./cutout/asking";
-import { cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from "./cutout/cut";
+import { blank, cutOut, CUT_SIDE, findCut, FOUND_NOTHING, NOTHING_SAID, type Cut, type Laid } from "./cutout/cut";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
@@ -329,6 +329,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         cutKey = "";
         cutShown = undefined;
         cutOpened = false;
+        cutNothing = false;
         await stage.show(shownSource);
         void showCut();
         if (token !== loading) return;
@@ -1470,6 +1471,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     let cutOpened = false;
     let cutBrush: "keep" | "remove" | undefined;
     let cutBusy = false;
+    // true when the model found nothing in the picture shown: a press on the thing wanted is then the way to cut it out
+    let cutNothing = false;
     const cutAsking = createAsking({ finder: () => sharedFinder, returnTo: () => buttons.cutout, moved: () => refresh() });
     /** The original as a bitmap, its numbers as they are (repaired, when that step is on), for the models and for cutting out. */
     const sourceBitmap = async () => {
@@ -1724,8 +1727,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
             frame.status.say("Cut out", `Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s with ${cutAsking.tier().name}`);
         } catch (error) {
             const said = error instanceof Error ? error.message : String(error);
-            // a model that found nothing leaves the picture as it was, and says so plainly
-            if (said === FOUND_NOTHING) frame.status.say("Nothing found", "Nothing was found to cut out, so the picture is left as it was", "warn");
+            // a model that found nothing leaves the picture as it was, and says so with the next step: a press on the thing wanted
+            cutNothing = said === FOUND_NOTHING;
+            if (cutNothing) frame.status.say("Nothing found", NOTHING_SAID.replace(/\.$/, ""), "warn");
             else frame.status.say("Not cut out", `The picture was not cut out: ${said}`, "warn");
         } finally {
             cutBusy = false;
@@ -1739,14 +1743,32 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const { id: _id, off: _off, type: _type, ...cut } = step;
         commit(history.now().map((each) => (each === step ? ({ ...to(cut as Cut), type: "cutout", id: step.id } as Kept) : each)));
     }
-    /** Keeps the thing pressed: the press-to-select model outlines it, and only what the cut-out found inside it stays. */
+    /**
+     * A press on the picture with the cut-out tool. With a cut-out the model found, it keeps the thing pressed: the press model outlines
+     * it, and only what the cut-out found inside it stays. Where the model found nothing, what is pressed is the cut-out itself, and each
+     * press after adds to it (the page at /cutout/ does the same).
+     */
     async function pickSubject(at: { x: number; y: number }) {
-        if (!picture || !look(picture).cutout || cutBusy || !(await cutAsking.picking(stage.element))) return;
+        const cut = picture ? look(picture).cutout : undefined;
+        if (!picture || (!cut && !cutNothing) || cutBusy || !(await cutAsking.picking(stage.element))) return;
         cutBusy = true;
         refresh();
         try {
-            const answer = await sharedFinder.select(PART_TIERS[0]!.id, `cut ${where.id ?? ""} ${picture.original.name}`, await sourceBitmap(), [{ x: Math.round(at.x), y: Math.round(at.y), add: true }]);
-            changeCut((cut) => ({ ...cut, pick: answer.found }));
+            const press = { x: Math.round(at.x), y: Math.round(at.y), add: true };
+            const key = `cut ${where.id ?? ""} ${picture.original.name}`;
+            if (!cut || cut.presses) {
+                const presses = [...(cut?.presses ?? []), press];
+                const answer = await sharedFinder.select(PART_TIERS[0]!.id, key, await sourceBitmap(), presses);
+                if (blank(answer.found)) frame.status.say("Nothing found", NOTHING_SAID.replace(/\.$/, ""), "warn");
+                else if (cut) changeCut((was) => ({ ...was, found: answer.found, presses }));
+                else {
+                    cutNothing = false;
+                    commit(setOnly(history.now(), { type: "cutout", found: answer.found, presses, background: "clear" }));
+                }
+            } else {
+                const answer = await sharedFinder.select(PART_TIERS[0]!.id, key, await sourceBitmap(), [press]);
+                changeCut((was) => ({ ...was, pick: answer.found }));
+            }
         } catch (error) {
             frame.status.say("Not chosen", `The thing pressed was not found: ${error instanceof Error ? error.message : String(error)}`, "warn");
         } finally {
@@ -1759,7 +1781,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     function cutStrip(): { said: string; controls: HTMLElement[] } {
         const cut = picture ? look(picture).cutout : undefined;
         if (cutBusy) return { said: cutAsking.tier().wait ? `Cutting out, usually ${cutAsking.tier().wait}` : "Cutting out", controls: [] };
-        if (!cut) return { said: "Not cut out", controls: [stripButton("Cut out", "Run the model again", () => void startCut())] };
+        // where the model found nothing, the strip says the next step in the status's own words
+        if (!cut) return { said: cutNothing ? NOTHING_SAID.slice(NOTHING_SAID.indexOf("Press")).replace(/\.$/, "") : "Not cut out", controls: [stripButton("Cut out", "Run the model again", () => void startCut())] };
         const pressed = (button: HTMLElement, on: boolean) => (button.classList.toggle("pressed", on), button);
         const swatches = COLORS.map((each) => {
             const mark = make("span", "quire-img-swatch");

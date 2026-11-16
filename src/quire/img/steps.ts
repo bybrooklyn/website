@@ -241,8 +241,8 @@ export function gradeOf(step: GradeStep | PartStep): Grade {
 
 /** A cut-out step's cut alone, without the document's fields. */
 export function cutOf(step: CutStep): Cut {
-    const { found, strokes, pick, background, color } = step;
-    return { found, ...(strokes ? { strokes } : {}), ...(pick ? { pick } : {}), background, ...(color ? { color } : {}) };
+    const { found, strokes, pick, presses, background, color } = step;
+    return { found, ...(strokes ? { strokes } : {}), ...(pick ? { pick } : {}), ...(presses ? { presses } : {}), background, ...(color ? { color } : {}) };
 }
 
 /** A step without the document's own fields. */
@@ -513,15 +513,29 @@ function readStrokes(value: unknown): Stroke[] | undefined {
     return strokes.length ? strokes : undefined;
 }
 
-/** A cut-out step from a file: its mask checked, its strokes and the subject pressed bounded, its background one of the three. */
+/** The presses that made a cut-out, from a file: at most 64, each a place within reach and whether it adds. */
+function readPresses(value: unknown): CutStep["presses"] {
+    if (!Array.isArray(value)) return undefined;
+    const presses = value
+        .slice(0, 64)
+        .map((each: Record<string, unknown> | null) => {
+            const [x, y] = [number(each?.x), number(each?.y)];
+            return x === undefined || y === undefined ? undefined : { x, y, add: each?.add !== false };
+        })
+        .filter((each): each is { x: number; y: number; add: boolean } => !!each);
+    return presses.length ? presses : undefined;
+}
+
+/** A cut-out step from a file: its mask checked, its strokes, the subject pressed and the presses that made it bounded, its background one of the three. */
 function readCut(step: Record<string, unknown>): CutStep | undefined {
     const found = readFound(step.found);
     if (!found) return undefined;
     const pick = readFound(step.pick);
     const strokes = readStrokes(step.strokes);
+    const presses = readPresses(step.presses);
     const background = step.background === "color" || step.background === "blur" ? step.background : "clear";
     const color = typeof step.color === "string" && COLOR.test(step.color) ? step.color.toLowerCase() : undefined;
-    return { type: "cutout", found, ...(strokes ? { strokes } : {}), ...(pick ? { pick } : {}), background, ...(color ? { color } : {}) };
+    return { type: "cutout", found, ...(strokes ? { strokes } : {}), ...(pick ? { pick } : {}), ...(presses ? { presses } : {}), background, ...(color ? { color } : {}) };
 }
 
 /** A part step from a file: its kind, gradient, strokes and found mask checked and bounded, its grade read as any grade is. */

@@ -8,7 +8,9 @@
 // are the page's own, ONNX Runtime's and the model's one file.
 
 import { expect, test } from "bun:test";
-import { homedir } from "node:os";
+import { mkdtemp, rm } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import { imgPage } from "../../../../scripts/img-page";
 import { CUT_TIERS } from "../parts/models";
 import { packageAt } from "../../../../scripts/lib";
@@ -142,3 +144,70 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         await page.close();
     }
 }, 300_000);
+
+test("in imgQuire, where the model finds nothing the tool says to press the thing wanted, and a press cuts it out as a step that keeps its presses", async () => {
+    // a worker standing in for the models, speaking the finder's own messages: every model is kept, the subject model finds nothing,
+    // and the press model keeps a square round each press
+    const folder = await mkdtemp(join(tmpdir(), "quire-cut-press-"));
+    await Bun.write(
+        `${folder}/worker.ts`,
+        `
+        import { encodeRuns } from "${import.meta.dir}/../masks.ts";
+        const found = (inside) => { const bytes = new Uint8Array(120 * 80); for (let y = 0; y < 80; y++) for (let x = 0; x < 120; x++) if (inside(x * 10, y * 10)) bytes[y * 120 + x] = 255; return { width: 120, height: 80, runs: encodeRuns(bytes) }; };
+        self.onmessage = (event) => {
+            const ask = event.data;
+            ask.picture?.close?.();
+            if (ask.type === "have") self.postMessage({ type: "have", id: ask.id, have: true });
+            else if (ask.type === "fetch") self.postMessage({ type: "fetched", id: ask.id });
+            else if (ask.type === "matte") self.postMessage({ type: "found", id: ask.id, found: found(() => false), ms: 1, place: "here" });
+            else if (ask.type === "select") self.postMessage({ type: "found", id: ask.id, found: found((x, y) => ask.presses.some((press) => Math.abs(x - press.x) < 150 && Math.abs(y - press.y) < 150)), ms: 1, place: "here" });
+        };
+    `,
+    );
+    const built = await Bun.build({ entrypoints: [`${folder}/worker.ts`], target: "browser" });
+    const worker = await built.outputs[0]!.text();
+    await rm(folder, { recursive: true, force: true });
+    const page = await imgPage("img-cutout-press", { width: 1300, height: 820 }, async (path) => (path === "/finder.ts" ? new Response(worker, { headers: { "Content-Type": "text/javascript" } }) : undefined));
+    if (!page) return;
+    const { tab, until } = page;
+    try {
+        await tab.run(`(async () => {
+            const canvas = new OffscreenCanvas(1200, 800);
+            const c = canvas.getContext("2d");
+            c.fillStyle = "#8a8a84"; c.fillRect(0, 0, 1200, 800);
+            c.fillStyle = "#b8452e"; c.fillRect(700, 250, 300, 300);
+            const blob = await canvas.convertToBlob({ type: "image/png" });
+            const data = new DataTransfer();
+            data.items.add(new File([blob], "box.png", { type: "image/png" }));
+            document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+        })()`);
+        await until("window.app.editing().stage?.loaded()?.size.width === 1200");
+        await tab.run("document.querySelector('.quire-img-stage').focus()");
+        await tab.press("Escape");
+        await tab.press("k");
+        // nothing is found: no step is made, and the strip says the next step
+        await until("document.querySelector('.quire-img-strip')?.textContent.includes('Press the thing you want to keep')");
+        expect(await tab.run("window.app.editing().steps().some((step) => step.type === 'cutout')")).toBe(false);
+        // a press on the box: the box is the cut-out, kept with its press
+        const box = await page.onScreen(850, 400);
+        await tab.click(box.x, box.y);
+        await until("window.app.editing().steps().find((step) => step.type === 'cutout')?.presses?.length === 1");
+        const alpha = "(async () => { const flat = await window.app.editing().flatten(); const at = (x, y) => flat.data[(y * flat.width + x) * 4 + 3]; return { box: at(850, 400), floor: at(200, 600) }; })()";
+        await until(`(async () => (await ${alpha}).box > 200)()`);
+        expect((await tab.run<{ box: number; floor: number }>(alpha)).floor).toBeLessThan(20);
+        expect(await tab.run("window.app.editing().steps().find((step) => step.type === 'cutout').presses")).toEqual([{ x: 850, y: 400, add: true }]);
+        // another press adds to what is kept, in the same step
+        const floor = await page.onScreen(200, 600);
+        await tab.click(floor.x, floor.y);
+        await until("window.app.editing().steps().find((step) => step.type === 'cutout')?.presses?.length === 2");
+        await until(`(async () => (await ${alpha}).floor > 200)()`);
+        expect(await tab.run("window.app.editing().steps().filter((step) => step.type === 'cutout').length")).toBe(1);
+        // each press is one step back
+        await tab.run("document.querySelector('.quire-img-stage').focus()");
+        await tab.press("z", { ctrl: true });
+        await until("window.app.editing().steps().find((step) => step.type === 'cutout')?.presses?.length === 1");
+        expect(tab.requests.filter((each) => !each.url.startsWith("http://localhost:"))).toEqual([]);
+    } finally {
+        await page.close();
+    }
+}, 120_000);

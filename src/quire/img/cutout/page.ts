@@ -34,7 +34,7 @@ import { atOnce, blobSink, fileSink, folderOut, runEach, zipOut, type Destinatio
 import { batchStrip, type StripItem } from "../batch-strip";
 import { pixelsOf, smallLook, smallOf } from "../thumbs";
 import { createAsking } from "./asking";
-import { blank, cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from "./cut";
+import { blank, cutOut, CUT_SIDE, findCut, FOUND_NOTHING, NOTHING_SAID, type Cut, type Laid } from "./cut";
 import type { Press } from "../parts/segment";
 
 /** The words of the page that a visitor reads first. */
@@ -45,13 +45,8 @@ export const CUT_WORDS = {
     working: "Cutting out",
     notCut: "Not cut out",
     /** When the model finds nothing: what is said, and the next step, which is a press on the thing wanted. */
-    nothing: "Nothing was found to cut out. Press the thing you want to keep.",
+    nothing: NOTHING_SAID,
 };
-
-/** A cut-out as the page holds it: with the presses that made it, when the model found nothing and it was pressed out by hand. */
-interface PressedCut extends Cut {
-    presses?: Press[];
-}
 
 /** A color offered to lay the cut-out on, named in its tooltip (the kit's). */
 export type { Swatch };
@@ -122,7 +117,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     let picture: ImageBitmap | undefined;
     let space: "srgb" | "p3" = "srgb";
     let profile: Uint8Array | undefined;
-    let cut: PressedCut | undefined;
+    let cut: Cut | undefined;
     // true when the model found nothing in the picture shown: a press on the thing wanted is then the way to cut it out
     let nothing = false;
     let result: ImageData | undefined;
@@ -453,7 +448,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     interface Entry {
         key: string;
         file: Blob & { name?: string };
-        cut?: PressedCut;
+        cut?: Cut;
         cutting?: Promise<Cut | undefined>;
         failed?: string;
         small?: ImageData;
