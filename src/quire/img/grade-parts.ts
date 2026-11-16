@@ -7,7 +7,7 @@
 //   const parts = gradeParts({ ... });
 //   panel.parts.append(parts.element); parts.fill();
 
-import { switchButton } from "../core/dialog";
+import { tick } from "../core/bench";
 import { make } from "../core/ui";
 import { slider } from "./grade-panel";
 import type { Shape } from "./masks";
@@ -59,7 +59,7 @@ export function gradeParts(hooks: PartsHooks) {
     const heading = make("p", "quire-img-grade-heading", "parts");
     const makers = make("div", "quire-img-grade-fixes");
     const button = (label: string, tip: string, press: () => void, className = "") => {
-        const made = make("button", `quire-dialog-dismiss quire-img-grade-fix ${className}`, label);
+        const made = make("button", `quire-bench-press quire-img-grade-fix ${className}`, label);
         made.type = "button";
         made.title = tip;
         made.addEventListener("click", press);
@@ -83,14 +83,11 @@ export function gradeParts(hooks: PartsHooks) {
             set: (value) => hooks.setShape({ feather: featherPixels(value, hooks.long()) }),
         },
     );
-    const invert = switchButton("inside out", false, (on) => hooks.setShape({ invert: on || undefined }));
-    invert.title = "Grade everything but the part";
-    const brushOn = switchButton("brush", false, (on) => hooks.setBrush({ ...hooks.brush(), on }));
-    brushOn.title = "Paint on the picture to add to this part";
-    const erase = switchButton("erase", false, (on) => hooks.setBrush({ ...hooks.brush(), erase: on }));
-    erase.title = "The brush takes away from the part";
+    const invert = tick("inside out", (on) => hooks.setShape({ invert: on || undefined }), "Grade everything but the part");
+    const brushOn = tick("brush", (on) => hooks.setBrush({ ...hooks.brush(), on }), "Paint on the picture to add to this part");
+    const erase = tick("erase", (on) => hooks.setBrush({ ...hooks.brush(), erase: on }), "The brush takes away from the part");
     const switches = make("div", "quire-img-part-switches");
-    switches.append(invert, brushOn, erase);
+    switches.append(invert.row, brushOn.row, erase.row);
     const size = slider(
         { key: "brush-size", label: "Size", tip: "The brush's size", low: 0 },
         { value: () => hooks.brush().size, preview: (value) => hooks.setBrush({ ...hooks.brush(), size: value }), set: (value) => hooks.setBrush({ ...hooks.brush(), size: value }) },
@@ -119,7 +116,7 @@ export function gradeParts(hooks: PartsHooks) {
         const brush = hooks.brush();
         brushOn.set(brush.on);
         erase.set(brush.erase);
-        erase.disabled = !brush.on;
+        erase.input.disabled = !brush.on;
         brushRows.classList.toggle("away", !brush.on);
         size.show();
         soft.show();

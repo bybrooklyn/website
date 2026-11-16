@@ -1,17 +1,18 @@
-// The Grade surface: a side panel where Export and Facts open (a sheet at the foot on a phone, which
-// can be dragged shorter), the picture refitting beside it. From the top: what is being graded, a
-// small histogram that follows the grade (pressed, a waveform), the one-press fixes, the six sliders,
-// and More, folded, for the deeper controls. Every slider has its zero in the middle and snaps to it,
-// is dragged from wherever it is pressed without jumping, is put back to zero by a double press, takes
-// a typed number, and moves by the arrow keys (Shift for ten). While a slider moves, the grade is
-// previewed; letting go makes it a change, one undo.
+// The grade's page of the side panel (side.ts), which the bar names color. From the top: what is being
+// graded, a small histogram that follows the grade (pressed, a waveform), the one-press fixes, the six
+// sliders, and More, folded, for the deeper controls. Every slider has its zero in the middle and snaps
+// to it, is dragged from wherever it is pressed without jumping, is put back to zero by a double press,
+// takes a typed number, and moves by the arrow keys (Shift for ten). While a slider moves, the grade is
+// previewed; letting go makes it a change, one undo. Its words and boxes are the small tools' kit
+// (core/bench.ts); the histogram, the curve and the wheels are its own.
 //
-//   const panel = gradePanel({ grade, set, preview, ... });
-//   panel.open(button); panel.fill(); panel.counts(counts);
+//   const panel = gradePanel(side, { grade, set, preview, ... });
+//   panel.open(); panel.fill(); panel.counts(counts);
 
-import { lowered } from "../core/bench";
-import { control, icon, make } from "../core/ui";
-import { giveRow, sidePanel, type GiveHooks } from "./panels";
+import { lowered, tick, word } from "../core/bench";
+import { make } from "../core/ui";
+import { giveRow, type GiveHooks } from "./panels";
+import type { sideColumn } from "./side";
 import { SLIDERS, type Grade } from "./grade";
 import { WAVE, type Counts } from "./measure";
 
@@ -229,8 +230,8 @@ export function drawCounts(canvas: HTMLCanvasElement, counts: Counts | undefined
 }
 
 /** Builds the Grade surface. `more` is filled by the deeper controls, `parts` by the parts' own. */
-export function gradePanel(hooks: GradeHooks) {
-    const side = sidePanel("grade", "quire-img-export quire-img-grade-panel", () => hooks.closed?.());
+export function gradePanel(column: ReturnType<typeof sideColumn>, hooks: GradeHooks) {
+    const side = column.page("color", "quire-img-grade-panel", { left: () => hooks.closed?.() });
     const target = make("p", "quire-img-grade-target");
     // the histogram, small, and the two ways to see the original beside it
     const top = make("div", "quire-img-grade-top");
@@ -252,7 +253,9 @@ export function gradePanel(hooks: GradeHooks) {
         flipScope();
     });
     scopeTip();
-    const original = control("Hold to see the original (\\)", icon("spoiler"), () => {});
+    const original = word("hold to see the original", () => {}, true);
+    original.title = "Hold to see the original (\\)";
+    original.setAttribute("aria-label", "Hold to see the original (\\)");
     original.classList.add("quire-img-grade-hold");
     const holdEnd = () => {
         original.classList.remove("pressed");
@@ -276,17 +279,18 @@ export function gradePanel(hooks: GradeHooks) {
     });
     original.addEventListener("keyup", holdEnd);
     original.addEventListener("blur", holdEnd);
-    const split = control("Split: the original on the left, the grade on the right", icon("column"), () => {
-        hooks.setSplit(!hooks.split());
+    const split = tick("split", (on) => {
+        hooks.setSplit(on);
         fill();
-    });
+    }, "Split: the original on the left, the grade on the right");
+    split.input.setAttribute("aria-label", "Split: the original on the left, the grade on the right");
     const ways = make("div", "quire-img-grade-ways");
-    ways.append(original, split);
+    ways.append(original, split.row);
     top.append(scope, ways);
     // the one-press fixes
     const fixes = make("div", "quire-img-grade-fixes");
     const button = (label: string, tip: string, press: () => void) => {
-        const made = make("button", "quire-dialog-dismiss quire-img-grade-fix", label);
+        const made = make("button", "quire-bench-press quire-img-grade-fix", label);
         made.type = "button";
         made.title = tip;
         made.addEventListener("click", press);
@@ -323,31 +327,12 @@ export function gradePanel(hooks: GradeHooks) {
     const parts = make("div", "quire-img-grade-parts");
     const space = make("p", "quire-img-grade-space");
     side.body.append(target, top, fixes, ...(giving ? [giving.row] : []), list, more, looks, parts, space);
-    // on a phone the sheet's head drags it shorter or taller, the picture above refitting as it goes
-    const head = side.panel.querySelector<HTMLElement>(".quire-img-panel-head")!;
-    let sheet: { y: number; height: number; id: number } | undefined;
-    head.addEventListener("pointerdown", (event) => {
-        if (!matchMedia("(max-width: 40rem)").matches || (event.target as HTMLElement).closest("button")) return;
-        event.preventDefault();
-        head.setPointerCapture(event.pointerId);
-        sheet = { y: event.clientY, height: side.panel.getBoundingClientRect().height, id: event.pointerId };
-    });
-    head.addEventListener("pointermove", (event) => {
-        if (!sheet || sheet.id !== event.pointerId) return;
-        const height = Math.round(Math.max(150, Math.min(innerHeight * 0.8, sheet.height - (event.clientY - sheet.y))));
-        document.documentElement.style.setProperty("--quire-img-sheet", `${height}px`);
-    });
-    const sheetDone = (event: PointerEvent) => {
-        if (sheet?.id === event.pointerId) sheet = undefined;
-    };
-    head.addEventListener("pointerup", sheetDone);
-    head.addEventListener("pointercancel", sheetDone);
 
     function fill() {
         target.textContent = lowered(hooks.target());
         for (const each of sliders) each.show();
         balance.classList.toggle("pressed", hooks.balancing());
-        split.classList.toggle("pressed", hooks.split());
+        split.set(hooks.split());
         space.textContent = hooks.space();
         giving?.fill();
     }

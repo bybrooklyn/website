@@ -66,7 +66,7 @@ test("Find asks first, fetches only when told, and presses, Alt-presses, Subject
         expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-img-find-dialog .quire-img-read-card')].map((card) => card.textContent)")).toEqual(["small27 MBQuick, on any machine", "better96 MBCleaner edges, on a fast machine"]);
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-img-find-download').click()");
-        await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')", 60_000);
+        await until("/Press a thing/.test(document.querySelector('.quire-img-doing-said')?.textContent ?? '')", 60_000);
         expect(await tab.run<string>("localStorage.getItem('quire-img-parts')")).toBe("small");
         // a press on the coat: a found part, picked
         const coat = await page.onScreen(600, 420);
@@ -75,17 +75,17 @@ test("Find asks first, fetches only when told, and presses, Alt-presses, Subject
         expect(await tab.run<string>("document.querySelector('.quire-img-grade-target').textContent")).toBe("found 1");
         const first = await tab.run<string>("JSON.stringify(window.app.editing().steps().find((step) => step.kind === 'found').found)");
         // an Alt-press on the head: the same part, changed
-        await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')");
+        await until("/Press a thing/.test(document.querySelector('.quire-img-doing-said')?.textContent ?? '')");
         const head = await page.onScreen(600, 250);
         await tab.click(head.x, head.y, { alt: true });
         await until(`JSON.stringify(window.app.editing().steps().find((step) => step.kind === 'found').found) !== ${JSON.stringify(first)}`, 30_000);
         expect(await tab.run<number>("window.app.editing().steps().filter((step) => step.kind === 'found').length")).toBe(1);
         // Subject, then Background: parts of their own, the second inside out
-        await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'subject').click()");
+        await until("/Press a thing/.test(document.querySelector('.quire-img-doing-said')?.textContent ?? '')");
+        await tab.run("[...document.querySelectorAll('.quire-img-doing button')].find((each) => each.textContent === 'subject').click()");
         await until("window.app.editing().steps().filter((step) => step.kind === 'found').length === 2", 60_000);
-        await until("/Press a thing/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'background').click()");
+        await until("/Press a thing/.test(document.querySelector('.quire-img-doing-said')?.textContent ?? '')");
+        await tab.run("[...document.querySelectorAll('.quire-img-doing button')].find((each) => each.textContent === 'background').click()");
         await until("window.app.editing().steps().filter((step) => step.kind === 'found').length === 3", 60_000);
         expect(await tab.run<boolean>("window.app.editing().steps().filter((step) => step.kind === 'found')[2].invert")).toBe(true);
         // graded and opened again from its steps: the same pixels, with no model asked

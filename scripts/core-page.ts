@@ -36,7 +36,7 @@ export async function corePage(script: string, options: { body?: string; width?:
         const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser", plugins: [withoutSpeech] });
         if (!built.success) throw new Error(built.logs.join("\n"));
         const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)}";
-        const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-markdown.css", "quire-extras.css", "quire-img.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
+        const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-markdown.css", "quire-extras.css", "quire-bench.css", "quire-img.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
         await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><body class="quire-app">${options.body ?? '<div id="host" class="quire-host"></div>'}<script type="module">${await built.outputs[0]!.text()}</script></body>`);
         const files = options.files;
         const isolated = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" };

@@ -1,10 +1,13 @@
 // imgQuire's editor: the picture document (steps.ts) on the stage (stage.ts), in the core's frame and
 // held by the core's session, so that saving, version history and moving between documents are the
-// Quires' own. It gives the frame its bar, its menus as one table, its single-key tools and the
-// palette; it makes a new document of any picture pasted, dropped or opened; and it gets the picture
+// Quires' own. It gives the frame its bar (undo and redo, then each tool by its word: crop, resize,
+// mark up, cut out, color, and export and more), its menus as one table, its single-key tools and the
+// palette, and beside the picture the one side panel (side.ts), always there, which shows the export
+// with no tool on and otherwise the controls of what is on. A picture opens with no tool on and nothing
+// over it. It makes a new document of any picture pasted, dropped or opened; and it gets the picture
 // out: Ctrl+C copies (asking the first time whether as it looks or as the export is set, and then
-// remembering), and the export panel saves. It reads the picture's text when asked (reading.ts): W,
-// the bar's Read text or Tools, Read text; with words selected on the picture, Ctrl+C copies them as
+// remembering), and the export page saves. It reads the picture's text when asked (reading.ts): W,
+// more's read text or Tools, Read text; with words selected on the picture, Ctrl+C copies them as
 // text instead of the picture.
 
 import { createFrame } from "../core/frame";
@@ -14,13 +17,14 @@ import { copyDocument, type Store } from "../core/store";
 import { packQuire, type Parts } from "../core/quire-file";
 import { openDialog } from "../core/dialog";
 import { createHistoryPanel, snapshotParts } from "../core/versions";
-import { lowered } from "../core/bench";
+import { dots, fold, group, lowered, row, stack, swatches, tick as tickBox, typed, word } from "../core/bench";
 import { control, enterGivesBack, fieldForm, flowMenu, icon, make, ruled, RULE, type MenuItem } from "../core/ui";
 import type { Heading } from "../core/menu-row";
 import { pressLines } from "./press-menu";
 import { copyPicture, exportName, formatOf, FORMATS, readSettings, weightSaid, type Settings } from "./export";
 import { heicIn } from "./codec-run";
-import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, MARK_TOOLS, nameFor, OUTLINES, resizeBox, SHADES, SHAPES, toolStrip, WEIGHTS, ZOOM_STEPS, type MarkControls } from "./panels";
+import { COLORS, cropPage, exportPanel, factsPanel, factsSaid, giveRow, kindOf, MARK_TOOLS, nameFor, OUTLINES, readPage, resizePage, SHADES, SHAPES, WEIGHTS, ZOOM_STEPS } from "./panels";
+import { sideColumn, type Page } from "./side";
 import { factsOf, profileOf, spaceOf, type Facts, type Keep } from "./metadata";
 import { gradingWith } from "./draw";
 import { createStage, PEN, setPerspective, setTurn, sizesFor, type Pen, type Tool } from "./stage";
@@ -187,12 +191,12 @@ export function mountEditor(host: HTMLElement, context: Context) {
     let settings: Settings = readSettings(local()?.getItem(KEYS.export));
     // the part models' worker, shared by Find and the cut-out, made when first asked
     const sharedFinder = createFinder();
-    /** A restoring model's run going (restore/), for the strip: what it does, how far, and its stop. */
+    /** A restoring model's run going (restore/), for the line over the side panel's page: what it does, how far, and its stop. */
     let running: { said: string; share?: number; stop: AbortController } | undefined;
     // the way of enlarging chosen in this browser: a model's id, or "" for the resize's filter
     let enlargeWay = "";
     let shape = "Free";
-    // perspective's dials and corners in the crop's strip, in place of its shapes
+    // whether perspective's part of the crop's page is open, its dials and corners
     let straightening = false;
 
     const stage = createStage({
@@ -231,7 +235,26 @@ export function mountEditor(host: HTMLElement, context: Context) {
             },
         },
     });
-    room.append(stage.element, empty, facts);
+    // the picture with the line under it on the left, and the one side panel, always there, on the right (under it on a phone)
+    const work = make("div", "quire-img-work");
+    work.append(stage.element, empty, facts);
+    const side = sideColumn({
+        home: () => exporting,
+        back: () => (picture ? stage.element : choose).focus({ preventScroll: true }),
+        escape: () => {
+            const run = escapeFor();
+            run?.();
+            return !!run;
+        },
+        left: (page) => {
+            if (chosen?.panel === page.panel) chosen = undefined;
+            // the bar marks the page now shown, once the change that showed it is done
+            queueMicrotask(refresh);
+        },
+    });
+    room.append(work, side.element);
+    // the page chosen that is no tool's (resize, color, more, the facts, version history), shown in place of the tool's or the export
+    let chosen: Page | undefined;
     // the part being graded (none for the whole picture), what a drag on the picture makes, and the brush
     let target: string | undefined;
     let making: "gradient" | "find" | undefined;
@@ -324,12 +347,15 @@ export function mountEditor(host: HTMLElement, context: Context) {
         target = undefined;
         making = undefined;
         measuredMasks = undefined;
-        // a new picture starts with the crop's own strip, not perspective's
+        // a new picture starts with perspective's part of the crop's page shut
         straightening = false;
         stage.setCornering(false);
-        // stepping through a batch keeps the tool in hand where it is one that works the same on every picture; anything else starts with the crop's frame
+        // stepping through a batch keeps the tool in hand where it is one that works the same on every picture; anything else opens with
+        // no tool on and nothing over the picture, the side panel showing the export
         const tool = stage.tool();
-        stage.setTool(grading.isOpen() ? "grade" : how.stepping && (tool === "hide" || (MARK_KINDS as string[]).includes(tool)) ? tool : "crop");
+        stage.setTool(grading.isOpen() ? "grade" : how.stepping && (tool === "hide" || (MARK_KINDS as string[]).includes(tool)) ? tool : "none");
+        // a page chosen for the picture that was there (its facts, its version history) gives way to the export for a new one
+        if (!how.stepping && chosen && chosen !== grading) chosen.close();
         measured = false;
         fillStrip();
         refresh();
@@ -739,9 +765,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         session.downloaded();
     }
 
-    // ---- what opens round the picture ----
-    const exporting = exportPanel({
-        closed: () => (beside(), refresh()),
+    // ---- the side panel's pages ----
+    const exporting = exportPanel(side, {
         keep: () => keeping,
         setKeep: (next) => ((keeping = next), void showExport(), estimate.soon()),
         settings: () => settings,
@@ -780,6 +805,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         void showExport();
         estimate.soon();
     }
+    // the picture the export page last showed the result of, so a page shown again for a changed picture works it out again
+    let exportShown: Picture | undefined;
     async function showExport() {
         exporting.fill();
         if (!picture || !stage.loaded()) return;
@@ -795,9 +822,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const sampleSpace = colors.space === "p3" && !converting() ? "display-p3" : "srgb";
         const part = new ImageData(side, side, { colorSpace: sampleSpace });
         for (let row = 0; row < side; row++) part.data.set(pixels.data.subarray(((at.y + row) * shown.width + at.x) * 4, ((at.y + row) * shown.width + at.x + side) * 4), row * side * 4);
+        exportShown = now;
         exporting.shows({ width: shown.width, height: shown.height, bytes: done.blob.size, label: formatOf(settings.format).label, over: done.over, quality: done.quality, original: part, exported: await createImageBitmap(done.blob).catch(() => undefined), at, originalBytes: now.original.bytes, space: sampleSpace });
     }
-    const resizing = resizeBox({
+    const resizing = resizePage(side, {
         size: () => (picture ? look(picture) : { width: 1, height: 1 }),
         apply: (width, height) => {
             if (!picture) return;
@@ -806,11 +834,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
             const larger = width > now.crop.width || (height ?? 0) > now.crop.height;
             commit(setOnly(history.now(), { type: "resize", width, ...(height ? { height } : {}), filter: now.filter, ...(larger && enlargeWay ? { model: enlargeWay } : {}) }));
         },
-        back: () => buttons.resize.focus({ preventScroll: true }),
-        done: () => stage.element.focus({ preventScroll: true }),
-        enlarge: {
-            said: () => `enlarge: ${lowered(restoreModelOf(enlargeWay)?.name ?? "filter")}`,
-            choose: (from) => void chooseEnlarge(from),
+        // a size applied gives the keyboard back to the picture, the page staying to show the size it now has
+        done: () => {
+            resizing.fill();
+            stage.element.focus({ preventScroll: true });
         },
         // in a batch, this picture's size given to the others
         give: {
@@ -819,46 +846,45 @@ export function mountEditor(host: HTMLElement, context: Context) {
             press: () => void giveAll(["resize"]),
         },
     });
-    const strip = toolStrip({
-        color: () => {
-            const mark = pickedMark();
-            return mark && "color" in mark ? mark.color : pen.color;
-        },
-        weight: () => pen.weight,
-        setColor: (value) => {
-            keepPen({ color: value });
-            const mark = pickedMark();
-            if (mark && "color" in mark) changeMark(mark.id, { color: value });
-            refresh();
-        },
-        setWeight: (value) => {
-            keepPen({ weight: value });
-            const mark = pickedMark();
-            if (mark && picture) {
-                const sizes = sizesFor(pen, picture.original);
-                // each kind's own size from the pen: a line's thickness, a text's size (its outline in step), a number's circle, a highlighter's stroke, a lens
-                const sized: Partial<Mark> | undefined =
-                    mark.type === "arrow" || mark.type === "box"
-                        ? { thickness: sizes.line }
-                        : mark.type === "text"
-                          ? { size: sizes.text, ...(mark.outlineWidth ? { outlineWidth: Math.round(((mark.outlineWidth * sizes.text) / mark.size) * 2) / 2 } : {}) }
-                          : mark.type === "number"
-                            ? { size: sizes.number }
-                            : mark.type === "highlight"
-                              ? { thickness: sizes.highlight }
-                              : mark.type === "magnifier"
-                                ? { radius: sizes.lens }
-                                : undefined;
-                if (sized) changeMark(mark.id, sized);
-            }
-            refresh();
-        },
-        mark: () => markControls(),
+    /** The color of a mark: the pen's, and the picked mark's too when it has one. */
+    const markColor = () => {
+        const mark = pickedMark();
+        return mark && "color" in mark ? mark.color : pen.color;
+    };
+    function setColor(value: string) {
+        keepPen({ color: value });
+        const mark = pickedMark();
+        if (mark && "color" in mark) changeMark(mark.id, { color: value });
+        refresh();
+    }
+    function setWeight(value: number) {
+        keepPen({ weight: value });
+        const mark = pickedMark();
+        if (mark && picture) {
+            const sizes = sizesFor(pen, picture.original);
+            // each kind's own size from the pen: a line's thickness, a text's size (its outline in step), a number's circle, a highlighter's stroke, a lens
+            const sized: Partial<Mark> | undefined =
+                mark.type === "arrow" || mark.type === "box"
+                    ? { thickness: sizes.line }
+                    : mark.type === "text"
+                      ? { size: sizes.text, ...(mark.outlineWidth ? { outlineWidth: Math.round(((mark.outlineWidth * sizes.text) / mark.size) * 2) / 2 } : {}) }
+                      : mark.type === "number"
+                        ? { size: sizes.number }
+                        : mark.type === "highlight"
+                          ? { thickness: sizes.highlight }
+                          : mark.type === "magnifier"
+                            ? { radius: sizes.lens }
+                            : undefined;
+            if (sized) changeMark(mark.id, sized);
+        }
+        refresh();
+    }
+    const cropping = cropPage(side, {
         shape: () => shape,
         setShape: (name) => {
             shape = name;
-            const chosen = SHAPES.find((each) => each.name === name)?.value;
-            stage.setAspect(chosen === "original" && picture ? picture.original.width / picture.original.height : (chosen as number | undefined));
+            const value = SHAPES.find((each) => each.name === name)?.value;
+            stage.setAspect(value === "original" && picture ? picture.original.width / picture.original.height : (value as number | undefined));
         },
         apply: () => applyCrop(),
         turn: {
@@ -866,7 +892,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             turning: (degrees) => stage.turning(degrees),
             turned: (degrees) => turnTo(degrees),
             levelling: () => stage.levelling(),
-            setLevelling: (on) => stage.setLevelling(on),
+            setLevelling: (on) => (stage.setLevelling(on), refresh()),
         },
         perspective: {
             vertical: () => perspectiveStep()?.vertical ?? 0,
@@ -879,18 +905,31 @@ export function mountEditor(host: HTMLElement, context: Context) {
             auto: () => void autoStraighten(),
             setOpen: (on) => setStraightening(on),
         },
+        straightening: () => straightening,
+    });
+    const readingPage = readPage(side, {
         read: () => {
             const found = reading.found();
             return { state: reading.state(), progress: reading.progress(), words: found ? found.lines.reduce((sum, line) => sum + line.words.length, 0) : 0, private: stage.findings().length, model: reading.tier().name };
         },
         hideAll: () => void stage.hideFindings(),
         chooseModel: (from) => reading.choose(from),
-        readAgain: () => void reading.start(buttons.read),
-        cut: () => cutStrip(),
-        // a model running: how far, and Stop, which leaves the picture as it was
-        busy: () => (running ? { said: running.share === undefined ? running.said : `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("stop", batchRunning ? "Stop: each picture is left done or as it was (Escape)" : "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
-        grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
+        readAgain: () => void reading.start(buttons.more),
     });
+    /** What is being done now, for the line over the side panel's page: a model running, with stop; a press asked for on the picture, with cancel. */
+    function doingNow(): { words: string; controls?: HTMLElement[] } | undefined {
+        if (running) {
+            const stop = word("stop", () => running?.stop.abort());
+            stop.title = batchRunning ? "Stop: each picture is left done or as it was (Escape)" : "Stop, and leave the picture as it was (Escape)";
+            return { words: running.share === undefined ? running.said : `${running.said} ${Math.round(running.share * 100)}%`, controls: [stop] };
+        }
+        if (asking) {
+            const cancel = word("cancel", () => cancelPick(), true);
+            cancel.title = "Do not, after all (Escape)";
+            return { words: making === "find" ? findSaid() : asking.said, controls: [...(making === "find" && finding.state() === "ready" ? [subjectButton, backgroundButton] : []), cancel] };
+        }
+        return undefined;
+    }
     /** The mark picked, if what is picked is a mark. */
     const pickedMark = (): (Kept & Mark) | undefined => {
         const step = history.now().find((each) => each.id === stage.picked());
@@ -908,23 +947,76 @@ export function mountEditor(host: HTMLElement, context: Context) {
     };
     /** Changes one mark, as one undo. */
     const changeMark = (id: string, to: Partial<Mark>) => commit(history.now().map((step) => (step.id === id ? ({ ...step, ...to } as Kept) : step)));
-    /** The kind of mark the strip is for: the one picked, else the tool's. */
-    const markKind = (): MarkKind | undefined => pickedMark()?.type ?? ((MARK_KINDS as string[]).includes(stage.tool()) ? (stage.tool() as MarkKind) : undefined);
-    /** A button of the strip for a mark, pressed when it is what the mark has. */
-    const markButton = (label: string, content: string | Node, on: boolean, press: () => void) => {
-        const button = control(label, typeof content === "string" ? icon(content) : content, () => (press(), refresh()));
-        button.classList.toggle("pressed", on);
-        return button;
+    /** The kind of mark mark up's page is for: the one picked, else the tool's, hide among them. */
+    const markKind = (): MarkKind | "hide" | undefined => pickedMark()?.type ?? (stage.tool() === "hide" ? "hide" : (MARK_KINDS as string[]).includes(stage.tool()) ? (stage.tool() as MarkKind) : undefined);
+    /** Moves a text's place so that its block stays where it is when its lines are aligned another way. */
+    const realigned = (mark: Extract<Mark, { type: "text" }>, align: Align): Partial<Mark> => {
+        const by = (alignShare(align) - alignShare(mark.align)) * textWidth(mark);
+        const radians = ((mark.angle ?? 0) * Math.PI) / 180;
+        return { at: { x: mark.at.x + by * Math.cos(radians), y: mark.at.y + by * Math.sin(radians) }, align: align === "left" ? undefined : align };
     };
-    /** A word button of the strip for a mark, pressed when it is what the mark has. */
-    const markWords = (label: string, tip: string, on: boolean, press: () => void) => {
-        const button = stripButton(label, tip, () => (press(), refresh()));
-        button.classList.toggle("pressed", on);
-        return button;
+
+    // ---- mark up: every mark, and hide, chosen in its page with the color and thickness ----
+    const marking = side.page("mark up", "quire-img-mark-page");
+    const kinds = dots<MarkKind | "hide">(
+        "mark",
+        [...MARK_KINDS.map((kind) => ({ value: kind as MarkKind | "hide", text: lowered(MARK_TOOLS[kind].label), tip: `${MARK_TOOLS[kind].label} (${MARK_TOOLS[kind].key})` })), { value: "hide", text: "hide", tip: "Hide (R): cover something private" }],
+        (kind) => {
+            // a mark picked is let go, so the kind pressed is the tool in hand
+            if (pickedMark()) stage.pick(undefined);
+            if (stage.tool() !== kind) pickTool(kind);
+            else refresh();
+        },
+    );
+    kinds.group.classList.add("quire-img-mark-kinds");
+    const markColors = swatches("color", COLORS, (value) => setColor(value));
+    const colorGroup = group("color", markColors.set);
+    const thickness = dots(
+        "thickness",
+        WEIGHTS.map((each) => ({ value: String(each.value), text: lowered(each.name), tip: `${each.name} line` })),
+        (value) => setWeight(Number(value)),
+    );
+    // a magnifier's size is its lens's, in the same three steps
+    const lensSize = dots(
+        "size",
+        WEIGHTS.map((each) => ({ value: String(each.value), text: each.name === "Thin" ? "small" : each.name === "Thick" ? "large" : "medium", tip: `${each.name === "Thin" ? "Small" : each.name === "Thick" ? "Large" : each.name} lens` })),
+        (value) => setWeight(Number(value)),
+    );
+    // a text's lines aligned, and its outline: none, or a color and a width
+    const aligns = dots<Align>(
+        "align",
+        (["left", "center", "right"] as Align[]).map((each) => ({ value: each, text: each, tip: `Align ${each}` })),
+        (align) => {
+            keepPen({ align });
+            const mark = pickedMark();
+            if (mark?.type === "text") changeMark(mark.id, realigned(mark, align));
+            refresh();
+        },
+    );
+    const setOutline = (next: { outline?: string; outlineWeight?: number }) => {
+        keepPen(next);
+        const now = pickedMark();
+        if (now?.type === "text" && picture) {
+            const outline = "outline" in next ? next.outline : now.outline;
+            const width = Math.max(1, Math.round(now.size * (next.outlineWeight ?? (now.outlineWidth ? now.outlineWidth / now.size : (pen.outlineWeight ?? PEN.outlineWeight))) * 2) / 2);
+            commit(history.now().map((step) => (step.id !== now.id ? step : ({ ...step, outline: undefined, outlineWidth: undefined, ...(outline ? { outline, outlineWidth: width } : {}) } as Kept))));
+        }
+        refresh();
     };
+    const noOutline = word("none", () => setOutline({ outline: undefined }), true);
+    noOutline.title = "No outline";
+    const outlineColors = swatches("outline", COLORS, (value) => setOutline({ outline: value }));
+    const outlineWidths = dots(
+        "outline",
+        OUTLINES.map((each) => ({ value: String(each.value), text: lowered(each.name.replace(" outline", "")), tip: each.name })),
+        (value) => setOutline({ outlineWeight: Number(value) }),
+    );
+    const outlineGroup = group("outline", row("color", noOutline, outlineColors.set), row("width", outlineWidths.set));
+    const textGroup = group(undefined, aligns.group, outlineGroup);
     // a numbered step's number, typed: kept with Enter or on leaving the field, which gives the keyboard back to the picture
-    const numberField = make("input", "quire-img-strip-number");
-    numberField.type = "text";
+    const numberLine = typed("number", () => {});
+    const numberField = numberLine.input as HTMLInputElement;
+    numberField.classList.add("quire-img-strip-number");
     numberField.inputMode = "numeric";
     numberField.setAttribute("aria-label", "Number");
     numberField.title = "Number";
@@ -932,117 +1024,92 @@ export function mountEditor(host: HTMLElement, context: Context) {
         numberField,
         (value) => {
             const mark = pickedMark();
-            const typed = Number.parseInt(value, 10);
+            const typedNumber = Number.parseInt(value, 10);
             if (mark?.type !== "number") return;
             if (!/^\d+$/.test(value)) return refresh();
-            changeMark(mark.id, { value: Math.min(MOST_NUMBER, typed) });
+            changeMark(mark.id, { value: Math.min(MOST_NUMBER, typedNumber) });
         },
         () => {
             stage.element.focus({ preventScroll: true });
             refresh();
         },
     );
-    // left by a press elsewhere, the strip is filled again too, as it was not while the field had the keyboard
+    // left by a press elsewhere, the page is filled again too, as it was not while the field had the keyboard
     numberField.addEventListener("blur", () => queueMicrotask(refresh));
-    // a text's outline: none, or a color and a width, from a small menu grown from its button
-    const outlineMenu = flowMenu("Outline", { className: "quire-img-outline-menu" });
-    const outlineLines = (): MenuItem[] => {
-        const mark = pickedMark();
-        const color = mark?.type === "text" ? mark.outline : pen.outline;
-        const share = mark?.type === "text" && mark.outlineWidth ? mark.outlineWidth / mark.size : (pen.outlineWeight ?? PEN.outlineWeight);
-        const set = (next: { outline?: string; outlineWeight?: number }) => {
-            keepPen(next);
-            const now = pickedMark();
-            if (now?.type === "text" && picture) {
-                const outline = "outline" in next ? next.outline : now.outline;
-                const width = Math.max(1, Math.round(now.size * (next.outlineWeight ?? (now.outlineWidth ? now.outlineWidth / now.size : (pen.outlineWeight ?? PEN.outlineWeight))) * 2) / 2);
-                commit(history.now().map((step) => (step.id !== now.id ? step : ({ ...step, outline: undefined, outlineWidth: undefined, ...(outline ? { outline, outlineWidth: width } : {}) } as Kept))));
-            }
+    const inOrder = word("in order", () => (numberInOrder(), refresh()));
+    inOrder.title = "Number it in order again";
+    const numberGroup = group(undefined, numberLine.row, row("", inOrder));
+    const zooms = dots(
+        "zoom",
+        ZOOM_STEPS.map((each) => ({ value: String(each), text: `${each}×`, tip: `Enlarge ${each} times` })),
+        (value) => {
+            const zoom = Number(value);
+            keepPen({ zoom });
+            const mark = pickedMark();
+            if (mark?.type === "magnifier") changeMark(mark.id, { zoom });
             refresh();
-        };
-        const swatchOf = (value: string) => {
-            const mark = make("span", "quire-img-swatch");
-            mark.style.background = value;
-            return mark;
-        };
-        return ruled(
-            [{ label: "No outline", icon: "close", group: "outline", pressed: !color, run: () => set({ outline: undefined }) }, ...COLORS.map((each): MenuItem => ({ label: each.name, icon: swatchOf(each.value), group: "outline", pressed: color === each.value, run: () => set({ outline: each.value }) }))],
-            OUTLINES.map((each, at): MenuItem => {
-                const line = icon("line");
-                line.style.strokeWidth = String(1.2 + at * 1.4);
-                return { label: each.name, icon: line, group: "outline-width", pressed: Math.abs(share - each.value) < 0.015, run: () => set({ outlineWeight: each.value }) };
-            }),
-        );
-    };
-    // made once, so that its menu keeps its place while the strip is filled again behind it
-    const outlineButton: HTMLButtonElement = control("Outline", icon("outlined"), () => (outlineMenu.isOpen() ? outlineMenu.close() : openHolding(outlineMenu, outlineButton, outlineLines())));
-    /** Moves a text's place so that its block stays where it is when its lines are aligned another way. */
-    const realigned = (mark: Extract<Mark, { type: "text" }>, align: Align): Partial<Mark> => {
-        const by = (alignShare(align) - alignShare(mark.align)) * textWidth(mark);
-        const radians = ((mark.angle ?? 0) * Math.PI) / 180;
-        return { at: { x: mark.at.x + by * Math.cos(radians), y: mark.at.y + by * Math.sin(radians) }, align: align === "left" ? undefined : align };
-    };
-    /** What the strip shows for the mark picked, or the mark tool in hand. */
-    function markControls(): MarkControls {
+        },
+    );
+    // a spotlight's shape, and how dark it shades (every spotlight shades alike, so the shade is changed for all of them at once)
+    const spotShapes = dots<"box" | "round">(
+        "shape",
+        [
+            { value: "box", text: "rectangle", tip: "Rectangle" },
+            { value: "round", text: "ellipse", tip: "Ellipse" },
+        ],
+        (value) => {
+            const on = value === "round";
+            keepPen({ round: on || undefined });
+            const mark = pickedMark();
+            if (mark?.type === "spotlight") changeMark(mark.id, { round: on ? true : undefined });
+            refresh();
+        },
+    );
+    const shades = dots(
+        "shade",
+        SHADES.map((each) => ({ value: String(each.value), text: lowered(each.name.replace(" shade", "")), tip: each.name })),
+        (value) => {
+            const dim = Number(value);
+            keepPen({ dim });
+            if (history.now().some((step) => step.type === "spotlight")) commit(history.now().map((step) => (step.type === "spotlight" ? ({ ...step, dim } as Kept) : step)));
+            refresh();
+        },
+    );
+    const spotGroup = group(undefined, spotShapes.group, shades.group);
+    const hidePrivate = word("hide what looks private", () => void stage.hideFindings());
+    hidePrivate.title = "Cover everything reading the text found that looks private, as one step";
+    const hideGroup = group(undefined, hidePrivate);
+    marking.body.append(kinds.group, colorGroup, thickness.group, lensSize.group, textGroup, numberGroup, zooms.group, spotGroup, hideGroup);
+    /** Mark up's page as the mark picked, or the mark in hand, now is: its kind, color and size, and what is its kind's own. */
+    function fillMarks() {
         const kind = markKind();
         const mark = pickedMark();
-        const lines = WEIGHTS.map((each) => `${each.name} line`);
-        if (kind === "spotlight") {
-            const round = mark?.type === "spotlight" ? !!mark.round : !!pen.round;
-            const shade = (mark?.type === "spotlight" ? mark.dim : undefined) ?? pen.dim ?? PEN.dim;
-            const setRound = (on: boolean) => {
-                keepPen({ round: on || undefined });
-                if (mark?.type === "spotlight") changeMark(mark.id, { round: on ? true : undefined });
-            };
-            // every spotlight shades alike, so the shade is changed for all of them at once
-            const setShade = (value: number) => {
-                keepPen({ dim: value });
-                if (history.now().some((step) => step.type === "spotlight")) commit(history.now().map((step) => (step.type === "spotlight" ? ({ ...step, dim: value } as Kept) : step)));
-            };
-            const shadeSwatch = (value: number) => {
-                const swatch = make("span", "quire-img-swatch quire-img-shade");
-                swatch.style.setProperty("--shade", String(value));
-                return swatch;
-            };
-            return {
-                colors: false,
-                extra: [
-                    [markButton("Rectangle", "box", !round, () => setRound(false)), markButton("Ellipse", "ellipse", round, () => setRound(true))],
-                    SHADES.map((each) => markButton(each.name, shadeSwatch(each.value), Math.abs(shade - each.value) < 0.01, () => setShade(each.value))),
-                ],
-            };
-        }
-        if (kind === "text") {
-            const align = (mark?.type === "text" ? mark.align : pen.align) ?? "left";
-            const outline = mark?.type === "text" ? mark.outline : pen.outline;
-            const setAlign = (next: Align) => {
-                keepPen({ align: next });
-                if (mark?.type === "text") changeMark(mark.id, realigned(mark, next));
-            };
-            outlineButton.classList.toggle("pressed", !!outline);
-            return {
-                colors: true,
-                weights: lines,
-                extra: [[markButton("Align left", "left", align === "left", () => setAlign("left")), markButton("Align center", "center", align === "center", () => setAlign("center")), markButton("Align right", "right", align === "right", () => setAlign("right"))], [outlineButton]],
-            };
-        }
-        if (kind === "number") {
-            if (mark?.type !== "number") return { colors: true, weights: lines, extra: [] };
-            numberField.value = String(numbersOf(history.now()).get(mark.id) ?? 1);
-            return { colors: true, weights: lines, extra: [[numberField, ...(mark.value !== undefined ? [markWords("in order", "Number it in order again", false, () => numberInOrder())] : [])]] };
-        }
-        if (kind === "magnifier") {
-            const zoom = (mark?.type === "magnifier" ? mark.zoom : pen.zoom) ?? PEN.zoom;
-            const setZoom = (value: number) => {
-                keepPen({ zoom: value });
-                if (mark?.type === "magnifier") changeMark(mark.id, { zoom: value });
-            };
-            return { colors: true, weights: WEIGHTS.map((each) => `${each.name === "Thin" ? "Small" : each.name === "Thick" ? "Large" : each.name} lens`), extra: [ZOOM_STEPS.map((each) => markWords(`${each}×`, `Enlarge ${each} times`, zoom === each, () => setZoom(each)))] };
-        }
-        return { colors: true, weights: lines, extra: [] };
+        kinds.show(kind);
+        const sized = kind !== undefined && kind !== "hide" && kind !== "spotlight";
+        fold(colorGroup, sized);
+        markColors.show(markColor());
+        fold(thickness.group, sized && kind !== "magnifier");
+        fold(lensSize.group, kind === "magnifier");
+        thickness.show(String(pen.weight));
+        lensSize.show(String(pen.weight));
+        fold(textGroup, kind === "text");
+        aligns.show((mark?.type === "text" ? mark.align : pen.align) ?? "left");
+        const outline = mark?.type === "text" ? mark.outline : pen.outline;
+        outlineColors.show(outline);
+        const share = mark?.type === "text" && mark.outlineWidth ? mark.outlineWidth / mark.size : (pen.outlineWeight ?? PEN.outlineWeight);
+        outlineWidths.show(String(OUTLINES.find((each) => Math.abs(share - each.value) < 0.015)?.value ?? ""));
+        fold(numberGroup, mark?.type === "number");
+        if (mark?.type === "number" && document.activeElement !== numberField) numberField.value = String(numbersOf(history.now()).get(mark.id) ?? 1);
+        fold(inOrder, mark?.type === "number" && mark.value !== undefined);
+        fold(zooms.group, kind === "magnifier");
+        zooms.show(String((mark?.type === "magnifier" ? mark.zoom : pen.zoom) ?? PEN.zoom));
+        fold(spotGroup, kind === "spotlight");
+        spotShapes.show((mark?.type === "spotlight" ? !!mark.round : !!pen.round) ? "round" : "box");
+        const shade = (mark?.type === "spotlight" ? mark.dim : undefined) ?? pen.dim ?? PEN.dim;
+        shades.show(String(SHADES.find((each) => Math.abs(shade - each.value) < 0.01)?.value ?? ""));
+        fold(hideGroup, kind === "hide");
+        hidePrivate.disabled = !stage.findings().length;
     }
-    room.append(strip.strip);
-    document.body.append(exporting.panel, resizing.box);
     const historyPanel = createHistoryPanel(
         {
             show(text, _older, into) {
@@ -1071,12 +1138,21 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 void open(snapshotParts(text).markdown).then(() => session.changed());
             },
             focus: () => stage.element.focus({ preventScroll: true }),
-            closed: () => beside(),
+            closed: () => historyPage.close(),
         },
         session.versions,
         session.historyKey,
         session.keeper as Parameters<typeof createHistoryPanel>[3],
     );
+    // version history is the core's panel, opened in the side panel as a page of it, with its own heading
+    const historyPage = side.page("version history", "quire-img-history-page", { heading: false, left: () => historyPanel.isOpen() && historyPanel.close() });
+    historyPage.body.append(historyPanel.element);
+    historyPanel.element.dataset.ownEscape = "";
+    /** Opens version history in the side panel. */
+    const showHistory = () => {
+        openPage(historyPage);
+        void historyPanel.open();
+    };
 
     // ---- a batch: its strip of small pictures under the picture, stepping through them, giving a change to all, and exporting all ----
     const thumbs = batchStrip({
@@ -1084,7 +1160,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         menu: (index, x, y, keyboard) => openThumbMenu(index, x, y, keyboard),
         drop: (files, place) => void addPictures(files, place),
     });
-    room.append(thumbs.element);
+    work.append(thumbs.element);
     /** The line under the picture with its size alone, while its weight is not known yet. */
     const sizeLine = (size: { width: number; height: number }) => `${batched() ? `${whichSaid(at, items.length)} · ` : ""}${size.width} × ${size.height} px`;
     /** The line under the picture: which of how many in a batch, then its size and the weight it will be given out at. */
@@ -1573,7 +1649,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     void enlargeAsking.way().then((way) => (enlargeWay = way ?? ""));
     // one run at a time, since the worker holds one model
     let queue: Promise<unknown> = Promise.resolve();
-    /** A model run over a picture tile by tile, the strip saying how far with Stop; each finished tile laid into pixels of the result's size, the only whole copy of it. */
+    /** A model run over a picture tile by tile, the line over the side panel's page saying how far, with stop; each finished tile laid into pixels of the result's size, the only whole copy of it. */
     function runModel(id: string, said: string, bitmap: () => Promise<ImageBitmap>, size: { width: number; height: number }, quality?: number): Promise<ImageData> {
         const job = queue.then(async () => {
             const model = restoreModelOf(id);
@@ -1590,7 +1666,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     progress: (share) => {
                         if (!running) return;
                         running.share = share;
-                        // the strip is filled again at most once a hundredth
+                        // the line is said again at most once a hundredth
                         if (share - told >= 0.01 || share === 1) ((told = share), refresh());
                     },
                     keep: (out, part) => {
@@ -1711,7 +1787,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const way = await enlargeAsking.choose(from, enlargeWay);
         if (way === undefined) return;
         enlargeWay = way;
-        resizing.sayWay();
+        fillMore();
         const step = history.now().find((each) => each.type === "resize");
         if (step?.type === "resize" && picture) {
             const { model: _model, ...plain } = step;
@@ -1807,106 +1883,170 @@ export function mountEditor(host: HTMLElement, context: Context) {
         }
     }
     const setLaid = (laid: Laid, color?: string) => changeCut((cut) => ({ ...cut, background: laid, ...(laid === "color" ? { color: color ?? cut.color ?? "#ffffff" } : { color: undefined }) }));
-    /** The strip while cutting out: what it is laid on, the brush, the quality, and taking the cut-out away. */
-    function cutStrip(): { said: string; controls: HTMLElement[] } {
+    // ---- cut out's page: what it is laid on, the brush, the quality, and taking the cut-out away, as the page at /cutout/ has them ----
+    const cutting = side.page("cut out", "quire-img-cut-page");
+    const cutSaid = make("p", "quire-img-cut-said");
+    cutSaid.setAttribute("role", "status");
+    const cutAgain = word("cut out", () => void startCut());
+    cutAgain.title = "Run the model again";
+    const lays = dots<Laid>(
+        "background",
+        [
+            { value: "clear", text: "clear", tip: "Nothing behind it, exported with transparency" },
+            { value: "color", text: "color", tip: "A color behind it" },
+            { value: "blur", text: "blur", tip: "The old background behind it, blurred" },
+        ],
+        (laid) => {
+            const cut = picture ? look(picture).cutout : undefined;
+            if (cut && cut.background !== laid) setLaid(laid);
+        },
+    );
+    const layColors = swatches("color", COLORS, (value) => setLaid("color", value));
+    lays.group.append(layColors.set);
+    const brushes = dots<"keep" | "remove">(
+        "touch up",
+        [
+            { value: "keep", text: "keep", tip: "Paint what should stay; press again to put the brush down" },
+            { value: "remove", text: "remove", tip: "Paint what should go; press again to put the brush down" },
+        ],
+        (value) => ((cutBrush = cutBrush === value ? undefined : value), refresh()),
+    );
+    const cutQuality = word("", () => void cutAsking.choose(buttons.cutout).then((chosen) => void (chosen && startCut())));
+    cutQuality.title = "Quality";
+    const takeAway = word("take away", () => commit(history.now().filter((each) => each.type !== "cutout")), true);
+    takeAway.title = "Bring the background back";
+    // in a batch, the others cut out the same way, one after another
+    const cutGive = giveRow({ said: () => (batched() ? (giveSaid("cutout") ?? "") : undefined), label: () => `give to the other ${items.length - 1}`, press: () => void giveAll(["cutout"]) });
+    const cutMade = group(undefined, lays.group, brushes.group, group("quality", cutQuality), group(undefined, takeAway), cutGive.row);
+    cutting.body.append(group(undefined, cutSaid, cutAgain), cutMade);
+    /** Cut out's page as the cut-out now is: what is being done or what a press does, and its controls once there is a cut-out to change. */
+    function fillCut() {
         const cut = picture ? look(picture).cutout : undefined;
-        if (cutBusy) return { said: cutAsking.tier().wait ? `Cutting out, usually ${cutAsking.tier().wait}` : "Cutting out", controls: [] };
-        // where the model found nothing, the strip says the next step in the status's own words
-        if (!cut) return { said: cutNothing ? NOTHING_SAID.slice(NOTHING_SAID.indexOf("Press")).replace(/\.$/, "") : "Not cut out", controls: [stripButton("cut out", "Run the model again", () => void startCut())] };
-        const pressed = (button: HTMLElement, on: boolean) => (button.classList.toggle("pressed", on), button);
-        const swatches = COLORS.map((each) => {
-            const mark = make("span", "quire-img-swatch");
-            mark.style.background = each.value;
-            return pressed(control(each.name, mark, () => setLaid("color", each.value)), cut.background === "color" && cut.color === each.value);
-        });
-        return {
-            said: cutBrush === "keep" ? "Paint what should stay" : cutBrush === "remove" ? "Paint what should go" : "Press a thing to keep it",
-            controls: [
-                pressed(stripButton("clear", "Nothing behind it, exported with transparency", () => setLaid("clear")), cut.background === "clear"),
-                ...swatches,
-                pressed(stripButton("blur", "The old background behind it, blurred", () => setLaid("blur")), cut.background === "blur"),
-                make("span", "quire-img-strip-rule"),
-                pressed(stripButton("keep", "Paint what should stay", () => ((cutBrush = cutBrush === "keep" ? undefined : "keep"), refresh())), cutBrush === "keep"),
-                pressed(stripButton("remove", "Paint what should go", () => ((cutBrush = cutBrush === "remove" ? undefined : "remove"), refresh())), cutBrush === "remove"),
-                make("span", "quire-img-strip-rule"),
-                stripButton(lowered(cutAsking.tier().name), "Quality", () => void cutAsking.choose(buttons.cutout).then((chosen) => void (chosen && startCut()))),
-                stripButton("take away", "Bring the background back", () => commit(history.now().filter((each) => each.type !== "cutout"))),
-                // in a batch, the others cut out the same way, one after another
-                ...(batched() ? [make("span", "quire-img-strip-rule"), stripButton(`give to the other ${items.length - 1}`, giveSaid("cutout") ?? "", () => void giveAll(["cutout"]))] : []),
-            ],
-        };
+        // where the model found nothing, the page says the next step in the status's own words
+        cutSaid.textContent = cutBusy ? (cutAsking.tier().wait ? `Cutting out, usually ${cutAsking.tier().wait}` : "Cutting out") : !cut ? (cutNothing ? NOTHING_SAID.slice(NOTHING_SAID.indexOf("Press")).replace(/\.$/, "") : "Not cut out") : cutBrush === "keep" ? "Paint what should stay" : cutBrush === "remove" ? "Paint what should go" : "Press a thing to keep it";
+        fold(cutAgain, !cut && !cutBusy);
+        cutMade.inert = !cut || cutBusy;
+        lays.show(cut?.background);
+        layColors.show(cut?.background === "color" ? cut.color : undefined);
+        fold(layColors.set, cut?.background === "color");
+        brushes.show(cutBrush);
+        cutQuality.textContent = lowered(cutAsking.tier().name);
+        cutGive.fill();
     }
-
-    // ---- the bar ----
+    // ---- the bar: undo and redo, then every tool by its word, then export and more ----
     const tool = (label: string, name: string, run: () => void) => control(label, icon(name), run);
+    /** A tool of the bar as its word, in lowercase, named with its key in its tooltip. */
+    const toolWord = (label: string, text: string, run: () => void) => control(label, make("span", "quire-img-word-text", text), run, "quire-button quire-img-word");
+    // the mark up chosen last, hide among them, which the bar's mark up puts in hand
+    let lastUp: MarkKind | "hide" = pen.mark;
     const buttons = {
         undo: tool("Undo (Ctrl+Z)", "undo", undo),
         redo: tool("Redo (Ctrl+Shift+Z)", "redo", redo),
-        crop: tool("Crop (C)", "crop", () => pickTool("crop")),
-        resize: tool("Resize", "resize", () => (resizing.isOpen() ? resizing.close() : resizing.open(buttons.resize))),
-        hide: tool("Hide (R)", "hide", () => pickTool("hide")),
-        read: tool("Read text (W)", "find", () => pickTool("read")),
-        cutout: tool("Cut out (K)", "cut", () => pickTool("cutout")),
-        // the mark last used, one press away, and beside it every mark, in a menu grown from where it was pressed
-        mark: tool(`${MARK_TOOLS[pen.mark].label} (${MARK_TOOLS[pen.mark].key})`, MARK_TOOLS[pen.mark].icon, () => pickTool(pen.mark)),
-        marks: tool("Marks", "chevron", () => toggleMarks()),
-        grade: tool("Grade (G)", "paper", () => showGrade()),
-        facts: tool("Facts (I)", "info", () => showFacts()),
-        export: tool("Export (E)", "export", () => showExportPanel()),
+        // pressed again, a word leaves its tool, and the export shows; the crop is applied as it is left
+        crop: toolWord("Crop (C)", "crop", () => (stage.tool() === "crop" ? applyCrop() : pickTool("crop"))),
+        resize: toolWord("Resize", "resize", () => (resizing.isOpen() ? resizing.close() : showResize())),
+        mark: toolWord("Mark up: arrow, box, text, steps, highlighter, magnifier, spotlight and hide", "mark up", () => (marking.isOpen() && !chosen ? leaveTool() : pickTool(lastUp))),
+        cutout: toolWord("Cut out (K)", "cut out", () => (stage.tool() === "cutout" ? leaveTool() : pickTool("cutout"))),
+        grade: toolWord("Color (G)", "color", () => showGrade()),
+        export: toolWord("Export (E)", "export", () => showExportPanel()),
+        more: toolWord("More: reading text, repair, enlarging, batches of pictures and facts", "more", () => showMore()),
     };
     const bar = make("div", "quire-bar quire-img-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Picture");
     const strip0 = make("div", "quire-bar-strip");
-    const group = (...items: HTMLElement[]) => {
+    const barGroup = (...items: HTMLElement[]) => {
         const made = make("div", "quire-bar-group");
         made.append(...items);
         return made;
     };
-    // on the narrowest screens Facts is left to View, Facts and the I key, so that the other tools fit
-    buttons.facts.classList.add("quire-img-bar-facts");
-    const end = group(buttons.grade, buttons.facts, buttons.export);
+    const end = barGroup(buttons.export, buttons.more);
     end.classList.add("quire-bar-end");
-    buttons.marks.classList.add("quire-img-bar-more");
-    buttons.marks.setAttribute("aria-haspopup", "menu");
-    strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read, buttons.cutout), group(buttons.mark, buttons.marks), end);
+    strip0.append(barGroup(buttons.undo, buttons.redo), barGroup(buttons.crop, buttons.resize, buttons.mark, buttons.cutout, buttons.grade), end);
     bar.append(strip0);
     frame.place("bar").append(bar);
-    const marksMenu = flowMenu("Marks", { className: "quire-img-marks-menu" });
     /** Every mark, as lines of a menu: its icon, its name and its key, the one in hand ticked. */
     const markLines = (): MenuItem[] => MARK_KINDS.map((kind) => ({ label: MARK_TOOLS[kind].label, icon: tick(stage.tool() === kind, MARK_TOOLS[kind].icon), hint: MARK_TOOLS[kind].key, key: kind, pressed: stage.tool() === kind, disabled: !picture, run: () => pickTool(kind) }));
-    /** Opens the marks' menu under its button, or closes it. */
-    function toggleMarks() {
-        if (marksMenu.isOpen()) return marksMenu.close();
-        openHolding(marksMenu, buttons.marks, markLines());
+
+    // ---- more: what is outside crop, resize, mark up, cut out and color, each a word that works as its menu line does ----
+    const more = side.page("more", "quire-img-more-page");
+    const readWord = word("read text", () => pickTool("read"));
+    readWord.title = "Read text (W): find the words in the picture, and what looks private";
+    const repairWord = tickBox("repair JPEG", () => void toggleRepair(), "Take a JPEG's blocks and ringing out, or put them back");
+    const repairWithWord = word("repair JPEG with…", () => void chooseRepair(repairWithWord));
+    const enlargeWord = word("", (button) => void chooseEnlarge(button));
+    enlargeWord.title = "How a picture made larger than it is is enlarged: the resize's filter, or a model";
+    enlargeWord.classList.add("quire-img-enlarge-way");
+    const addWord = word("add pictures", () => choosePictures());
+    addWord.title = "Add pictures to this one, to make a batch of them";
+    const giveWords = (["grade", "resize", "repair", "cutout", "export"] as Givable[]).map((kind) => {
+        const made = word(kind === "grade" ? "the grade" : kind === "resize" ? "the size" : kind === "repair" ? "the repair" : kind === "cutout" ? "the cut-out" : "the export settings", () => void giveAll([kind]));
+        made.dataset.give = kind;
+        return made;
+    });
+    const giveEverything = word("all of its changes", () => picture && void giveAll(givables(picture)));
+    const giveGroup = fold(stack("give to all", ...giveWords, giveEverything), false);
+    const factsWord = word("facts", () => showFacts());
+    factsWord.title = "Facts (I): what the picture says about itself, and what goes with it";
+    more.body.append(stack(undefined, readWord), stack(undefined, repairWord.row, repairWithWord), stack(undefined, enlargeWord), stack(undefined, addWord), giveGroup, stack(undefined, factsWord));
+    /** More's page as the picture now is: what can be repaired, the way of enlarging, and in a batch what can be given to all. */
+    function fillMore() {
+        const can = !!picture && repairable && !running;
+        repairWord.input.disabled = repairWithWord.disabled = !can;
+        repairWord.row.inert = !can;
+        repairWord.set(!!picture && !!look(picture).repair);
+        enlargeWord.textContent = `enlarge: ${lowered(restoreModelOf(enlargeWay)?.name ?? "filter")}`;
+        fold(giveGroup, batched());
+        for (const each of giveWords) each.disabled = !giveSaid(each.dataset.give as Givable) || !!running || !!exportRun;
+        giveEverything.disabled = !!running || !!exportRun || !picture;
     }
-    /** Opens a menu from a button, the keyboard in it even when opened by the pointer (no line of it yet), so that Escape closes it and not the tool under it; the first line too when opened from the keyboard. */
-    function openHolding(menu: ReturnType<typeof flowMenu>, from: HTMLElement, lines: MenuItem[]) {
-        const keyboard = from.matches(":focus-visible");
-        menu.open(from, lines, keyboard);
-        if (!keyboard) menu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
+    /** Opens a page that is no tool's (resize, more, the facts, version history, color) in the side panel, the tool in hand put down first and the crop applied. */
+    function openPage(page: Page) {
+        if (!picture) return;
+        if (grading.isOpen() && page !== grading) grading.close();
+        if (stage.tool() === "crop") stage.applyCrop();
+        if (stage.tool() !== "none" && page !== grading) stage.setTool("none");
+        if (stage.picked()) stage.pick(undefined);
+        chosen = page;
+        side.show(page);
+        refresh();
     }
-    /** The bar's mark button shows the mark last used. */
-    let shownMark: MarkKind | undefined;
-    function showLastMark() {
-        if (shownMark === pen.mark) return;
-        shownMark = pen.mark;
-        const { label, icon: name, key } = MARK_TOOLS[pen.mark];
-        buttons.mark.setAttribute("aria-label", `${label} (${key})`);
-        buttons.mark.title = `${label} (${key})`;
-        buttons.mark.replaceChildren(icon(name));
+    /** Shows more's words, or the export again when it is shown. */
+    function showMore() {
+        if (more.isOpen()) return more.close();
+        openPage(more);
+        readWord.focus({ preventScroll: true });
+    }
+    /** Shows resize, its width ready to type. */
+    function showResize() {
+        resizing.fill();
+        openPage(resizing);
+        resizing.width.focus({ preventScroll: true });
+        resizing.width.select();
+    }
+    /** Leaves the tool in hand, or the page chosen, and the export shows again. */
+    function leaveTool() {
+        if (stage.picked()) stage.pick(undefined);
+        if (chosen) chosen.close();
+        stage.setTool("none");
+        stage.element.focus({ preventScroll: true });
+        refresh();
     }
 
     function pickTool(next: Tool) {
         if (!picture) return;
         if (next === "grade") return showGrade();
         if (grading.isOpen()) grading.close();
+        // a page that is no tool's gives its place to the tool's
+        if (chosen) chosen.close();
         if (stage.tool() === "crop" && next !== "crop") stage.applyCrop();
         if ((MARK_KINDS as string[]).includes(next)) keepPen({ mark: next as MarkKind });
+        if (next === "hide" || (MARK_KINDS as string[]).includes(next)) lastUp = next as MarkKind | "hide";
         stage.setTool(stage.tool() === next && next !== "crop" ? "none" : next);
         stage.element.focus({ preventScroll: true });
-        if (stage.tool() === "read") void reading.start(buttons.read);
+        if (stage.tool() === "read") void reading.start(buttons.more);
         if (stage.tool() === "cutout" && !look(picture).cutout) void startCut();
+        refresh();
     }
     /** Reads with another size of model, the tool for reading on: at once if it is kept, else asked for. */
     function useModel(id: string) {
@@ -1914,7 +2054,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (stage.tool() === "crop") stage.applyCrop();
         if (stage.tool() !== "read") stage.setTool("read");
         stage.element.focus({ preventScroll: true });
-        void reading.use(id, buttons.read);
+        void reading.use(id, buttons.more);
     }
     /** Turns the picture to level it, as one step; level again takes the step away. The crop's frame follows, and a line being drawn is done. */
     function turnTo(degrees: number) {
@@ -1926,7 +2066,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     }
     /** The picture's perspective step, if it has one. */
     const perspectiveStep = (): Perspective | undefined => history.now().find((step) => step.type === "perspective") as Perspective | undefined;
-    /** Perspective's part of the crop's strip, open or shut; shut, the corners are no longer being set. */
+    /** Perspective's part of the crop's page, open or shut; shut, the corners are no longer being set. */
     function setStraightening(on: boolean) {
         if (!picture) return;
         if (on && stage.tool() !== "crop") pickTool("crop");
@@ -1989,15 +2129,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         stage.setTool("none");
         stage.element.focus({ preventScroll: true });
     }
-    /** The picture keeps its room narrowed while one of the panels is open, and has it back when none is. */
-    const beside = () => {
-        room.classList.toggle("beside", exporting.isOpen() || showing.isOpen() || grading.isOpen() || historyPanel.isOpen());
-        room.classList.toggle("grading", grading.isOpen());
-        // version history is wider than the editor's own panels, and its room is as wide as it is
-        room.classList.toggle("history", historyPanel.isOpen());
-    };
-    const showing = factsPanel({
-        closed: () => (beside(), refresh()),
+    const showing = factsPanel(side, {
         facts: () => ({ ...said, size: picture ? `${picture.original.width} × ${picture.original.height} px, ${weightSaid(picture.original.bytes)} ${kindOf(picture.original)}` : "" }),
         edits: () => picture?.edits ?? {},
         setEdit: (key, value) => {
@@ -2010,7 +2142,6 @@ export function mountEditor(host: HTMLElement, context: Context) {
             estimate.soon();
         },
     });
-    document.body.append(showing.panel);
 
     // ---- grading: the whole picture's grade, on the Grade surface ----
     const measure = createMeasure();
@@ -2065,13 +2196,12 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (stacked.stack !== measuredMasks) measure.masks((measuredMasks = stacked.stack));
         measure.grade(shown.grades.filter((each) => !isNeutral(each.grade)).map((each) => ({ ready: prepared(each.grade, colors.space), ...stacked.layers(each.id) })), shown.crop, colors.space, (counts) => grading.counts(counts));
     }
-    const grading = gradePanel({
+    const grading = gradePanel(side, {
         closed: () => {
             cancelPick();
             stage.hold(false);
             stage.setSplit(undefined);
             if (stage.tool() === "grade") stage.setTool("none");
-            beside();
             refresh();
         },
         grade: () => currentGrade(),
@@ -2104,7 +2234,6 @@ export function mountEditor(host: HTMLElement, context: Context) {
             press: () => void giveAll(["grade"]),
         },
     });
-    document.body.append(grading.panel);
     // More: the tint, the curve, the wheels and colors on their own
     const deeper = gradeMore({
         grade: () => currentGrade(),
@@ -2227,14 +2356,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
         },
         returnTo: () => stage.element,
     });
+    /** A word to press in the line over the side panel's page, named in its tooltip. */
     const stripButton = (label: string, tip: string, press: () => void) => {
-        const button = make("button", "quire-img-strip-words", label);
-        button.type = "button";
+        const button = word(label, press);
         button.title = tip;
-        button.addEventListener("click", press);
         return button;
     };
-    /** What the strip says while finding. */
+    /** What the line over the side panel's page says while finding. */
     const findSaid = () => ({ idle: "Find", asking: "Choosing a model", fetching: "Downloading the model", finding: "Finding", ready: "Press a thing to outline it; Alt and press to take away" })[finding.state()];
     const subjectButton = stripButton("subject", "The picture's subject, found by a model", () => void finding.subject(false));
     const backgroundButton = stripButton("background", "Everything but the picture's subject", () => void finding.subject(true));
@@ -2303,17 +2431,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
         commit(withGrade({ ...now, warmth: fixed.warmth, tint: fixed.tint, curves: { ...now.curves, all: fixed.curve } }));
         frame.status.say("Auto", `Warmth ${fixed.warmth}, tint ${fixed.tint}, and the curve's ends at ${fixed.curve[0]!.x} and ${fixed.curve.at(-1)!.x}`);
     }
-    /** Opens the Grade surface in the export's place, or closes it. */
-    function showGrade(from: HTMLElement = buttons.grade) {
+    /** Opens the grade's page, which the bar calls color, in the side panel, or the export again when it is open. */
+    function showGrade() {
         if (grading.isOpen()) return grading.close();
         if (!picture) return;
-        if (stage.tool() === "crop") stage.applyCrop();
-        exporting.close();
-        showing.close();
+        openPage(grading);
         stage.setTool("grade");
-        grading.fill();
-        grading.open(from);
-        beside();
+        fillGrade();
         refresh();
         void measureGrade();
         grading.sliders[0]?.track.focus({ preventScroll: true });
@@ -2329,55 +2453,84 @@ export function mountEditor(host: HTMLElement, context: Context) {
         each.addEventListener("keyup", holdKey);
     }
     stage.element.addEventListener("blur", () => stage.hold(false));
-    // undo and redo reach the surface too, which lies outside the frame's keys; its number fields keep their own
-    grading.panel.addEventListener("keydown", (event) => {
-        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.target instanceof HTMLInputElement) return;
+    // undo and redo reach the side panel too, which lies outside the frame's keys; its fields keep their own
+    side.element.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
         const key = event.key.toLowerCase();
         const run = key === "z" && !event.shiftKey ? undo : (key === "z" && event.shiftKey) || key === "y" ? redo : undefined;
         if (!run) return;
         event.preventDefault();
         run();
     });
-    /** Opens the facts in the export's place, or closes them. */
-    function showFacts(from: HTMLElement = buttons.facts) {
+    /** Opens the facts in the side panel, or the export again when they are open. */
+    function showFacts() {
         if (showing.isOpen()) return showing.close();
         if (!picture) return;
-        exporting.close();
-        grading.close();
         showing.fill();
-        showing.open(from);
-        beside();
-        refresh();
+        openPage(showing);
         showing.panel.querySelector<HTMLElement>("input")?.focus({ preventScroll: true });
     }
-    function showExportPanel(from: HTMLElement = buttons.export) {
-        if (exporting.isOpen()) return exporting.close();
+    /** The export in the side panel, as it shows with no tool on: the tool in hand is left (the crop applied) and the page chosen gives its place. */
+    function showExportPanel() {
+        if (!picture) return;
         if (stage.tool() === "crop") stage.applyCrop();
-        // the picture makes room for the panel, gliding into what is left, rather than lying under it
-        showing.close();
-        grading.close();
-        room.classList.add("beside");
-        exporting.open(from);
+        if (grading.isOpen()) grading.close();
+        if (chosen) chosen.close();
+        if (stage.picked()) stage.pick(undefined);
+        if (stage.tool() !== "none") stage.setTool("none");
+        refresh();
         void showExport();
         exporting.copyButton.focus({ preventScroll: true });
     }
 
-    /** The bar, the strip and the facts follow the document and the tool. */
+    /** The page the side panel shows now: a page chosen, else the tool's in hand (a mark picked has mark up's), else the export. */
+    function pageNow(): Page {
+        if (!picture) return exporting;
+        if (chosen) return chosen;
+        const tool = stage.tool();
+        if (tool === "crop") return cropping;
+        if (tool === "cutout") return cutting;
+        if (tool === "read") return readingPage;
+        if (tool === "hide" || (MARK_KINDS as string[]).includes(tool) || pickedMark()) return marking;
+        return exporting;
+    }
+    /** The bar, the side panel and the line under the picture follow the document and the tool. */
     function refresh() {
         const has = !!picture;
         room.classList.toggle("blank", !has);
         empty.inert = has;
-        showLastMark();
-        const marking = (MARK_KINDS as string[]).includes(stage.tool());
+        if (stage.tool() !== "crop") straightening = false;
+        const page = pageNow();
+        const shown = side.current();
+        side.show(page);
+        side.element.inert = !has;
+        side.element.classList.toggle("blank", !has);
+        // a page coming into view is filled with what it shows; the export is worked out again for the picture as it now is
+        if (page === exporting && has && (shown?.panel !== exporting.panel || exportShown !== picture)) void showExport();
+        else if (page === exporting) exporting.fill();
+        if (page === cropping) cropping.fill();
+        if (page === readingPage) readingPage.fill();
+        if (page === marking) fillMarks();
+        if (page === cutting) fillCut();
+        if (page === more) fillMore();
+        side.say(has ? doingNow() : undefined);
+        // the bar's word for what is on is marked: the tool in hand, or the page shown
+        const on: Record<string, boolean> = {
+            crop: page === cropping,
+            resize: page === resizing,
+            mark: page === marking,
+            cutout: page === cutting,
+            grade: page === grading,
+            export: page === exporting && has,
+            more: page === more || page === readingPage || page === showing,
+        };
         for (const [name, button] of Object.entries(buttons)) {
             button.disabled = !has;
-            button.classList.toggle("pressed", (stage.tool() === name && name !== "grade") || (name === "mark" && marking) || (name === "export" && exporting.isOpen()) || (name === "facts" && showing.isOpen()) || (name === "grade" && grading.isOpen()));
+            button.classList.toggle("pressed", !!on[name]);
+            if (name in on) button.setAttribute("aria-pressed", String(!!on[name]));
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
-        if (stage.tool() !== "crop") straightening = false;
-        const kind = !has ? "none" : running ? "busy" : stage.tool() === "crop" ? (straightening ? "perspective" : "crop") : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : marking || pickedMark() ? "mark" : "none";
-        strip.fill(kind);
         if (picture && !factsWhole) setFacts(factsLine(look(picture), picture.original.bytes, kindOf(picture.original)));
         if (!picture) setFacts("");
     }
@@ -2415,7 +2568,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     ],
                     [
                         { label: "Rename", icon: "rename", form: () => fieldForm({ value: where.name, label: "Name", button: "Rename" }, { set: (value) => void session.rename(value) }), run: () => {} },
-                        { label: "Version history", icon: "history", disabled: !picture, run: () => void historyPanel.open().then(beside) },
+                        { label: "Version history", icon: "history", disabled: !picture, run: () => showHistory() },
                     ],
                 ),
         },
@@ -2468,7 +2621,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         },
                     ],
                     [
-                        { label: "Facts", icon: tick(showing.isOpen(), "info"), hint: "I", key: "facts", pressed: showing.isOpen(), disabled: !picture, run: () => showFacts(frame.name) },
+                        { label: "Facts", icon: tick(showing.isOpen(), "info"), hint: "I", key: "facts", pressed: showing.isOpen(), disabled: !picture, run: () => showFacts() },
                         { label: "Split", icon: tick(stage.split() !== undefined, "column"), key: "split", pressed: stage.split() !== undefined, disabled: !picture, run: () => stage.setSplit(stage.split() === undefined ? stage.element.clientWidth / 2 : undefined) },
                     ],
                     [{ label: "Full screen", icon: "full", hint: "Ctrl+Shift+F", key: "full-screen", run: () => frame.fullScreen(!frame.isFull()) }],
@@ -2480,7 +2633,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 ruled(
                     [
                         { label: "Crop", icon: tick(stage.tool() === "crop", "crop"), hint: "C", key: "crop", pressed: stage.tool() === "crop", disabled: !picture, run: () => pickTool("crop") },
-                        { label: "Crop shape", icon: "free", items: () => SHAPES.map((each) => ({ label: each.name, icon: tick(shape === each.name, each.icon), pressed: shape === each.name, run: () => (pickTool("crop"), strip.fill("crop"), (shape = each.name), stage.setAspect(each.value === "original" && picture ? picture.original.width / picture.original.height : (each.value as number | undefined))) })), run: () => {} },
+                        { label: "Crop shape", icon: "free", items: () => SHAPES.map((each) => ({ label: each.name, icon: tick(shape === each.name, each.icon), pressed: shape === each.name, run: () => (pickTool("crop"), (shape = each.name), refresh(), stage.setAspect(each.value === "original" && picture ? picture.original.width / picture.original.height : (each.value as number | undefined))) })), run: () => {} },
                         { label: "Remove the crop", icon: "trash", disabled: !history.now().some((step) => step.type === "crop"), run: () => commit(history.now().filter((step) => step.type !== "crop")) },
                     ],
                     [
@@ -2489,7 +2642,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         { label: "Remove the perspective", icon: "trash", disabled: !history.now().some((step) => step.type === "perspective"), run: () => commit(history.now().filter((step) => step.type !== "perspective")) },
                     ],
                     [
-                        { label: "Resize", icon: "resize", key: "resize", disabled: !picture, run: () => resizing.open(buttons.resize) },
+                        { label: "Resize", icon: "resize", key: "resize", disabled: !picture, run: () => showResize() },
                         {
                             label: "Resize filter",
                             icon: "settings",
@@ -2506,7 +2659,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         { label: "Remove the resize", icon: "trash", disabled: !history.now().some((step) => step.type === "resize"), run: () => commit(history.now().filter((step) => step.type !== "resize")) },
                     ],
                     [
-                        { label: "Grade", icon: tick(grading.isOpen(), "paper"), hint: "G", key: "grade", pressed: grading.isOpen(), disabled: !picture, run: () => showGrade() },
+                        { label: "Color", icon: tick(grading.isOpen(), "paper"), hint: "G", key: "grade", pressed: grading.isOpen(), disabled: !picture, run: () => showGrade() },
                         { label: "Auto", icon: "paper", key: "grade-auto", disabled: !picture, run: () => void autoGrade() },
                         { label: "Remove the grade", icon: "trash", disabled: !history.now().some((step) => step.type === "grade"), run: () => commit(history.now().filter((step) => step.type !== "grade")) },
                     ],
@@ -2589,9 +2742,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
     /** When the menu was last opened from the keyboard, whose own menu event may follow. */
     let pressKeyedAt = -Infinity;
     const onPressMenu = (event: MouseEvent) => {
-        // Shift leaves the browser's own menu; a field, a button, the strip and a panel keep theirs
+        // Shift leaves the browser's own menu; a field, a button and the side panel keep theirs
         if (event.shiftKey || event.defaultPrevented || host.classList.contains("shelved")) return;
-        if (event.target instanceof Element && event.target.closest("input, textarea, button, [contenteditable=true], .quire-img-strip, .quire-img-panel, .quire-img-resize")) return;
+        if (event.target instanceof Element && event.target.closest("input, textarea, button, [contenteditable=true], .quire-img-side")) return;
         event.preventDefault();
         if (performance.now() - pressKeyedAt < 500) return;
         stage.pickAt(event.clientX, event.clientY);
@@ -2658,11 +2811,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
             ["H", "Highlighter: level as dragged (Shift: at any angle), along the words read"],
             ["M", "Magnifier: drag from what to enlarge to where the lens goes"],
             ["S", "Spotlight: drag a shape to leave bright"],
-            ["G", "Grade: sliders, curves, wheels, looks, and parts of the picture"],
+            ["G", "Color: the grade's sliders, curves, wheels, looks, and parts of the picture"],
             ["\\", "Hold to see the original"],
             ["E", "Export"],
             ["Enter", "Apply the crop"],
-            ["Escape", "Leave the tool"],
+            ["Escape", "Leave the tool, and the export shows again"],
             ["Arrows", "Nudge the frame, a corner or what is picked (Shift: 10 pixels)"],
             ["Delete", "Remove what is picked"],
             ["Ctrl+C", "Copy"],
@@ -2698,10 +2851,12 @@ export function mountEditor(host: HTMLElement, context: Context) {
             };
         if (stage.picked()) return () => stage.pick(undefined);
         if (stage.selected()) return () => stage.selectAll(false);
-        // setting the corners, Escape stops; with perspective open, it goes back to the crop's strip
+        // setting the corners, Escape stops; with perspective open, it shuts perspective's part of the crop's page
         if (stage.cornering()) return () => (stage.setCornering(false), refresh());
         if (straightening && stage.tool() === "crop") return () => setStraightening(false);
-        if (stage.tool() !== "none") return () => stage.setTool("none");
+        // a page that is no tool's goes back to the export; a tool is left, and the export shows again
+        if (chosen) return () => chosen?.close();
+        if (stage.tool() !== "none") return () => (stage.setTool("none"), refresh());
         return undefined;
     }
 
@@ -2722,17 +2877,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             if (key === "-") return () => stage.zoom(0.8);
             return undefined;
         }
-        // Escape is answered from the tool's own controls too (the dial, a shape, a color), as from the picture, and the keyboard then goes back to the picture
-        if (!onPicture && event.key === "Escape" && !event.altKey && !control && event.target instanceof Element && event.target.closest(".quire-img-strip")) {
-            const run = escapeFor();
-            return (
-                run &&
-                (() => {
-                    run();
-                    stage.element.focus({ preventScroll: true });
-                })
-            );
-        }
+        // Escape from the side panel's own controls (the dial, a shape, a color) is answered by the panel (side.ts), as from the picture
         // single keys only while the picture, not a field, has the keyboard
         if (!onPicture || event.altKey || control) return undefined;
         const picked = TOOL_KEYS[event.code];
@@ -2800,11 +2945,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
             running?.stop.abort();
             restorer.destroy();
             finding.destroy();
-            grading.panel.remove();
             document.removeEventListener("paste", pasted);
             pressMenu.close(false);
-            marksMenu.close(false);
-            outlineMenu.close(false);
             pressAnchor.remove();
             thumbMenu.close(false);
             thumbAnchor.remove();
@@ -2812,9 +2954,6 @@ export function mountEditor(host: HTMLElement, context: Context) {
             session.destroy();
             frame.destroy();
             stage.destroy();
-            exporting.panel.remove();
-            showing.panel.remove();
-            resizing.box.remove();
             historyPanel.close();
             historyPanel.element.remove();
             host.classList.remove("quire-img-editor");

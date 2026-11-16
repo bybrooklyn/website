@@ -362,7 +362,7 @@ export function gradeMore(hooks: MoreHooks) {
     wheelRow.append(...wheels.map((each) => each.element));
     // colors picked in the picture, each with its own three sliders
     const colors = make("div", "quire-img-own-colors");
-    const pick = make("button", "quire-dialog-dismiss quire-img-grade-fix quire-img-pick-color", "pick a color");
+    const pick = make("button", "quire-bench-press quire-img-grade-fix quire-img-pick-color", "pick a color");
     pick.type = "button";
     pick.title = "Then press a color in the picture, to shift it on its own";
     pick.addEventListener("click", () => hooks.pickColor());

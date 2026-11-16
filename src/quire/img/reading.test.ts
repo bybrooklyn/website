@@ -6,7 +6,7 @@
 //   be fetched, from where and how big, as three cards, and fetches only when told;
 // - the only requests are the page's own files, ONNX Runtime's and the model's, each a GET with no
 //   body: nothing of the picture is sent anywhere;
-// - the reading is shown quietly in the tool's strip, and what looks private is offered there;
+// - the reading is shown quietly in its page of the side panel, and what looks private is offered there;
 // - pressing a word makes a cover exactly over its box and the stated margin, in the color round it;
 //   pressing it again picks that cover; a drag across words makes one cover over the run; Hide all
 //   covers everything that looks private as one step, and undo takes it back;
@@ -76,8 +76,8 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         const started = Date.now();
         await tab.run("document.querySelector('.quire-img-read-download').click()");
-        await until("/look private/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')", 90_000);
-        console.log(`fetched the tiny model and read the screenshot in ${Date.now() - started} ms; the strip says "${await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")}"`);
+        await until("/look private/.test(document.querySelector('.quire-img-read-said')?.textContent ?? '')", 90_000);
+        console.log(`fetched the tiny model and read the screenshot in ${Date.now() - started} ms; the side panel says "${await tab.run<string>("document.querySelector('.quire-img-read-said').textContent")}"`);
         expect(await tab.run<boolean>("!document.querySelector('.quire-img-read-dialog')")).toBe(true);
 
         // the only requests: the page's own, ONNX Runtime's and the model's, each a GET with no body
@@ -89,7 +89,7 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
 
         const words = await wordsOf(page);
         expect(words.map((word) => word.text)).toEqual(["Account", "settings", "Email:", "someone@example.com", "Token:", "ghp_9f8a7c6b5d4e3f2a1b0c"]);
-        expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toBe("6 words, 2 look private");
+        expect(await tab.run<string>("document.querySelector('.quire-img-read-said').textContent")).toBe("6 words, 2 look private");
         expect(await tab.run<string>("localStorage.getItem('quire-img-read')")).toBe("tiny");
 
         // a word pressed: a cover exactly over its box and margin, in the page's color round it
@@ -123,10 +123,10 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
         expect(run.y).toBe(Math.min(account!.cover.y, settings!.cover.y));
 
         // Hide all covers what is left that looks private, as one step
-        expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toBe("6 words, 1 looks private");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'hide all').click()");
+        expect(await tab.run<string>("document.querySelector('.quire-img-read-said').textContent")).toBe("6 words, 1 looks private");
+        await tab.run("[...document.querySelectorAll('.quire-img-read-page button')].find((button) => button.textContent === 'hide all').click()");
         await until("window.app.editing().steps().length === 3");
-        expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toBe("6 words");
+        expect(await tab.run<string>("document.querySelector('.quire-img-read-said').textContent")).toBe("6 words");
         await tab.press("z", { ctrl: true });
         await until("window.app.editing().steps().length === 2");
         await tab.press("z", { ctrl: true });
@@ -150,7 +150,7 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
         // the next picture is read with no dialog: the model is kept and the size remembered
         await page.paste("screenshot");
         await tab.press("w");
-        await until("/look private/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')", 60_000);
+        await until("/look private/.test(document.querySelector('.quire-img-read-said')?.textContent ?? '')", 60_000);
         expect(await tab.run<boolean>("!document.querySelector('.quire-img-read-dialog')")).toBe(true);
         expect(tab.requests.filter((each) => each.url.includes("huggingface")).length).toBe(3);
         expect(tab.errors.filter((error) => !/onnxruntime|W:onnx/.test(error))).toEqual([]);
@@ -173,14 +173,14 @@ test("a phone number is hidden by one cover edge to edge, by Hide all or by pres
             const data = new DataTransfer(); data.items.add(new File([blob], "image.png", { type: "image/png" }));
             document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
         })()`);
-        await until("window.app.editing().stage?.loaded() && document.querySelector('.quire-img-frame.shown')");
+        await until("window.app.editing().stage?.loaded()");
         await tab.run("document.querySelector('.quire-img-stage').focus()");
         await tab.press("w");
         await until("document.querySelector('.quire-img-read-dialog .quire-dialog-action')");
         await tab.run("document.querySelector('.quire-img-read-dialog .quire-dialog-action').click()");
         await until("document.querySelector('.quire-img-read-download')");
         await tab.run("document.querySelector('.quire-img-read-download').click()");
-        await until("/look/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')", 90_000);
+        await until("/look/.test(document.querySelector('.quire-img-read-said')?.textContent ?? '')", 90_000);
         const words = await wordsOf(page);
         const at = (text: string) => words.findIndex((word) => word.text === text);
         const [plus, group, last, jordan] = [at("+1"), at("555"), at("0132"), at("Jordan")];
@@ -192,11 +192,11 @@ test("a phone number is hidden by one cover edge to edge, by Hide all or by pres
             const point = await middleOf(index);
             return tab.run<number>(`(() => { const over = document.querySelector('.quire-img-over'); const box = over.getBoundingClientRect(); const ratio = over.width / box.width; return over.getContext('2d').getImageData(Math.round((${point.x} - box.x) * ratio), Math.round((${point.y} - box.y) * ratio), 1, 1).data[3]; })()`);
         };
-        expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toContain("1 looks private");
+        expect(await tab.run<string>("document.querySelector('.quire-img-read-said').textContent")).toContain("1 looks private");
         expect(await tint(group)).toBeGreaterThan(0);
 
         // Hide all: one cover, from the first group's edge to the last's
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'hide all').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-read-page button')].find((button) => button.textContent === 'hide all').click()");
         await until("window.app.editing().steps().length === 1");
         const [all] = await covers(page);
         expect([all!.rect.x, all!.rect.x + all!.rect.width]).toEqual([phone.x, phone.right]);

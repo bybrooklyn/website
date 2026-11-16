@@ -80,10 +80,10 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         // JPEG: said plainly, with a color or PNG offered
         await tab.run("document.querySelector('.quire-img-bar [aria-label=\"Export (E)\"]').click()");
         await until("document.querySelector('.quire-img-export.open')");
-        await tab.run("document.querySelector('.quire-img-formats [aria-label^=\"JPEG:\"]').click()");
+        await tab.run("document.querySelector('.quire-img-formats label[title^=\"JPEG:\"]').click()");
         await until("!document.querySelector('.quire-img-note').classList.contains('away')");
         expect(await tab.run<string>("document.querySelector('.quire-img-note').textContent")).toContain("JPEG has no transparency");
-        await tab.run("document.querySelector('.quire-img-note [aria-label=\"Use PNG\"]').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-note button')].find((each) => each.textContent === 'use PNG').click()");
         await until("document.querySelector('.quire-img-note').classList.contains('away')");
         // the document opened again draws the same, with no request at all
         const asked = tab.requests.length;
@@ -95,13 +95,14 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         // Keep painted over the ground brings it back
         await tab.run("document.querySelector('.quire-img-stage').focus()");
         await tab.press("k");
-        await until("[...document.querySelectorAll('.quire-img-strip-words')].some((each) => each.textContent === 'keep')");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'keep').click()");
+        await until("[...document.querySelectorAll('.quire-img-cut-page.open label')].some((each) => each.textContent === 'keep')");
+        await tab.run("[...document.querySelectorAll('.quire-img-cut-page.open label')].find((each) => each.textContent === 'keep').click()");
         await tab.drag(await page.onScreen(80, 90), await page.onScreen(130, 110), 6);
         await until("window.app.editing().steps().find((step) => step.type === 'cutout').strokes?.length === 1");
         await until(`(async () => (await window.app.editing().flatten()).data[(100 * 1200 + 100) * 4 + 3] > 200)()`);
         // laid on a color: nothing is clear
-        await tab.run("document.querySelector('.quire-img-strip [aria-label=\"Red\"]').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-cut-page.open label')].find((each) => each.textContent === 'color').click()");
+        await tab.run("document.querySelector('.quire-img-cut-page.open [aria-label=\"Red\"]').click()");
         await until("window.app.editing().steps().find((step) => step.type === 'cutout').background === 'color'");
         // in a batch, the cut-out given to the others: each cut out in turn, laid on the same color, as one undo step
         await tab.run(`(async () => {
@@ -116,7 +117,8 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
             await window.app.editing().addPictures([await make("second.png", 120), await make("third.png", 200)]);
         })()`);
         await until("window.app.editing().batch().count === 3");
-        expect(await tab.run<string>("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent.startsWith('give to the other'))?.title")).toBe("Cut out the other 2 pictures the same way, one after another");
+        expect(await tab.run<string>("document.querySelector('.quire-img-cut-page .quire-img-give-said').textContent")).toBe("Cut out the other 2 pictures the same way, one after another");
+        expect(await tab.run<string>("document.querySelector('.quire-img-cut-page .quire-img-give-button').textContent")).toBe("give to the other 2");
         await tab.run("window.app.editing().giveAll(['cutout'])");
         const laid = () => tab.run<(string | null)[]>("(async () => { const editor = window.app.editing(); const out = []; for (let at = 1; at < 3; at++) { await editor.stepTo(at); const step = editor.steps().find((each) => each.type === 'cutout'); out.push(step ? step.background + ' ' + step.color : null); } await editor.stepTo(0); return out; })()");
         expect(await laid()).toEqual(["color #ff3b30", "color #ff3b30"]);
@@ -130,12 +132,12 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         await tab.run("window.app.editing().undo()");
         expect(await laid()).toEqual([null, null]);
         expect(await tab.run("window.app.editing().steps().some((step) => step.type === 'cutout')")).toBe(true);
-        // (stepping put the crop's frame back in hand, as on any picture stepped to)
+        // (stepping put the tool down, as on any picture stepped to)
         await tab.run("document.querySelector('.quire-img-stage').focus()");
         await tab.press("k");
-        await until("[...document.querySelectorAll('.quire-img-strip-words')].some((each) => each.textContent === 'take away')");
+        await until("[...document.querySelectorAll('.quire-img-cut-page.open button')].some((each) => each.textContent === 'take away')");
         // Take away: the background back
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'take away').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-cut-page.open button')].find((each) => each.textContent === 'take away').click()");
         await until("!window.app.editing().steps().some((step) => step.type === 'cutout')");
         const outside = tab.requests.filter((each) => !each.url.startsWith("http://localhost:"));
         expect(outside.map((each) => each.url.replace(/resolve\/[0-9a-f]{40}/, "resolve/C"))).toEqual(["https://huggingface.co/Xenova/modnet/resolve/C/onnx/model_fp16.onnx"]);
@@ -185,8 +187,8 @@ test("in imgQuire, where the model finds nothing the tool says to press the thin
         await tab.run("document.querySelector('.quire-img-stage').focus()");
         await tab.press("Escape");
         await tab.press("k");
-        // nothing is found: no step is made, and the strip says the next step
-        await until("document.querySelector('.quire-img-strip')?.textContent.includes('Press the thing you want to keep')");
+        // nothing is found: no step is made, and cut out's page says the next step
+        await until("document.querySelector('.quire-img-cut-page')?.textContent.includes('Press the thing you want to keep')");
         expect(await tab.run("window.app.editing().steps().some((step) => step.type === 'cutout')")).toBe(false);
         // a press on the box: the box is the cut-out, kept with its press
         const box = await page.onScreen(850, 400);

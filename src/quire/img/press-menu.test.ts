@@ -75,7 +75,7 @@ test("a right-click on the empty room offers Paste and Choose a picture, and Pas
     // the clipboard holds a picture: Paste from the menu opens it
     await page.tab.run(`(async () => { const canvas = new OffscreenCanvas(300, 200); const context = canvas.getContext("2d"); context.fillStyle = "#246"; context.fillRect(0, 0, 300, 200); const blob = await canvas.convertToBlob({ type: "image/png" }); navigator.clipboard.read = async () => [{ types: ["image/png"], getType: async () => blob }]; })()`);
     await page.tab.run("[...document.querySelectorAll('.quire-img-press-menu:popover-open button')].find((each) => each.textContent.includes('Paste')).click()");
-    await page.until("window.app.editing().stage?.loaded() && document.querySelector('.quire-img-frame.shown')");
+    await page.until("window.app.editing().stage?.loaded()");
     expect(await page.tab.run("(async () => { const flat = await window.app.editing().flatten(); return [flat.width, flat.height]; })()")).toEqual([300, 200]);
 }, 60_000);
 

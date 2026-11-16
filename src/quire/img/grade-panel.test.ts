@@ -1,6 +1,6 @@
 // What the Grade surface is held to: a slider's number is said plainly and a typed one held to its
 // range; a drag moves a slider by how far the pointer went, never jumping, snapping to zero; and in
-// Chromium, by real keys and drags, G opens the surface beside the picture (which refits, and is
+// Chromium, by real keys and drags, G opens the grade's page in the side panel beside the picture (which keeps its place, and is
 // never under it), a slider dragged previews and is one undo when let go, a double press puts it
 // back to zero, a typed number and the arrow keys set it, the backslash held shows the original, the
 // split goes on and is dragged, Balance on a gray patch makes it neutral, Auto lands as slider and
@@ -41,7 +41,7 @@ afterAll(async () => {
 });
 const gradeOf = () => page!.tab.run<Record<string, unknown> | undefined>("window.app.editing().steps().find((step) => step.type === 'grade')?.grade");
 
-test("G opens the surface beside the picture, which refits; a slider dragged is one undo; a double press, a typed number and the arrows set it", async () => {
+test("G opens the grade's page in the side panel beside the picture, which keeps its place; a slider dragged is one undo; a double press, a typed number and the arrows set it", async () => {
     if (!page) return;
     await page.paste("photo");
     const before = await page.boxOf(".quire-img-stage");
@@ -50,7 +50,8 @@ test("G opens the surface beside the picture, which refits; a slider dragged is 
     await page.tab.wait(700);
     const after = await page.boxOf(".quire-img-stage");
     const panel = await page.boxOf(".quire-img-grade-panel");
-    expect(after.width).toBeLessThan(before.width);
+    expect(after).toEqual(before);
+    expect(await page.tab.run("[...document.querySelectorAll('.quire-img-bar .quire-img-word.pressed')].map((each) => each.textContent)")).toEqual(["color"]);
     // the picture's room ends before the panel starts
     expect(after.x + after.width).toBeLessThanOrEqual(panel.x + 1);
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("grade");

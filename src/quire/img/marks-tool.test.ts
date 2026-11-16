@@ -4,8 +4,8 @@
 // what is under it and leaving the words dark; a magnifier whose lens shows the place it looks at, exactly there,
 // and in the export sharply from the original's own pixels even when the picture is made smaller, on the screen
 // too; spotlights that shade all but their shapes, an overlap left bright, the shade changed for all at once; a
-// text with an outline; marks that stay where they were put through a turn and a straightening; and the bar's
-// mark button and menu, and the keys.
+// text with an outline; marks that stay where they were put through a turn and a straightening; and mark up's
+// word on the bar, its page's kinds, the Tools menu's marks, and the keys.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import sharp from "sharp";
@@ -24,8 +24,8 @@ afterAll(async () => {
 type Step = Kept & { rect?: { x: number; y: number; width: number; height: number }; from?: { x: number; y: number }; to?: { x: number; y: number }; thickness?: number; value?: number; dim?: number };
 const stepsOf = () => page!.tab.run<Step[]>("window.app.editing().steps()");
 const focus = () => page!.tab.run("document.querySelector('.quire-img-stage').focus()");
-/** Presses a button of the strip by its tooltip or its words. */
-const strip = (label: string) => page!.tab.run(`[...document.querySelectorAll('.quire-img-strip button')].find((each) => each.title === ${JSON.stringify(label)} || each.textContent.trim() === ${JSON.stringify(label)}).click()`);
+/** Presses a word, a color or a dot of the side panel's page shown, by its tooltip or its words. */
+const strip = (label: string) => page!.tab.run(`[...document.querySelectorAll('.quire-img-page.open button, .quire-img-page.open label')].find((each) => each.title === ${JSON.stringify(label)} || each.textContent.trim() === ${JSON.stringify(label)}).click()`);
 /** The export's pixel at a place, red, green and blue. */
 const exported = (points: { x: number; y: number }[]) => page!.tab.run<number[][]>(`(async () => { const flat = await window.app.editing().flatten(); return ${JSON.stringify(points)}.map(({ x, y }) => [...flat.data.slice((Math.round(y) * flat.width + Math.round(x)) * 4, (Math.round(y) * flat.width + Math.round(x)) * 4 + 3)]); })()`);
 /** Leaves any tool, so that a press picks. */
@@ -38,7 +38,7 @@ const noTool = async () => {
 async function pastePng(png: Buffer) {
     const was = await page!.tab.run<string>("window.app.editing().current().id ?? ''");
     await page!.tab.run(`(async () => { const bytes = Uint8Array.from(atob(${JSON.stringify(png.toString("base64"))}), (c) => c.charCodeAt(0)); const data = new DataTransfer(); data.items.add(new File([bytes], "image.png", { type: "image/png" })); document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); })()`);
-    await page!.until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded() && document.querySelector(".quire-img-frame.shown") && document.activeElement === document.querySelector(".quire-img-stage")`);
+    await page!.until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded() && document.activeElement === document.querySelector(".quire-img-stage")`);
 }
 
 test("numbered steps: each press puts down the next number, one taken away renumbers the rest, one set by hand keeps its number until put back in order from the right-click menu, and undo takes each back", async () => {
@@ -65,7 +65,7 @@ test("numbered steps: each press puts down the next number, one taken away renum
     await page.tab.press("Delete");
     steps = await stepsOf();
     expect([...numbersOf(steps).values()]).toEqual([1, 2]);
-    // the last set to 7 in the strip's field, which shows its number when it is picked
+    // the last set to 7 in mark up's field, which shows its number when it is picked
     const last = await page.onScreen(900, 300);
     await page.tab.click(last.x, last.y);
     expect(await page.tab.run("document.querySelector('.quire-img-strip-number').value")).toBe("2");
@@ -213,10 +213,8 @@ test("a text has an outline in the color chosen round its letters, and lines ali
     await page.tab.press("t");
     await strip("White");
     await strip("Align center");
-    await page.tab.run("document.querySelector('.quire-img-strip button[title=Outline]').click()");
-    await page.until("document.querySelector('.quire-img-outline-menu:popover-open')");
-    await page.tab.run("[...document.querySelectorAll('.quire-img-outline-menu .quire-menu-line')].find((each) => each.textContent.includes('Black')).click()");
-    await page.tab.press("Escape");
+    await page.tab.run("document.querySelector('.quire-img-page.open [aria-label=outline] [title=Black]').click()");
+    await focus();
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("text");
     const at = await page.onScreen(800, 450);
     await page.tab.click(at.x, at.y);
@@ -254,8 +252,8 @@ test("turned by the dial, a number stays where it was put and is picked there; s
     // straightened by the vertical dial, a box and a text put at the same place: the text's ink starts at the box's corner
     await page.paste("screenshot");
     await page.tab.press("p");
-    await page.until("document.querySelector('.quire-img-strip[data-kind=perspective]')");
-    await page.tab.run("document.querySelector('.quire-img-strip .quire-img-dial[aria-label=Vertical]').focus()");
+    await page.until("document.querySelector('.quire-img-page.open .quire-img-keystones:not(.away)')");
+    await page.tab.run("document.querySelector('.quire-img-side .quire-img-dial[aria-label=Vertical]').focus()");
     for (let step = 0; step < 8; step++) await page.tab.press("ArrowRight", { shift: true });
     await focus();
     await page.tab.press("Escape");
@@ -276,29 +274,35 @@ test("turned by the dial, a number stays where it was put and is picked there; s
     expect(Math.abs(found.red[1]! - found.blue[1]!)).toBeLessThan(14);
 }, 90_000);
 
-test("the bar keeps the mark last used one press away, beside a menu of all seven grown from its button, and each mark has its key", async () => {
+test("each mark has its key, and with any mark in hand the bar's mark up is marked and its page's dot is that mark; its dots choose every mark and hide, and the Tools menu lists all seven", async () => {
     if (!page) return;
     await page.paste("screenshot");
     await focus();
-    for (const [key, tool, label] of [["n", "number", "Numbered step (N)"], ["h", "highlight", "Highlighter (H)"], ["m", "magnifier", "Magnifier (M)"], ["s", "spotlight", "Spotlight (S)"], ["a", "arrow", "Arrow (A)"]] as const) {
+    const chosen = () => page!.tab.run<string>("document.querySelector('.quire-img-page.open .quire-img-mark-kinds input:checked')?.value ?? ''");
+    for (const [key, tool] of [["n", "number"], ["h", "highlight"], ["m", "magnifier"], ["s", "spotlight"], ["r", "hide"], ["a", "arrow"]] as const) {
         await page.tab.press(key);
         expect(await page.tab.run("window.app.editing().stage.tool()")).toBe(tool);
-        expect(await page.tab.run("document.querySelector('.quire-img-bar .quire-button[aria-label$=\")\"]:not([aria-label^=Undo]):not([aria-label^=Redo]).pressed')?.getAttribute('aria-label')")).toBe(label);
+        expect(await page.tab.run("[...document.querySelectorAll('.quire-img-bar .quire-img-word.pressed')].map((each) => each.textContent)")).toEqual(["mark up"]);
+        expect(await chosen()).toBe(tool);
         await page.tab.press("Escape");
+        // left, the export shows again and the bar marks it
+        expect(await page.tab.run("[...document.querySelectorAll('.quire-img-bar .quire-img-word.pressed')].map((each) => each.textContent)")).toEqual(["export"]);
     }
-    const more = await page.middle(".quire-img-bar [aria-label='Marks']");
-    await page.tab.click(more.x, more.y);
-    await page.until("document.querySelector('.quire-img-marks-menu:popover-open')");
-    const lines = await page.tab.run<string[]>("[...document.querySelectorAll('.quire-img-marks-menu .quire-menu-label')].map((each) => each.textContent)");
-    expect(lines).toEqual(["Arrow", "Box", "Text", "Numbered step", "Highlighter", "Magnifier", "Spotlight"]);
-    // the menu holds the keyboard: Escape closes it and leaves the tool as it was
-    await page.tab.press("Escape");
-    await page.until("!document.querySelector('.quire-img-marks-menu:popover-open')");
-    await page.tab.click(more.x, more.y);
-    await page.until("document.querySelector('.quire-img-marks-menu:popover-open')");
-    await page.tab.run("[...document.querySelectorAll('.quire-img-marks-menu .quire-menu-line')].find((line) => line.textContent.includes('Spotlight')).click()");
+    // mark up puts the mark last used in hand; a dot puts another, hide among them
+    await page.tab.run("document.querySelector('.quire-img-bar [aria-label^=\"Mark up\"]').click()");
+    expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("arrow");
+    await strip("spotlight");
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("spotlight");
-    expect(await page.tab.run("document.querySelector('.quire-img-bar [aria-label=\"Spotlight (S)\"]') !== null")).toBe(true);
+    await strip("hide");
+    expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("hide");
+    expect(await page.tab.run("[...document.querySelectorAll('.quire-img-page.open .quire-bench-press')].filter((each) => !each.closest('.away')).map((each) => each.textContent)")).toEqual(["hide what looks private"]);
+    await focus();
+    await page.tab.press("Escape");
+    await page.tab.press("t", { alt: true });
+    await page.until("document.querySelector('.quire-menu:popover-open .quire-menu-line')");
+    const lines = await page.tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-label')].map((each) => each.textContent)");
+    expect(lines).toEqual(expect.arrayContaining(["Arrow", "Box", "Text", "Numbered step", "Highlighter", "Magnifier", "Spotlight", "Hide"]));
+    await page.tab.press("Escape");
 }, 60_000);
 
 test("a number put down before a spotlight is as bright in the export as one put down after it", async () => {

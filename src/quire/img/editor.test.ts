@@ -43,6 +43,39 @@ test("the first Ctrl+C asks how to copy and keeps the answer; the next copies wi
     expect(await page.tab.run("!!document.querySelector('dialog[open]')")).toBe(false);
 }, 30_000);
 
+test("a picture opens with no tool on and nothing over it, the side panel showing the export; each tool is a word on the bar, and Escape leaves it, from the picture or from the panel, the export showing again", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    const state = () => page!.tab.run<[string, string, string[], boolean]>("[window.app.editing().stage.tool(), document.querySelector('.quire-img-side').dataset.page, [...document.querySelectorAll('.quire-img-bar .quire-img-word.pressed')].map((each) => each.textContent), !!document.querySelector('.quire-img-frame.shown')]");
+    expect(await state()).toEqual(["none", "export", ["export"], false]);
+    expect(await page.tab.run("[...document.querySelectorAll('.quire-img-bar .quire-img-word')].map((each) => each.textContent)")).toEqual(["crop", "resize", "mark up", "cut out", "color", "export", "more"]);
+    // the side panel is always there, at the right of the picture
+    const stage = await page.boxOf(".quire-img-stage");
+    const side = await page.boxOf(".quire-img-side");
+    expect(stage.x + stage.width).toBeLessThanOrEqual(side.x + 1);
+    // a key picks a tool and the panel shows its page; Escape from the picture leaves it
+    await page.tab.press("c");
+    await page.until("document.querySelector('.quire-img-frame.shown')");
+    expect(await state()).toEqual(["crop", "crop", ["crop"], true]);
+    await page.tab.press("Escape");
+    await page.until("!document.querySelector('.quire-img-frame.shown')");
+    expect(await state()).toEqual(["none", "export", ["export"], false]);
+    // a word picks it too, and Escape from a control of its page leaves it and gives the keyboard back to the picture
+    await page.tab.run("document.querySelector('.quire-img-bar [aria-label^=\"Mark up\"]').click()");
+    expect((await state()).slice(1, 3)).toEqual(["mark-up", ["mark up"]]);
+    await page.tab.run("document.querySelector('.quire-img-page.open .quire-img-mark-kinds input:checked').focus()");
+    await page.tab.press("Escape");
+    expect(await state()).toEqual(["none", "export", ["export"], false]);
+    expect(await page.tab.run("document.activeElement?.className")).toBe("quire-img-stage");
+    // more, and Escape from it
+    await page.tab.run("document.querySelector('.quire-img-bar [aria-label^=More]').click()");
+    expect((await state()).slice(1, 3)).toEqual(["more", ["more"]]);
+    await page.tab.press("Escape");
+    expect(await state()).toEqual(["none", "export", ["export"], false]);
+    // the picture never moved
+    expect(await page.boxOf(".quire-img-stage")).toEqual(stage);
+}, 30_000);
+
 test("pressed again in the same place, the one beneath is picked; it comes forward from Edit, and Delete takes it away, undo bringing it back", async () => {
     if (!page) return;
     await page.tab.press("r");
@@ -100,9 +133,9 @@ test("a saved picture is named from its document and carries no metadata", async
     await page.tab.press("e");
     await page.until("document.querySelector('.quire-img-export.open')");
     await page.tab.wait(700);
-    const png = await page.tab.run<{ x: number; y: number }>("(() => { const box = [...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === 'PNG').getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()");
+    const png = await page.tab.run<{ x: number; y: number }>("(() => { const box = [...document.querySelectorAll('.quire-img-export.open .quire-img-formats label')].find((each) => each.textContent === 'PNG').getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()");
     await page.tab.click(png.x, png.y);
-    const save = await page.middle(".quire-img-export .quire-img-actions .quire-dialog-dismiss");
+    const save = await page.middle(".quire-img-export .quire-img-actions .quire-img-save");
     await page.tab.click(save.x, save.y);
     await page.until("Object.keys(window.downloads).some((name) => name.endsWith('.png'))");
     const [name, bytes] = await page.tab.run<[string, number[]]>("Object.entries(window.downloads).find(([name]) => name.endsWith('.png'))");
@@ -131,20 +164,22 @@ test("every line of the menus has an icon, and the menu words are File, Edit, Vi
     await page.tab.press("Escape");
 }, 30_000);
 
-test("version history draws a version's steps over the original, and never lies over the picture, which glides aside as it opens and back as it closes", async () => {
+test("version history draws a version's steps over the original in the side panel, and never lies over the picture, which keeps its place as it opens and closes", async () => {
     if (!page) return;
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
-    // the room as it is with no panel open, once an earlier panel has given its width back
+    // the room as it is with the export in the side panel
     await page.tab.wait(700);
     const wide = await page.boxOf(".quire-img-stage");
     await page.tab.press("f", { alt: true });
     await page.until("document.querySelector('.quire-menu:popover-open .quire-menu-line')");
     await page.tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-line')].find((line) => line.textContent.includes('Version history')).click()");
     await page.until("document.querySelector('.quire-history.open .quire-history-item')");
-    // the room has given the panel its width once both have moved, and the picture is fitted into what is left
+    // the panel is a page of the side panel, beside the picture, and the picture has not moved
     await page.tab.wait(900);
+    expect(await page.tab.run("document.querySelector('.quire-img-side').contains(document.querySelector('.quire-history'))")).toBe(true);
     const panel = await page.boxOf(".quire-history");
     const stage = await page.boxOf(".quire-img-stage");
+    expect(stage).toEqual(wide);
     expect(stage.x + stage.width).toBeLessThanOrEqual(panel.x);
     const right = await page.tab.run<number>("(() => { const s = window.app.editing().stage; const size = s.loaded().size; return Math.max(...[[0, 0], [size.width, 0], [size.width, size.height], [0, size.height]].map(([x, y]) => s.toScreen({ x, y }).x)) + document.querySelector('.quire-img-stage').getBoundingClientRect().x; })()");
     expect(right).toBeLessThanOrEqual(panel.x);
@@ -153,7 +188,8 @@ test("version history draws a version's steps over the original, and never lies 
     expect(await page.tab.run<number>("document.querySelector('.quire-img-version').width")).toBeLessThanOrEqual(360);
     await page.tab.press("Escape");
     await page.tab.press("Escape");
-    // closed, the room is whole again
+    // closed, the export shows again in its place, and the room is as it was
     await page.tab.wait(900);
     expect(await page.boxOf(".quire-img-stage")).toEqual(wide);
+    expect(await page.tab.run("document.querySelector('.quire-img-side').dataset.page")).toBe("export");
 }, 30_000);

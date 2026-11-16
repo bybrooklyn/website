@@ -99,7 +99,7 @@ export function gradeLooks(hooks: LooksHooks) {
     field.placeholder = "Name of the look";
     field.setAttribute("aria-label", "Name of the look");
     field.maxLength = MOST_LOOKS.name;
-    const keep = make("button", "quire-dialog-dismiss quire-img-grade-fix", "save look");
+    const keep = make("button", "quire-bench-press quire-img-grade-fix", "save look");
     keep.type = "button";
     keep.title = "Keeps this grade as a look, in this browser, to give to other pictures";
     save.append(field, keep);
@@ -112,7 +112,7 @@ export function gradeLooks(hooks: LooksHooks) {
     chooser.accept = ".cube";
     chooser.hidden = true;
     const button = (label: string, tip: string, press: () => void) => {
-        const made = make("button", "quire-dialog-dismiss quire-img-grade-fix", label);
+        const made = make("button", "quire-bench-press quire-img-grade-fix", label);
         made.type = "button";
         made.title = tip;
         made.addEventListener("click", press);

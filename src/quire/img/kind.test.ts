@@ -36,6 +36,9 @@ const timings: string[] = [];
 test("crop and copy: a pasted screenshot, its frame's corners dragged in, Enter, and Ctrl+C asks the first time and copies the part kept", async () => {
     if (!page) return;
     const before = await paste("screenshot");
+    // a picture opens with no tool on: C puts the crop's frame on it
+    await page.tab.press("c");
+    await until("document.querySelector('.quire-img-frame.shown')");
     const frame = await boxOf(".quire-img-frame");
     await page.tab.drag({ x: frame.x, y: frame.y }, { x: frame.x + frame.width * 0.04, y: frame.y + frame.height * 0.08 }, 8);
     await page.tab.drag({ x: frame.x + frame.width, y: frame.y + frame.height }, { x: frame.x + frame.width * 0.5, y: frame.y + frame.height * 0.5 }, 8);
@@ -61,16 +64,16 @@ test("shrink and convert: a pasted 12 megapixel photograph halved, WebP under 20
     await page.tab.click(half.x, half.y);
     await page.tab.press("e");
     await until("document.querySelector('.quire-img-export.open')");
-    // the panel has slid in before anything on it is pressed
+    // the page has faded in before anything on it is pressed
     await page.tab.wait(700);
-    const webp = await page.tab.run<{ x: number; y: number }>("(() => { const button = [...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === 'WebP').getBoundingClientRect(); return { x: button.x + button.width / 2, y: button.y + button.height / 2 }; })()");
+    const webp = await page.tab.run<{ x: number; y: number }>("(() => { const button = [...document.querySelectorAll('.quire-img-export.open .quire-img-formats label')].find((each) => each.textContent === 'WebP').getBoundingClientRect(); return { x: button.x + button.width / 2, y: button.y + button.height / 2 }; })()");
     await page.tab.click(webp.x, webp.y);
     const under = middle(await boxOf(".quire-img-under"));
     await page.tab.click(under.x, under.y);
     await page.tab.type("200");
     await page.tab.press("Enter");
     await until("/KB WebP/.test(document.querySelector('.quire-img-result')?.textContent ?? '')", 30_000);
-    const copy = middle(await boxOf(".quire-img-export .quire-dialog-action"));
+    const copy = middle(await boxOf(".quire-img-export .quire-img-copy"));
     await page.tab.click(copy.x, copy.y);
     const took = await copiedAfter(before);
     const result = await page.tab.run<string>("document.querySelector('.quire-img-result').textContent");
@@ -80,8 +83,6 @@ test("shrink and convert: a pasted 12 megapixel photograph halved, WebP under 20
     timings.push(`shrink and convert: ${took} ms from paste to copied (${result})`);
     expect(took).toBeLessThan(10_000);
     await page.tab.press("Escape");
-    // the picture glides back into the room the panel gave up
-    await page.tab.wait(700);
 }, 60_000);
 
 test("hide something: R, a drag over the token, and what is copied holds none of the token's red where it was", async () => {
