@@ -38,7 +38,11 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 - `lines.ts`: a picture's straight lines found, where they meet, and the camera's turn that stands them upright.
 - `deblock.ts`: a JPEG's tables read from its bytes, and its blocks and ringing taken out by hand;
   `repair.ts`, the same run in a worker, as the editor offers it.
-- `tiles.ts`: a model run over a large picture tile by tile, for when models are chosen.
+- `tiles.ts`: a model run over a large picture tile by tile.
+- `restore/`: repairing a JPEG and enlarging with a model. `models.ts`, the three files pinned with their sizes and
+  digests and how each takes a picture; `engine.ts`, the worker that keeps, fetches and runs them through `tiles.ts`;
+  `asking.ts`, the dialog of ways as cards; `half.ts`, half-precision numbers by hand; `graph.ts`, the one mend made
+  to the Swin2SR file's bytes before it is loaded.
 - `metadata.ts`: a picture's Exif, XMP, IPTC and colour profile read and written by hand, through the
   core's walkers of a JPEG, PNG and WebP (`core/picture-bytes.ts`) and its own of AVIF, HEIC and JPEG XL
   boxes.
@@ -683,9 +687,54 @@ blurs twice and enlarges twice gives, tile by tile with a margin as wide as its 
 gives the whole picture; with no margin the joins show. A 50 megapixel photograph read a tile at a time ran
 through a blur in 54 tiles in 2.1 s, memory growing by 78 MB at most against 200 MB for the picture held whole.
 It says the share done after each tile and stops between tiles when asked. A result past 16,384 a side is
-refused (a 50 megapixel photograph cannot be enlarged at all; a 12 megapixel one four times). The models for
-repairing, restoring and enlarging, and their dialog, wait for the owner's choice; the candidates are listed for
-her with their files, sizes and licences.
+refused (a 50 megapixel photograph cannot be enlarged at all; a 12 megapixel one four times).
+
+**Repairing and enlarging with a model.** Nine candidates were tried on the site's own runtime and measured; what
+ran where, what each is worth, how much each invents and why three were kept is in
+[imgQuire-models](imgQuire-models.md). Each is fetched, checked and kept as the text models are (from Hugging Face
+at its pinned commit, no referrer, no cookies, its size and SHA-256 checked before it is kept in the browser's
+private storage, in a folder of its own, and again before it is used), and run in a worker of its own
+(`restore/engine.ts`) tile by tile, each finished tile handed back to the page as it is done.
+
+- **Repair JPEG** stays the instant way it was, and uses the way last chosen. **Repair JPEG with…** (Image, and the
+  picture's right-click menu) opens a dialog in the reading dialog's family, straight to its cards, three in a row:
+  Instant (no download, first and where it starts), Better (SCUNet, 38 MB, "Blocks and noise smoothed away") and
+  Best (FBCNN, 144 MB, "Blocks gone, detail kept"), each with its size or "On this device", the source and license
+  under them; the button says Download and repair, or Repair when nothing is to be fetched. Better is offered only
+  for a file at quality 50 or below, both only where a graphics card gives WebGPU (on WebAssembly a megapixel takes
+  one to one and a half minutes); without one the dialog says so and offers Instant. FBCNN is told the file's
+  quality. The step is `{"type": "repair", "model": "repair-best", "made": "pictures/name-repaired-repair-best.webp"}`:
+  the model's result is kept in the document beside the original, written by the site's own WebP lossless encoder
+  (a PNG where it cannot be had), so the document opened again draws the same pixels with no model and no request,
+  and the model is never run again on opening. The cost is in the file's size: about 1.0 to 1.1 bytes a pixel for a
+  photograph (a 12 megapixel photograph's repair, about 12 MB beside a JPEG of 1 to 3 MB), 0.2 for a screenshot; as a
+  PNG it would be 2.3 to 2.6 and 0.35. A step from before, `{"type": "repair"}`, reads and draws as it did; a model's
+  result missing from the document falls back to the instant repair and says so.
+- **Enlarging** is in Resize: the sizes gain 200% and 400%, and a quiet button under them says the way a picture
+  made larger is enlarged, "Enlarge: Filter" or "Enlarge: Sharp", and opens the same dialog with two cards, Filter
+  (the resize's own filter, no download) and Sharp (Swin2SR lightweight, 8 MB, "Faithful edges, a minute or two a
+  megapixel"). A resize larger than the picture then names the model (`"model": "enlarge-small"`); one that makes
+  it smaller ignores it. When the picture is exported or copied (and for the weight under it), the picture as it
+  looks before the resize is flattened at its own size with no marks, run through the model once for up to twice
+  as large and a second time over its own answer for more, made the asked size by the browser's best resampling if
+  that is not the model's own, and the marks drawn over it. The result is kept while the document is open, for the
+  look it was made from, and never in the document: it would cost four to sixteen times the picture's pixels in the
+  file, and it is only wanted on export, so opening a document runs nothing. Past 16,384 a side or 64 megapixels it
+  is refused in plain words and the filter used. Sharp runs on WebAssembly even where there is a graphics card,
+  since it gives a wrong picture there.
+- **While a model runs** the strip says "Repairing 40%" or "Enlarging 40%" (with "twice as large first" and "then
+  twice again" for four times) with Stop; Escape stops it too. Stopped or failed, the picture is left as it was and
+  the status says why in plain words; a run the graphics card could not finish (its errors watched for the length
+  of each run, as the cut-out's are) is made once more in a fresh worker first. One run at a time.
+- Help, Open-source notices credits the three models, their authors, sources and licenses (`codecs/MODELS-NOTICES.txt`,
+  which `codecs/build.sh` writes into the notices).
+
+Measured (`restore/real.test.ts`, `restore/tool.test.ts`, headless Chromium, four cores, an RTX 3070 Ti): a 1280 by
+960 scene compressed at quality 30 came from 31.93 dB to 32.17 with Instant, 38.04 with Better and 39.99 with Best;
+Best took 1.8 to 2.1 s, Better 9 to 10 s. A 320 by 240 scene made twice as large came to 34.77 dB against 29.60 for
+the filter (and 28.90 for the browser's smooth enlargement), in 11.6 s on two WebAssembly threads, its tiles within
+73.7 dB of the whole picture's answer; four times by twice over, 28.63 against 25.32. The document reopened draws
+the same pixels with no request; the only request outside the page is the model's file, a GET with no body.
 
 ## Decided
 
@@ -953,14 +1002,22 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
   A number set by hand and a spotlight's shade are changed from the strip only; a text already made cannot have its
   words changed, only be made again. Not tried on a real touch screen: a finger's tap was tried in the headless
   browser.
+- Repairing and enlarging with a model: the repair models run only on a graphics card, so a machine without one has
+  the instant repair alone; Sharp runs only on WebAssembly (it is wrong on the card in ONNX Runtime 1.24.1), so four
+  times a megapixel takes several minutes. Enlarging is worked out on export, not shown on the stage (the stage
+  draws the resize from the original, as before), and its result is held whole on the page, up to 64 megapixels.
+  The repair's kept result adds about a byte a pixel to a photograph's document. The models' quality was measured on
+  pictures made smaller or compressed here, not on a phone's own JPEGs or pictures that came small; the Swin2SR
+  model's gain on those will be less. Tile joins were held to the whole picture's answer for Sharp only. The repair
+  models' licenses rest on their upstream projects (imgQuire-models says what is and is not confirmed). The tests
+  put the repair models in the browser's storage before they start, since the browser's driver cannot hand over
+  a file of 38 or 144 MB as an answer; their fetch is held with Sharp's 8 MB.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
 
 ## Next slices, in order
 
-1. The models for repairing, restoring and enlarging, once the owner has chosen them: their dialog in the
-   reading dialog's family, run through `tiles.ts` in a worker.
-2. Many at once: batches through the same steps and export (a look given to a batch), and the cut-out's
+1. Many at once: batches through the same steps and export (a look given to a batch), and the cut-out's
    pictures as a zip.
-3. From the phone, and opening a picture from mdQuire and back.
+2. From the phone, and opening a picture from mdQuire and back.

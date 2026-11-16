@@ -255,3 +255,22 @@ test("the new marks and a text's outline and alignment read back from steps.json
     expect(steps.every((step) => isMark(step))).toBe(true);
 });
 
+test("a repair may name a model and the picture its result is kept in, and an enlarging resize a model; old files read as they did", () => {
+    const old = readSteps(JSON.stringify({ quire: 1, original, steps: [{ id: "s1", type: "repair" }, { id: "s2", type: "resize", width: 600, filter: "lanczos" }] }))!;
+    expect(old.steps.map(({ id: _id, ...step }) => step)).toEqual([{ type: "repair" }, { type: "resize", width: 600, filter: "lanczos" }]);
+    expect(look(old)).toMatchObject({ repair: true, width: 600 });
+    expect(look(old).repairModel).toBeUndefined();
+    const steps: Kept[] = [
+        { id: "s1", type: "repair", model: "repair-small", made: "pictures/cat-repaired.png" },
+        { id: "s2", type: "resize", width: 2400, filter: "lanczos", model: "enlarge-small" },
+    ];
+    const read = readSteps(writeSteps({ original, steps }))!;
+    expect(read.steps).toEqual(steps);
+    expect(look(read)).toMatchObject({ repair: true, repairModel: "repair-small", repairMade: "pictures/cat-repaired.png", enlarge: "enlarge-small", width: 2400, height: 1600 });
+    // a model named on a resize that makes the picture smaller is no enlargement
+    expect(look({ original, steps: [{ id: "s1", type: "resize", width: 600, filter: "lanczos", model: "enlarge-small" }] }).enlarge).toBeUndefined();
+    // a result's place outside the document's own pictures, or a name that is no model's, is left out
+    const hostile = readSteps(JSON.stringify({ quire: 1, original, steps: [{ type: "repair", model: "repair-small", made: "../../etc/passwd" }, { type: "repair", model: "<script>", made: "pictures/a.png" }, { type: "resize", width: 2400, model: 7 }] }))!;
+    expect(hostile.steps.map(({ id: _id, ...step }) => step)).toEqual([{ type: "repair", model: "repair-small" }, { type: "repair" }, { type: "resize", width: 2400, filter: "lanczos" }]);
+});
+

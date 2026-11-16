@@ -17,7 +17,7 @@ export const PICKED_COMMANDS = ["remove", "forward", "back", "renumber"];
 export const PICTURE_COMMANDS = ["copy", "copy-text", "paste", "export"];
 
 /** The one-press fixes for the whole picture, under a rule of their own after Paste, each only when it can be used. */
-export const FIX_COMMANDS = ["straighten", "repair"];
+export const FIX_COMMANDS = ["straighten", "repair", "repair-with"];
 
 /**
  * Every line of the picture's menu, in order, found by name among the menus' lines.

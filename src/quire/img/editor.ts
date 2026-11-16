@@ -28,6 +28,9 @@ import { perspectiveMap, rectangleOf, type Corners, type Perspective } from "./p
 import { apply, ratioOf } from "./homography";
 import { grey, segments, straighten } from "./lines";
 import { createRepair } from "./repair";
+import { createRestorer } from "./restore/engine";
+import { createRestoreAsking } from "./restore/asking";
+import { enlargedSize, restoreModelOf } from "./restore/models";
 import { jpegFacts, worthRepairing } from "./deblock";
 import { createReading } from "./reading";
 import { gradePanel } from "./grade-panel";
@@ -138,6 +141,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
     let settings: Settings = readSettings(local()?.getItem(KEYS.export));
     // the part models' worker, shared by Find and the cut-out, made when first asked
     const sharedFinder = createFinder();
+    /** A restoring model's run going (restore/), for the strip: what it does, how far, and its stop. */
+    let running: { said: string; share: number; stop: AbortController } | undefined;
+    // the way of enlarging chosen in this browser: a model's id, or "" for the resize's filter
+    let enlargeWay = "";
     let shape = "Free";
     // perspective's dials and corners in the crop's strip, in place of its shapes
     let straightening = false;
@@ -377,7 +384,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const loaded = stage.loaded();
         if (!loaded || !picture) throw new Error("the picture is not shown yet");
         const shown = look(picture);
-        return loaded.flatten(shown, undefined, gradingWith(shown, colors.space, loaded.size, srgb && colors.space === "p3"), colors.space);
+        const grading = gradingWith(shown, colors.space, loaded.size, srgb && colors.space === "p3");
+        const made = shown.enlarge ? await enlargedFor(shown, srgb) : undefined;
+        return loaded.flatten(shown, undefined, grading, colors.space, made);
     };
     /** The export as set, worked out once for each set of steps and settings. */
     function exported() {
@@ -540,9 +549,19 @@ export function mountEditor(host: HTMLElement, context: Context) {
     }
     const resizing = resizeBox({
         size: () => (picture ? look(picture) : { width: 1, height: 1 }),
-        apply: (width, height) => picture && commit(setOnly(history.now(), { type: "resize", width, ...(height ? { height } : {}), filter: look(picture).filter })),
+        apply: (width, height) => {
+            if (!picture) return;
+            const now = look(picture);
+            // made larger than the picture is, it is enlarged the way chosen: a model, or the filter
+            const larger = width > now.crop.width || (height ?? 0) > now.crop.height;
+            commit(setOnly(history.now(), { type: "resize", width, ...(height ? { height } : {}), filter: now.filter, ...(larger && enlargeWay ? { model: enlargeWay } : {}) }));
+        },
         back: () => buttons.resize.focus({ preventScroll: true }),
         done: () => stage.element.focus({ preventScroll: true }),
+        enlarge: {
+            said: () => `Enlarge: ${restoreModelOf(enlargeWay)?.name ?? "Filter"}`,
+            choose: (from) => void chooseEnlarge(from),
+        },
     });
     const strip = toolStrip({
         color: () => {
@@ -612,6 +631,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         chooseModel: (from) => reading.choose(from),
         readAgain: () => void reading.start(buttons.read),
         cut: () => cutStrip(),
+        // a model running: how far, and Stop, which leaves the picture as it was
+        busy: () => (running ? { said: `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("Stop", "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
         grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
     });
     /** The mark picked, if what is picked is a mark. */
@@ -815,6 +836,16 @@ export function mountEditor(host: HTMLElement, context: Context) {
     /** The pixels the steps start from: the picture as it came, or with its JPEG repaired when that step is on, worked out once for each picture. */
     async function baseSource(): Promise<Blob | ImageBitmap | undefined> {
         if (!shownSource || !picture || !look(picture).repair || !repairable || !originalBytes) return shownSource;
+        const shown = look(picture);
+        if (shown.repairModel) {
+            // a model's repair, kept in the document beside the original: read, never made again
+            const made = shown.repairMade ? (madeKept.get(shown.repairMade) ?? (await originalOf(shown.repairMade).catch(() => undefined))) : undefined;
+            if (made) {
+                madeKept.set(shown.repairMade!, made);
+                return made;
+            }
+            frame.status.say("Repaired by hand", "The model's repair was not found with the document, so the instant repair is shown", "warn");
+        }
         repaired ??= repairNow(shownSource, originalBytes);
         return (await repaired) ?? shownSource;
     }
@@ -836,15 +867,180 @@ export function mountEditor(host: HTMLElement, context: Context) {
         frame.status.say("Repaired", `The JPEG's blocks and ringing taken out in ${((performance.now() - started) / 1000).toFixed(1)} s`);
         return createImageBitmap(made, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
     }
-    /** Repairs the JPEG, or stops repairing it, as one step. */
-    function toggleRepair() {
-        if (!picture || !repairable) return;
-        commit(look(picture).repair ? history.now().filter((step) => step.type !== "repair") : setOnly(history.now(), { type: "repair" }));
+    /** Repairs the JPEG the way last chosen (the instant way unless a model was), or stops repairing it, as one step. */
+    async function toggleRepair() {
+        if (!picture || !repairable || running) return;
+        if (look(picture).repair) return commit(history.now().filter((step) => step.type !== "repair"));
+        const way = await repairAsking.way();
+        if (way && (await repairAsking.have(way))) return void repairWith(way);
+        commit(setOnly(history.now(), { type: "repair" }));
+    }
+    /** The ways of repairing as cards, the model chosen fetched when told, and the picture repaired that way. */
+    async function chooseRepair(from?: HTMLElement) {
+        if (!picture || !repairable || running) return;
+        const way = await repairAsking.choose(from, look(picture).repairModel ?? undefined);
+        if (way === undefined || !picture) return;
+        if (way === "") return commit(setOnly(history.now(), { type: "repair" }));
+        if (look(picture).repairModel === way && look(picture).repairMade) return;
+        void repairWith(way);
+    }
+
+    // ---- restoring with a model: a JPEG repaired, a picture enlarged (restore/), in a worker of their own ----
+    const restorer = createRestorer();
+    const repairAsking = createRestoreAsking({ restorer: () => restorer, returnTo: () => stage.element, job: "repair", moved: () => refresh(), quality: () => (originalBytes ? jpegFacts(originalBytes)?.quality : undefined) });
+    const enlargeAsking = createRestoreAsking({ restorer: () => restorer, returnTo: () => buttons.resize, job: "enlarge", moved: () => refresh() });
+    void enlargeAsking.way().then((way) => (enlargeWay = way ?? ""));
+    // one run at a time, since the worker holds one model
+    let queue: Promise<unknown> = Promise.resolve();
+    /** A model run over a picture tile by tile, the strip saying how far with Stop; each finished tile laid into pixels of the result's size, the only whole copy of it. */
+    function runModel(id: string, said: string, bitmap: () => Promise<ImageBitmap>, size: { width: number; height: number }, quality?: number): Promise<ImageData> {
+        const job = queue.then(async () => {
+            const model = restoreModelOf(id);
+            if (!model) throw new Error("that model is not offered");
+            const result = new ImageData(size.width * model.scale, size.height * model.scale);
+            const stop = new AbortController();
+            running = { said, share: 0, stop };
+            refresh();
+            let told = 0;
+            try {
+                await restorer.run(id, bitmap, {
+                    signal: stop.signal,
+                    ...(quality ? { quality } : {}),
+                    progress: (share) => {
+                        if (!running) return;
+                        running.share = share;
+                        // the strip is filled again at most once a hundredth
+                        if (share - told >= 0.01 || share === 1) ((told = share), refresh());
+                    },
+                    keep: (out, part) => {
+                        for (let row = 0; row < out.height; row++) result.data.set(part.data.subarray(row * out.width * 4, (row + 1) * out.width * 4), ((out.y + row) * result.width + out.x) * 4);
+                    },
+                });
+                return result;
+            } finally {
+                running = undefined;
+                refresh();
+            }
+        });
+        queue = job.catch(() => undefined);
+        return job;
+    }
+    /** What a run that did not finish says: stopped by her, or why it failed, and that the picture is as it was. */
+    const notFinished = (error: unknown, what: string) => {
+        const stopped = error instanceof Error && error.name === "AbortError";
+        frame.status.say(stopped ? "Stopped" : `Not ${what}`, stopped ? `Stopped; the picture is as it was` : `The model did not finish: ${error instanceof Error ? error.message : String(error)}. The picture is as it was`, stopped ? "quiet" : "warn");
+    };
+    // the model's repairs made while the document is open, by where each is kept in it
+    const madeKept = new Map<string, Blob>();
+    /** The JPEG repaired by a model: run over the original tile by tile, its result kept in the document beside the original (a PNG, lossless) and the repair step pointing at it. */
+    async function repairWith(id: string) {
+        const model = restoreModelOf(id);
+        if (!model || !picture || !repairable || !shownSource || !originalBytes || running) return;
+        const token = loading;
+        const now = picture;
+        const source = shownSource;
+        const started = performance.now();
+        try {
+            const first = await createImageBitmap(source, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+            const size = { width: first.width, height: first.height };
+            let given: ImageBitmap | undefined = first;
+            const bitmap = async () => {
+                const made = given ?? (await createImageBitmap(source, { colorSpaceConversion: "none", premultiplyAlpha: "none" }));
+                given = undefined;
+                return made;
+            };
+            const result = await runModel(id, "Repairing", bitmap, size, jpegFacts(originalBytes)?.quality);
+            if (token !== loading) return;
+            // kept losslessly, so the document holds exactly what the model made: as WebP lossless, under half a PNG's weight
+            // on photographs, or as a PNG where that encoder cannot be had
+            frame.status.say("Keeping", "Keeping the repair with the document");
+            const lossless = await formatOf("webp-lossless").encode(result, 1).catch(() => undefined);
+            const blob = lossless ?? (await (() => {
+                const canvas = new OffscreenCanvas(result.width, result.height);
+                canvas.getContext("2d")!.putImageData(result, 0, 0);
+                return canvas.convertToBlob({ type: "image/png" });
+            })());
+            const stem = now.original.name.replace(/^pictures\//, "").replace(/\.[^.]*$/, "").replace(/[^\w.-]+/g, "-") || "picture";
+            const made = where.store && where.id ? await where.store.savePicture(where.id, blob, `${stem}-repaired-${id}${lossless ? ".webp" : ".png"}`).catch(() => undefined) : undefined;
+            if (token !== loading) return;
+            if (made) madeKept.set(made, blob);
+            commit(setOnly(history.now(), { type: "repair", model: id, ...(made ? { made } : {}) }));
+            frame.status.say("Repaired", `Repaired with the ${model.name} model in ${((performance.now() - started) / 1000).toFixed(1)} s${made ? "" : "; it could not be kept with the document"}`);
+        } catch (error) {
+            if (token === loading) notFinished(error, "repaired");
+        }
+    }
+    const enlarged: { key?: string; done?: Promise<ImageData | undefined> } = {};
+    /**
+     * The picture enlarged by the resize's model, at the look's size: the picture as it looks before the resize
+     * flattened at its own size with no marks, run through the model, and made the asked size if that is not the
+     * model's own. Worked out once for each look before it and kept while the document is open (never in it). With
+     * no such model, a result past what may be made, or a run stopped or failed, undefined: the filter is used.
+     */
+    function enlargedFor(shown: ReturnType<typeof look>, srgb: boolean): Promise<ImageData | undefined> {
+        const loaded = stage.loaded();
+        const model = restoreModelOf(shown.enlarge);
+        if (!loaded || !model) return Promise.resolve(undefined);
+        const { enlarge: _enlarge, ...rest } = shown;
+        const base = { ...rest, width: shown.crop.width, height: shown.crop.height, marks: [] };
+        // a model of twice as large is run a second time over its own result for more than twice
+        const passes = Math.max(shown.width / base.width, shown.height / base.height) > model.scale ? 2 : 1;
+        const scale = model.scale ** passes;
+        if (!enlargedSize(base, { scale })) {
+            frame.status.say("Not enlarged", `Too large to enlarge with a model: it would be ${base.width * scale} by ${base.height * scale}. The resize filter is used`, "warn");
+            return Promise.resolve(undefined);
+        }
+        const key = `${JSON.stringify(base)} ${model.id} ${passes} ${srgb} ${colors.space}`;
+        if (enlarged.key !== key || !enlarged.done) {
+            enlarged.key = key;
+            enlarged.done = (async () => {
+                const started = performance.now();
+                const pixels = await loaded.flatten(base, undefined, gradingWith(base, colors.space, loaded.size, srgb && colors.space === "p3"), colors.space);
+                try {
+                    let big = await runModel(model.id, passes === 2 ? "Enlarging, twice as large first," : "Enlarging", () => createImageBitmap(pixels, { colorSpaceConversion: "none", premultiplyAlpha: "none" }), pixels);
+                    if (passes === 2) {
+                        const half = big;
+                        big = await runModel(model.id, "Enlarging, then twice again,", () => createImageBitmap(half, { colorSpaceConversion: "none", premultiplyAlpha: "none" }), half);
+                    }
+                    frame.status.say("Enlarged", `Enlarged with the ${model.name} model in ${((performance.now() - started) / 1000).toFixed(1)} s`);
+                    return big;
+                } catch (error) {
+                    notFinished(error, "enlarged");
+                    // not kept: the next export tries again
+                    enlarged.key = undefined;
+                    queueMicrotask(() => (exportCache.key = undefined));
+                    return undefined;
+                }
+            })();
+        }
+        return enlarged.done.then((big) => big && sizedTo(big, shown.width, shown.height));
+    }
+    /** Pixels made another size by the browser's best resampling, or as they are when already that size. */
+    async function sizedTo(pixels: ImageData, width: number, height: number): Promise<ImageData> {
+        if (pixels.width === width && pixels.height === height) return pixels;
+        const made = await createImageBitmap(pixels, { resizeWidth: width, resizeHeight: height, resizeQuality: "high", colorSpaceConversion: "none", premultiplyAlpha: "none" });
+        const canvas = new OffscreenCanvas(width, height);
+        const context = canvas.getContext("2d")!;
+        context.drawImage(made, 0, 0);
+        made.close();
+        return context.getImageData(0, 0, width, height);
+    }
+    /** The resize's way of enlarging chosen in the dialog, and the resize there is changed to it. */
+    async function chooseEnlarge(from: HTMLElement) {
+        const way = await enlargeAsking.choose(from, enlargeWay);
+        if (way === undefined) return;
+        enlargeWay = way;
+        resizing.sayWay();
+        const step = history.now().find((each) => each.type === "resize");
+        if (step?.type === "resize" && picture) {
+            const { model: _model, ...plain } = step;
+            commit(history.now().map((each) => (each === step ? { ...plain, ...(way ? { model: way } : {}) } : each)));
+        }
     }
     /** After the steps change: the cut-out made again when it changed (or the repair), and put on the stage in place of the original (or the original back). */
     async function showCut() {
         const cut = picture ? look(picture).cutout : undefined;
-        const key = (cut ? JSON.stringify(cut) : "") + (picture && look(picture).repair && repairable ? " repaired" : "");
+        const key = (cut ? JSON.stringify(cut) : "") + (picture && look(picture).repair && repairable ? ` repaired ${look(picture).repairModel ?? ""} ${look(picture).repairMade ?? ""}` : "");
         if (key === cutKey || !shownSource) return;
         cutKey = key;
         if (!cut) {
@@ -1459,7 +1655,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
         if (stage.tool() !== "crop") straightening = false;
-        const kind = !has ? "none" : stage.tool() === "crop" ? (straightening ? "perspective" : "crop") : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : marking || pickedMark() ? "mark" : "none";
+        const kind = !has ? "none" : running ? "busy" : stage.tool() === "crop" ? (straightening ? "perspective" : "crop") : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : marking || pickedMark() ? "mark" : "none";
         strip.fill(kind);
         if (picture && !facts.textContent) facts.textContent = factsSaid(look(picture), picture.original.bytes, kindOf(picture.original));
         if (!picture) facts.textContent = "";
@@ -1587,7 +1783,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     ],
                     // a JPEG's repair is a step of its own, on or off, and no part of the grade
                     [
-                        { label: "Repair JPEG", icon: tick(!!picture && !!look(picture).repair, "paint"), key: "repair", pressed: !!picture && !!look(picture).repair, disabled: !picture || !repairable, run: () => toggleRepair() },
+                        { label: "Repair JPEG", icon: tick(!!picture && !!look(picture).repair, "paint"), key: "repair", pressed: !!picture && !!look(picture).repair, disabled: !picture || !repairable || !!running, run: () => void toggleRepair() },
+                        { label: "Repair JPEG with…", icon: "paint", key: "repair-with", disabled: !picture || !repairable || !!running, run: () => void chooseRepair(stage.element) },
                     ],
                 ),
         },
@@ -1761,6 +1958,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : picked === "facts" ? showFacts() : picked === "grade" ? showGrade() : picked === "perspective" ? setStraightening(!(straightening && stage.tool() === "crop")) : pickTool(picked));
         if (event.key === "Enter" && stage.tool() === "crop") return applyCrop;
         if (event.key === "Escape") {
+            if (running) return () => running?.stop.abort();
             if (asking) return () => cancelPick();
             if (grading.isOpen() && target)
                 return () => {
@@ -1822,6 +2020,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
             reading.destroy();
             measure.destroy();
             repairer.destroy();
+            running?.stop.abort();
+            restorer.destroy();
             finding.destroy();
             grading.panel.remove();
             document.removeEventListener("paste", pasted);

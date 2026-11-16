@@ -10,10 +10,11 @@ import { corePage, quire } from "./core-page";
 const TOP = '<header class="quire-top"><div class="quire-top-in"><div class="quire-top-line"><nav class="quire-trail"><a class="quire-word" href="/imgquire/">imgQuire</a><span class="quire-stroke quire-name-stroke">/</span><span class="quire-name-home"></span></nav><div class="quire-menus-home"></div><div class="quire-status-home"></div></div><div class="quire-bar-home"></div></div></header>';
 
 /**
- * Opens the page with a database of its own, or gives undefined where there is no Chromium; with `files`, served over HTTP as corePage says.
- * Opened again with `#img` or `#md` after its address, it is the own page of that kind, as /imgquire/ and /mdquire/ are.
+ * Opens the page with a database of its own, or gives undefined where there is no Chromium; with `files`, served over HTTP as corePage says;
+ * `args` go to Chromium (the graphics card's flags, for a model run on it). Opened again with `#img` or `#md` after its address, it is the own
+ * page of that kind, as /imgquire/ and /mdquire/ are.
  */
-export async function imgPage(database: string, size = { width: 1300, height: 820 }, files?: (path: string) => Promise<Response | undefined>) {
+export async function imgPage(database: string, size = { width: 1300, height: 820 }, files?: (path: string) => Promise<Response | undefined>, args?: string[]) {
     const page = await corePage(
         `
         import { startApp } from "${quire}/core/app.ts";
@@ -73,7 +74,7 @@ export async function imgPage(database: string, size = { width: 1300, height: 82
         window.box = (selector) => { const box = document.querySelector(selector)?.getBoundingClientRect(); return box && { x: box.x, y: box.y, width: box.width, height: box.height }; };
         startApp(document.querySelector("#host"), { kinds: [markdown({ sample: "# A sample\\n" }), img()], database: ${JSON.stringify(database)}, top: document.querySelector(".quire-top"), home: location.hash.slice(1) || undefined }).then((app) => (window.app = app));
     `,
-        { body: `${TOP}<div id="host" class="quire-host"></div>`, ...size, files },
+        { body: `${TOP}<div id="host" class="quire-host"></div>`, ...size, files, ...(args ? { args } : {}) },
     );
     if (!page) return undefined;
     const tab = page.tab;

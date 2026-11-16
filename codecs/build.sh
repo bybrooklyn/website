@@ -240,6 +240,8 @@ section() { printf '\n\n================ %s ================\n' "$1"; }
     section "heic.wasm: reading HEIC"
     crate heic-rs-0.1.4 "used under MIT; also Apache-2.0" LICENSE-MIT NOTICE
     rustlib
+    # the restoring models are fetched by the visitor from Hugging Face, not served here, and are credited here all the same
+    cat "$HERE/MODELS-NOTICES.txt"
 } > "$OUT/NOTICES.txt"
 # every crate linked into a Rust module has its notice, so that the file cannot fall out of step with Cargo.lock
 for each in $(cd "$HERE/rust" && cargo tree --offline --target wasm32-unknown-unknown -e normal --prefix none | grep -v -e "(/" -e "^$" | sort -u | awk '{ print $1 "-" substr($2, 2) }'); do

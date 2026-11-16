@@ -85,8 +85,15 @@ export type CutStep = { type: "cutout" } & Cut;
 /** The picture straightened by a perspective (perspective.ts): the keystone dials, and corners set by hand with their rectangle's proportions. */
 export type PerspectiveStep = { type: "perspective" } & Perspective;
 
-/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture; a perspective straightens it before it is turned. A repair takes a JPEG's blocks and ringing out of the original's pixels (deblock.ts) before anything else. A cut-out takes the background away first, before anything else is drawn. */
-export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | PerspectiveStep | { type: "repair" } | ({ type: "cover" } & Cover) | GradeStep | PartStep | CutStep | Mark;
+/**
+ * A JPEG's repair: by hand (deblock.ts), or with a restoring model (`model`), whose result is kept in the
+ * document beside the original (`made`, `pictures/name`) so that it is not made again each time the document
+ * opens.
+ */
+export type RepairStep = { type: "repair"; model?: string; made?: string };
+
+/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture; a perspective straightens it before it is turned. A repair takes a JPEG's blocks and ringing out of the original's pixels before anything else. A resize that enlarges may name a model to enlarge with (`model`); its filter is used where the model is not. A cut-out takes the background away first, before anything else is drawn. */
+export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter; model?: string } | { type: "turn"; angle: number } | PerspectiveStep | RepairStep | ({ type: "cover" } & Cover) | GradeStep | PartStep | CutStep | Mark;
 
 /** A step as the document keeps it: with an id of its own, and switched off if it is. */
 export type Kept = Step & { id: string; off?: boolean };
@@ -126,6 +133,11 @@ export interface Look {
     cutout?: Cut;
     /** Whether a JPEG's blocks and ringing are taken out of the original's pixels first. */
     repair?: true;
+    /** The model that repairs it, and where its result is kept, when a model does. */
+    repairModel?: string;
+    repairMade?: string;
+    /** The model that enlarges the picture, when the resize names one and enlarges it. */
+    enlarge?: string;
 }
 
 /** The largest side a picture may be made, and the most steps a file is read with: beyond these a file is taken to be damaged. */
@@ -163,7 +175,8 @@ export function look(picture: Picture): Look {
     const marks: Mark[] = [];
     const grades: Look["grades"] = [];
     let cutout: Cut | undefined;
-    let repair = false;
+    let repair: RepairStep | undefined;
+    let enlarge: string | undefined;
     const numbers = numbersOf(picture.steps);
     for (const step of picture.steps) {
         if (step.off) continue;
@@ -174,15 +187,16 @@ export function look(picture: Picture): Look {
             across = step.width / crop.width;
             down = step.height ? step.height / crop.height : across;
             filter = step.filter;
+            enlarge = step.model;
         } else if (step.type === "cover") covers.push({ rect: step.angle ? step.rect : within(step.rect, original), color: step.color, ...(step.angle ? { angle: step.angle } : {}) });
         else if (step.type === "cutout") cutout = cutOf(step);
-        else if (step.type === "repair") repair = true;
+        else if (step.type === "repair") repair = step;
         else if (step.type === "number") marks.push({ ...(withoutId(step) as Extract<Mark, { type: "number" }>), value: numbers.get(step.id) ?? 1 });
         else if (step.type !== "turn" && step.type !== "perspective") marks.push(withoutId(step) as Mark);
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
-    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(perspective ? { perspective } : {}), ...(cutout ? { cutout } : {}), ...(repair ? { repair: true as const } : {}) };
+    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(perspective ? { perspective } : {}), ...(cutout ? { cutout } : {}), ...(repair ? { repair: true as const, ...(repair.model ? { repairModel: repair.model } : {}), ...(repair.made ? { repairMade: repair.made } : {}) } : {}), ...(enlarge && (width > crop.width || height > crop.height) ? { enlarge } : {}) };
 }
 
 /**
@@ -356,6 +370,11 @@ function readRect(value: unknown): Rect | undefined {
     return x === undefined || y === undefined || width === undefined || height === undefined ? undefined : { x, y, width, height };
 }
 
+/** A model's name as a step keeps it: small letters, digits and dashes. */
+const modelName = (value: unknown) => (typeof value === "string" && /^[a-z0-9-]{1,40}$/.test(value) ? value : undefined);
+/** Where a model's result may be kept: one of the document's own pictures, by a plain name. */
+const MADE = /^pictures\/[\w.-]{1,120}$/;
+
 /** One step from a file, checked field by field, or undefined if it is not one. */
 function readStep(value: unknown): Step | undefined {
     const step = value as Record<string, unknown> | null;
@@ -370,7 +389,8 @@ function readStep(value: unknown): Step | undefined {
         const width = number(step.width, 1, LIMITS.side);
         const height = step.height === undefined ? undefined : number(step.height, 1, LIMITS.side);
         const filter = step.filter === "bilinear" || step.filter === "nearest" ? step.filter : "lanczos";
-        return width === undefined ? undefined : { type: "resize", width: Math.round(width), ...(height ? { height: Math.round(height) } : {}), filter };
+        const model = modelName(step.model);
+        return width === undefined ? undefined : { type: "resize", width: Math.round(width), ...(height ? { height: Math.round(height) } : {}), filter, ...(model ? { model } : {}) };
     }
     if (step.type === "grade") return { type: "grade", grade: trimGrade(readGrade(step.grade)) };
     if (step.type === "turn") {
@@ -378,7 +398,12 @@ function readStep(value: unknown): Step | undefined {
         return angle === undefined ? undefined : { type: "turn", angle: Math.round(angle * 100) / 100 };
     }
     if (step.type === "perspective") return readPerspective(step);
-    if (step.type === "repair") return { type: "repair" };
+    if (step.type === "repair") {
+        const model = modelName(step.model);
+        // a result kept beside the original: one of the document's own pictures, by a plain name, and nowhere else
+        const made = model && typeof step.made === "string" && MADE.test(step.made) ? step.made : undefined;
+        return { type: "repair", ...(model ? { model } : {}), ...(made ? { made } : {}) };
+    }
     // a box's, a text's or a cover's own turn, if it has one
     const angle = number(step.angle, -MOST_TURN, MOST_TURN);
     const turned = angle ? { angle } : {};

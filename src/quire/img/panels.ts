@@ -319,8 +319,12 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     return { ...side, fill, shows, copyButton: copy };
 }
 
-/** The resize box: width and height, linked, in pixels or as a percentage, and the common sizes; Enter applies and Escape closes it. */
-export function resizeBox(hooks: { size(): { width: number; height: number }; apply(width: number, height?: number): void; back(): void; done(): void }) {
+/**
+ * The resize box: width and height, linked, in pixels or as a percentage, and the common sizes, among them twice and
+ * four times as large; and how a picture made larger is enlarged (the filter, or a model), which opens the choice
+ * in a dialog. Enter applies and Escape closes it.
+ */
+export function resizeBox(hooks: { size(): { width: number; height: number }; apply(width: number, height?: number): void; back(): void; done(): void; enlarge?: { said(): string; choose(from: HTMLElement): void } }) {
     const box = make("div", "quire-img-resize");
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-label", "Resize");
@@ -340,12 +344,12 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
         height.value = String(on ? 100 : size.height);
     });
     const sizes = make("div", "quire-img-sizes");
-    for (const [label, wide] of [["50%", 0.5], ["1920", 1920], ["1280", 1280], ["1080", 1080], ["800", 800]] as const) {
+    for (const [label, wide] of [["50%", 0.5], ["200%", 2], ["400%", 4], ["1920", 1920], ["1280", 1280], ["1080", 1080], ["800", 800]] as const) {
         const button = make("button", "quire-dialog-dismiss", label);
         button.type = "button";
         button.addEventListener("click", () => {
             const size = hooks.size();
-            hooks.apply(wide < 1 ? Math.round(size.width * wide) : wide);
+            hooks.apply(wide <= 4 ? Math.round(size.width * wide) : wide);
             close(true);
         });
         sizes.append(button);
@@ -353,6 +357,13 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
     const fields = make("div", "quire-img-row");
     fields.append(width, make("span", "quire-img-by", "×"), height, link);
     box.append(fields, unit, sizes);
+    // how a picture made larger is enlarged: the button says the way in use and opens the choice
+    const enlarging = hooks.enlarge && make("button", "quire-dialog-dismiss quire-img-enlarge-way", hooks.enlarge.said());
+    if (enlarging) {
+        enlarging.type = "button";
+        enlarging.addEventListener("click", () => hooks.enlarge?.choose(enlarging));
+        box.append(enlarging);
+    }
     const shape = () => hooks.size().height / hooks.size().width;
     function follow(changed: HTMLInputElement) {
         if (!linked) return;
@@ -404,16 +415,22 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
             unit.set(false);
             width.value = String(size.width);
             height.value = String(size.height);
+            if (enlarging) enlarging.textContent = hooks.enlarge!.said();
             const button = from.getBoundingClientRect();
-            box.style.left = `${Math.max(8, Math.min(innerWidth - 300, button.left))}px`;
+            // held inside the window by its own width (its sizes run to two rows), with a gutter of 8 pixels, inside the app (whose right edge leaves the scroll bar's room out)
+            const room = box.parentElement?.getBoundingClientRect().right || innerWidth;
+            const left = Math.max(8, Math.min(room - (box.offsetWidth || 300) - 8, button.left));
+            box.style.left = `${left}px`;
             box.style.top = `${button.bottom + 6}px`;
-            box.style.transformOrigin = `${Math.max(0, button.left + button.width / 2 - Math.max(8, Math.min(innerWidth - 300, button.left)))}px 0`;
+            box.style.transformOrigin = `${Math.max(0, button.left + button.width / 2 - left)}px 0`;
             box.inert = false;
             box.classList.add("open");
             width.focus();
             width.select();
         },
         close,
+        /** Says the way of enlarging again, after it was chosen. */
+        sayWay: () => enlarging && (enlarging.textContent = hooks.enlarge!.said()),
     };
 }
 
@@ -446,7 +463,7 @@ export interface MarkControls {
 }
 
 /** The strip for the tool in hand: the crop's shapes and Apply, perspective's dials and corners, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; mark?(): MarkControls; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; perspective?: PerspectiveHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
+export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; mark?(): MarkControls; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; perspective?: PerspectiveHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; busy?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
     const strip = make("div", "quire-img-strip");
     strip.setAttribute("role", "toolbar");
     strip.setAttribute("aria-label", "Tool");
@@ -481,9 +498,9 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
     const corners = keystone ? control("Corners: drag them to the corners of something that should be a rectangle", icon("corners"), () => keystone.setCornering(!keystone.cornering())) : undefined;
     const keystones = make("div", "quire-img-strip-horizon");
     if (upright && across) keystones.append(upright.element, across.element);
-    function fill(kind: "crop" | "perspective" | "mark" | "read" | "grade" | "cut" | "none") {
-        const grading = kind === "grade" ? hooks.grade?.() : kind === "cut" ? hooks.cut?.() : undefined;
-        if ((kind === "grade" || kind === "cut") && !grading) kind = "none";
+    function fill(kind: "crop" | "perspective" | "mark" | "read" | "grade" | "cut" | "busy" | "none") {
+        const grading = kind === "grade" ? hooks.grade?.() : kind === "cut" ? hooks.cut?.() : kind === "busy" ? hooks.busy?.() : undefined;
+        if ((kind === "grade" || kind === "cut" || kind === "busy") && !grading) kind = "none";
         strip.classList.toggle("open", kind !== "none");
         strip.dataset.kind = kind;
         strip.inert = kind === "none";
