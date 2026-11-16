@@ -27,7 +27,7 @@ in `publishing.md`.
 - **Posts** with numbered sources, a timeline stepped through by scrolling, and RSS.
 - **Projects**, with facts brought up to date from GitHub (`bun run projects`) and covers drawn in code for
   projects with no picture. Some open a page of their own: Spectrum, tone tags, mdQuire.
-- **Photos**: shown one at a time over blurred previews; the order is shuffled and the shuffle remembered;
+- **Photos**: shown one at a time, each over one color of its own until it arrives; the order is shuffled and the shuffle remembered;
   a missing picture is skipped. A friend's photographs are credited to him. Memes and screenshots are shown
   under their own heading.
 - **Minis** (`minis.md`).

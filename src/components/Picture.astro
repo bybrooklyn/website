@@ -1,14 +1,13 @@
 ---
-// Every generated picture on the site: AVIF at the sizes asked for, with a
-// blurred preview behind it until it arrives.
+// Every generated picture on the site: AVIF at the sizes asked for. Its place is held by its width
+// and height, and nothing stands in for it while it comes: it had a tiny blurred copy of itself behind
+// it, which showed as a picture of very low quality, and that was taken out.
 import { Image } from "astro:assets";
 import type { ComponentProps } from "astro/types";
-import { preview } from "../lib/preview";
 
 type Props = ComponentProps<typeof Image>;
 
 const props = Astro.props;
-const behind = typeof props.src === "object" && "src" in props.src ? await preview(props.src) : "";
 ---
 
-<Image format="avif" {...props} style={behind ? `background:${behind}` : undefined} />
+<Image format="avif" {...props} />
