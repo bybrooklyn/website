@@ -369,6 +369,7 @@
     flex-direction: column;
     gap: 1rem;
     min-width: 0;
+    container: qr-panel / inline-size;
 }
 
 .quire-qr-modes .quire-qr-choice {
@@ -427,6 +428,46 @@
 
 .quire-qr-section.dropping {
     outline-color: var(--accent);
+}
+
+/* Where the panel has the width, the name of each part stands beside it and not over it, so that the whole maker is seen at once: on a
+   window 1288 by 828 the panel had been 968 tall, with the margin, the picture and the error correction below the fold. The fields of
+   what the code holds keep the panel's whole width. It goes by the panel's own width, since a narrower panel has no room for a name
+   beside six shapes or a row of colors, and there the names stand over their parts as on a phone. */
+@container qr-panel (min-width: 33rem) {
+    .quire-qr-make {
+        gap: 0.7rem;
+    }
+
+    /* (rows are set apart by margins, not by the grid's own gap: a fold that is shut is a row of no height, and a gap round it would show) */
+    .quire-qr-make > .quire-qr-section {
+        display: grid;
+        grid-template-columns: 7.5rem minmax(0, 1fr);
+        gap: 0 0.75rem;
+        align-items: center;
+    }
+
+    .quire-qr-make > .quire-qr-section > .quire-qr-heading {
+        grid-area: 1 / 1;
+    }
+
+    .quire-qr-make > .quire-qr-section > :not(.quire-qr-heading) {
+        grid-column: 2;
+    }
+
+    .quire-qr-make > .quire-qr-section > .quire-qr-fold {
+        margin-top: 0;
+    }
+
+    .quire-qr-make > .quire-qr-section > .quire-qr-fold.open {
+        margin-top: 0.45rem;
+    }
+
+    /* the six kinds of content, and the fields of the one chosen, have the panel's whole width under their name */
+    .quire-qr-make > .quire-qr-section > :is(.quire-qr-kinds, .quire-qr-forms) {
+        grid-column: 1 / -1;
+        margin-top: 0.45rem;
+    }
 }
 
 .quire-qr-heading {
