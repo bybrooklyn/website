@@ -277,7 +277,7 @@ One line each in `MATERIALS`. Conduct is in 32nds of the most; `made` is the tem
 | water | liquid | 100 | 32 | 40 | levels; stores 8 |
 | stone | solid | 255 | 24 | 40 | |
 | dirt | powder | 150 | 12 | 40 | slides at about 63 degrees |
-| steam | gas | 4 | 12 | 120 | levels under a ceiling; stores 28; airy |
+| steam | gas | 4 | 2 | 160 | levels under a ceiling; stores 28; airy |
 | wood | solid | 255 | 24 | 40 | |
 | oil | liquid | 80 | 16 | 40 | levels; floats on water |
 | lava | liquid | 200 | 8 | 250 | creeps (moves sideways 96 steps in 256); hardens where it rests; shade follows heat |
@@ -1021,4 +1021,9 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   air. Water poured beside the tester's heap now stands at row 271 on both sides with no ash under water,
   where it stood at 265 on one side and never reached the other. Water poured on a burning block still
   leaves embers burning where the water beside them boils away as fast as it comes (31 after 20 seconds).
+- **Steam poured with the brush reaches a roof.** Made at 120 and passing heat at 12, it cooled to 56 and
+  rained within a second and a half: 2,432 cells under a roof were all water 90 steps later, none ever
+  under the roof. It is now made at 160 and passes heat at 2. The same pour reaches the roof at once
+  (1,021 cells in the rows under it), 3,069 are still steam after 90 steps, and it rains over about
+  fifteen seconds. Steam boiled from water is made at 60 as before, and boils and condenses as it did.
 
