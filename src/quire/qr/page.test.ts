@@ -215,3 +215,66 @@ test("in Chromium, the page is built from the kit, makes codes as they are typed
         await rm(folder, { recursive: true, force: true });
     }
 }, 120_000);
+
+test("in Chromium, a hex line settles on the color in use, a network with no security has no password to type, and a file that is no picture takes the old reading away", async () => {
+    const css = (await Promise.all(["quire-bench.css", "quire-qr.css"].map((name) => Bun.file(`${import.meta.dir}/../../styles/${name}`).text()))).join("\n");
+    const page = await corePage(
+        `
+        import { createQrPage } from "${quire}/qr/page.ts";
+        import { encode } from "${quire}/qr/encode.ts";
+        import { drawSvg, PLAIN } from "${quire}/qr/style.ts";
+        window.qr = createQrPage(document.querySelector("#host"), { grounds: [{ name: "Mint", value: "#a8f0d0" }] });
+        window.code = async (text) => { const image = new Image(); image.src = URL.createObjectURL(new Blob([drawSvg(encode(text), PLAIN, { size: 360 })], { type: "image/svg+xml" })); await image.decode(); const canvas = new OffscreenCanvas(440, 440); const c = canvas.getContext("2d"); c.fillStyle = "#ffffff"; c.fillRect(0, 0, 440, 440); c.drawImage(image, 40, 40, 360, 360); return new File([await canvas.convertToBlob({ type: "image/png" })], "code.png", { type: "image/png" }); };
+        const style = document.createElement("style");
+        style.textContent = ${JSON.stringify(css)};
+        document.head.append(style);
+        window.ready = true;
+    `,
+        { width: 1300, height: 900 },
+    );
+    if (!page) return;
+    const { tab } = page;
+    const until = async (expression: string, ms = 30_000) => {
+        const started = Date.now();
+        while (Date.now() - started < ms) {
+            if (await tab.run<boolean>(`!!(${expression})`)) return;
+            await tab.wait(100);
+        }
+        throw new Error(`waited for ${expression}`);
+    };
+    /** Types into a field as a visitor does and leaves it with Enter. */
+    const typeInto = (selector: string, text: string) => tab.run(`(() => { const field = document.querySelector(${JSON.stringify(selector)}); field.focus(); field.value = ${JSON.stringify(text)}; field.dispatchEvent(new Event("input", { bubbles: true })); field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`);
+    try {
+        await until("window.ready === true");
+        // the first hex line is the code's color: digits that are no color are not kept in the line, which says the color in use
+        const hex = ".quire-qr-hex";
+        const first = await tab.run<string>(`document.querySelector("${hex}").value`);
+        for (const wrong of ["zzz", "#12", "red", "#12345g"]) {
+            await typeInto(hex, wrong);
+            expect(await tab.run<string>(`document.querySelector("${hex}").value`)).toBe(first);
+        }
+        // five digits pass through three on the way: the line ends on the color that was taken, written the one way
+        await tab.run(`(() => { const field = document.querySelector("${hex}"); field.focus(); for (const text of ["#1", "#12", "#123", "#1234", "#12345"]) { field.value = text; field.dispatchEvent(new Event("input", { bubbles: true })); } field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`);
+        expect(await tab.run<string>(`document.querySelector("${hex}").value`)).toBe("#112233");
+        await typeInto(hex, "0A7");
+        expect(await tab.run<string>(`document.querySelector("${hex}").value`)).toBe("#00aa77");
+        // Wi-Fi with no security: the password's line is there and out of reach, and comes back with WPA
+        await tab.press("2");
+        const passwordInert = () => tab.run<boolean>("[...document.querySelectorAll('.quire-bench-row')].find((each) => each.querySelector('.quire-bench-label')?.textContent === 'password').inert");
+        expect(await passwordInert()).toBe(false);
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"nopass\"]').click()");
+        expect(await passwordInert()).toBe(true);
+        await tab.run("document.querySelector('.quire-bench-choices input[value=\"WPA\"]').click()");
+        expect(await passwordInert()).toBe(false);
+        // read a good code, then a file that is no picture: the old picture, its outline and its text are gone, and the file is named
+        await tab.run("window.code('https://bybrooklyn.dev/').then((file) => { const data = new DataTransfer(); data.items.add(file); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })");
+        await until("document.querySelectorAll('.quire-qr-card').length === 1");
+        expect(await tab.run("document.querySelector('.quire-qr').classList.contains('has-picture')")).toBe(true);
+        await tab.run("(() => { const data = new DataTransfer(); data.items.add(new File(['words, not a picture'], 'notes.png', { type: 'image/png' })); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })()");
+        await until("document.querySelector('.quire-bench-said').textContent.includes('notes.png')");
+        expect(await tab.run("[document.querySelectorAll('.quire-qr-card').length, document.querySelector('.quire-qr').classList.contains('has-picture'), document.querySelector('.quire-qr-read-marks').childElementCount]")).toEqual([0, false, 0]);
+        expect(await tab.run<string>("document.querySelector('.quire-bench-said').textContent")).toContain("notes.png is not a picture this browser can read.");
+    } finally {
+        await page.close();
+    }
+}, 120_000);

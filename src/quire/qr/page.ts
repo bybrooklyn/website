@@ -152,18 +152,37 @@ function arrow(angle: number): SVGSVGElement {
     return svg;
 }
 
+/** What is said of a file that is no picture, with its name when it has one. */
+const notPicture = (file: Blob): string => {
+    const name = (file as File).name;
+    return name ? `${name} is not a picture this browser can read.` : "That is not a picture this browser can read.";
+};
+
 /** The kit's row of colors with a line under it for any color as hex digits; the color matching the line is ringed. */
 function colorPick(label: string, colors: Swatch[], initial: string, change: (value: string) => void) {
     const picked = swatches(label, colors, (value) => {
         set(value);
         change(value);
     });
+    // the color in use: what the line goes back to when what was typed is no color
+    let inUse = initial;
     const hex = typed(`${label} as hex digits`, (value) => {
         if (!isHex(value)) return;
         const color = normalHex(value);
+        inUse = color;
         picked.show(color);
         change(color);
     }).input as HTMLInputElement;
+    // left, or Enter pressed: the line says the color in use, written the one way. Digits that are no color (two, five, a word) had
+    // stayed in the line while the code kept another color, with nothing to say so
+    const settle = () => {
+        if (inUse.startsWith("#")) hex.value = inUse;
+    };
+    hex.addEventListener("change", settle);
+    hex.addEventListener("blur", settle);
+    hex.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") settle();
+    });
     hex.classList.add("quire-qr-hex");
     hex.maxLength = 7;
     hex.autocomplete = "off";
@@ -171,6 +190,7 @@ function colorPick(label: string, colors: Swatch[], initial: string, change: (va
     const line = make("div", "quire-qr-color");
     line.append(picked.set, hex);
     const set = (value: string) => {
+        inUse = value;
         picked.show(value);
         if (value.startsWith("#") && document.activeElement !== hex) hex.value = value;
     };
@@ -292,9 +312,11 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
                 { value: "WEP", text: "WEP" },
                 { value: "nopass", text: "none" },
             ],
-            (value) => ((wifi = { ...wifi, security: value }), security.show(value), changed()),
+            (value) => ((wifi = { ...wifi, security: value }), security.show(value), (password.inert = value === "nopass"), changed()),
         );
         security.show(wifi.security);
+        // a network with no security has no password: the line is there, faint and out of reach, and the code leaves it out
+        const password = line("password", (value) => ((wifi = { ...wifi, password: value }), changed()));
         const hidden = dots<"no" | "yes">(
             "Hidden network",
             [
@@ -304,7 +326,7 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
             (value) => ((wifi = { ...wifi, hidden: value === "yes" }), hidden.show(value), changed()),
         );
         hidden.show("no");
-        formOf.set("wifi", fold(line("network name", (value) => ((wifi = { ...wifi, name: value }), changed())), line("password", (value) => ((wifi = { ...wifi, password: value }), changed())), widely("security", security.set), widely("the network's name is", hidden.set)));
+        formOf.set("wifi", fold(line("network name", (value) => ((wifi = { ...wifi, name: value }), changed())), password, widely("security", security.set), widely("the network's name is", hidden.set)));
     }
     {
         const names: [keyof Contact, string][] = [
@@ -506,7 +528,7 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         try {
             bitmap = await createImageBitmap(file);
         } catch {
-            say("That is not a picture this browser can read.");
+            say(notPicture(file));
             return;
         }
         const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
@@ -724,7 +746,14 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
         try {
             bitmap = await createImageBitmap(file);
         } catch {
-            sayRead("That is not a picture this browser can read.");
+            // what was read before is taken away: left there, it looked as if it came from this file
+            for (const card of readPart.querySelectorAll(".quire-qr-card")) card.remove();
+            readMarks.replaceChildren();
+            found = [];
+            if (readImage.src.startsWith("blob:")) URL.revokeObjectURL(readImage.src);
+            readImage.removeAttribute("src");
+            root.classList.remove("has-picture");
+            sayRead(notPicture(file));
             return;
         }
         if (readImage.src.startsWith("blob:")) URL.revokeObjectURL(readImage.src);
