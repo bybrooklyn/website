@@ -11,3 +11,8 @@
 src/scripts/transition.js linguist-vendored
 scripts/trim-fonts.py linguist-vendored
 scripts/fraunces-soft.py linguist-vendored
+
+# mdQuire is left out of the bar and of GitHub's counts too, at its owner's word: it is 43,000 lines, almost a
+# quarter of the repository, and reads as a project of its own within the site's. Its stylesheets and the
+# core it shares with the other tools are counted as before.
+src/quire/md/** linguist-vendored
