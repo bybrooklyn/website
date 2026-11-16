@@ -131,7 +131,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     const frame = createFrame(host, { top: context.top, name: context.start?.entry.name ?? "Untitled", onName: context.onName });
     const room = make("div", "quire-img-room");
     const empty = make("div", "quire-img-empty");
-    const choose = make("button", "quire-dialog-action", "Choose a picture");
+    const choose = make("button", "quire-dialog-action", "choose a picture");
     choose.type = "button";
     const chooser = make("input");
     chooser.type = "file";
@@ -789,7 +789,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         // in a batch, this picture's size given to the others
         give: {
             said: () => (batched() ? (giveSaid("resize") ?? "") : undefined),
-            label: () => `Give to the other ${items.length - 1}`,
+            label: () => `give to the other ${items.length - 1}`,
             press: () => void giveAll(["resize"]),
         },
     });
@@ -862,7 +862,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         readAgain: () => void reading.start(buttons.read),
         cut: () => cutStrip(),
         // a model running: how far, and Stop, which leaves the picture as it was
-        busy: () => (running ? { said: running.share === undefined ? running.said : `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("Stop", batchRunning ? "Stop: each picture is left done or as it was (Escape)" : "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
+        busy: () => (running ? { said: running.share === undefined ? running.said : `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("stop", batchRunning ? "Stop: each picture is left done or as it was (Escape)" : "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
         grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
     });
     /** The mark picked, if what is picked is a mark. */
@@ -1003,7 +1003,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (kind === "number") {
             if (mark?.type !== "number") return { colors: true, weights: lines, extra: [] };
             numberField.value = String(numbersOf(history.now()).get(mark.id) ?? 1);
-            return { colors: true, weights: lines, extra: [[numberField, ...(mark.value !== undefined ? [markWords("In order", "Number it in order again", false, () => numberInOrder())] : [])]] };
+            return { colors: true, weights: lines, extra: [[numberField, ...(mark.value !== undefined ? [markWords("in order", "Number it in order again", false, () => numberInOrder())] : [])]] };
         }
         if (kind === "magnifier") {
             const zoom = (mark?.type === "magnifier" ? mark.zoom : pen.zoom) ?? PEN.zoom;
@@ -1783,7 +1783,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const cut = picture ? look(picture).cutout : undefined;
         if (cutBusy) return { said: cutAsking.tier().wait ? `Cutting out, usually ${cutAsking.tier().wait}` : "Cutting out", controls: [] };
         // where the model found nothing, the strip says the next step in the status's own words
-        if (!cut) return { said: cutNothing ? NOTHING_SAID.slice(NOTHING_SAID.indexOf("Press")).replace(/\.$/, "") : "Not cut out", controls: [stripButton("Cut out", "Run the model again", () => void startCut())] };
+        if (!cut) return { said: cutNothing ? NOTHING_SAID.slice(NOTHING_SAID.indexOf("Press")).replace(/\.$/, "") : "Not cut out", controls: [stripButton("cut out", "Run the model again", () => void startCut())] };
         const pressed = (button: HTMLElement, on: boolean) => (button.classList.toggle("pressed", on), button);
         const swatches = COLORS.map((each) => {
             const mark = make("span", "quire-img-swatch");
@@ -1793,17 +1793,17 @@ export function mountEditor(host: HTMLElement, context: Context) {
         return {
             said: cutBrush === "keep" ? "Paint what should stay" : cutBrush === "remove" ? "Paint what should go" : "Press a thing to keep it",
             controls: [
-                pressed(stripButton("Clear", "Nothing behind it, exported with transparency", () => setLaid("clear")), cut.background === "clear"),
+                pressed(stripButton("clear", "Nothing behind it, exported with transparency", () => setLaid("clear")), cut.background === "clear"),
                 ...swatches,
-                pressed(stripButton("Blur", "The old background behind it, blurred", () => setLaid("blur")), cut.background === "blur"),
+                pressed(stripButton("blur", "The old background behind it, blurred", () => setLaid("blur")), cut.background === "blur"),
                 make("span", "quire-img-strip-rule"),
-                pressed(stripButton("Keep", "Paint what should stay", () => ((cutBrush = cutBrush === "keep" ? undefined : "keep"), refresh())), cutBrush === "keep"),
-                pressed(stripButton("Remove", "Paint what should go", () => ((cutBrush = cutBrush === "remove" ? undefined : "remove"), refresh())), cutBrush === "remove"),
+                pressed(stripButton("keep", "Paint what should stay", () => ((cutBrush = cutBrush === "keep" ? undefined : "keep"), refresh())), cutBrush === "keep"),
+                pressed(stripButton("remove", "Paint what should go", () => ((cutBrush = cutBrush === "remove" ? undefined : "remove"), refresh())), cutBrush === "remove"),
                 make("span", "quire-img-strip-rule"),
-                stripButton(cutAsking.tier().name, "Quality", () => void cutAsking.choose(buttons.cutout).then((chosen) => void (chosen && startCut()))),
-                stripButton("Take away", "Bring the background back", () => commit(history.now().filter((each) => each.type !== "cutout"))),
+                stripButton(lowered(cutAsking.tier().name), "Quality", () => void cutAsking.choose(buttons.cutout).then((chosen) => void (chosen && startCut()))),
+                stripButton("take away", "Bring the background back", () => commit(history.now().filter((each) => each.type !== "cutout"))),
                 // in a batch, the others cut out the same way, one after another
-                ...(batched() ? [make("span", "quire-img-strip-rule"), stripButton(`Give to the other ${items.length - 1}`, giveSaid("cutout") ?? "", () => void giveAll(["cutout"]))] : []),
+                ...(batched() ? [make("span", "quire-img-strip-rule"), stripButton(`give to the other ${items.length - 1}`, giveSaid("cutout") ?? "", () => void giveAll(["cutout"]))] : []),
             ],
         };
     }

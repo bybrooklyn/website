@@ -67,7 +67,7 @@ test("Auto stands a tilted building straight as one change; a dial's keys make a
     await page.tab.press("p");
     await page.until("document.querySelector('.quire-img-strip[data-kind=perspective]')");
     const started = performance.now();
-    await pressButton("Auto");
+    await pressButton("auto");
     await page.until("window.app.editing().steps().some((step) => step.type === 'perspective')");
     const autoTook = performance.now() - started;
     const auto = (await perspective())!;
@@ -127,7 +127,7 @@ test("a picture with no clear lines is left as it was, and the status says so", 
     await page.paste("photo");
     await page.tab.press("p");
     await page.until("document.querySelector('.quire-img-strip[data-kind=perspective]')");
-    await pressButton("Auto");
+    await pressButton("auto");
     await page.until("document.querySelector('.quire-status-home')?.textContent.includes('No clear lines')");
     expect(await perspective()).toBeNull();
 }, 60_000);

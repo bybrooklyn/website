@@ -124,7 +124,7 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
 
         // Hide all covers what is left that looks private, as one step
         expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toBe("6 words, 1 looks private");
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'Hide all').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'hide all').click()");
         await until("window.app.editing().steps().length === 3");
         expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toBe("6 words");
         await tab.press("z", { ctrl: true });
@@ -196,7 +196,7 @@ test("a phone number is hidden by one cover edge to edge, by Hide all or by pres
         expect(await tint(group)).toBeGreaterThan(0);
 
         // Hide all: one cover, from the first group's edge to the last's
-        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'Hide all').click()");
+        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'hide all').click()");
         await until("window.app.editing().steps().length === 1");
         const [all] = await covers(page);
         expect([all!.rect.x, all!.rect.x + all!.rect.width]).toEqual([phone.x, phone.right]);
