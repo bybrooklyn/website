@@ -4,12 +4,14 @@
 // swell and run together. It can be played again, and slowly. It is unlisted, kept out of search and
 // the sitemap, and linked from nowhere; it is here to be judged before the site's pictures are given it.
 import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import sharp from "sharp";
 import Document from "../layouts/Document.astro";
 import Flags from "../components/Flags.astro";
 import { site } from "../data/site";
 
-const folder = new URL("../../public/photos/", import.meta.url).pathname;
+// (found from where the site is built, since a built page is no longer beside its source)
+const folder = join(process.cwd(), "public", "photos") + "/";
 const wanted = ["img-0406-copy", "img-2674", "img-1103", "20241202-171006", "20260711-194551", "img-1507", "20250526-164011", "img-3224"];
 const there = new Set(await readdir(folder));
 const pictures = await Promise.all(
