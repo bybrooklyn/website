@@ -159,7 +159,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 2, fall: 3, pace: 96, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [226, 92, 28, 255], vary: [58, 110, 40], paint: true },
     Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [176, 218, 240, 245], vary: [14, 12, 8], paint: true },
     Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [70, 68, 72, 170], vary: [20, 20, 20], paint: true },
-    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: 0, conduct: 32, made: 230, latent: 0, warms: -4, toward: 0, airy: true, glow: 1, color: [236, 116, 34, 255], vary: [40, 200, 80], paint: true },
+    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: 0, conduct: 2, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [236, 116, 34, 255], vary: [40, 200, 80], paint: true },
     Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [116, 214, 64, 230], vary: [20, 30, 14], paint: true },
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [84, 58, 40, 255], vary: [18, 14, 10], paint: false },
     Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [196, 70, 26, 255], vary: [70, 80, 30], paint: false },
@@ -249,7 +249,7 @@ pub const REACTIONS: &[Reaction] = &[
     // lava lights what burns where it touches it
     line(WOOD, LAVA, 0, 255, EMBER, SAME, 64, Heat::Kept, 0),
     // a flame licking wood lights it now and then, however cool the wood still is
-    line(WOOD, FIRE, 0, 255, EMBER, SAME, 48, Heat::Kept, 0),
+    line(WOOD, FIRE, 0, 255, EMBER, SAME, 192, Heat::Kept, 0),
     // oil hot enough, with air beside it, bursts into flame; a flame lights the oil it touches
     line(OIL, OPEN, 85, 255, FIRE, SAME, 512, Heat::Kept, 230),
     line(OIL, LAVA, 0, 255, FIRE, SAME, 256, Heat::Kept, 230),
@@ -261,7 +261,7 @@ pub const REACTIONS: &[Reaction] = &[
     line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 12, Heat::Kept, 0),
     // a flame that has cooled dies, some of it to smoke; water puts it out with a hiss of steam
     line(FIRE, ALONE, 0, 60, EMPTY, SAME, ALWAYS, Heat::Kept, 0),
-    line(FIRE, ALONE, 0, 90, SMOKE, SAME, 160, Heat::Kept, 0),
+    line(FIRE, ALONE, 0, 90, SMOKE, SAME, 40, Heat::Kept, 0),
     line(FIRE, WATER, 0, 255, EMPTY, STEAM, 640, Heat::Shared, 0),
     line(FIRE, OIL, 0, 255, SAME, FIRE, ALWAYS, Heat::Kept, 230),
     // acid eats stone, wood and dirt, a cell for a cell, and goes up in fumes
@@ -279,7 +279,7 @@ pub const REACTIONS: &[Reaction] = &[
     line(EMBER, WATER, 0, 255, WOOD, STEAM, 512, Heat::Shared, 0),
     line(EMBER, ALONE, 0, 255, SMOKE, SAME, 4, Heat::Kept, 0),
     line(EMBER, ALONE, 0, 255, ASH, SAME, 2, Heat::Kept, 0),
-    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 256, Heat::Kept, 230),
+    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 128, Heat::Kept, 230),
 ];
 
 /// The reactions of `a` beside `b` (with `b` a material), in the order they are tried.

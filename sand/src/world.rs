@@ -725,8 +725,8 @@ impl World {
             self.rises_into(p.density, self.cells[to]) && (side == 0 || self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]))
         };
         let side: isize = match roll & 7 {
-            0 | 1 => -1,
-            6 | 7 => 1,
+            0 => -1,
+            7 => 1,
             _ => 0,
         };
         let goes = if up(side) {

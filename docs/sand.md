@@ -283,14 +283,14 @@ One line each in `MATERIALS`. Conduct is in 32nds of the most; `made` is the tem
 | lava | liquid | 200 | 8 | 250 | creeps (moves sideways 96 steps in 256); hardens where it rests; shade follows heat |
 | ice | solid | 255 | 32 | 0 | |
 | smoke | gas | 3 | 10 | 90 | does not level: rises, drifts and thins; airy |
-| fire | fire (new kind) | 1 | 32 | 230 | rises and wavers; cools 4 a step; shade follows heat; airy |
+| fire | fire (new kind) | 1 | 2 | 230 | rises and wavers; cools 2 a step; shade follows heat; airy |
 | acid | liquid | 110 | 28 | 40 | levels; sinks under water |
 | wet dirt | powder | 170 | 12 | 40 | slides at about 72 degrees; stores 8; not offered to the brush |
 | ember (burning wood) | solid | 255 | 20 | 200 | warms 16 a step up to 200; shade flickers with heat; not offered |
 | ash | powder | 40 | 6 | 40 | floats; airy; not offered |
 
 Fire is a new kind: each step it moves up, or up and to a side by chance (a quarter of the time each
-way), so a flame wavers; when it cannot rise it moves to a side now and then. It never levels. A falling
+way; an eighth since the owner's play, below), so a flame wavers; when it cannot rise it moves to a side now and then. It never levels. A falling
 cell passes through it as through a lighter gas.
 
 ### The reactions as built
@@ -307,6 +307,7 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | dirt | water | any | wet dirt | air | 96 | shared |
 | steam | alone | 56 or less | water | | always | kept (gives back 20) |
 | wood | anything airy | 90 or more | burning wood | as it was | 384 | kept |
+| wood | fire | any | burning wood | as it was | 192 | kept |
 | wood | lava | any | burning wood | as it was | 64 | kept |
 | oil | anything airy | 85 or more | fire | as it was | 512 | the flame starts at 230 or more |
 | oil | lava | any | fire | as it was | 256 | the flame starts at 230 or more |
@@ -315,7 +316,7 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | ice | alone | 28 or more | water | | always | kept (stores 8) |
 | smoke | alone | any | air | | 12 | kept |
 | fire | alone | 60 or less | air | | always | kept |
-| fire | alone | 90 or less | smoke | | 160 | kept |
+| fire | alone | 90 or less | smoke | | 40 | kept |
 | fire | water | any | air | steam | 640 | shared |
 | fire | oil | any | as it was | fire | always | the flame starts at 230 or more |
 | acid | stone | any | smoke | air | 24 | kept |
@@ -327,7 +328,7 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | burning wood | water | any | wood | steam | 512 | shared |
 | burning wood | alone | any | smoke | | 4 | kept |
 | burning wood | alone | any | ash | | 2 | kept |
-| burning wood | air | any | as it was | fire | 256 | the flame starts at 230 or more |
+| burning wood | air | any | as it was | fire | 128 | the flame starts at 230 or more |
 
 What each line does to the counts follows from it (`changes` in `materials.rs`): wood becomes burning wood
 one for one, burning wood becomes smoke or ash one for one, smoke thins to nothing and fire dies to nothing
@@ -958,3 +959,22 @@ The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a 
 - The world is made once, for the size the mini has when it loads; a resize keeps it and fits it again in
   whole pixels, cutting its edges if the canvas has grown smaller than it.
 - With no WebGL 2 the page says so and draws nothing.
+
+## Reworked after the owner's play
+
+The owner found fire did not really work and the mini quite broken; a tester then played it by hand on the
+page and counted grains (the counts below are from those scenes, stepped natively one step a frame on the
+same strokes, a world of 358 by 278, and checked on the page). What changed, a commit each:
+
+- **Flames live.** A flame was made at 230 but passed heat at 32, so it gave its heat to the air in a few
+  steps: one flame alone lived 6 to 9 steps, and a dragged line of 757 flames was 7 flames 16 steps later.
+  Fire now passes heat at 2 and cools 2 a step, wavers to a side an eighth of the time each way (it was a
+  quarter), and turns to smoke as it dies 40 times in 1024 a step (it was 160). One flame lives 24 to 37
+  steps, about 32 on average, rising about 31 cells, and a third end as smoke. Burning wood gives off
+  flames 128 times in 1024 a step (it was 256), as each lives four times as long.
+- **A flame touching wood lights it** 192 times in 1024 a step (it was 48). A wooden house with fire drawn
+  three cells from its wall had nothing burnt in 45 seconds; it now burns down to ash in about 40.
+  A flame lives long enough to drift: fire now crosses gaps of up to about nine cells between burning
+  columns (eleven now and then, thirteen in none of six seeds), and the test holds that a firebreak of
+  fifteen is not crossed where it held seven.
+

@@ -386,26 +386,87 @@ fn a_forest_lit_at_one_end_burns_across_and_goes_out() {
 }
 
 #[test]
-fn fire_jumps_a_gap_of_two_cells_by_heat_and_not_one_of_seven() {
+fn fire_jumps_a_gap_of_two_cells_and_not_a_firebreak_of_fifteen() {
     for seed in [1, 2, 3] {
         let mut world = World::new(160, 100, seed);
         world.paint(STONE, 0, 95, 159, 99, 2, 100, false);
-        // columns three wide: the second two cells from the first, the third seven from the second (a
-        // gap of three is crossed now and then: once in these three seeds, measured)
-        for x in [40, 45, 55] {
+        // columns three wide: the second two cells from the first, the third fifteen from the second.
+        // A flame lives about 35 steps and wavers as it rises, so gaps up to about nine are crossed
+        // by flames drifting over (eleven now and then, thirteen in none of six seeds, measured)
+        for x in [40, 45, 63] {
             world.paint(WOOD, x, 40, x, 93, 1, 100, false);
         }
         let left = |w: &World, x: i32| (x - 1..=x + 1).flat_map(|x| (40..94).map(move |y| (x, y))).filter(|&(x, y)| w.at(x, y) == WOOD).count();
-        let whole = left(&world, 55);
+        let whole = left(&world, 63);
         for k in 0..4000 {
             if k < 40 {
                 world.paint(FIRE, 37, 91, 37, 91, 1, 45, false);
             }
             world.step();
         }
-        println!("seed {seed}: wood left in the three columns {} {} {}", left(&world, 40), left(&world, 45), left(&world, 55));
+        println!("seed {seed}: wood left in the three columns {} {} {}", left(&world, 40), left(&world, 45), left(&world, 63));
         assert_eq!(left(&world, 45), 0, "across two cells\n{}", picture(&world, 30, 30, 70, 97));
-        assert_eq!(left(&world, 55), whole, "not across seven");
+        assert_eq!(left(&world, 63), whole, "not across fifteen");
+    }
+}
+
+#[test]
+fn a_poured_flame_lives_about_thirty_five_steps_rising_as_a_tongue_and_mostly_ends_as_nothing() {
+    let (mut lives, mut smoke, mut risen) = (vec![], 0, 0);
+    for seed in 1..=100 {
+        // one flame alone in still air
+        let mut world = World::new(64, 128, seed);
+        world.paint(FIRE, 32, 120, 32, 120, 0, 100, false);
+        let (mut k, mut top) = (0, 120);
+        while world.count(FIRE) > 0 && k < 500 {
+            world.step();
+            k += 1;
+            if let Some(y) = (0..128).find(|&y| (0..64).any(|x| world.at(x, y) == FIRE)) {
+                top = top.min(y);
+            }
+        }
+        lives.push(k);
+        smoke += world.count(SMOKE);
+        risen += 120 - top;
+    }
+    let mean = lives.iter().sum::<usize>() as f64 / lives.len() as f64;
+    println!("a flame lives {} to {} steps, {mean:.1} on average, rises {} cells on average; {smoke} of 100 end as smoke", lives.iter().min().unwrap(), lives.iter().max().unwrap(), risen / 100);
+    assert!(mean >= 28.0 && *lives.iter().min().unwrap() >= 15, "it lives about 35 steps: {lives:?}");
+    assert!(risen / 100 >= 20, "and rises as it does");
+    assert!(smoke < 50, "most end as nothing, some as smoke");
+}
+
+#[test]
+fn a_flame_a_few_cells_from_wood_lights_it_and_a_wooden_house_burns_down_to_ash() {
+    for seed in [1, 2] {
+        let mut world = World::new(200, 140, seed);
+        let floor = 138;
+        // a hollow house of planks one cell thick: a floor, two walls and a pointed roof
+        world.paint(WOOD, 60, floor, 160, floor, 1, 100, false);
+        world.paint(WOOD, 60, floor, 60, floor - 58, 1, 100, false);
+        world.paint(WOOD, 160, floor, 160, floor - 58, 1, 100, false);
+        world.paint(WOOD, 55, floor - 58, 110, floor - 93, 1, 100, false);
+        world.paint(WOOD, 110, floor - 93, 165, floor - 58, 1, 100, false);
+        let wood = world.count(WOOD);
+        // fire drawn quickly up beside the left wall, its nearest flames three cells from it
+        for k in 0..5 {
+            world.paint(FIRE, 53, floor - 4 - k * 5, 53, floor - 9 - k * 5, 2, 45, false);
+            world.step();
+        }
+        run(&mut world, 300);
+        let lit = wood - world.count(WOOD);
+        let mut out = None;
+        for k in 0..6000 {
+            world.step();
+            if world.count(WOOD) + world.count(EMBER) + world.count(FIRE) == 0 {
+                out = Some(k + 301);
+                break;
+            }
+        }
+        println!("seed {seed}: of {wood} wood, {lit} caught in 300 steps; burnt out after {out:?} steps, {} ash", world.count(ASH));
+        assert!(lit > 0, "the flames light it\n{}", picture(&world, 40, 40, 170, 139));
+        assert!(out.is_some() && world.count(WOOD) == 0, "and it burns down\n{}", picture(&world, 40, 40, 170, 139));
+        assert!(world.count(ASH) > wood / 10, "to ash");
     }
 }
 
