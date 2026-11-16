@@ -1,55 +1,59 @@
-/* The converter's page (src/quire/convert/page.ts): the list of files at the left, which is the work, and
-   the choices for each kind in their own room beside it, staying in view as the page scrolls; on a phone
-   the list stays at the top, holding its own scroll, and the choices run under it. Rows grow in and
-   shrink away; nothing that stays open covers the list. The menu is the suite's own (quire.css). */
+/* What is the converter's own on its page (src/quire/convert/page.ts): the place files are dropped, the
+   list of them with how each is getting on, and what only its column has (a unit after a row of dots, a
+   quiet note, a part that folds open, the words for every file kept at the window's foot). The box, its
+   column and its one line are every small tool's (quire-bench.css); the menu is the suite's own
+   (quire.css). Rows grow in and shrink away, notes and folds grow open and shut, and nothing that stays
+   open covers the list. */
 
-.quire-convert-page main {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
+/* the box clips its round corners without holding its own scroll, so the work and the words at the
+   column's foot can stay in view as the page scrolls */
+.quire-bench.quire-convert {
+    overflow: clip;
 }
 
-.quire-convert-host {
-    display: flex;
-    flex: 1;
-    justify-content: center;
+/* ---- the work: the drop place and the list, staying in view while the column scrolls past ---- */
+
+.quire-convert .quire-bench-work {
+    position: sticky;
+    top: 0;
+    align-self: start;
 }
 
-.quire-convert {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 25rem);
-    gap: 2.5rem;
-    align-items: start;
-    width: 100%;
-    max-width: calc(var(--page) + var(--gutter) * 2);
-    padding: 1.5rem var(--gutter) 4rem;
-    box-sizing: border-box;
-    font-family: var(--font-text);
-    color: var(--ink);
-}
-
-/* ---- the work: where files arrive, what is done with them all, and the list ---- */
-
-.quire-convert-work {
+.quire-convert-room {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    min-width: 0;
+    box-sizing: border-box;
+    height: var(--tall);
+    padding: 1rem;
+    line-height: 1.4;
 }
 
+/* the drop place fills the room while the list is empty, and draws back to a strip over it when files come */
 .quire-convert-drop {
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 0.9rem;
     padding: 1.5rem 1.25rem;
-    border: 0.125rem dashed var(--rule);
-    border-radius: var(--quire-round);
+    border: 0.0625rem dashed var(--rule);
+    border-radius: var(--radius);
+    color: var(--muted);
     text-align: center;
     transition:
+        flex-grow 0.4s var(--ease),
+        padding 0.4s var(--ease),
+        gap 0.4s var(--ease),
         border-color 0.15s ease,
         background 0.2s ease;
+}
+
+.quire-convert.has-files .quire-convert-drop {
+    flex-grow: 0;
+    gap: 0.45rem;
+    padding: 0.7rem 1rem;
 }
 
 .quire-convert.dropping .quire-convert-drop {
@@ -58,103 +62,46 @@
 }
 
 .quire-convert-empty {
-    max-width: 34rem;
+    max-width: 30rem;
     margin: 0;
-    color: var(--muted);
-    font-size: 1rem;
     line-height: 1.5;
+    transition: font-size 0.4s var(--ease);
 }
 
-.quire-convert-actions,
-.quire-convert-bar {
+.quire-convert.has-files .quire-convert-empty {
+    font-size: 0.85rem;
+}
+
+.quire-convert-actions {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
+    align-items: baseline;
 }
 
-.quire-convert-summary,
-.quire-convert-said {
-    min-height: 1.35rem;
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
-    line-height: 1.45;
-}
-
-.quire-convert-said:empty {
-    min-height: 0;
-}
-
-/* ---- buttons ---- */
-
-.quire-convert :is(.quire-convert-main, .quire-convert-plain, .quire-convert-choice, .quire-convert-small) {
-    min-height: 2.25rem;
-    padding: 0 0.85rem;
-    border: 0;
-    border-radius: var(--quire-round-small);
-    font: inherit;
-    font-size: 0.92rem;
-    cursor: pointer;
-    transition:
-        background 0.15s ease,
-        color 0.15s ease,
-        opacity 0.2s ease,
-        scale 0.2s var(--ease);
-}
-
-.quire-convert :is(.quire-convert-main, .quire-convert-plain, .quire-convert-choice, .quire-convert-small):active:not(:disabled, .cannot) {
-    scale: 0.95;
-}
-
-.quire-convert :is(button:disabled, .cannot) {
-    opacity: 0.4;
-    cursor: default;
-}
-
-.quire-convert-main {
-    min-width: 6rem;
-    background: var(--accent);
-    color: var(--ground);
-    font-weight: 600;
-}
-
-.quire-convert-plain,
-.quire-convert-choice,
-.quire-convert-small {
-    background: color-mix(in oklch, var(--ink) 7%, transparent);
-    color: var(--ink);
-}
-
-:is(.quire-convert-plain, .quire-convert-choice, .quire-convert-small):hover:not(:disabled, .cannot) {
-    background: color-mix(in oklch, var(--ink) 13%, transparent);
-}
-
-.quire-convert-choice.pressed {
-    background: color-mix(in oklch, var(--accent) 24%, transparent);
-    color: var(--accent);
-}
-
-/* a phone has no right-click and no keys to paste with: there, and only there, a plain Paste button */
+/* a phone has no right-click and no keys to paste with: there, and only there, a plain paste */
 .quire-convert-paste {
     display: none;
 }
 
 @media (pointer: coarse) {
     .quire-convert-paste {
-        display: inline-flex;
-        align-items: center;
+        display: inline;
     }
 }
 
 /* ---- the rows ---- */
 
 .quire-convert-rows {
-    display: flex;
-    flex-direction: column;
+    flex: 0 1 auto;
+    min-height: 0;
     margin: 0;
     padding: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
     list-style: none;
+}
+
+.quire-convert.has-files .quire-convert-rows {
+    flex: 1 1 0;
 }
 
 /* a row grows from no height as it arrives and shrinks back as it leaves */
@@ -181,7 +128,6 @@
 .quire-convert-row:focus-visible {
     outline: 0.125rem solid var(--accent);
     outline-offset: -0.125rem;
-    border-radius: var(--quire-round-small);
 }
 
 .quire-convert-row-body {
@@ -194,8 +140,11 @@
         "notes notes notes";
     align-items: center;
     gap: 0.15rem 1rem;
-    padding: 0.7rem 0.2rem 0.55rem;
-    border-top: 0.0625rem solid color-mix(in oklch, var(--rule) 70%, transparent);
+    padding: 0.6rem 0.1rem 0.5rem;
+}
+
+.quire-convert-row + .quire-convert-row .quire-convert-row-body {
+    border-top: 0.0625rem solid var(--rule);
 }
 
 .quire-convert-row-label {
@@ -234,7 +183,7 @@
 .quire-convert-status {
     grid-area: status;
     justify-self: end;
-    max-width: 16rem;
+    max-width: 14rem;
     overflow: hidden;
     font-size: 0.85rem;
     font-variant-numeric: tabular-nums;
@@ -250,42 +199,41 @@
     color: var(--muted);
 }
 
+/* a row's own words keep their places, the one not wanted now fading out where it is */
 .quire-convert-row-actions {
     grid-area: actions;
     display: flex;
-    align-items: center;
-    gap: 0.3rem;
+    align-items: baseline;
 }
 
-.quire-convert-small {
-    min-height: 2rem !important;
-    padding: 0 0.7rem !important;
-    font-size: 0.85rem !important;
-}
-
-/* a row's own buttons keep their places, the one not wanted now fading out where it is */
 .quire-convert-row-main {
-    min-width: 5.6rem;
+    min-width: 4.6rem;
+    text-align: end;
 }
 
 .quire-convert-row-actions .away {
     opacity: 0;
-    scale: 0.9;
     pointer-events: none;
 }
 
-.quire-convert-copy.away {
-    width: 0;
-    min-width: 0;
-    margin-left: -0.3rem;
-    padding: 0 !important;
+.quire-convert-copy {
+    max-width: 4rem;
     overflow: hidden;
+    transition:
+        max-width 0.3s var(--ease),
+        margin 0.3s var(--ease),
+        opacity 0.2s ease;
 }
 
-.quire-convert-remove {
-    min-width: 2rem;
-    padding: 0 !important;
-    font-size: 1.1rem !important;
+.quire-convert-row-actions .quire-convert-copy.away {
+    max-width: 0;
+    margin-inline-start: 0;
+}
+
+.quire-convert-row-actions .quire-convert-remove {
+    padding: 0 0.15rem;
+    font-size: 1.15rem;
+    line-height: 1;
 }
 
 .quire-convert-track {
@@ -319,7 +267,7 @@
     grid-area: notes;
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: baseline;
     gap: 0.3rem 0.6rem;
     padding-top: 0.35rem;
 }
@@ -340,125 +288,68 @@
     color: var(--ink);
 }
 
-/* ---- the panel ---- */
-
-.quire-convert-panel {
-    position: sticky;
-    top: 6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.6rem;
-    max-height: calc(100dvh - 7.5rem);
-    min-width: 0;
-    padding-right: 0.3rem;
-    overflow: auto;
-    overscroll-behavior: contain;
-}
-
-.quire-convert-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-
-.quire-convert-heading {
-    margin: 0;
-    color: var(--ink);
-    font-family: var(--font-text);
-    font-size: 0.95rem;
-    font-weight: 700;
-}
-
-.quire-convert-line {
-    display: grid;
-    grid-template-columns: 5.5rem minmax(0, 1fr);
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.quire-convert-label {
-    color: var(--muted);
+.quire-convert-notes > .quire-convert-offer {
+    margin-inline-start: 0;
     font-size: 0.85rem;
 }
 
-.quire-convert-choices {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
+/* ---- the column ---- */
+
+/* in a group of a kind, each row keeps the step from what is over it, a note or a fold too */
+.quire-convert-kind > * + .quire-bench-row,
+.quire-convert-kind > * + .quire-convert-html {
+    margin-top: 0.55rem;
 }
 
-.quire-convert-choice {
-    min-height: 2rem !important;
-    padding: 0 0.7rem !important;
-    font-size: 0.88rem !important;
+/* a choice this browser cannot do is there, faint, and says why when the pointer rests on it */
+.quire-convert .quire-bench-choices label.cannot {
+    opacity: 0.45;
+    cursor: default;
 }
 
-.quire-convert-note {
-    margin: 0;
+.quire-convert .quire-bench-choices label.cannot input {
+    cursor: default;
+}
+
+.quire-convert .quire-bench-press.cannot {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.quire-convert-unit {
     color: var(--muted);
-    font-size: 0.82rem;
-    line-height: 1.45;
-    transition: opacity 0.2s ease;
-}
-
-.quire-convert-note.empty {
-    display: none;
-}
-
-.quire-convert-field {
-    box-sizing: border-box;
-    width: 6.5rem;
-    padding: 0.4rem 0.55rem;
-    border: 0.0625rem solid var(--field-edge);
-    border-radius: var(--quire-round-small);
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.92rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.quire-convert-field:focus {
-    border-color: var(--accent);
-    outline: none;
-}
-
-.quire-convert-under {
-    width: 8rem;
+    font-size: 0.85rem;
 }
 
 .quire-convert-number {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.quire-convert-unit,
-.quire-convert-value {
-    color: var(--muted);
-    font-size: 0.85rem;
+    max-width: 5.5rem;
     font-variant-numeric: tabular-nums;
 }
 
-.quire-convert-value {
-    min-width: 2rem;
-    color: var(--ink);
+/* a quiet sentence grows in under what it is about and shrinks away when it has nothing to say */
+.quire-convert-note {
+    max-height: 14rem;
+    margin: 0.45rem 0 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+    transition:
+        max-height 0.35s var(--ease),
+        margin-top 0.35s var(--ease),
+        opacity 0.2s ease;
 }
 
-.quire-convert-line.with-value {
-    grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+.quire-convert-note.empty {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
 }
 
-.quire-convert-range {
-    width: 100%;
-    accent-color: var(--accent);
-}
-
-/* a shut fold takes no room, not even the section's gap before it */
+/* a part that folds open grows from no height under the row that opened it, and goes back the same way */
 .quire-convert-fold {
     display: grid;
     grid-template-rows: 0fr;
-    margin-top: -0.6rem;
     opacity: 0;
     transition:
         grid-template-rows 0.35s var(--ease),
@@ -468,7 +359,7 @@
 
 .quire-convert-fold.open {
     grid-template-rows: 1fr;
-    margin-top: 0;
+    margin-top: 0.55rem;
     opacity: 1;
 }
 
@@ -477,74 +368,26 @@
     overflow: hidden;
 }
 
-.quire-convert-fold-pad {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    padding: 0.15rem 0.1rem 0.15rem 6.1rem;
+/* out of reach while folded away, it is not also drawn faint: it is not there to be seen */
+.quire-bench-side .quire-convert-fold-in[inert] {
+    opacity: 1;
 }
 
-.quire-convert-fold-pad > .quire-convert-line {
-    margin-left: -6.1rem;
+/* the words for every file stay at the window's foot while the column scrolls, and settle at its end */
+.quire-convert-all {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin-bottom: -1rem;
+    padding-bottom: 1rem;
+    background: var(--ground);
 }
 
-/* ---- a phone: the list at the top, staying in view with its own scroll, the choices under it ---- */
+/* ---- a narrow window: the column under the work, the work scrolling with the page ---- */
 
-@media (max-width: 52rem) {
-    .quire-convert {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 1.25rem;
-        padding-top: 0.75rem;
-    }
-
-    .quire-convert-work {
-        position: sticky;
-        top: 3.35rem;
-        z-index: 5;
-        max-height: 60dvh;
-        margin-inline: calc(var(--gutter) * -1);
-        padding: 0.5rem var(--gutter) 0.4rem;
-        border-bottom: 0.0625rem solid var(--rule);
-        background: var(--ground);
-    }
-
-    .quire-convert-rows {
-        min-height: 0;
-        overflow: auto;
-        overscroll-behavior: contain;
-    }
-
-    .quire-convert-drop {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.5rem;
-        padding: 0.7rem;
-    }
-
-    .quire-convert-empty {
-        font-size: 0.85rem;
-    }
-
-    .quire-convert-bar {
-        gap: 0.3rem;
-    }
-
-    .quire-convert-bar > button {
-        min-height: 2rem !important;
-        padding: 0 0.6rem !important;
-        font-size: 0.82rem !important;
-    }
-
-    .quire-convert-panel {
+@media (max-width: 44rem) {
+    .quire-convert .quire-bench-work {
         position: static;
-        max-height: none;
-        overflow: visible;
-    }
-
-    /* what the keyboard brings into view stops below the list, never under it */
-    .quire-convert-panel :is(button, input, h2) {
-        scroll-margin-top: calc(60dvh + 4rem);
     }
 
     .quire-convert-row-body {
@@ -562,23 +405,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .quire-convert *,
-    .quire-convert {
-        transition-duration: 0s !important;
-        animation: none !important;
+    .quire-convert-drop,
+    .quire-convert-empty,
+    .quire-convert-row,
+    .quire-convert-copy,
+    .quire-convert-track,
+    .quire-convert-track i,
+    .quire-convert-note,
+    .quire-convert-fold {
+        transition: none;
     }
-}
-
-.quire-convert-html {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-
-.quire-convert-more {
-    width: fit-content;
-}
-
-.quire-convert-html .quire-convert-fold-pad {
-    padding-left: 0.1rem;
 }

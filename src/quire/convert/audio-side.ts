@@ -1,13 +1,14 @@
-// The sounds' side of the converter's panel: the format (WAV and FLAC written by hand, Opus in WebM or
+// The sounds' group of the converter's column: the format (WAV and FLAC written by hand, Opus in WebM or
 // Ogg and AAC in M4A by the browser's own encoder, each offered only where this browser has it, and
 // said so where it has not), the rate, the channels, the rate of bits where it means something, and the bits
-// of a WAV or FLAC. MP3 is read and never written, and the panel says why.
+// of a WAV or FLAC. MP3 is read and never written, and the column says why.
 
+import { group } from "../core/bench";
 import { make } from "../core/ui";
 import { AUDIO_DEFAULT, AUDIO_FORMATS, audioAbilities, decodeSound, encodeSound, NO_MP3, soundFacts, type AudioChoice, type AudioFormat } from "./audio";
 import type { Found } from "./kinds";
 import { timeSaid } from "./names";
-import { choices, fold, line, note, section, type Becoming, type Item, type Made, type Side } from "./parts";
+import { choices, fold, note, unit, type Becoming, type Item, type Made, type Side } from "./parts";
 
 /** A rate as a person reads it: "48 kHz", "44.1 kHz". */
 export const rateSaid = (rate: number) => `${Math.round(rate / 100) / 10} kHz`;
@@ -31,7 +32,7 @@ export function shapeFor(choice: AudioChoice, came: { rate?: number; channels?: 
     return { rate, channels };
 }
 
-/** The sounds' side of the panel. */
+/** The sounds' group of the column. */
 export function audioSide(): Side {
     const choice: AudioChoice = { ...AUDIO_DEFAULT };
     const facts = new WeakMap<Blob, Awaited<ReturnType<typeof soundFacts>>>();
@@ -73,49 +74,45 @@ export function audioSide(): Side {
         if (format === "aac-m4a" && !abilities.aac) return "This browser cannot write AAC.";
         return undefined;
     };
-    const formatOptions = () => AUDIO_FORMATS.map((each) => ({ value: each.key, label: each.short, tip: `${each.label}: ${each.tip}`, cannot: cannotOf(each.key) }));
-    const formats = choices<AudioFormat>("Into", formatOptions(), choice.format, (value) => {
+    const formatOptions = () => AUDIO_FORMATS.map((each) => ({ value: each.key, label: each.short.toLowerCase(), tip: `${each.label}: ${each.tip}`, cannot: cannotOf(each.key) }));
+    const formats = choices<AudioFormat>("into", formatOptions(), choice.format, (value) => {
         choice.format = value;
         fill();
         changed();
     });
     const canSay = note();
-    const rates = choices<string>(
-        "Rate",
-        [0, 48_000, 44_100, 32_000, 24_000, 16_000].map((rate) => ({ value: String(rate), label: rate ? rateSaid(rate) : "As it came" })),
-        "0",
-        (value) => ((choice.rate = Number(value)), changed()),
-    );
-    const channels = choices<string>("Channels", [{ value: "0", label: "As it came" }, { value: "2", label: "Stereo" }, { value: "1", label: "Mono" }], "0", (value) => ((choice.channels = Number(value)), changed()));
+    const rateOptions = (opus: boolean) => [0, 48_000, 44_100, 32_000, 24_000, 16_000].map((rate) => ({ value: String(rate), label: rate ? rateSaid(rate) : "as it came", cannot: opus && rate !== 48_000 && rate !== 0 ? "Opus is always 48 kHz." : undefined }));
+    const rates = choices<string>("rate", rateOptions(false), "0", (value) => ((choice.rate = Number(value)), changed()));
+    const channels = choices<string>("channels", [{ value: "0", label: "as it came" }, { value: "2", label: "stereo" }, { value: "1", label: "mono" }], "0", (value) => ((choice.channels = Number(value)), changed()));
     const bitrates = choices<string>(
-        "Bitrate",
+        "bitrate",
         [64, 96, 128, 160, 192, 256].map((rate) => ({ value: String(rate * 1000), label: `${rate}`, tip: `${rate} kilobits a second` })),
         String(choice.bitrate),
         (value) => ((choice.bitrate = Number(value)), changed()),
+        unit("kbps"),
     );
-    const bits = choices<string>("Bits", [{ value: "16", label: "16" }, { value: "24", label: "24" }, { value: "32", label: "32 float", tip: "Floating point, for further work" }], "16", (value) => ((choice.bits = Number(value) as 16 | 24 | 32), changed()));
+    const bitsOptions = (flac: boolean) => [{ value: "16", label: "16" }, { value: "24", label: "24" }, { value: "32", label: "32 float", tip: "Floating point, for further work", cannot: flac ? "FLAC is written in 16 or 24 bits." : undefined }];
+    const bits = choices<string>("bits", bitsOptions(false), "16", (value) => ((choice.bits = Number(value) as 16 | 24 | 32), changed()));
     const rateNote = note();
-    const bitrateLine = line("Bitrate", bitrates.element, make("span", "quire-convert-unit", "kbps"));
-    bitrateLine.classList.add("with-value");
-    const lossyFold = fold(bitrateLine);
-    const bitsFold = fold(line("Bits", bits.element));
+    const lossyFold = fold(bitrates.element);
+    const bitsFold = fold(bits.element);
     function fill() {
         const format = AUDIO_FORMATS.find((each) => each.key === choice.format)!;
         lossyFold.open(format.lossy);
         bitsFold.open(!format.lossy);
         const opus = format.key.startsWith("opus");
-        rates.rebuild([0, 48_000, 44_100, 32_000, 24_000, 16_000].map((rate) => ({ value: String(rate), label: rate ? rateSaid(rate) : "As it came", cannot: opus && rate !== 48_000 && rate !== 0 ? "Opus is always 48 kHz." : undefined })));
+        rates.bar(rateOptions(opus));
         rateNote.say(opus ? "Opus is always 48 kHz." : "");
-        bits.rebuild([{ value: "16", label: "16" }, { value: "24", label: "24" }, { value: "32", label: "32 float", tip: "Floating point, for further work", cannot: format.key === "flac" ? "FLAC is written in 16 or 24 bits." : undefined }]);
+        bits.bar(bitsOptions(format.key === "flac"));
         if (format.key === "flac" && choice.bits === 32) {
             choice.bits = 24;
             bits.set("24");
         }
-        formats.rebuild(formatOptions());
+        formats.bar(formatOptions());
         const missing = [!abilities.opus && "Opus", !abilities.aac && "AAC"].filter(Boolean);
         canSay.say(abilities.asked && missing.length ? `This browser cannot write ${missing.join(" or ")}, so ${missing.length > 1 ? "they are" : "it is"} not offered here.` : "");
     }
-    side.element = section("Sounds", line("Into", formats.element), canSay, note(NO_MP3), line("Rate", rates.element), rateNote, line("Channels", channels.element), lossyFold.element, bitsFold.element);
+    side.element = group("sounds", formats.element, canSay, note(NO_MP3), rates.element, rateNote, channels.element, lossyFold.element, bitsFold.element);
     side.element.dataset.kind = "audio";
     fill();
     void audioAbilities().then((found) => {

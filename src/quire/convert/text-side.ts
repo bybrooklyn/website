@@ -1,10 +1,11 @@
-// The text and data side of the converter's panel: Markdown becomes HTML and HTML becomes Markdown
+// The text and data group of the converter's column: Markdown becomes HTML and HTML becomes Markdown
 // (through mdQuire's own reader and writer, handed in by the page script), and CSV, JSON, YAML and TOML
 // become the one chosen. A file's kind of text is found by its ending, else by what it holds. A shape
-// one format cannot carry is refused in plain words with what can be done, as a button on the row that
-// converts that file again with the offer taken. Text pasted becomes a file of its own, and a result
+// one format cannot carry is refused in plain words with what can be done, as words to press on the row
+// that convert that file again with the offer taken. Text pasted becomes a file of its own, and a result
 // can be copied as well as saved.
 
+import { group, word } from "../core/bench";
 import { make } from "../core/ui";
 import type { Found } from "./kinds";
 import { DataError, type Offer } from "./errors";
@@ -12,7 +13,7 @@ import type { DataOptions } from "./data";
 import type { Separator } from "./csv";
 import { HTML_DROPPED, HTML_UNDERSTOOD, type MarkdownEngine } from "./markdown";
 import { stemOf } from "./names";
-import { choices, fold, line, note, Offered, section, type Becoming, type Item, type Made, type Side } from "./parts";
+import { choices, fold, note, Offered, type Becoming, type Item, type Made, type Side } from "./parts";
 import { convertText, TEXT_FORMATS, textKindOf, type TextFormat } from "./text";
 
 /** The most text read at once: a text file this large is nearly always something else. */
@@ -37,7 +38,7 @@ export function targetOf(from: TextFormat, data: TextFormat): TextFormat | undef
     return from === data ? undefined : data;
 }
 
-/** The text and data side of the panel. */
+/** The text and data group of the column. */
 export function textSide(markdown?: MarkdownEngine): Side {
     let data: TextFormat = "json";
     const options: DataOptions = { header: true, types: false };
@@ -78,15 +79,15 @@ export function textSide(markdown?: MarkdownEngine): Side {
         },
     };
     const changed = () => side.changed?.();
-    const into = choices<TextFormat>("Data into", (["csv", "json", "yaml", "toml"] as TextFormat[]).map((value) => ({ value, label: TEXT_FORMATS[value].label })), data, (value) => ((data = value), changed()));
+    const into = choices<TextFormat>("data into", (["csv", "json", "yaml", "toml"] as TextFormat[]).map((value) => ({ value, label: TEXT_FORMATS[value].label.toLowerCase() })), data, (value) => ((data = value), changed()));
     const separators = choices<"find" | Separator>(
-        "CSV separator",
+        "separator",
         [
-            { value: "find", label: "Find it", tip: "Found from the file when reading; a comma when writing" },
-            { value: ",", label: "Comma" },
-            { value: ";", label: "Semicolon" },
-            { value: "\t", label: "Tab" },
-            { value: "|", label: "Bar" },
+            { value: "find", label: "find it", tip: "Found from the file when reading; a comma when writing" },
+            { value: ",", label: "comma" },
+            { value: ";", label: "semicolon" },
+            { value: "\t", label: "tab" },
+            { value: "|", label: "bar" },
         ],
         "find",
         (value) => {
@@ -95,34 +96,36 @@ export function textSide(markdown?: MarkdownEngine): Side {
             changed();
         },
     );
-    const header = choices<"yes" | "no">("First CSV row", [{ value: "yes", label: "Names" }, { value: "no", label: "Data" }], "yes", (value) => ((options.header = value === "yes"), changed()));
+    const header = choices<"yes" | "no">("first row", [{ value: "yes", label: "names" }, { value: "no", label: "data" }], "yes", (value) => ((options.header = value === "yes"), changed()));
     const types = choices<"text" | "read">(
-        "CSV numbers",
+        "numbers",
         [
-            { value: "text", label: "Kept as text", tip: "CSV does not say which values are numbers, so none are guessed" },
-            { value: "read", label: "Read as numbers", tip: "Plain numbers, true and false, and empty fields are read as such" },
+            { value: "text", label: "kept as text", tip: "CSV does not say which values are numbers, so none are guessed" },
+            { value: "read", label: "read as numbers", tip: "Plain numbers, true and false, and empty fields are read as such" },
         ],
         "text",
         (value) => ((options.types = value === "read"), changed()),
     );
-    // what HTML is read folds open under its button, growing, and shut again
+    // what HTML is read folds open under its words, growing, and shut again
     const htmlFold = fold(note(HTML_UNDERSTOOD), note(HTML_DROPPED));
-    const htmlButton = make("button", "quire-convert-small quire-convert-more", "What HTML is understood");
-    htmlButton.type = "button";
+    const htmlButton = word(
+        "what HTML is understood",
+        () => {
+            const open = htmlButton.getAttribute("aria-expanded") !== "true";
+            htmlButton.setAttribute("aria-expanded", String(open));
+            htmlFold.open(open);
+        },
+        true,
+    );
     htmlButton.setAttribute("aria-expanded", "false");
-    htmlButton.addEventListener("click", () => {
-        const open = htmlButton.getAttribute("aria-expanded") !== "true";
-        htmlButton.setAttribute("aria-expanded", String(open));
-        htmlFold.open(open);
-    });
     const html = make("div", "quire-convert-html");
     html.append(htmlButton, htmlFold.element);
-    side.element = section(
-        "Text and data",
-        line("Data into", into.element),
-        line("Separator", separators.element),
-        line("First row", header.element),
-        line("Numbers", types.element),
+    side.element = group(
+        "text and data",
+        into.element,
+        separators.element,
+        header.element,
+        types.element,
         note(markdown ? "Markdown becomes HTML, and HTML becomes Markdown." : "Markdown and HTML cannot be converted on this page."),
         html,
     );
