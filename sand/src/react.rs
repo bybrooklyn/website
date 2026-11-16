@@ -10,7 +10,7 @@
 //! Every change is counted in `World::fired` by its line, so a test can hold the count of each
 //! material to what the lines that happened say it should be.
 
-use crate::materials::{ALWAYS, Heat, LATENT, LINES, OPEN, Props, REACTIONS, SAME, TABLE, ALONE};
+use crate::materials::{ALONE, ALWAYS, Heat, Kind, LATENT, LINES, OPEN, Props, REACTIONS, SAME, TABLE};
 use crate::world::{World, chance, material, temperature, with_state, with_temperature};
 
 /// A number of 0 to 1023 for line `line` from a cell's roll, so each line has a chance of its own.
@@ -43,7 +43,7 @@ impl World {
         let s = self.stride as isize;
         let sides = [-1, 1, -s, s];
         for (k, line) in REACTIONS.iter().enumerate().take(end as usize).skip(start as usize) {
-            if t < line.above || t > line.below || (line.resting && cell >> 30 != 0) {
+            if t < line.above || t > line.below || (line.resting && !self.resting(at, cell, p)) {
                 continue;
             }
             let lucky = line.chance >= ALWAYS || roll_for(roll(), k) < line.chance as u32;
@@ -82,6 +82,15 @@ impl World {
             }
         }
         false
+    }
+
+    /// Whether a cell is at rest on something that holds it up: not falling, and over a solid, a
+    /// powder or a liquid at least as heavy. Lava sinking through water is not at rest, so it does not
+    /// harden into stone hanging in the water.
+    #[inline]
+    fn resting(&self, at: usize, cell: u32, p: Props) -> bool {
+        let under = TABLE[material(self.cells[at + self.stride]) as usize];
+        cell >> 30 == 0 && (matches!(under.kind, Kind::Solid | Kind::Powder) || (under.kind == Kind::Liquid && under.density >= p.density))
     }
 
     /// Does line `k` to the cell at `at` and, for a line with a neighbor, the neighbor at `there`:
@@ -141,7 +150,7 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::materials::{EMPTY, ICE, LAVA, MATERIALS, STEAM, STONE, WATER};
+    use crate::materials::{EMPTY, ICE, LAVA, MATERIALS, ROCK, STEAM, STONE, WATER};
 
     #[test]
     fn each_line_has_a_chance_of_its_own() {
@@ -167,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn lava_beside_water_makes_stone_and_steam_sharing_their_heat() {
+    fn lava_beside_water_makes_rock_and_steam_sharing_their_heat() {
         let mut world = World::new(8, 8, 2);
         world.paint(STONE, 0, 7, 7, 7, 0, 100, false);
         let (lava, water) = (world.index(3, 6), world.index(4, 6));
@@ -177,7 +186,7 @@ mod tests {
         let k = (start as usize..REACTIONS.len()).find(|&k| REACTIONS[k].b == WATER).unwrap();
         let before = world.heat_total();
         world.change(k, lava, 3, 6, Some((water, 4, 6)));
-        assert_eq!((world.at(3, 6), world.at(4, 6)), (STONE, STEAM));
+        assert_eq!((world.at(3, 6), world.at(4, 6)), (ROCK, STEAM));
         assert_eq!(world.heat_total(), before);
         let (ts, tv) = (world.temperature_at(3, 6) as i32, world.temperature_at(4, 6) as i32);
         assert!((ts - tv).abs() <= 1, "{ts} {tv}");

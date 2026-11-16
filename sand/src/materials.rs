@@ -139,6 +139,8 @@ pub const ASH: u8 = 17;
 pub const PRIDE: u8 = 18;
 /// Oil that is burning: it keeps itself hot, gives off flames for a few seconds, and burns away.
 pub const BURNING_OIL: u8 = 19;
+/// What lava that meets water hardens into: loose stone that falls and settles, rather than a fixed slab.
+pub const ROCK: u8 = 20;
 
 /// The shade a material with `glow` 3 is given picks its color: a stripe's number times 4, with
 /// the lowest two bits a slight shade of its own, so stripes of 64 colors can be poured.
@@ -168,6 +170,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
     Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [40, 40, 40], paint: true },
     Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [214, 92, 30, 245], vary: [60, 90, 30], paint: false },
+    Material { name: "rock", kind: Kind::Powder, density: 255, slide: 1, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [96, 92, 104, 255], vary: [22, 22, 22], paint: false },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -258,9 +261,13 @@ pub const REACTIONS: &[Reaction] = &[
     line(OIL, OPEN, 85, 255, BURNING_OIL, SAME, 512, Heat::Kept, 200),
     line(OIL, LAVA, 0, 255, BURNING_OIL, SAME, 256, Heat::Kept, 200),
     line(OIL, FIRE, 0, 255, BURNING_OIL, SAME, 96, Heat::Kept, 200),
-    // lava that cools hardens where it comes to rest; water on it hardens it and boils away
+    // water hardens the lava it touches now and then, into loose rock that sinks and settles, and boils
+    // away; lava, heavier, sinks through the water as it does
+    line(LAVA, WATER, 0, 255, ROCK, STEAM, 64, Heat::Shared, 0),
+    // lava that cools hardens where it comes to rest; beside water, into loose rock that sinks
+    resting(line(LAVA, WATER, 0, 100, ROCK, SAME, ALWAYS, Heat::Kept, 0)),
     resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0)),
-    line(LAVA, WATER, 0, 255, STONE, STEAM, 640, Heat::Shared, 0),    // ice that warms melts
+    // ice that warms melts
     line(ICE, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
     // smoke thins to nothing
     line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 12, Heat::Kept, 0),
@@ -270,6 +277,7 @@ pub const REACTIONS: &[Reaction] = &[
     line(FIRE, WATER, 0, 255, EMPTY, STEAM, 640, Heat::Shared, 0),
     // acid eats stone, wood and dirt, a cell for a cell, and goes up in fumes
     line(ACID, STONE, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
+    line(ACID, ROCK, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
     line(ACID, WOOD, 0, 255, SMOKE, EMPTY, 32, Heat::Kept, 0),
     line(ACID, DIRT, 0, 255, SMOKE, EMPTY, 40, Heat::Kept, 0),
     line(ACID, WET_DIRT, 0, 255, SMOKE, EMPTY, 40, Heat::Kept, 0),
@@ -530,6 +538,7 @@ mod tests {
             (ASH, "ash"),
             (PRIDE, "pride sand"),
             (BURNING_OIL, "burning oil"),
+            (ROCK, "rock"),
         ];
         for (number, name) in named {
             assert_eq!(MATERIALS[number as usize].name, name);
@@ -568,7 +577,7 @@ mod tests {
     #[test]
     fn the_reactions_named_in_the_plan_are_lines_of_the_table() {
         let one = |a: u8, b: u8| reactions(a, b).next().map(|line| (line.a_becomes, line.b_becomes));
-        assert_eq!(one(LAVA, WATER), Some((STONE, STEAM)), "lava and water make stone and steam");
+        assert_eq!(one(LAVA, WATER), Some((ROCK, STEAM)), "lava and water make rock and steam");
         assert_eq!(one(FIRE, WATER), Some((EMPTY, STEAM)), "water puts out fire with steam");
         assert_eq!(one(DIRT, WATER), Some((WET_DIRT, EMPTY)), "dirt and water make wet dirt");
         assert_eq!(one(WOOD, EMPTY), Some((EMBER, SAME)), "wood burns where air reaches it");
@@ -587,7 +596,7 @@ mod tests {
         for (m, by) in changes(burn) {
             sum[m as usize] += by;
         }
-        assert_eq!((sum[LAVA as usize], sum[WATER as usize], sum[STONE as usize], sum[STEAM as usize]), (-1, -1, 1, 1));
+        assert_eq!((sum[LAVA as usize], sum[WATER as usize], sum[ROCK as usize], sum[STEAM as usize]), (-1, -1, 1, 1));
         let flame = reactions(EMBER, EMPTY).next().unwrap();
         let mut sum = [0i32; 32];
         for (m, by) in changes(flame) {

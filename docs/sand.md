@@ -288,6 +288,7 @@ One line each in `MATERIALS`. Conduct is in 32nds of the most; `made` is the tem
 | wet dirt | powder | 170 | 12 | 40 | slides at about 72 degrees; stores 8; not offered to the brush |
 | ember (burning wood) | solid | 255 | 20 | 200 | warms 16 a step up to 200; shade flickers with heat; not offered |
 | ash | powder | 40 | 6 | 40 | floats; airy; not offered |
+| rock | powder | 255 | 24 | 40 | loose stone that lava makes in water: sinks and piles; not offered |
 | burning oil | liquid | 80 | 16 | 185 | warms 16 a step up to 185; shade flickers with heat; not offered |
 
 Fire is a new kind: each step it moves up, or up and to a side by chance (a quarter of the time each
@@ -314,7 +315,8 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | oil | lava | any | burning oil | as it was | 256 | it starts at 185 or more |
 | oil | fire | any | burning oil | as it was | 96 | it starts at 185 or more |
 | lava, at rest | alone | 100 or less | stone | | always | kept |
-| lava | water | any | stone | steam | 640 | shared |
+| lava | water | any | rock | steam | 64 | shared |
+| lava, at rest | water | 100 or less | rock | | always | kept |
 | ice | alone | 28 or more | water | | always | kept (stores 8) |
 | smoke | alone | any | air | | 12 | kept |
 | fire | alone | 60 or less | air | | always | kept |
@@ -998,4 +1000,17 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   the lava crusts; how near half it comes moves by a cell or two with any change to the chances, so the
   test now holds two fifths. Lava poured three cells from an ice column of 302 cells leaves 34 of it; the
   tester's pour, 25 cells away, crusted before it reached the ice and left 239.
+- **Lava sinks in water and hisses.** Lava poured into a cup of water hardened at once into a raft of
+  stone resting on the water (858 cells of stone over water, steam at most 81). Water now hardens the
+  lava it touches 64 times in 1024 a step (it was 640), into rock (material 20, not offered): stone in
+  colour and weight, but loose, a powder that sinks and piles. Lava that cools beside water hardens into
+  rock too, and lava hardens on its own only where it rests on something that holds it up (a solid, a
+  powder or a liquid at least as heavy), so lava sinking through water no longer hardens hanging in it.
+  The same pour now sinks, makes steam up to 317 cells at once, and leaves 607 rock heaped on the floor
+  of the cup and 24 cells of stone with water somewhere under them.
+- **A bubble rises.** Steam or smoke under a liquid rises through it a cell a step, and water no longer
+  spreads sideways into a bubble with liquid over it: water beside a bubble had pushed it from side to
+  side for ever, so steam made under water stayed there. Water boiling over lava now bubbles up and
+  condenses under the lid (the sealed box boiled 1,879 cells' worth, with at most 25 steam at once,
+  where steam had gathered under the water in a layer of up to 426).
 

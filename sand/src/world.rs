@@ -623,7 +623,16 @@ impl World {
             let pushed = matches!(props(self.cells[at - s]).kind, Kind::Liquid | Kind::Powder);
             // Only into air or a gas, not into a lighter liquid: two liquids side by side would trade
             // places for ever. A heavier liquid gets under a lighter one by falling and sliding.
-            let lower = |side: isize| self.sideways(at, side, p.spread as isize, pushed, s as isize, |c| props(c).kind != Kind::Liquid && self.sinks_into(p.density, c));
+            // Nor into a bubble of gas with liquid over it: it rises through the liquid by itself, and
+            // pushed sideways every step by the water beside it it would never come up.
+            let lower = |side: isize| {
+                self.sideways(at, side, p.spread as isize, pushed, s as isize, |c| props(c).kind != Kind::Liquid && self.sinks_into(p.density, c))
+            };
+            let bubble = |side: isize| {
+                let to = at.wrapping_add_signed(side);
+                props(self.cells[to]).kind == Kind::Gas && props(self.cells[to - s]).kind == Kind::Liquid
+            };
+            let lower = |side: isize| if bubble(side) { 0 } else { lower(side) };
             let (left, right_far) = (lower(-1), lower(1));
             if left > 0 || right_far > 0 {
                 if !self.paced(roll, x, y, p) {
@@ -817,7 +826,14 @@ impl World {
     fn rise(&mut self, at: usize, x: i32, y: i32, p: Props) {
         let s = self.stride;
         let roll = chance(self.seed, self.steps, at);
-        let up = self.rises_into(p.density, self.cells[at - s]);
+        let above = self.cells[at - s];
+        // A bubble of gas under a liquid rises through it a cell a step. Without this, water beside
+        // a bubble spreads sideways into it for ever and it never comes up.
+        if props(above).kind == Kind::Liquid && clock_of(above) != self.clock {
+            self.swap(at, at - s, 0, (x, y), (x, y - 1));
+            return;
+        }
+        let up = self.rises_into(p.density, above);
         let side_open = |side: isize| self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) && self.rises_into(p.density, self.cells[(at - s).wrapping_add_signed(side)]);
         let (left, right) = (side_open(-1), side_open(1));
         if up || left || right {

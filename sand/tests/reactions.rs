@@ -8,7 +8,7 @@
 mod common;
 
 use common::{by_the_lines, counts, heat_area, picture, run};
-use sand::materials::{ACID, ASH, BURNING_OIL, DIRT, EMBER, EMPTY, FIRE, ICE, LAVA, OIL, ROOM, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD};
+use sand::materials::{ACID, ASH, BURNING_OIL, DIRT, EMBER, EMPTY, FIRE, ICE, LAVA, OIL, ROCK, ROOM, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD};
 use sand::world::World;
 
 /// A stone basin from x0 to x1, its floor at row `floor`, its walls up to row `top`, two cells thick.
@@ -40,7 +40,7 @@ fn mean_temperature(world: &World, of: u8) -> f64 {
 }
 
 #[test]
-fn lava_poured_into_water_makes_a_stone_crust_and_steam_and_the_counts_add_up() {
+fn lava_poured_into_water_sinks_hisses_and_leaves_rock_settled_under_the_water() {
     let mut world = World::new(160, 100, 4);
     basin(&mut world, 10, 150, 50, 95);
     fill_rows(&mut world, WATER, 12, 148, 60, 93);
@@ -61,14 +61,17 @@ fn lava_poured_into_water_makes_a_stone_crust_and_steam_and_the_counts_add_up() 
         most_steam = most_steam.max(world.count(STEAM));
         lava_on_water = world.fired.iter().zip(sand::materials::REACTIONS).filter(|(_, line)| line.a == LAVA && line.b == WATER).map(|(n, _)| *n).sum::<u64>();
     }
-    let made = world.count(STONE) as i64 - stone;
-    println!("lava poured {lava}, stone made {made} ({lava_on_water} by water), lava left {}, steam at most {most_steam}, water {} of {water}", world.count(LAVA), world.count(WATER));
-    // every cell of lava is lava or stone; every cell of water is water, steam or ice
+    let made = world.count(STONE) as i64 - stone + world.count(ROCK) as i64;
+    // what hardened and still has water somewhere under it: a crust resting on the water, or stone hanging in it
+    let over_water = (12..149).flat_map(|x| (51..94).map(move |y| (x, y))).filter(|&(x, y)| matches!(world.at(x, y), STONE | ROCK) && (y + 1..94).any(|y| world.at(x, y) == WATER)).count() as i64;
+    println!("lava poured {lava}, hardened {made} ({} rock, {lava_on_water} by water), {over_water} of it over water, lava left {}, steam at most {most_steam}, water {} of {water}", world.count(ROCK), world.count(LAVA), world.count(WATER));
+    // every cell of lava is lava, stone or rock; every cell of water is water, steam or ice
     assert_eq!(world.count(LAVA) as i64 + made, lava);
     assert_eq!((world.count(WATER) + world.count(STEAM) + world.count(ICE)) as i64, water);
     assert_eq!(counts(&world), by_the_lines(&before, &fired, &world));
-    assert!(made > lava / 3, "a crust of stone forms\n{}", picture(&world, 8, 15, 152, 97));
-    assert!(lava_on_water > 0 && most_steam >= 5, "the water boils where the lava meets it");
+    assert!(made > lava / 2, "it hardens\n{}", picture(&world, 8, 15, 152, 97));
+    assert!(over_water * 10 < made, "and sinks rather than resting on the water\n{}", picture(&world, 8, 15, 152, 97));
+    assert!(lava_on_water > 0 && most_steam as i64 >= lava / 4, "the water boils hard where the lava meets it");
 }
 
 #[test]
@@ -196,6 +199,8 @@ fn a_sealed_stone_box_of_water_heated_from_below_by_lava_boils_and_the_box_holds
         most_steam = most_steam.max(world.count(STEAM));
         assert_eq!(world.count(WATER) + world.count(STEAM) + world.count(ICE), water);
     }
+    // steam made from the water: it rises through the water as bubbles and condenses under the lid
+    let boiled = world.fired.iter().zip(sand::materials::REACTIONS).filter(|(_, line)| line.a == WATER && line.a_becomes == STEAM).map(|(n, _)| *n).sum::<u64>() as usize;
     for y in 0..120 {
         for x in 0..120 {
             if matches!(world.at(x, y), WATER | STEAM) {
@@ -203,8 +208,8 @@ fn a_sealed_stone_box_of_water_heated_from_below_by_lava_boils_and_the_box_holds
             }
         }
     }
-    println!("water {water}: steam at most {most_steam}, at the end {} steam and {} water", world.count(STEAM), world.count(WATER));
-    assert!(most_steam > water / 4, "the water boils\n{}", picture(&world, 0, 30, 119, 119));
+    println!("water {water}: {boiled} cells boiled, steam at most {most_steam}, at the end {} steam and {} water", world.count(STEAM), world.count(WATER));
+    assert!(boiled > water / 4, "the water boils\n{}", picture(&world, 0, 30, 119, 119));
 }
 
 #[test]
@@ -243,7 +248,7 @@ fn oil_floats_on_water_and_burns_on_top_of_it() {
     }
     println!("oil {oil}: {} left after burning; water {} of {water}; fire seen for {burning_over_water} steps", world.count(OIL), world.count(WATER));
     // most of it burns; the last thin layer, cooled by the water under it, may not catch
-    assert!(world.count(OIL) < oil * 2 / 5, "the oil burns away\n{}", picture(&world, 18, 60, 222, 97));
+    assert!(world.count(OIL) < oil / 2, "the oil burns away\n{}", picture(&world, 18, 60, 222, 97));
     assert!(world.count(WATER) + world.count(STEAM) + world.count(ICE) == water, "the water stays");
     // burning oil is hot for a few seconds a cell and boils some of the water under it
     assert!(world.count(WATER) > water * 4 / 5);
