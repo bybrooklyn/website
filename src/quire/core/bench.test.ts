@@ -6,7 +6,8 @@
 // already chosen, while the dots show only what the tool last said is chosen, so a choice that was
 // refused never shows as made; a row is a small label and what it names; a line to type on tells what
 // is typed; a slider says its value in the tool's words; a number steps by one and stops at its ends;
-// and a color picked is told, and ringed once the tool shows it. Run with
+// and a color picked is told, and ringed once the tool shows it; a fold is shut and out of reach while
+// away; and a box to tick tells on or off. Run with
 // `bun test src/quire/core/bench.test.ts`.
 
 import { expect, test } from "bun:test";
@@ -152,6 +153,47 @@ test("in Chromium, a row of small pictures is a row of dots whose words are pict
         await tab.wait(300);
         const accent = await tab.run<string>("(() => { const probe = document.createElement('i'); probe.style.color = 'var(--accent)'; document.body.append(probe); return getComputedStyle(probe).color; })()");
         expect(await tab.run("[...document.querySelectorAll('.quire-bench-pictured label')].map((each) => getComputedStyle(each).color)")).toEqual([expect.not.stringMatching(accent.replace(/[()]/g, "\\$&")), accent]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("in Chromium, a fold is out of reach and shut while away and open again when shown, and a box to tick tells the tool on or off while `set` tells it nothing", async () => {
+    const css = await Bun.file(`${import.meta.dir}/../../styles/quire-bench.css`).text();
+    const page = await corePage(
+        `
+        import { bench, fold, group, tick, word } from "${quire}/core/bench.ts";
+        const box = bench("Try");
+        document.querySelector("#host").append(box.root);
+        window.told = [];
+        const linked = tick("keep the shape", (on) => window.told.push(on), "Keep the shape");
+        const only = fold(group("all", word("save all", () => {})), false);
+        box.side.append(group("size", linked.row), only);
+        linked.set(true);
+        window.only = only;
+        window.fold = fold;
+        window.ready = true;
+    `,
+        { body: `<style>${css}</style><div id="host"></div>` },
+    );
+    if (!page) return;
+    const { tab } = page;
+    try {
+        for (let waited = 0; waited < 100 && !(await tab.run<boolean>("window.ready === true")); waited++) await tab.wait(100);
+        const shut = () => tab.run("[window.only.className, window.only.inert]");
+        expect(await shut()).toEqual(["quire-bench-group quire-bench-fold away", true]);
+        await tab.wait(500);
+        // nothing of it is left but its rule, made clear
+        expect(await tab.run<number>("window.only.getBoundingClientRect().height")).toBeLessThanOrEqual(1);
+        await tab.run("window.fold(window.only, true)");
+        expect(await shut()).toEqual(["quire-bench-group quire-bench-fold", false]);
+        await tab.wait(500);
+        expect(await tab.run<number>("window.only.getBoundingClientRect().height")).toBeGreaterThan(10);
+        // the box shows what `set` said without telling; a press on its words tells
+        expect(await tab.run("[document.querySelector('.quire-bench-tick').title, document.querySelector('.quire-bench-tick').textContent, document.querySelector('.quire-bench-tick input').checked, window.told.length]")).toEqual(["Keep the shape", "keep the shape", true, 0]);
+        const at = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-bench-tick').getBoundingClientRect(); return { x: b.x + b.width - 8, y: b.y + b.height / 2 }; })()");
+        await tab.click(at.x, at.y);
+        expect(await tab.run("window.told")).toEqual([false]);
     } finally {
         await page.close();
     }
