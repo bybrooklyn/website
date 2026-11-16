@@ -221,3 +221,60 @@ test("a mark picked moves with the arrows and goes with Delete, undo brings it b
     await page.tab.press("Escape");
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("none");
 }, 30_000);
+
+/** Where the picture lies on the screen once it has stopped gliding: its first and last pixels, to the nearest pixel. */
+async function settledPlace() {
+    const read = () => page!.tab.run<string>(`(() => { const s = window.app.editing().stage; const o = s.loaded().size; const a = s.toScreen({ x: 0, y: 0 }); const b = s.toScreen({ x: o.width, y: o.height }); return [a.x, a.y, b.x, b.y].map(Math.round).join(" "); })()`);
+    let was = await read();
+    for (let at = 0; at < 60; at++) {
+        await page!.tab.wait(80);
+        const now = await read();
+        if (now === was) return now;
+        was = now;
+    }
+    return was;
+}
+/** Where the picture lies once fitted, as Ctrl+0 fits it. */
+async function fittedPlace() {
+    await page!.tab.run("window.app.editing().stage.fit()");
+    return settledPlace();
+}
+/** Opens Resize from the bar and presses one of its common sizes. */
+async function pressSize(label: string) {
+    const resize = await page!.middle(".quire-img-bar [aria-label='Resize']");
+    await page!.tab.click(resize.x, resize.y);
+    await page!.until("document.querySelector('.quire-img-resize.open')");
+    await page!.tab.wait(300);
+    const button = await page!.tab.run<{ x: number; y: number }>(`(() => { const b = [...document.querySelectorAll('.quire-img-sizes button')].find((each) => each.textContent === ${JSON.stringify(label)}).getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+    await page!.tab.click(button.x, button.y);
+}
+
+test("a picture made another size is fitted and centered again, as one opened is: by a common size, a width typed, and undo and redo of one", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await page.tab.press("Escape");
+    for (const label of ["50%", "1920"]) {
+        await pressSize(label);
+        expect(await settledPlace()).toBe(await fittedPlace());
+    }
+    // a width typed, and Enter
+    const resize = await page.middle(".quire-img-bar [aria-label='Resize']");
+    await page.tab.click(resize.x, resize.y);
+    await page.until("document.querySelector('.quire-img-resize.open')");
+    await page.tab.wait(300);
+    const width = await page.middle(".quire-img-resize [aria-label='Width']");
+    await page.tab.click(width.x, width.y);
+    await page.tab.press("a", { ctrl: true });
+    await page.tab.type("300");
+    await page.tab.press("Enter");
+    const typed = await settledPlace();
+    expect(typed).toBe(await fittedPlace());
+    // 300 wide is shown at its own size
+    const [left, , right] = typed.split(" ").map(Number);
+    expect(right! - left!).toBe(300);
+    await page.tab.run("document.querySelector('.quire-img-stage').focus()");
+    for (const shift of [false, true]) {
+        await page.tab.press("z", { ctrl: true, shift });
+        expect(await settledPlace()).toBe(await fittedPlace());
+    }
+}, 60_000);

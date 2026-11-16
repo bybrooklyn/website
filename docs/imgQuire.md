@@ -106,7 +106,9 @@ frame back on the whole picture takes the crop step away.
 
 **Resize.** A box grown from its button: width and height linked (a link button unlinks them), Percent as
 a switch, and 50%, 1920, 1280, 1080 and 800; Enter applies and gives the keyboard to the picture, Escape
-gives it back to the button. The filter (Lanczos, bilinear, nearest) is in Image, Resize filter.
+gives it back to the button. The filter (Lanczos, bilinear, nearest) is in Image, Resize filter. A
+picture made another size, by the box or by undo and redo of a resize, is fitted and centered again as one
+opened is: it is drawn first where the old one lay, at the same size on the screen, and glides to its place.
 
 **Hide.** R, then a drag: covered at once in the color round it, no settings and no confirmation; drag
 again for the next. The covers are painted into each piece of the original before anything is sampled,

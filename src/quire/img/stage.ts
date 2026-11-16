@@ -300,6 +300,8 @@ export function createStage(hooks: StageHooks) {
     // the turn and the straightening last drawn from the steps, to know when they changed
     let shownTurn = 0;
     let shownPerspective = "null";
+    // the size the picture was last drawn at, to know when a resize, or its undo, changed it
+    let shownSize: { width: number; height: number } | undefined;
     // whether the picture's Display P3 numbers are made sRGB on the screen, the canvas having no Display P3
     let screenConverts = false;
     let blob: Blob | ImageBitmap | undefined;
@@ -1068,6 +1070,11 @@ export function createStage(hooks: StageHooks) {
         };
         requestAnimationFrame(step);
     }
+    /** The size of the picture as it looks, once it is on the card. */
+    const sizeNow = (): { width: number; height: number } | undefined => {
+        const now = shown();
+        return now && loaded ? { width: now.width, height: now.height } : undefined;
+    };
     const zoom = (by: number, at: Point = { x: element.clientWidth / 2, y: element.clientHeight / 2 }) => ((view = zoomAt(view, by, at)), paint());
 
     // ---- tools ----
@@ -1627,6 +1634,7 @@ export function createStage(hooks: StageHooks) {
             loaded = await prepare();
             if (tool === "crop") cropFrame = shown()?.crop;
             fitView();
+            shownSize = sizeNow();
             return loaded;
         },
         /**
@@ -1751,6 +1759,14 @@ export function createStage(hooks: StageHooks) {
             const straightened = seenNow !== shownPerspective;
             shownPerspective = seenNow;
             if (tool === "crop" && !cornering && (was !== shownTurn || straightened) && turning === undefined && !keystoning) glideToFit();
+            // a picture made another size is fitted and centered again, as a picture opened is: drawn first where the old one lay, at
+            // the same size on the screen, then glided to where it fits, so that it never sits small in a corner or runs off the room
+            const before = shownSize;
+            shownSize = sizeNow();
+            if (before && shownSize && !cropping() && (before.width !== shownSize.width || before.height !== shownSize.height)) {
+                view = { ...view, scale: (view.scale * before.width) / shownSize.width };
+                glideToFit();
+            }
             if (picked && !hooks.picture()?.steps.some((step) => step.id === picked)) picked = undefined;
             paint();
         },
