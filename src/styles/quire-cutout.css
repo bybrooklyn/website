@@ -115,14 +115,9 @@
     cursor: pointer;
 }
 
-/* the colors to lay it on grow out under "color" and go back the same way */
+/* the colors to lay it on (the kit's row of colors) grow out under "color" and go back the same way */
 .quire-cut-swatches {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.1rem;
     max-height: 0;
-    /* the first dot's edge on the column's edge, under the words */
-    margin-inline-start: -0.35rem;
     overflow: hidden;
     opacity: 0;
     transition:
@@ -131,18 +126,15 @@
         opacity 0.2s ease;
 }
 
-.quire-cut-swatches.open {
+/* out of reach while folded away, it is not also drawn faint: it is not there to be seen */
+.quire-bench-side .quire-cut-swatches[inert] {
+    opacity: 0;
+}
+
+.quire-bench-side .quire-cut-swatches.open {
     max-height: 5rem;
     margin-top: 0.4rem;
     opacity: 1;
-}
-
-/* eight of them stand in one row of the column */
-.quire-cut-swatches > button {
-    min-width: 0;
-    width: 1.75rem;
-    height: 1.75rem;
-    padding: 0;
 }
 
 /* saving all of many: there only with many, growing in under the rest */

@@ -139,7 +139,9 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await tab.run("[...document.querySelectorAll('.quire-cut-out .quire-bench-press')].find((each) => each.textContent === 'save').click()");
         await until("window.downloads['field-cut-out.png'] > 1000");
         // with a cut-out the whole column is in reach, and the dots say what is on: clear behind it, no brush, quick
-        expect(await tab.run<boolean>("[...document.querySelectorAll('.quire-bench-side > .quire-bench-group:not(.quire-cut-all)')].some((each) => each.inert || [...each.children].some((child) => child.inert))")).toBe(false);
+        expect(await tab.run<boolean>("[...document.querySelectorAll('.quire-bench-side > .quire-bench-group:not(.quire-cut-all)')].some((each) => each.inert || [...each.children].some((child) => child.inert && !child.classList.contains('quire-cut-swatches')))")).toBe(false);
+        // the colors are folded away and out of reach until "color" is chosen
+        expect(await tab.run("[document.querySelector('.quire-cut-swatches').inert, document.querySelector('.quire-cut-swatches').classList.contains('open')]")).toEqual([true, false]);
         expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-bench-choices input:checked')].map((each) => each.value)")).toEqual(["clear", "cut-quick"]);
         // best, whose model is not kept, asks for that one model alone; told not now, quick is still the quality and its dot is back
         await tab.run("document.querySelector('.quire-bench-choices input[value=\"cut-best\"]').click()");
@@ -179,6 +181,11 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         // a color behind it, then the old picture blurred: nothing clear is left
         await tab.run("document.querySelector('.quire-bench-choices input[value=\"color\"]').click()");
         await until("window.seen() && window.seen().head[3] === 255 && window.cutout.cut().background === 'color'");
+        // the colors have grown out, the first one ringed; another picked is laid behind the cut-out
+        expect(await tab.run("[document.querySelector('.quire-cut-swatches').inert, document.querySelector('.quire-cut-swatches').classList.contains('open'), [...document.querySelectorAll('.quire-bench-swatch')].map((each) => each.getAttribute('aria-pressed'))]")).toEqual([false, true, ["true", "false"]]);
+        await tab.run("document.querySelectorAll('.quire-bench-swatch')[1].click()");
+        await until("window.cutout.cut()?.color === '#b48cff'");
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-swatch')].map((each) => each.getAttribute('aria-pressed'))")).toEqual(["false", "true"]);
         seen = await tab.run("window.seen()");
         await tab.run("document.querySelector('.quire-bench-choices input[value=\"blur\"]').click()");
         await until("window.cutout.cut()?.background === 'blur'");

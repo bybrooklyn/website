@@ -4,7 +4,9 @@
 // controls written the way the Walker's column is (src/styles/minis.css): a small heading for each
 // group, round dots for a choice of one, words in the accent to press, thin rules between. No boxed
 // buttons, and every label in lowercase, as the site's labels are. A group with nothing to act on yet is
-// made `inert`, which draws it faint, so nothing appears from nowhere. Their look is quire-bench.css.
+// made `inert`, which draws it faint, so nothing appears from nowhere. Besides those there is a row (a
+// small muted label, then what it names), a line to type on, a slider, a number with less and more
+// either side of it, and a row of colors. Their look is quire-bench.css.
 //
 //   const box = bench("Cut-out");
 //   box.hold(room);
@@ -87,6 +89,113 @@ export function dots<T extends string>(heading: string, options: Dot<T>[], press
         for (const input of inputs) input.checked = input.value === value;
     };
     return { group: group(heading, set), set, show };
+}
+
+/** A row of a group: a small muted label, then what it names, on the column's own grid (as the Walker's rows are). */
+export function row(label: string, ...inside: Node[]): HTMLElement {
+    const made = make("div", "quire-bench-row");
+    const held = make("div", "quire-bench-held");
+    held.append(...inside);
+    made.append(make("span", "quire-bench-label", label), held);
+    return made;
+}
+
+/** Something of the column that holds a value: its row, the thing itself, and `set`, which shows a value without telling the tool. */
+export interface Held<T, E extends HTMLElement = HTMLElement> {
+    row: HTMLElement;
+    input: E;
+    set(value: T): void;
+}
+
+/**
+ * A line to type on, as the site's are: a rule under the words, the accent while it is typed on. `change` is told as it is typed.
+ * `many` makes it a box of several lines; `kind` is the input's type ("text", "url", "password"); `wide` gives it the group's whole
+ * width, its label over it.
+ */
+export function typed(label: string, change: (value: string) => void, options: { hint?: string; many?: boolean; kind?: string; wide?: boolean } = {}): Held<string, HTMLInputElement | HTMLTextAreaElement> {
+    const input = options.many ? make("textarea", "quire-bench-typed") : make("input", "quire-bench-typed");
+    if (input instanceof HTMLInputElement) input.type = options.kind ?? "text";
+    else input.rows = 3;
+    if (options.hint) input.placeholder = options.hint;
+    input.setAttribute("aria-label", label);
+    input.spellcheck = false;
+    input.addEventListener("input", () => change(input.value));
+    const made = row(label, input);
+    if (options.wide || options.many) made.classList.add("wide");
+    return { row: made, input, set: (value) => void (input.value = value) };
+}
+
+/** A slider with its value said after it. `change` is told as it is dragged; `say` puts the value into words ("85", "48 kHz"). */
+export function slide(label: string, range: { min: number; max: number; step?: number }, change: (value: number) => void, say: (value: number) => string = String): Held<number, HTMLInputElement> {
+    const input = make("input", "quire-bench-slide");
+    input.type = "range";
+    input.min = String(range.min);
+    input.max = String(range.max);
+    input.step = String(range.step ?? 1);
+    input.setAttribute("aria-label", label);
+    const said = make("output", "quire-bench-value");
+    const show = () => {
+        said.textContent = say(Number(input.value));
+        // how far along it is, for the filled part of its track
+        input.style.setProperty("--along", `${((Number(input.value) - range.min) / (range.max - range.min || 1)) * 100}%`);
+    };
+    input.addEventListener("input", () => {
+        show();
+        change(Number(input.value));
+    });
+    const made = row(label, input, said);
+    return { row: made, input, set: (value) => ((input.value = String(value)), show()) };
+}
+
+/** A whole number with less and more either side of it, as the Dice's "add" is; it stops at the range's ends. */
+export function count(label: string, range: { min: number; max: number }, change: (value: number) => void, say: (value: number) => string = String): Held<number> {
+    let now = range.min;
+    const said = make("output", "quire-bench-value quire-bench-count");
+    const step = (by: number) => {
+        const next = Math.max(range.min, Math.min(range.max, now + by));
+        if (next === now) return;
+        show(next);
+        change(next);
+    };
+    const less = word("−", () => step(-1));
+    less.setAttribute("aria-label", `${label}: less`);
+    const more = word("+", () => step(1));
+    more.setAttribute("aria-label", `${label}: more`);
+    const show = (value: number) => {
+        now = value;
+        said.textContent = say(value);
+        less.disabled = value <= range.min;
+        more.disabled = value >= range.max;
+    };
+    const made = row(label, less, said, more);
+    made.classList.add("quire-bench-counted");
+    show(now);
+    return { row: made, input: said, set: show };
+}
+
+/** A color to pick, named in its tooltip. */
+export interface Swatch {
+    name: string;
+    value: string;
+}
+
+/** A row of colors to pick one of, each a round dot of the color itself; `show` rings the one chosen (or none). */
+export function swatches(label: string, colors: Swatch[], pick: (value: string) => void): { set: HTMLElement; show(chosen: string | undefined): void } {
+    const set = make("div", "quire-bench-swatches");
+    set.setAttribute("role", "group");
+    set.setAttribute("aria-label", label);
+    const buttons = colors.map((each) => {
+        const button = make("button", "quire-bench-swatch");
+        button.type = "button";
+        button.title = each.name;
+        button.setAttribute("aria-label", each.name);
+        button.dataset.color = each.value;
+        button.style.setProperty("--swatch", each.value);
+        button.addEventListener("click", () => pick(each.value));
+        set.append(button);
+        return button;
+    });
+    return { set, show: (chosen) => buttons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.color === chosen))) };
 }
 
 /** A tool's box: the work's side, the column, and the one line under the work. */

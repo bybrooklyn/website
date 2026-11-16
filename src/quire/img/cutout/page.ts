@@ -18,8 +18,8 @@
 //
 //   createCutoutPage(host, { colors: [{ name: "White", value: "#ffffff" }, ...] });
 
-import { dots, group, stack, bench, word } from "../../core/bench";
-import { control, flowMenu, make, ruled, RULE, still, type MenuItem } from "../../core/ui";
+import { bench, dots, group, stack, swatches, word, type Swatch } from "../../core/bench";
+import { flowMenu, make, ruled, RULE, still, type MenuItem } from "../../core/ui";
 import { crc32 } from "../../core/zip";
 import type { FolderHandle } from "../../core/store-folder";
 import { decodeHeic, heicIn } from "../codec-run";
@@ -44,11 +44,8 @@ export const CUT_WORDS = {
     notCut: "Not cut out",
 };
 
-/** A color offered to lay the cut-out on, named in its tooltip. */
-export interface Swatch {
-    name: string;
-    value: string;
-}
+/** A color offered to lay the cut-out on, named in its tooltip (the kit's). */
+export type { Swatch };
 
 /** What the page is given: the colors offered (the site's), and a finder for tests. */
 export interface PageOptions {
@@ -135,15 +132,9 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         ],
         (value) => laid !== value && setLaid(value),
     );
-    const swatches = make("div", "quire-cut-swatches");
-    for (const each of options.colors ?? [{ name: "White", value: "#ffffff" }]) {
-        const mark = make("span", "quire-img-swatch");
-        mark.style.background = each.value;
-        const button = control(each.name, mark, () => ((color = each.value), (laid = "color"), void again(), fill()));
-        button.dataset.color = each.value;
-        swatches.append(button);
-    }
-    lays.group.append(swatches);
+    const colors = swatches("color", options.colors ?? [{ name: "White", value: "#ffffff" }], (value) => ((color = value), (laid = "color"), void again(), fill()));
+    colors.set.classList.add("quire-cut-swatches");
+    lays.group.append(colors.set);
     const brushes = dots<"keep" | "remove">(
         "touch up",
         [
@@ -193,8 +184,9 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         for (const each of [lays.group, brushes.group, out, original]) each.inert = !result;
         qualities.group.inert = another.inert = !picture;
         lays.show(laid);
-        swatches.classList.toggle("open", laid === "color");
-        for (const button of swatches.querySelectorAll<HTMLElement>("button")) button.classList.toggle("pressed", button.dataset.color === color);
+        colors.set.classList.toggle("open", laid === "color");
+        colors.set.inert = laid !== "color";
+        colors.show(color);
         brushes.show(brush);
         qualities.show(asking.tier().id);
         view.dataset.brush = brush ?? "";

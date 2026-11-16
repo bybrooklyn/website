@@ -141,6 +141,137 @@
     cursor: pointer;
 }
 
+/* a row of a group: a small muted label, then what it names (as the Walker's rows are) */
+.quire-bench-row {
+    display: grid;
+    grid-template-columns: 4.6rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.3rem 0.8rem;
+}
+
+.quire-bench-row + .quire-bench-row,
+.quire-bench-choices + .quire-bench-row,
+.quire-bench-row + .quire-bench-choices {
+    margin-top: 0.55rem;
+}
+
+/* a wide one has its label over it, and the group's whole width */
+.quire-bench-row.wide {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.quire-bench-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-bench-held {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.6rem;
+    min-width: 0;
+}
+
+/* a line to type on is a line: a rule under the words, the accent when it is being typed on (as in a mini's panel) */
+.quire-bench-typed {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    padding: 0.2rem 0;
+    border: 0;
+    border-bottom: 0.0625rem solid var(--field-edge);
+    border-radius: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    transition: border-color 0.15s ease;
+}
+
+textarea.quire-bench-typed {
+    min-height: 4.2rem;
+    line-height: 1.4;
+    resize: vertical;
+}
+
+.quire-bench-typed:focus {
+    border-bottom-color: var(--accent);
+}
+
+.quire-bench-typed::placeholder {
+    color: color-mix(in oklch, var(--muted) 70%, transparent);
+}
+
+.quire-bench-slide {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* a value said after its slider, or between less and more: figures that keep their width as they change */
+.quire-bench-value {
+    min-width: 2.2ch;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+
+.quire-bench-count {
+    text-align: center;
+}
+
+.quire-bench-counted .quire-bench-press {
+    margin-inline-start: 0;
+    padding: 0 0.3rem;
+    text-decoration: none;
+}
+
+/* colors to pick one of: round dots of the colors themselves, the one chosen ringed in the accent */
+.quire-bench-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem;
+    /* the first dot's edge on the column's edge, under the words */
+    margin-inline-start: -0.35rem;
+}
+
+.quire-bench-swatch {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+}
+
+.quire-bench-swatch::before {
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    background: var(--swatch);
+    box-shadow: inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.6);
+    content: "";
+    transition:
+        scale 0.2s var(--ease),
+        box-shadow 0.15s ease;
+}
+
+.quire-bench-swatch:hover::before {
+    scale: 1.12;
+}
+
+.quire-bench-swatch[aria-pressed="true"]::before {
+    box-shadow:
+        inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.6),
+        0 0 0 0.125rem var(--ground),
+        0 0 0 0.25rem var(--accent);
+}
+
 /* a thing to press is a word in the accent, underlined as a link is (as in a mini's panel) */
 .quire-bench-press {
     padding: 0;
@@ -219,7 +350,8 @@
     }
 
     .quire-bench-group,
-    .quire-bench-status > p {
+    .quire-bench-status > p,
+    .quire-bench-swatch::before {
         transition: none;
     }
 }
