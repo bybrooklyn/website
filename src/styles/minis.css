@@ -709,6 +709,31 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* the number the line is drawn by: small, its digits even, no spinner */
+.marbles-line-label {
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.mote-panel input.marbles-line {
+    width: 3.2rem;
+    padding: 0.15rem 0.3rem;
+    border: 0;
+    border-radius: 0.4rem;
+    color: var(--ink);
+    background: var(--panel-raised);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    appearance: textfield;
+}
+
+.mote-panel input.marbles-line::-webkit-inner-spin-button,
+.mote-panel input.marbles-line::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+}
+
 .marbles-race-list {
     display: grid;
     gap: 0.15rem;

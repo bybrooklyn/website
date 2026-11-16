@@ -33,7 +33,7 @@ import { checks, type Mark } from "./checks";
 import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
-import { OUT_WORDS, RACE, RACERS, makeRace, progress, standing, timeOf, type Race } from "./race";
+import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
 import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
@@ -626,11 +626,12 @@ export default function marbles(m: Mote): Scene {
         for (const { id, solids } of table.movers()) {
             const piece = run.find((one) => one.id === id);
             if (!piece) continue;
-            const moving = shapeOf(piece.kind).moving!;
+            // a hopper's moving part is the starting gate a race puts across its chute: steel
+            const moving = shapeOf(piece.kind).moving;
             solids.forEach((solid, i) => {
                 now.add(solid);
                 let one = movers.get(solid);
-                const metal = isMetal(moving.kind === "hoist" ? moving.bodies[0]! : moving.bodies[i]!);
+                const metal = !moving || isMetal(moving.kind === "hoist" ? moving.bodies[0]! : moving.bodies[i]!);
                 if (!one) {
                     // oak, or steel; the grain along the solid's longest side; solids of one shape (a hoist's
                     // paddles) share a mesh, so that they are drawn at once; held up off the table, they are
@@ -1542,15 +1543,21 @@ export default function marbles(m: Mote): Scene {
 
     // ---- races (race.ts) ----
     // A race starts from a new table for the run as it rests, so that the same run gives the same race
-    // every time; it is stepped in place of the table, step for step as the test runs it. Anything that
+    // every time; it is stepped in place of the table, step for step as the test runs it. Its racers
+    // stand in a line drawn from a number, shown with it: race them draws a new number, same line runs
+    // the number shown again, and a link carries the last race's count and number. Anything that
     // changes the run or lets other marbles go stops it, and what it had found so far is kept, said so.
     let race: Race | undefined;
     let raceCount = 4;
     let raceStopped = false;
+    /** The number the next same line is drawn by; and the last race, with the run it was on, for a link while the run is the same. */
+    let lineNumber = 1 + Math.floor(Math.random() * DRAWN[1]);
+    let lastRace: { count: number; drawn: number; text: string } | undefined;
     /** What the result said last, so that it is written again only when it changes. */
     let raceSaid = "";
     let paintRace = (_why?: string) => {};
-    const startRace = () => {
+    /** A race with a new line drawn, or with the number given. */
+    const startRace = (drawn?: number) => {
         if (!resting().some((piece) => piece.kind.family === "h") || !resting().some((piece) => piece.kind.family === "t")) {
             paintRace("A race needs a hopper and a tray.");
             return refuse();
@@ -1561,7 +1568,11 @@ export default function marbles(m: Mote): Scene {
         offered = undefined;
         if (camera.kind === "ride") toFree();
         freshTable();
-        race = makeRace(table, raceCount);
+        lineNumber = drawnOf(drawn ?? 1 + Math.floor(Math.random() * DRAWN[1]));
+        race = makeRace(table, raceCount, lineNumber);
+        // the starting gates the race put across the hoppers, drawn as the moving parts are
+        drawMovers();
+        lastRace = { count: raceCount, drawn: lineNumber, text: write(resting()) };
         raceStopped = false;
         raceSaid = "";
         sound?.knock(0.4, 1500);
@@ -1604,7 +1615,7 @@ export default function marbles(m: Mote): Scene {
     };
     /** A short word said quietly under the bar, grown from the button pressed, gone after a moment. */
     let say = (_words: string, _from?: HTMLElement) => {};
-    const sharedNow = () => ({ run: resting(), spots, owns: ownsUsed(resting(), owns) });
+    const sharedNow = () => ({ run: resting(), spots, owns: ownsUsed(resting(), owns), race: lastRace?.text === write(resting()) ? { count: lastRace.count, drawn: lastRace.drawn } : undefined });
     const saveFile = (text: string) => {
         const link = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "marble run.marbles" });
         link.click();
@@ -1645,6 +1656,13 @@ export default function marbles(m: Mote): Scene {
     const openShared = (opened: Opened, from?: HTMLElement, cut = false) => {
         stopRace();
         load(write(opened.run));
+        // a race that came with it, ready to run again by its number
+        if (opened.race) {
+            [raceCount, lineNumber, lastRace] = [opened.race.count, opened.race.drawn, { ...opened.race, text: write(resting()) }];
+            race = undefined;
+            showRace();
+            paintRace("A race came with this run: same line runs it.");
+        }
         setSpots(opened.spots);
         spotAt = opened.spots.length ? 0 : -1;
         const fresh = opened.owns.filter((own) => !owns.some((one) => one.text === own.text));
@@ -1944,6 +1962,7 @@ export default function marbles(m: Mote): Scene {
     const clearMarbles = () => {
         stopRace();
         table.clear();
+        drawMovers();
         m.wake();
     };
     const toggleSelecting = () => {
@@ -2090,13 +2109,22 @@ export default function marbles(m: Mote): Scene {
         const fewer = el("button", { type: "button", class: "marbles-step", textContent: "−", ariaLabel: "one marble fewer", onclick: () => raceBy(-1) });
         const more = el("button", { type: "button", class: "marbles-step", textContent: "+", ariaLabel: "one marble more", onclick: () => raceBy(1) });
         const counted = el("span", { class: "marbles-race-count" });
-        const goRace = el("button", { type: "button", textContent: "race them", onclick: startRace });
+        const goRace = el("button", { type: "button", textContent: "race them", onclick: () => startRace() });
+        // the number the line is drawn by: shown, and given again by same line, or by a number typed in
+        const lineBox = el("input", { type: "number", class: "marbles-line", min: String(DRAWN[0]), max: String(DRAWN[1]), step: "1", inputMode: "numeric", ariaLabel: "the number the line is drawn by" });
+        const sameLine = () => startRace(drawnOf(Number(lineBox.value)));
+        lineBox.addEventListener("keydown", (event) => {
+            event.stopPropagation();
+            if (event.key === "Enter") sameLine();
+        });
+        const againRace = el("button", { type: "button", textContent: "same line", onclick: sameLine });
         const leader = el("button", { type: "button", textContent: "ride the leader", onclick: rideLeader });
         const placings = el("ol", { class: "marbles-race-list" });
         const raceNote = el("p", { class: "marbles-race-note" });
-        const raceFold = { ...fold("marbles-race", el("div", { class: "marbles-race-row" }, fewer, counted, more, goRace, leader), placings, raceNote), from: () => raceTool };
+        const raceFold = { ...fold("marbles-race", el("div", { class: "marbles-race-row" }, fewer, counted, more, goRace, againRace, el("label", { class: "marbles-line-label" }, "line ", lineBox), leader), placings, raceNote), from: () => raceTool };
         paintRace = (why?: string) => {
             counted.textContent = `${raceCount} marbles`;
+            if (document.activeElement !== lineBox) lineBox.value = String(lineNumber);
             fewer.disabled = raceCount <= RACE[0];
             more.disabled = raceCount >= RACE[1];
             leader.disabled = !race || race.done || raceStopped;
@@ -2109,7 +2137,10 @@ export default function marbles(m: Mote): Scene {
                 const said = one.time !== undefined ? timeOf(one.time) : one.racer.out ? OUT_WORDS[one.racer.out] : raceStopped ? "stopped" : "going";
                 return el("li", { class: one.time === undefined ? "marbles-out" : "" }, el("span", { class: "marbles-place", textContent: one.time !== undefined ? String(place + 1) : "" }), swatch, el("span", { textContent: one.racer.name }), el("span", { class: "marbles-time", textContent: said }));
             }));
-            raceNote.textContent = why ?? (raceStopped ? "Stopped before the end." : race?.done && placed.some((one) => one.close) ? "A photo finish: within a hundredth of a second." : "");
+            // what is true of the race: stopped, or decided by the line where no marble could pass, or a photo finish
+            const finished = placed.filter((one) => one.time !== undefined).length;
+            const verdict = raceStopped ? "Stopped before the end." : !race?.done || finished < 2 ? "" : inLine(race) ? "No marble passed another: the line decided it." : placed.some((one) => one.close) ? "A photo finish: within a hundredth of a second." : "Places changed on the way.";
+            raceNote.textContent = why ?? (race ? `Line ${race.drawn}. ${verdict}`.trim() : "");
         };
         paintRace();
         folds.push(raceFold);
@@ -2176,7 +2207,8 @@ export default function marbles(m: Mote): Scene {
             ["comma, full stop", "the piece before, after"],
             ["Space, Shift+Space", "let a marble go, a stream"],
             ["P, C", "pause, clear the marbles"],
-            ["X", "race the marbles"],
+            ["X", "race the marbles, in a new line"],
+            ["Shift+X", "race them again in the same line"],
             ["tap a marble, V", "ride along with it, with the next marble"],
             ["Shift+V", "ride the leader of a race"],
             ["T", "a tour of the run"],
@@ -2621,7 +2653,7 @@ export default function marbles(m: Mote): Scene {
             else if (lower === "g") glideStep(event.shiftKey ? -1 : 1);
             else if (lower === "x") {
                 showRace();
-                startRace();
+                startRace(event.shiftKey ? lineNumber : undefined);
             } else return;
             event.preventDefault();
             m.wake();
@@ -2903,13 +2935,13 @@ export default function marbles(m: Mote): Scene {
                 const eye = eyeOf(cam().orbit);
                 return obstaclesOf(resting()).filter((one) => !one.glass && within(one, eye)).length;
             },
-            race: (count?: number) => {
+            race: (count?: number, drawn?: number) => {
                 if (count) raceCount = count;
                 showRace();
-                startRace();
+                startRace(drawn);
             },
             /** The race as it stands: done or stopped, each placing's name, time (and its bits) or why not. */
-            raced: () => race && { done: race.done, stopped: raceStopped, clock: race.clock, placings: standing(race).map((one) => ({ name: one.racer.name, time: one.time ?? null, bits: one.time === undefined ? null : [...new Uint32Array(new Float64Array([one.time]).buffer)].map((word) => word.toString(16)).join(""), out: one.racer.out ?? null, close: one.close })) },
+            raced: () => race && { done: race.done, stopped: raceStopped, clock: race.clock, drawn: race.drawn, inLine: inLine(race), note: document.querySelector(".marbles-race-note")?.textContent ?? "", placings: standing(race).map((one) => ({ name: one.racer.name, time: one.time ?? null, bits: one.time === undefined ? null : [...new Uint32Array(new Float64Array([one.time]).buffer)].map((word) => word.toString(16)).join(""), out: one.racer.out ?? null, close: one.close })) },
             /** Steps as the scene does, the race or the table and the camera, as many steps of 1/120 s as asked: for watching minutes without waiting minutes. */
             advance: (count: number) => {
                 for (let i = 0; i < count; i++) {

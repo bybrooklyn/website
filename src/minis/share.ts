@@ -6,6 +6,7 @@
 //   run v3.h0_0_8_0.s2_0_1_8_2...
 //   spot 0 100 0 750 620 2200          the point looked at in mm, the turn and tip in thousandths of a radian, the distance in mm
 //   own v3.s1_0_0_1_0.c1_1_1_0_1_0 hairpin
+//   race 8 417                         the last race: how many marbles, and the number their line is drawn by
 //
 // Opening takes nothing on trust. The text, the squeezed bytes and what they unsqueeze to are bounded,
 // and unsqueezing stops at the bound, so a few bytes that would grow to gigabytes cost no more than it;
@@ -16,6 +17,7 @@
 
 import { moved, placeKey, type Move } from "./edit";
 import { STRAIGHT, type Orbit } from "./orbit";
+import { DRAWN, RACE } from "./race";
 import { keyOf } from "./pieces";
 import { fits, read, write, type Placed } from "./run";
 import { canSqueeze, fromText, through, toText } from "./worlds";
@@ -26,11 +28,12 @@ export interface Own {
     text: string;
 }
 
-/** What is shared: the run, its spots, and the pieces of one's own it uses. */
+/** What is shared: the run, its spots, the pieces of one's own it uses, and the race run on it last, if any. */
 export interface Shared {
     run: Placed[];
     spots: Orbit[];
     owns: Own[];
+    race?: { count: number; drawn: number };
 }
 
 /** A shared run opened: the run as far as it fits, how many pieces were left out, its spots and pieces of one's own. */
@@ -68,7 +71,7 @@ const spotLine = (spot: Orbit) => `spot ${[spot.at[0] * 10, spot.at[1] * 10, spo
 
 /** A shared run as its text: the file's text, and what a link squeezes. */
 export function writeShared(shared: Shared): string {
-    const lines = [HEAD, `run ${write(shared.run)}`, ...shared.spots.slice(0, MOST.spots).map(spotLine), ...shared.owns.slice(0, MOST.owns).map((own) => `own ${own.text} ${cleanName(own.name)}`)];
+    const lines = [HEAD, `run ${write(shared.run)}`, ...shared.spots.slice(0, MOST.spots).map(spotLine), ...shared.owns.slice(0, MOST.owns).map((own) => `own ${own.text} ${cleanName(own.name)}`), ...(shared.race ? [`race ${shared.race.count} ${shared.race.drawn}`] : [])];
     return `${lines.join("\n")}\n`;
 }
 
@@ -139,11 +142,12 @@ export function readShared(text: string): Opened | undefined {
         const { run, left } = fitted(bare.run);
         return { run, left: left + bare.unread, spots: [], owns: [] };
     }
-    if (lines[0] !== HEAD || lines.length > 2 + MOST.spots + MOST.owns) return undefined;
+    if (lines[0] !== HEAD || lines.length > 3 + MOST.spots + MOST.owns) return undefined;
     const runLine = lines[1]?.startsWith("run ") ? readRun(lines[1].slice(4)) : undefined;
     if (!runLine) return undefined;
     const spots: Orbit[] = [];
     const owns: Own[] = [];
+    let race: Shared["race"];
     for (const line of lines.slice(2)) {
         const [word, ...rest] = line.split(" ");
         if (word === "spot" && spots.length < MOST.spots) {
@@ -154,10 +158,14 @@ export function readShared(text: string): Opened | undefined {
             const group = ownText && readRun(ownText);
             const clean = cleanName(name.join(" "));
             if (group && !group.unread && group.run.length && group.run.length <= MOST.own && clean) owns.push({ name: clean, text: write(group.run) });
+        } else if (word === "race" && !race && rest.length === 2) {
+            // as many marbles as a race lets go, and a number a line is drawn from
+            const [count, drawn] = rest.map(whole);
+            if (count !== undefined && drawn !== undefined && count >= RACE[0] && count <= RACE[1] && drawn >= DRAWN[0] && drawn <= DRAWN[1]) race = { count, drawn };
         }
     }
     const { run, left } = fitted(runLine.run);
-    return { run, left: left + runLine.unread, spots, owns };
+    return { run, left: left + runLine.unread, spots, owns, ...(race ? { race } : {}) };
 }
 
 /** A shared run squeezed for a link's fragment: "z" and the squeezed bytes, or "p" and the bytes as they are where the browser cannot squeeze, in letters an address carries. */

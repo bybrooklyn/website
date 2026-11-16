@@ -41,6 +41,19 @@ test("links are short: every made run's link is well under the length past which
     }
 });
 
+test("a run that carries a race gives the same race back, through a file and a link; a race out of bounds is dropped and the run kept", async () => {
+    const shared: Shared = { run: read(RUNS[0]!.text), spots: [], owns: [], race: { count: 8, drawn: 417 } };
+    expect(writeShared(shared).trim().split("\n").at(-1)).toBe("race 8 417");
+    expect(readShared(writeShared(shared))!.race).toEqual({ count: 8, drawn: 417 });
+    expect((await unpackShared(await packShared(shared)))!.race).toEqual({ count: 8, drawn: 417 });
+    expect(readShared(writeShared({ ...shared, race: undefined }))!.race).toBeUndefined();
+    for (const bad of ["race 9 417", "race 1 417", "race 8 0", "race 8 1000", "race 8", "race 8 4.5", "race eight 417"]) {
+        const opened = readShared(`marbles 1\nrun ${write(shared.run)}\n${bad}\n`)!;
+        expect(opened.race).toBeUndefined();
+        expect(write(opened.run)).toBe(write(shared.run));
+    }
+});
+
 test("a bare run's text is read as a run, and an old one in its old form", () => {
     expect(write(readShared(RUNS[0]!.text)!.run)).toBe(write(read(RUNS[0]!.text)));
     expect(readShared("v3")!.run).toEqual([]);

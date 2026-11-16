@@ -191,7 +191,60 @@ export interface Table {
     hingeOf(hinge: Hinge): number | undefined;
     /** A marble's number: how many were made on this table before it, so that its look is decided by it and a run replayed looks the same. */
     numberOf(marble: Solid): number;
+    /**
+     * Lines marbles up for a race on each hopper's chute, `counts` of them by the hopper's number, each
+     * line front first behind a starting gate shut across the chute, the front marble where the
+     * hopper's own marble waits, the rest up the chute behind it and, past its top, inside the hopper's
+     * box, all held still; the hopper's own marbles are taken away and it is not filled again. The
+     * marbles lined up, by hopper.
+     */
+    line(counts: Map<number, number>): Map<number, Solid[]>;
+    /**
+     * Lets the front marble of a hopper's line through its gate: the plate rises, the marble rolls
+     * away from where a hopper's marble is let go, the plate comes down behind it, and the line moves
+     * up one place, ready again in `PACE` seconds. The marble let through, if there was one.
+     */
+    release(id: number): Solid | undefined;
 }
+
+/**
+ * The starting gate: a steel plate across a hopper's chute, `thick` cm through, from `low` below the
+ * chute's line to `top` above it, in a frame of two posts `posts` cm either side of the chute's middle
+ * and a bar across them `bar` cm above its line. To let a marble through it rises by `rise` in `moving`
+ * seconds, stays up until `open` seconds, while the marble rolls clear, and comes down in `moving`; the
+ * marbles behind move up one place from `follow` seconds, taking `sliding`, so that the next is in
+ * place when a hopper's next marble would be, `PACE` seconds on. The line's places stop `room` cm short
+ * of the chute's top end, and past that they stack up inside the hopper's box.
+ */
+export const GATE = { thick: 0.25, top: 1.6, low: -1.3, rise: 3.6, moving: 0.06, open: 0.2, follow: 0.1, sliding: 0.25, posts: 2.4, bar: 5.3, room: 1.1 };
+/** A hopper's pace: how often it can let a marble go, its next marble out of the box and waiting at its mouth by then, in seconds. A race's gates let their lines through at it. */
+export const PACE = COMING + 0.05;
+
+/** A starting gate on a table: its plate, the hopper it holds, and the seconds since it began to open. */
+interface StartGate {
+    id: number;
+    solid: Solid;
+    /** The frame it rises in: two posts beside the chute and a bar across above it, still. */
+    frame: Solid[];
+    /** The marbles still waiting, front first, held; and the places they wait in, front first. */
+    queue: Solid[];
+    slots: V3[];
+    /** Seconds since it last let a marble through. */
+    since?: number;
+}
+
+/** How far up the gate's plate is, from 0 shut to 1 open, `since` seconds after it began to let a marble through: up quickly, open while the marble rolls clear, down behind it, easing in and out. */
+function gateUp(since: number | undefined): number {
+    if (since === undefined) return 0;
+    const ease = (u: number) => {
+        const k = Math.max(0, Math.min(1, u));
+        return k * k * (3 - 2 * k);
+    };
+    return since < GATE.open ? ease(since / GATE.moving) : 1 - ease((since - GATE.open) / GATE.moving);
+}
+
+/** How far apart two points are. */
+const dist = (a: V3, b: V3): number => Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2);
 
 /** Where a marble rests in the groove at a point along a piece of track: the nearest point of its middle line, then down by how far a marble sinks. */
 function restingOn(piece: Piece & { frame?(t: number): { p: V3; up: V3 }; path?: { end: number; point(t: number): V3 } }, near: V3): V3 {
@@ -216,6 +269,7 @@ export function makeTable({ filled = true } = {}): Table {
     const reach = TABLE * CELL + 40;
     space.slab([0, -1, 0], [reach, 1, reach], undefined, CLOTH);
     const built = new Map<number, Built>();
+    const gates: StartGate[] = [];
     let pillarSolids: Solid[] = [];
     const marbles: Solid[] = [];
 
@@ -344,12 +398,26 @@ export function makeTable({ filled = true } = {}): Table {
             heard.delete(solid);
         }
         if (one.mover?.hinge) hinges.delete(one.mover.hinge);
+        unGate((gate) => gate.id === one.piece.id);
         for (const marble of [one.hopper?.waiting, one.hopper?.coming?.marble]) {
             if (!marble) continue;
             space.remove(marble);
             table.gone?.(marble);
         }
         rouse(one.room);
+    };
+
+    /** Takes away the starting gates that `which` picks. */
+    const unGate = (which: (gate: StartGate) => boolean) => {
+        for (let i = gates.length - 1; i >= 0; i--) {
+            if (!which(gates[i]!)) continue;
+            for (const solid of [gates[i]!.solid, ...gates[i]!.frame, ...gates[i]!.queue]) {
+                space.remove(solid);
+                heard.delete(solid);
+            }
+            for (const marble of gates[i]!.queue) table.gone?.(marble);
+            gates.splice(i, 1);
+        }
     };
 
     /** Each length's ends that are joints of the piece, marked joined where they meet another piece, so that a marble crossing feels one surface. */
@@ -369,7 +437,7 @@ export function makeTable({ filled = true } = {}): Table {
         run: [],
         marbles,
         pillars: [],
-        held: () => [...built.values()].flatMap((one) => [one.hopper?.waiting, one.hopper?.coming?.marble].filter((marble): marble is Solid => marble !== undefined)),
+        held: () => [...[...built.values()].flatMap((one) => [one.hopper?.waiting, one.hopper?.coming?.marble].filter((marble): marble is Solid => marble !== undefined)), ...gates.flatMap((gate) => gate.queue)],
         set(run) {
             const wanted = new Map(run.map((piece) => [piece.id, piece]));
             const keyOfPiece = (piece: Placed) => keyOf(piece.kind) + JSON.stringify(piece.place);
@@ -430,6 +498,19 @@ export function makeTable({ filled = true } = {}): Table {
                     hopper.coming = undefined;
                 }
             }
+            // each gate's line moving up a place behind the marble it let through, held, rolling as it goes
+            for (const gate of gates) {
+                if (gate.since === undefined) continue;
+                gate.since += dt;
+                const k = Math.max(0, Math.min(1, (gate.since - GATE.follow) / GATE.sliding));
+                const ease = k * k * (3 - 2 * k);
+                gate.queue.forEach((marble, j) => {
+                    const [from, to] = [gate.slots[j + 1]!, gate.slots[j]!];
+                    const before = marble.p;
+                    marble.p = [from[0] + (to[0] - from[0]) * ease, from[1] + (to[1] - from[1]) * ease, from[2] + (to[2] - from[2]) * ease];
+                    roll(marble, before);
+                });
+            }
             // Lifts and hoists run while a marble is in play: any let go that is awake. One that waits
             // at a lift or a hoist, still and so asleep, keeps that one running, or it would wait for ever.
             const balls = space.solids.filter((solid) => solid.radius !== undefined && !solid.held);
@@ -453,6 +534,7 @@ export function makeTable({ filled = true } = {}): Table {
                 table.gone?.(marble);
             }
             marbles.length = 0;
+            unGate(() => true);
             for (const one of built.values()) {
                 const hopper = one.hopper;
                 if (!hopper || !filled) continue;
@@ -473,7 +555,7 @@ export function makeTable({ filled = true } = {}): Table {
             return undefined;
         },
         heard: (solid) => heard.get(solid),
-        movers: () => [...built.values()].flatMap((one) => (one.mover ? [{ id: one.piece.id, solids: one.mover.solids }] : [])),
+        movers: () => [...[...built.values()].flatMap((one) => (one.mover ? [{ id: one.piece.id, solids: one.mover.solids }] : [])), ...gates.map((gate) => ({ id: gate.id, solids: [gate.solid, ...gate.frame] }))],
         running: false,
         parts() {
             const state = new Map<number, number[]>();
@@ -505,6 +587,74 @@ export function makeTable({ filled = true } = {}): Table {
         },
         hingeOf: (hinge) => hinges.get(hinge),
         numberOf: (marble) => numbers.get(marble) ?? 0,
+        line(counts) {
+            const lined = new Map<number, Solid[]>();
+            for (const piece of table.run) {
+                const one = built.get(piece.id);
+                const hopper = one?.hopper;
+                const many = counts.get(piece.id) ?? 0;
+                if (!one || !hopper || many <= 0) continue;
+                for (const marble of [hopper.waiting, hopper.coming?.marble]) {
+                    if (!marble) continue;
+                    space.remove(marble);
+                    table.gone?.(marble);
+                }
+                hopper.waiting = hopper.coming = undefined;
+                // the chute from its joint up, as the line along its middle and where a marble rests in its groove, by how far along from the joint
+                const chute = one.lengths[0]!.piece as Piece & { frame(t: number): { p: V3; up: V3 }; path: { end: number } };
+                const samples: { along: number; line: V3; rest: V3 }[] = [];
+                for (let i = 0; i <= 4000; i++) {
+                    const f = chute.frame(chute.path.end * (1 - i / 4000));
+                    const rest: V3 = [f.p[0] - f.up[0] * SINK, f.p[1] - f.up[1] * SINK, f.p[2] - f.up[2] * SINK];
+                    const before = samples[i - 1];
+                    samples.push({ along: before ? before.along + dist(rest, before.rest) : 0, line: f.p, rest });
+                }
+                const at = (along: number) => samples.find((one) => one.along >= along) ?? samples.at(-1)!;
+                // the line: its front where the hopper's own marble waits, the rest up the chute a marble's width and a millimetre apart, and past its top end stacked up inside the hopper's box
+                const apart = 2 * RADIUS + 0.02;
+                const mouth = samples.reduce((best, one) => (dist(one.rest, hopper.wait) < dist(best.rest, hopper.wait) ? one : best)).along;
+                const slots: V3[] = [[...hopper.wait]];
+                for (let k = 1; k < many; k++) {
+                    const along = mouth + k * apart;
+                    if (along <= samples.at(-1)!.along - GATE.room) slots.push([...at(along).rest]);
+                    else slots.push([slots.at(-1)![0], slots.at(-1)![1] + apart, slots.at(-1)![2]]);
+                }
+                // the gate: a plate standing across the chute just before the front marble, its middle over where a marble there would rest, as high as the chute's line there
+                const there = at(mouth - RADIUS - 0.05 - GATE.thick / 2);
+                const shut: V3 = [there.rest[0], there.line[1] + (GATE.top + GATE.low) / 2, there.rest[2]];
+                const gate: StartGate = { id: piece.id, solid: undefined as unknown as Solid, frame: [], queue: [], slots };
+                gate.solid = space.driven(block(boxToWorld(piece.place, { at: [0, 0, 0], half: [GATE.thick / 2, (GATE.top - GATE.low) / 2, 1] }).half), shut, () => ({ p: [shut[0], shut[1] + GATE.rise * gateUp(gate.since), shut[2]], q: [0, 0, 0, 1] }), { density: 7.8, friction: 0.05, bounce: 0.3, roll: 0.006 });
+                // its frame: a post either side of the chute, clear of the groove, and a bar across them that the plate rises up to
+                const across = wayToWorld(piece.place, [0, 0, 1]);
+                const foot = there.line[1] + GATE.low;
+                const post: V3 = [GATE.thick / 2, (GATE.bar + 0.4 - GATE.low) / 2, GATE.thick / 2];
+                gate.frame = [-1, 1].map((side) => space.fixed(block(post), [shut[0] + across[0] * side * GATE.posts, foot + post[1], shut[2] + across[2] * side * GATE.posts], { friction: 0.05, bounce: 0.3, roll: 0.006 }));
+                gate.frame.push(space.fixed(block(boxToWorld(piece.place, { at: [0, 0, 0], half: [GATE.thick / 2, 0.2, GATE.posts + GATE.thick / 2] }).half), [shut[0], there.line[1] + GATE.bar + 0.2, shut[2]], { friction: 0.05, bounce: 0.3, roll: 0.006 }));
+                gates.push(gate);
+                for (const solid of [gate.solid, ...gate.frame]) heard.set(solid, { kind: "metal" });
+                // the marbles, held where they wait until the gate lets each through
+                for (const slot of slots) {
+                    const marble = ball([...slot]);
+                    numbers.set(marble, count++);
+                    space.hold(marble);
+                    gate.queue.push(marble);
+                }
+                lined.set(piece.id, [...gate.queue]);
+            }
+            return lined;
+        },
+        release(id) {
+            const gate = gates.find((one) => one.id === id);
+            const front = gate?.queue.shift();
+            if (!gate || !front) return undefined;
+            // those behind are in the places they moved up to, and those places are the line's now
+            gate.slots = gate.slots.slice(0, gate.queue.length + 1);
+            gate.queue.forEach((marble, j) => (marble.p = [...gate.slots[j + 1]!]));
+            space.wake(front);
+            marbles.push(front);
+            gate.since = 0;
+            return front;
+        },
         arrived(marble) {
             for (const one of built.values()) {
                 const box = one.catches;
