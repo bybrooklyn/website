@@ -86,6 +86,13 @@ export interface AwayJob {
     enlarge?(look: Look, flatten: (look: Look) => Promise<ImageData>): Promise<ImageData | undefined>;
 }
 
+/**
+ * The side of the pieces a picture away from the stage is flattened in: smaller than the stage's own, since the card's
+ * answer for each piece is waited for on the page's thread, and on a machine drawing without a graphics card a piece
+ * of 2048 a side kept the page from answering for seconds while a batch was exported.
+ */
+export const AWAY_PIECE = 1024;
+
 /** A picture flattened away from the stage: its pixels repaired and cut out as its steps say, put on a card of its own, flattened, and let go. */
 export async function flattenAway(job: AwayJob): Promise<ImageData> {
     const shown = look(job.picture);
@@ -114,9 +121,9 @@ export async function flattenAway(job: AwayJob): Promise<ImageData> {
     const loaded = await loadPicture(job.backend, base);
     if (base instanceof ImageBitmap) base.close();
     try {
-        const flatten = (each: Look) => loaded.flatten(each, undefined, gradingWith(each, job.space, loaded.size, job.convert && job.space === "p3"), job.space);
+        const flatten = (each: Look) => loaded.flatten(each, AWAY_PIECE, gradingWith(each, job.space, loaded.size, job.convert && job.space === "p3"), job.space);
         const made = shown.enlarge && job.enlarge ? await job.enlarge(shown, flatten) : undefined;
-        return await loaded.flatten(shown, undefined, gradingWith(shown, job.space, loaded.size, job.convert && job.space === "p3"), job.space, made);
+        return await loaded.flatten(shown, AWAY_PIECE, gradingWith(shown, job.space, loaded.size, job.convert && job.space === "p3"), job.space, made);
     } finally {
         loaded.destroy();
     }

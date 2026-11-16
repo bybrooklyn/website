@@ -168,7 +168,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     // the part models' worker, shared by Find and the cut-out, made when first asked
     const sharedFinder = createFinder();
     /** A restoring model's run going (restore/), for the strip: what it does, how far, and its stop. */
-    let running: { said: string; share: number; stop: AbortController } | undefined;
+    let running: { said: string; share?: number; stop: AbortController } | undefined;
     // the way of enlarging chosen in this browser: a model's id, or "" for the resize's filter
     let enlargeWay = "";
     let shape = "Free";
@@ -514,7 +514,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         );
         adding -= list.length;
         failed = ran.failed.length;
-        frame.status.say("Brought in", failed ? `${picturesSaid(came)} brought in; ${failed} could not be read as pictures` : `${picturesSaid(came)} brought in; ${picturesSaid(items.length)} in all`, failed ? "warn" : "quiet");
+        const why = ran.failed[0] ? (ran.failed[0].error instanceof Error ? ran.failed[0].error.message : String(ran.failed[0].error)) : "";
+        frame.status.say("Brought in", failed ? `${picturesSaid(came)} brought in; ${failed} could not be read (${why})` : `${picturesSaid(came)} brought in; ${picturesSaid(items.length)} in all`, failed ? "warn" : "quiet");
         refresh();
         if (exporting.isOpen()) exporting.fill();
     }
@@ -857,7 +858,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         readAgain: () => void reading.start(buttons.read),
         cut: () => cutStrip(),
         // a model running: how far, and Stop, which leaves the picture as it was
-        busy: () => (running ? { said: `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("Stop", "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
+        busy: () => (running ? { said: running.share === undefined ? running.said : `${running.said} ${Math.round(running.share * 100)}%`, controls: [stripButton("Stop", batchRunning ? "Stop: each picture is left done or as it was (Escape)" : "Stop, and leave the picture as it was (Escape)", () => running?.stop.abort())] } : undefined),
         grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
     });
     /** The mark picked, if what is picked is a mark. */
@@ -1217,7 +1218,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const shown = look(source);
         const quick = kinds.filter((kind) => kind === "grade" || kind === "resize" || kind === "export" || (kind === "repair" && !shown.repairModel));
         const slow = kinds.filter((kind) => kind === "cutout" || (kind === "repair" && !!shown.repairModel));
-        const all = await storePictures();
+        // the originals are read only for what needs them: a repair (which must know which are JPEGs worth repairing) or a model
+        const all = kinds.includes("repair") || slow.length ? await storePictures() : new Map<string, Blob>();
         const repairable = kinds.includes("repair") ? await whichRepairable(others, all) : new Set<Item>();
         const settingsSet = new Map<Item, { before?: Settings; after?: Settings }>();
         groupSettings.set(group, settingsSet);
@@ -1252,7 +1254,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (repairing && !(await repairAsking.have(repairing.id))) return frame.status.say("Not repaired", `The ${repairing.name} model is not on this device: repair this picture with it first`, "warn");
         const stop = new AbortController();
         const doing = cutting ? "Cutting out" : "Repairing";
-        running = { said: doing, share: 0, stop };
+        running = { said: doing, stop };
         batchRunning = true;
         let done = 0;
         const failed: string[] = [];
@@ -1260,8 +1262,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         try {
             for (const [index, item] of others.entries()) {
                 if (stop.signal.aborted) break;
-                running.said = `${doing} ${index + 1} of ${others.length},`;
-                running.share = 0;
+                // a repair says how far through this picture it is; a cut-out, which says nothing as it runs, only which of how many
+                running.said = `${doing} ${index + 1} of ${others.length}${repairing ? "," : ""}`;
+                running.share = repairing ? 0 : undefined;
                 refresh();
                 try {
                     const blob = await pictureFrom(all, item.original.name);

@@ -3,7 +3,8 @@
 // nothing until told; then the picture is cut out as a step, the export clear where the ground was and
 // whole on the figure, at full size; a JPEG says plainly it has no transparency and offers a color or
 // PNG; laid on a color nothing is clear; Keep paints the ground back; the document opened again draws
-// the same pixels with no request at all; Take away brings the background back; and the only requests
+// the same pixels with no request at all; in a batch, Give to all cuts each other picture out in turn, laid
+// on the same color, as one undo step; Take away brings the background back; and the only requests
 // are the page's own, ONNX Runtime's and the model's one file.
 
 import { expect, test } from "bun:test";
@@ -93,6 +94,37 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         // laid on a color: nothing is clear
         await tab.run("document.querySelector('.quire-img-strip [aria-label=\"Red\"]').click()");
         await until("window.app.editing().steps().find((step) => step.type === 'cutout').background === 'color'");
+        // in a batch, the cut-out given to the others: each cut out in turn, laid on the same color, as one undo step
+        await tab.run(`(async () => {
+            const make = async (name, hue) => {
+                const canvas = new OffscreenCanvas(900, 600);
+                const c = canvas.getContext("2d");
+                c.fillStyle = "hsl(" + hue + " 50% 40%)"; c.fillRect(0, 0, 900, 600);
+                c.fillStyle = "#b8452e"; c.beginPath(); c.moveTo(340, 600); c.lineTo(375, 350); c.lineTo(525, 350); c.lineTo(560, 600); c.fill();
+                c.fillStyle = "#e0b090"; c.beginPath(); c.arc(450, 270, 70, 0, 7); c.fill();
+                return new File([await canvas.convertToBlob({ type: "image/png" })], name, { type: "image/png" });
+            };
+            await window.app.editing().addPictures([await make("second.png", 120), await make("third.png", 200)]);
+        })()`);
+        await until("window.app.editing().batch().count === 3");
+        expect(await tab.run<string>("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent.startsWith('Give to the other'))?.title")).toBe("Cut out the other 2 pictures the same way, one after another");
+        await tab.run("window.app.editing().giveAll(['cutout'])");
+        const laid = () => tab.run<(string | null)[]>("(async () => { const editor = window.app.editing(); const out = []; for (let at = 1; at < 3; at++) { await editor.stepTo(at); const step = editor.steps().find((each) => each.type === 'cutout'); out.push(step ? step.background + ' ' + step.color : null); } await editor.stepTo(0); return out; })()");
+        expect(await laid()).toEqual(["color #ff3b30", "color #ff3b30"]);
+        // the second picture, cut out by the model on its own: its ground clear of the figure's color, laid on red
+        await tab.run("window.app.editing().stepTo(1)");
+        await until("window.app.editing().stage.loaded()?.size.width === 900");
+        // (the cut-out's pixels take the original's place on the stage a moment after it is shown)
+        await until("window.app.editing().flatten().then((flat) => flat.data[(60 * 900 + 60) * 4] > 200 && flat.data[(60 * 900 + 60) * 4 + 1] < 120)", 30_000);
+        await tab.run("window.app.editing().stepTo(0)");
+        await until("window.app.editing().stage.loaded()?.size.width === 1200");
+        await tab.run("window.app.editing().undo()");
+        expect(await laid()).toEqual([null, null]);
+        expect(await tab.run("window.app.editing().steps().some((step) => step.type === 'cutout')")).toBe(true);
+        // (stepping put the crop's frame back in hand, as on any picture stepped to)
+        await tab.run("document.querySelector('.quire-img-stage').focus()");
+        await tab.press("k");
+        await until("[...document.querySelectorAll('.quire-img-strip-words')].some((each) => each.textContent === 'Take away')");
         // Take away: the background back
         await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((each) => each.textContent === 'Take away').click()");
         await until("!window.app.editing().steps().some((step) => step.type === 'cutout')");

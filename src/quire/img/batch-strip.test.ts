@@ -159,6 +159,36 @@ test("Export all into a folder writes each file straight into it, never over a f
     expect(await tab.run<string>("window.folder.get('photo.png').text()")).toBe("mine");
 }, 90_000);
 
+test("a small picture's right-click opens its own menu, Shift leaving the browser's; with the strip holding the keyboard its arrows step through", async () => {
+    if (!page) return;
+    const { tab, until } = page;
+    const lines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items > *')].map((each) => each.textContent.trim()).filter(Boolean)");
+    const second = await page.middle(".quire-img-thumb:nth-child(2)");
+    await tab.run(`document.querySelector('.quire-img-thumb:nth-child(2)').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: ${second.x}, clientY: ${second.y} }))`);
+    await until("document.querySelector('.quire-menu:popover-open')");
+    const said = await lines();
+    expect(said.slice(0, 3)).toEqual(["Save this one", "Copy this one", "Give its changes to the other 2"]);
+    expect(said).toEqual(expect.arrayContaining(["Add pictures", expect.stringContaining("Paste"), "Take out of the batch"]));
+    // what giving its changes will do is said under it
+    expect(said[3]).toBe("the grade, PNG");
+    await tab.press("Escape");
+    await until("!document.querySelector('.quire-menu:popover-open')");
+    // with Shift the page leaves the event to the browser
+    const left = await tab.run<boolean>(`!document.querySelector('.quire-img-thumb:nth-child(2)').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, shiftKey: true, clientX: ${second.x}, clientY: ${second.y} }))`);
+    expect(left).toBe(false);
+    // the strip's own keys
+    await tab.run("window.app.editing().stepTo(0)");
+    await until("window.app.editing().batch().at === 0");
+    await tab.run("document.querySelector('.quire-img-thumb.current').focus()");
+    await tab.press("ArrowRight");
+    await until("window.app.editing().batch().at === 1");
+    await until("document.activeElement === document.querySelector('.quire-img-thumb.current')");
+    await tab.press("End");
+    await until("window.app.editing().batch().at === 2");
+    await tab.press("ArrowLeft");
+    await until("window.app.editing().batch().at === 1");
+}, 60_000);
+
 test("the batch is one row on the shelf, opens again as it was left, and a picture can be taken out", async () => {
     if (!page) return;
     const { tab, until } = page;
