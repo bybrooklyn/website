@@ -268,6 +268,11 @@
     opacity: 0.35;
 }
 
+/* while reading there is no code to copy or save: the maker's buttons fade away as its words do, keeping their room */
+.quire-qr.reading .quire-qr-out {
+    opacity: 0;
+}
+
 .quire-qr-sizes {
     display: flex;
     flex-basis: 100%;
