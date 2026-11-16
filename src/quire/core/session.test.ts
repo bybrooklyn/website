@@ -71,7 +71,7 @@ used("a document changed elsewhere is not written over: the status says it chang
     expect(await run("q.store.files.get(q.first.id).text")).toBe("Theirs.\n");
     expect(await run("q.told.said.at(-1)")).toBe("Changed");
     // the writer takes theirs, and it is put in place of what she typed
-    await run("[...q.session.conflict.element.querySelectorAll('button')].find((each) => each.textContent === 'Take theirs').click()");
+    await run("[...q.session.conflict.element.querySelectorAll('button')].find((each) => each.textContent === 'take theirs').click()");
     await page!.tab.wait(300);
     expect(await run("q.text.value")).toBe("Theirs.\n");
     expect(await run("q.told.said.at(-1)")).toBe("Saved");

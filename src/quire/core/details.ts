@@ -59,9 +59,9 @@ export function createDetails() {
         list.append(make("dt", "", term), value);
         return value;
     };
-    const file = line("File");
-    const length = line("Length");
-    const kept = line("Kept");
+    const file = line("file");
+    const length = line("length");
+    const kept = line("kept");
     let last: Shown | undefined;
     const draw = () => {
         if (!last) return;

@@ -21,6 +21,7 @@ import type { State } from "./history";
 import { typeIn } from "./inserts";
 import { caret } from "./keys";
 import type { Surface } from "./surface";
+import { lowered } from "../core/bench";
 import { composing, flowMenu, make, markActive, unmarkActive, type MenuItem } from "../core/ui";
 
 /** What has been typed after a colon just before the cursor, two letters or more of a name; undefined when no list should be open. */
@@ -372,7 +373,7 @@ export function emojiGrid(put: (name: string, tone: number) => void): HTMLElemen
     function fill() {
         const query = search.value.trim();
         const shown: Used[] = query ? matchEmoji(query, Infinity).map((each) => ({ name: each.name, tone })) : group === "used" ? lately : (groups.get(group) ?? []).map((name) => ({ name, tone }));
-        label.textContent = query ? (shown.length ? "Found" : "Nothing by that name") : group === "used" ? "Recently used" : (GROUPS.find((each) => each.key === group)?.label ?? "");
+        label.textContent = query ? (shown.length ? "found" : "Nothing by that name") : group === "used" ? "recently used" : lowered(GROUPS.find((each) => each.key === group)?.label ?? "");
         grid.replaceChildren(...shown.map((each) => button(each.name, each.tone)));
         for (const tab of tabs.children) {
             const on = !query && (tab as HTMLElement).dataset.group === group;

@@ -239,7 +239,7 @@ export function createHistoryPanel(view: VersionView, storage: VersionStorage, n
     panel.setAttribute("aria-label", "Version history");
     panel.inert = true;
     const head = make("div", "quire-history-head");
-    const title = make("span", "quire-outline-title", "Version history");
+    const title = make("span", "quire-outline-title", "version history");
     const back = control("Back to the list", icon("chevron"), () => showList());
     back.classList.add("quire-history-back");
     const closer = control("Close", icon("close"), () => close());
@@ -279,7 +279,7 @@ export function createHistoryPanel(view: VersionView, storage: VersionStorage, n
         const text = await storage.load(version.id);
         const shown = make("div", "quire-history-text prose");
         view.show(text, older ? await storage.load(older.id) : undefined, shown);
-        const restore = filledButton("Restore this version", () => {
+        const restore = filledButton("restore this version", () => {
             view.restore(text);
             keeper.now();
             close();

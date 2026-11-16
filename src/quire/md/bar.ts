@@ -54,6 +54,7 @@ import {
     type Selection,
 } from "./document";
 import type { State } from "./history";
+import { lowered } from "../core/bench";
 import { nameButton, statusLine, STATUS_PASSES, type NameButton, type StatusLine } from "../core/status";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, paste, rangeOf, sameLeaf, tableOf } from "./keys";
 import { SHORTCUTS } from "./shortcuts";
@@ -365,6 +366,14 @@ export const LISTS: [ListStyle, string][] = [
     ["bullet", "Bulleted list"],
     ["number", "Numbered list"],
 ];
+
+/** The typefaces whose names have only a first capital, and so are kept by hand on the typeface button. */
+const TYPEFACE_NAMES = ["Torrens", "Drafting Mono"];
+
+/** What the style and typeface buttons show for the line chosen in their menus: the line in the site's lowercase, names keeping their capitals, as "Normal text" shows "normal text" and Drafting Mono stays Drafting Mono. */
+export function shownLabel(label: string): string {
+    return TYPEFACE_NAMES.includes(label) ? label : lowered(label);
+}
 
 /** A control's tooltip: its name, with its shortcut in words where it has one, "Bold (Ctrl+B)"; on a Mac Ctrl is said as Cmd. */
 export function tip(label: string, command?: string, onMac = false): string {
@@ -705,7 +714,7 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- the style ----
     const styles = flowMenu("Style");
-    const styleLabel = make("span", "quire-style-label", STYLES[0]![1]);
+    const styleLabel = make("span", "quire-style-label", shownLabel(STYLES[0]![1]));
     // Title does not restyle the line: the title is the line above the writing, and the status says the cursor went there
     const toTitle = () => {
         options.onTitle?.();
@@ -728,7 +737,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         return shown;
     };
     const fontLines = (): MenuItem[] => FONTS.map(([label, value]) => ({ label, icon: fontSample(value), run: doing(font(value)) }));
-    const fontLabel = make("span", "quire-font-label", FONTS[0]![0]);
+    const fontLabel = make("span", "quire-font-label", shownLabel(FONTS[0]![0]));
     const fontButton = opener(fonts, "Typeface", fontLabel, fontLines);
     fontButton.classList.add("quire-font");
     fontButton.append(icon("chevron"));
@@ -1216,9 +1225,9 @@ export function createBar(surface: Surface, options: BarOptions) {
         const list = activeBlock(doc, selection.focus.path).list;
         lists.show(list, !!list);
         const style = currentStyle(doc, selection.focus.path);
-        styleLabel.textContent = STYLES.find(([each]) => each === style)![1];
+        styleLabel.textContent = shownLabel(STYLES.find(([each]) => each === style)![1]);
         const format = formatAt(doc, rangeOf(selection).start, !collapsed(selection));
-        fontLabel.textContent = FONTS.find(([, value]) => value === (format.font ?? null))?.[0] ?? FONTS[0]![0];
+        fontLabel.textContent = shownLabel(FONTS.find(([, value]) => value === (format.font ?? null))?.[0] ?? FONTS[0]![0]);
         colorMark.style.borderBottomColor = format.color ?? "";
         highlightButton.style.setProperty("--mark", format.highlight ?? "currentColor");
         showSize();

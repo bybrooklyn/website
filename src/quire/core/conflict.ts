@@ -55,15 +55,15 @@ export function createConflict(choose: (choice: "mine" | "theirs") => void, back
     head.append(closer);
     const said = make("p", "quire-conflict-said", "It was saved there after you opened it here. What you typed is kept and nothing has been written over.");
     const choices = make("div", "quire-conflict-choices");
-    const both = switchButton("See both", false, (on) => panel.classList.toggle("both", on));
+    const both = switchButton("see both", false, (on) => panel.classList.toggle("both", on));
     both.classList.add("far");
-    const theirs = make("button", "quire-dialog-dismiss", "Take theirs");
+    const theirs = make("button", "quire-dialog-dismiss", "take theirs");
     theirs.type = "button";
     theirs.addEventListener("click", () => {
         close();
         choose("theirs");
     });
-    const mine = filledButton("Keep mine", () => {
+    const mine = filledButton("keep mine", () => {
         close();
         choose("mine");
     });
@@ -78,8 +78,8 @@ export function createConflict(choose: (choice: "mine" | "theirs") => void, back
         const columns = make("div", "quire-conflict-columns");
         const left = make("div", "quire-conflict-side");
         const right = make("div", "quire-conflict-side");
-        left.append(make("p", "quire-outline-title", "Yours"));
-        right.append(make("p", "quire-outline-title", "Theirs"));
+        left.append(make("p", "quire-outline-title", "yours"));
+        right.append(make("p", "quire-outline-title", "theirs"));
         const leftLines = make("pre");
         const rightLines = make("pre");
         for (const row of sideBySide(mineText, theirsText ?? "")) {

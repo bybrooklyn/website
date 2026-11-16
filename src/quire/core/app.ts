@@ -395,10 +395,10 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
             className: "quire-repository-dialog",
             body: [form.element],
             returnTo: back,
-            others: kept ? [{ label: "Forget", far: true, press: (dialog) => void dialog.close().then(forget) }] : [],
-            dismiss: "Cancel",
+            others: kept ? [{ label: "forget", far: true, press: (dialog) => void dialog.close().then(forget) }] : [],
+            dismiss: "cancel",
             action: {
-                label: kept ? "Save and open" : "Connect",
+                label: kept ? "save and open" : "connect",
                 press: (button, dialog) => {
                     button.disabled = true;
                     void form.send().then(async (connected) => {

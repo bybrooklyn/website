@@ -161,7 +161,7 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         });
         const buttons = make("div", "quire-note-actions");
         // in every dialog's order: the quiet cancel, then the filled button, named as Docs names it, at the right
-        buttons.append(control("Cancel", "Cancel", cancel, "quire-button quire-note-button"), control("Comment", "Comment", () => done(area.value.trim()), "quire-button quire-note-button quire-note-keep"));
+        buttons.append(control("Cancel", "cancel", cancel, "quire-button quire-note-button"), control("Comment", "comment", () => done(area.value.trim()), "quire-button quire-note-button quire-note-keep"));
         form.append(area, buttons);
         requestAnimationFrame(() => area.isConnected && area.focus({ preventScroll: true }));
         return form;

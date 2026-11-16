@@ -248,7 +248,7 @@ export function createLinkCard(surface: Surface, edit: (from: HTMLElement) => vo
             else back(range.end);
         });
         const short = shortFor(href, 32);
-        row.append(make("span", "quire-link-where", "Show as"), field);
+        row.append(make("span", "quire-link-where", "show as"), field);
         if (short !== field.value) row.append(control("Short form", word(short), () => choose(shortFor(href, 200))));
         row.append(control("Keep address", word(cutMiddle(href, 24)), () => back(range.end)));
         show("chip", range, href, row);
@@ -328,7 +328,7 @@ export function createLinkCard(surface: Surface, edit: (from: HTMLElement) => vo
 
 /** A field for a link's address, with a button to set it and, for a link already there, one to take it off. Enter sets, Escape cancels. */
 export function linkForm(current: string | undefined, done: { set(href: string): void; remove(): void; cancel(): void }, places: { label: string; href: string; kind: string }[] = []): HTMLElement {
-    const form = fieldForm({ value: current, label: "Link address", placeholder: "Paste or type an address", type: "url", button: "Set", said: "Set the link" }, { set: (href) => (href ? done.set(href) : current ? done.remove() : done.cancel()), cancel: done.cancel });
+    const form = fieldForm({ value: current, label: "Link address", placeholder: "Paste or type an address", type: "url", button: "set", said: "Set the link" }, { set: (href) => (href ? done.set(href) : current ? done.remove() : done.cancel()), cancel: done.cancel });
     if (current) form.append(control("Remove the link", icon("trash"), () => done.remove()));
     if (!places.length) return form;
     // the document's own headings and bookmarks, to link to by their names

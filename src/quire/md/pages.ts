@@ -17,6 +17,7 @@
 import type { Page } from "./document";
 import { paperSize, setPage } from "./paper";
 import type { Surface } from "./surface";
+import { raised } from "../core/bench";
 import { openDialog, switchButton, type Dialog } from "../core/dialog";
 import { make } from "../core/ui";
 
@@ -253,19 +254,19 @@ export function createPages(paper: HTMLElement, surface: Surface, options: Pages
             const input = make("input", "quire-link-field");
             input.value = options.page()[key] ?? "";
             input.placeholder = "On every page";
-            input.setAttribute("aria-label", `${label}, on every page`);
+            input.setAttribute("aria-label", `${raised(label)}, on every page`);
             row.append(make("span", "quire-form-label", label), input);
             return { row, input };
         };
-        const header = field("Header", "header");
-        const footer = field("Footer", "footer");
+        const header = field("header", "header");
+        const footer = field("footer", "footer");
         let numbers = !!options.page().numbers;
-        const turn = switchButton("Page numbers", numbers, (on) => (numbers = on));
+        const turn = switchButton("page numbers", numbers, (on) => (numbers = on));
         asking = openDialog(from, {
             title: "Header and footer",
             className: "quire-page-dialog",
             body: [header.row, footer.row, turn],
-            dismiss: "Cancel",
+            dismiss: "cancel",
             action: {
                 label: "OK",
                 press: (_, dialog) => {

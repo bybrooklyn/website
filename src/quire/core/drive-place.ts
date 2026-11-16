@@ -56,7 +56,7 @@ export const DRIVE_WORDS = {
     title: "Google Drive",
     about: "Keep documents in your Google Drive, locked with a passphrase in this browser before they are sent.",
     seen: "Google can see that you use mdQuire, how many files you keep, their sizes and when they change. It cannot read their names or what is in them.",
-    signIn: "Sign in with Google",
+    signIn: "sign in with Google",
     waiting: "Finish signing in in the window that opened. If none opened, let this site open pop-ups and try again.",
     again: "Your sign-in to Google has run out. Sign in again to go on saving; your writing is kept here meanwhile.",
     makeTitle: "Make a passphrase",
@@ -65,10 +65,10 @@ export const DRIVE_WORDS = {
     open: "Type the passphrase your documents in Google Drive are locked with.",
     lost: "If you forget it, nobody can open your documents again, not even you.",
     kept: "It is not kept anywhere. It is asked for again in each new tab.",
-    passphrase: "Passphrase",
-    passphraseAgain: "The same again",
-    makeButton: "Make it",
-    openButton: "Open",
+    passphrase: "passphrase",
+    passphraseAgain: "the same again",
+    makeButton: "make it",
+    openButton: "open",
     working: "Opening",
     notSetUp: "Google Drive is not set up yet.",
 };
@@ -222,7 +222,7 @@ export function drivePlace(options: DriveOptions & { onSignedIn?: () => void } =
                 body: step === "sign in" ? signInBody() : [said],
                 className: "quire-drive-dialog",
                 action: { label: step === "sign in" ? DRIVE_WORDS.signIn : DRIVE_WORDS.openButton, press: () => void press() },
-                dismiss: "Not now",
+                dismiss: "not now",
                 onClose: () => {
                     asking?.cancel();
                     for (const input of [first, second]) if (input) input.value = "";

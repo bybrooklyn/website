@@ -71,5 +71,5 @@ export function openTyping(from: HTMLElement, choices: TypingChoices) {
             list.append(line);
         }
     }
-    openDialog(from, { title: "Typing preferences", body: [intro, list], className: "quire-keys-dialog quire-typing-dialog", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: choices.onClose });
+    openDialog(from, { title: "Typing preferences", body: [intro, list], className: "quire-keys-dialog quire-typing-dialog", action: { label: "done", press: (_, dialog) => void dialog.close() }, onClose: choices.onClose });
 }

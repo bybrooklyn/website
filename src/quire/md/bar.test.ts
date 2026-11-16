@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../../scripts/browser";
-import { addCode, addDivider, ALIGNS, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, LISTS, nextSize, SIZE_STEPS, sizeNumber, sizesOffered, sizeValue, STATUS_PASSES, STYLES, tip, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
+import { addCode, addDivider, ALIGNS, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, LISTS, nextSize, SIZE_STEPS, sizeNumber, sizesOffered, sizeValue, STATUS_PASSES, STYLES, tip, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, shownLabel, size, toggle, toggleList, wordAt, type Action } from "./bar";
 import { collect } from "./styling";
 import { blockAt, markdownOnly, type Paragraph, type TextRun } from "./document";
 import type { Selection } from "./document";
@@ -84,6 +84,11 @@ test("the style picker makes headings, quotes, code and paragraphs, and shows wh
     expect(md(run(setStyleOf("code"), at("let a\n", caret([0], 0))))).toBe("```\nlet a\n```\n");
     expect(md(run(setStyleOf("heading1"), at("One\n\nTwo\n", span([0], 0, 0))))).toBe("# One\n\nTwo\n");
     expect(md(run(setStyleOf("heading3"), at("One\n\nTwo\n", { anchor: { path: [0], offset: 1 }, focus: { path: [1], offset: 1 } })))).toBe("### One\n\n### Two\n");
+});
+
+test("the style and typeface buttons show the chosen line in lowercase, names keeping their capitals, while the menus' lines keep a first capital", () => {
+    expect(STYLES.map(([, label]) => shownLabel(label))).toEqual(["normal text", "title", "subtitle", "heading 1", "heading 2", "heading 3", "heading 4", "heading 5", "heading 6", "quote", "code"]);
+    expect(FONTS.map(([label]) => shownLabel(label))).toEqual(["the page's own", "Torrens", "Drafting Mono", "system serif", "system sans", "system mono"]);
 });
 
 test("the style box calls a paragraph Normal text, as Format does, and text in a callout or a list is normal text, not Quote", () => {

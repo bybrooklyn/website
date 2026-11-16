@@ -96,9 +96,9 @@ export function lineMarkOf(line: string): string | undefined {
 
 /** The rows of the table grouped by where their meaning comes from, in the order Typing preferences shows them. */
 export const GROUPS: { origin: Origin; title: string; all: string; rows: Typed[] }[] = [
-    { origin: "Markdown", title: "Markdown's own marks", all: "All Markdown marks", rows: TYPING.filter((each) => each.origin === "Markdown") },
-    { origin: "GitHub", title: "GitHub's marks", all: "All GitHub marks", rows: TYPING.filter((each) => each.origin === "GitHub") },
-    { origin: "extra", title: "mdQuire's extras", all: "All mdQuire extras", rows: TYPING.filter((each) => each.origin === "extra") },
+    { origin: "Markdown", title: "Markdown's own marks", all: "all Markdown marks", rows: TYPING.filter((each) => each.origin === "Markdown") },
+    { origin: "GitHub", title: "GitHub's marks", all: "all GitHub marks", rows: TYPING.filter((each) => each.origin === "GitHub") },
+    { origin: "extra", title: "mdQuire's extras", all: "all mdQuire extras", rows: TYPING.filter((each) => each.origin === "extra") },
 ];
 
 /** The ids switched off, as kept in this browser: a list written as JSON, anything else read as nothing switched off. */

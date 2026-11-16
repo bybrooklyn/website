@@ -17,6 +17,7 @@
 
 import type { Position } from "../document";
 import { openDialog, type Dialog } from "../../core/dialog";
+import { lowered } from "../../core/bench";
 import { control, flowMenu, make, menuLine, type MenuItem } from "../../core/ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
@@ -28,6 +29,12 @@ import { createSpeller } from "./spelling";
 
 /** Most findings of one kind the list draws; the rest are counted. */
 const LISTED = 150;
+
+/** A rule's name as its checkbox in the settings says it: in the site's lowercase, names keeping their capitals, and the X and Y of a framing kept as the letters they stand for. */
+export function settingLabel(label: string): string {
+    return label.replace(/[A-Za-z][A-Za-z0-9.'-]*/g, (word) => (word === "X" || word === "Y" ? word : lowered(word)));
+}
+
 /** The most time, in milliseconds, one slice of checking may hold the page. */
 const BUDGET = 8;
 
@@ -432,15 +439,15 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     }
     function settingsBody(): HTMLElement {
         const body = make("div", "quire-check-form");
-        body.append(box("Check this document", prefs.on, (on) => {
+        body.append(box("check this document", prefs.on, (on) => {
             prefs.on = on;
             apply();
         }));
         for (const kind of KINDS) {
             const group = make("fieldset", "quire-check-set");
             group.dataset.kind = kind;
-            group.append(make("legend", "", KIND_NAMES[kind]));
-            group.append(box(`All of ${KIND_NAMES[kind].toLowerCase()}`, prefs.settings.kinds[kind], (on) => {
+            group.append(make("legend", "", lowered(KIND_NAMES[kind])));
+            group.append(box(`all of ${lowered(KIND_NAMES[kind])}`, prefs.settings.kinds[kind], (on) => {
                 prefs.settings.kinds[kind] = on;
                 apply();
                 // the kind's own rules fold in or out under it, the dialog easing to its new size
@@ -450,14 +457,14 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
                     dialog.body.querySelector<HTMLElement>(`[data-kind="${kind}"] input`)?.focus();
                 });
             }));
-            if (prefs.settings.kinds[kind]) for (const each of RULES.filter((one) => one.kind === kind)) group.append(box(each.label, ruleOn(each, prefs.settings), (on) => {
+            if (prefs.settings.kinds[kind]) for (const each of RULES.filter((one) => one.kind === kind)) group.append(box(settingLabel(each.label), ruleOn(each, prefs.settings), (on) => {
                 prefs.settings.rules[each.id] = on;
                 apply();
             }, each.why));
             body.append(group);
         }
         const numbers = make("fieldset", "quire-check-set");
-        numbers.append(make("legend", "", "Lengths and spelling"));
+        numbers.append(make("legend", "", "lengths and spelling"));
         const field = (label: string, key: "sentence" | "paragraph") => {
             const line = make("label", "quire-check-number-line");
             const input = make("input");
@@ -475,7 +482,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             line.append(make("span", "", label), input);
             return line;
         };
-        numbers.append(field("Words in a long sentence", "sentence"), field("Words in a long paragraph", "paragraph"));
+        numbers.append(field("words in a long sentence", "sentence"), field("words in a long paragraph", "paragraph"));
         const dialect = make("label", "quire-check-number-line");
         const choose = make("select");
         for (const [value, label] of [["us", "American"], ["gb", "British"]]) {
@@ -488,9 +495,9 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             prefs.settings.dialect = choose.value === "gb" ? "gb" : "us";
             apply();
         });
-        dialect.append(make("span", "", "Spelling"), choose);
+        dialect.append(make("span", "", "spelling"), choose);
         numbers.append(dialect);
-        const words = make("button", "quire-button quire-check-action quire-check-own", "Personal dictionary");
+        const words = make("button", "quire-button quire-check-action quire-check-own", "personal dictionary");
         words.type = "button";
         words.addEventListener("click", () => openDictionary(words));
         numbers.append(words);
@@ -508,7 +515,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             className: "quire-check-settings",
             body: [settingsBody()],
             returnTo: listFrom.isConnected ? listFrom : count,
-            action: { label: "Done", press: (_, dialog) => void dialog.close() },
+            action: { label: "done", press: (_, dialog) => void dialog.close() },
             onClose: () => (settingsDialog = undefined),
         });
     }
@@ -523,7 +530,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         list.setAttribute("aria-label", "Your words");
         for (const word of words) {
             const line = make("li", "quire-own-word");
-            const remove = make("button", "quire-button quire-own-remove", "Remove");
+            const remove = make("button", "quire-button quire-own-remove", "remove");
             remove.type = "button";
             remove.setAttribute("aria-label", `Remove ${word}`);
             remove.addEventListener("click", () => {
@@ -581,10 +588,10 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             className: "quire-own-dialog",
             body: [intro, count, holder, chooser],
             returnTo: from.isConnected ? from : undefined,
-            action: { label: "Done", press: (_, dialog) => void dialog.close() },
+            action: { label: "done", press: (_, dialog) => void dialog.close() },
             others: [
                 {
-                    label: "Download as text",
+                    label: "download as text",
                     press: () => {
                         const link = make("a");
                         link.href = URL.createObjectURL(new Blob([wordsText(own)], { type: "text/plain" }));
@@ -593,7 +600,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
                         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
                     },
                 },
-                { label: "Add from a text file", press: () => chooser.click() },
+                { label: "add from a text file", press: () => chooser.click() },
             ],
             onClose: () => (dictionaryDialog = undefined),
         });

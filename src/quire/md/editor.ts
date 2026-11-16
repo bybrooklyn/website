@@ -306,7 +306,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
 
     // ---- About mdQuire, from Tools and the three dots: something to read, so a dialog grown out of where it was asked for ----
-    const showAbout = (from: HTMLElement) => openDialog(from, { title: "About mdQuire", body: [aboutPanel()], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+    const showAbout = (from: HTMLElement) => openDialog(from, { title: "About mdQuire", body: [aboutPanel()], action: { label: "done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
 
     // ---- the three-dot menu ----
     const give = (file: Blob, fileName: string) => {
@@ -500,7 +500,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             title: "Page setup",
             body: [form.element],
             className: "quire-setup-dialog",
-            dismiss: "Cancel",
+            dismiss: "cancel",
             action: {
                 label: "OK",
                 press: (_, dialog) => {
@@ -672,13 +672,13 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         const bytes = new Blob([markdown, quire?.style ?? "", quire?.notes ?? ""]).size;
         const list = make("dl", "quire-facts");
         const facts: [string, string][] = [
-            ["File", fileName(name, doc.quire ? ".quire" : doc.mdx ? ".mdx" : ".md")],
-            ["Kept", keptLine(store?.label, savedAt, Date.now())],
-            ["Size", sizeLine(bytes, doc.quire ? new Set(pictureAddresses(doc)).size : 0)],
-            ["Length", lengthLine(countWords(doc))],
+            ["file", fileName(name, doc.quire ? ".quire" : doc.mdx ? ".mdx" : ".md")],
+            ["kept", keptLine(store?.label, savedAt, Date.now())],
+            ["size", sizeLine(bytes, doc.quire ? new Set(pictureAddresses(doc)).size : 0)],
+            ["length", lengthLine(countWords(doc))],
         ];
         for (const [term, value] of facts) list.append(make("dt", "", term), make("dd", "", value));
-        openDialog(from, { title: "Details", body: [list], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+        openDialog(from, { title: "Details", body: [list], action: { label: "done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
     };
     /** The keys' own cut and copy, asked for from a menu: the surface takes them as it takes the keys. */
     const clip = (how: "cut" | "copy") => {
@@ -765,7 +765,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 marked: doing(toggle("mark")),
                 superscript: doing(toggle("sup")),
                 subscript: doing(toggle("sub")),
-                help: () => openDialog(row.words[6]!, { title: "mdQuire help", body: helpBody(showShortcuts), className: "quire-help", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() }),
+                help: () => openDialog(row.words[6]!, { title: "mdQuire help", body: helpBody(showShortcuts), className: "quire-help", action: { label: "done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() }),
                 typing: () =>
                     openTyping(row.words[5]!, {
                         // the arrows and signs are the switch that was there first, kept where it always was
@@ -892,10 +892,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         }
         if (picked !== undefined) {
             const head = make("tr", "quire-count-head");
-            head.append(make("th"), make("th", "", "Document"), make("th", "", "Selected"));
+            head.append(make("th"), make("th", "", "document"), make("th", "", "selected"));
             table.prepend(head);
         }
-        openDialog(from, { title: "Word count", body: [table], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+        openDialog(from, { title: "Word count", body: [table], action: { label: "done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
     };
     // ---- every shortcut and every piece of typing, Ctrl+/: a dialog with a search, grown from where it was asked for ----
     const showShortcuts = (from: HTMLElement) => {
@@ -929,7 +929,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         };
         field.addEventListener("input", fill);
         fill();
-        openDialog(from, { title: "Keyboard shortcuts", body: [field, list], className: "quire-keys-dialog", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+        openDialog(from, { title: "Keyboard shortcuts", body: [field, list], className: "quire-keys-dialog", action: { label: "done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
         field.focus({ preventScroll: true });
     };
 

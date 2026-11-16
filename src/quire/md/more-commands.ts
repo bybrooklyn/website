@@ -57,10 +57,10 @@ export function moreCommands(surface: Surface, options: MoreOptions): Pick<RowAc
         if (here.list.style === "number") return [{ label: "Restart numbering", icon: "number", form: restart, run: () => {} }, carry];
         return [...MARKERS.map(([marker, label]): MenuItem => ({ label, hint: marker, group: "marker", pressed: here.list.marker === marker, words: ["bullet character"], run: doing(markWith(marker)) })), RULE, carry];
     };
-    const restart = () => form({ value: "1", label: "Number to start from", type: "number", button: "Restart", said: "Restart the numbering" }, (typed) => (/^\d{1,9}$/.test(typed) ? doing(restartAt(Number(typed)))() : surface.focus()));
+    const restart = () => form({ value: "1", label: "Number to start from", type: "number", button: "restart", said: "Restart the numbering" }, (typed) => (/^\d{1,9}$/.test(typed) ? doing(restartAt(Number(typed)))() : surface.focus()));
     const bookmark = () => {
         const state = { doc: surface.getDocument(), selection: surface.getSelection() };
-        return form({ value: suggestedName(state), label: "Bookmark name", button: "Add", said: "Add the bookmark" }, (typed) => doing(addBookmark(typed || suggestedName(state)))());
+        return form({ value: suggestedName(state), label: "Bookmark name", button: "add", said: "Add the bookmark" }, (typed) => doing(addBookmark(typed || suggestedName(state)))());
     };
     return {
         subs: { capitals: () => CASES.map(([how, label]) => ({ label, run: doing(recase(how)) })), lists: listLines },

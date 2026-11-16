@@ -16,7 +16,7 @@
 // screen reader hears it as a dialog with its title as its name, and the rest of the page is inert.
 // One is open at a time: opening another closes the first.
 //
-//   const dialog = openDialog(button, { title: "Dictation", body: [line], action: { label: "Choose", press } });
+//   const dialog = openDialog(button, { title: "Dictation", body: [line], action: { label: "choose", press } });
 //   dialog.change(() => swap(), from);   // the dialog eases to its new size; `from` grows into what replaced it
 //   await dialog.close();
 //
@@ -32,9 +32,9 @@ export interface DialogParts {
     body: Node[];
     /** The filled button at the bottom. Pressing it leaves the dialog open: `press` closes it if it should. */
     action?: { label: string; press: (button: HTMLButtonElement, dialog: Dialog) => void };
-    /** A quieter way out beside the button ("Not now", "Cancel"); it closes the dialog. */
+    /** A quieter way out beside the button ("not now", "cancel"); it closes the dialog. */
     dismiss?: string;
-    /** More quiet buttons before the cancel, such as "Download a copy"; one marked `far` stands alone at the far left, for a way out that leaves something behind ("Leave without saving"). */
+    /** More quiet buttons before the cancel, such as "download a copy"; one marked `far` stands alone at the far left, for a way out that leaves something behind ("leave without saving"). */
     others?: { label: string; press: (dialog: Dialog) => void; far?: boolean }[];
     /** Where focus goes when it closes, when that is not the control it grew from (a line of a menu that has gone). */
     returnTo?: HTMLElement;

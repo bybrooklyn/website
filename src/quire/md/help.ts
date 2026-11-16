@@ -39,7 +39,7 @@ export function aboutPanel(): HTMLElement {
         anchor.href = href;
         return anchor;
     };
-    links.append(link("/", "Her site"), link("/projects/mdquire/", "The project"));
+    links.append(link("/", "her site"), link("/projects/mdquire/", "the project"));
     panel.append(said, links);
     return panel;
 }
