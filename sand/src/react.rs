@@ -10,7 +10,7 @@
 //! Every change is counted in `World::fired` by its line, so a test can hold the count of each
 //! material to what the lines that happened say it should be.
 
-use crate::materials::{ALONE, ALWAYS, Heat, Kind, LATENT, LINES, OPEN, Props, REACTIONS, SAME, TABLE};
+use crate::materials::{AFLOAT, ALONE, ALWAYS, Heat, Kind, LATENT, LINES, OPEN, Props, REACTIONS, SAME, SOLID_GROUND, TABLE};
 use crate::world::{World, chance, material, temperature, with_state, with_temperature};
 
 /// A number of 0 to 1023 for line `line` from a cell's roll, so each line has a chance of its own.
@@ -43,7 +43,7 @@ impl World {
         let s = self.stride as isize;
         let sides = [-1, 1, -s, s];
         for (k, line) in REACTIONS.iter().enumerate().take(end as usize).skip(start as usize) {
-            if t < line.above || t > line.below || (line.resting && !self.resting(at, cell, p)) {
+            if t < line.above || t > line.below || (line.resting && !self.resting(at, cell, p, line.ground)) {
                 continue;
             }
             let lucky = line.chance >= ALWAYS || roll_for(roll(), k) < line.chance as u32;
@@ -84,13 +84,15 @@ impl World {
         false
     }
 
-    /// Whether a cell is at rest on something that holds it up: not falling, and over a solid, a
-    /// powder or a liquid at least as heavy. Lava sinking through water is not at rest, so it does not
-    /// harden into stone hanging in the water.
+    /// Whether a cell is at rest on the `ground` a line asks for (`ANY_GROUND`, `SOLID_GROUND`,
+    /// `AFLOAT`): not falling, and over a solid, or over loose ground (a powder, or a liquid at least as
+    /// heavy). Lava sinking through water is held up by neither, so it does not harden hanging in it.
     #[inline]
-    fn resting(&self, at: usize, cell: u32, p: Props) -> bool {
+    fn resting(&self, at: usize, cell: u32, p: Props, ground: u8) -> bool {
         let under = TABLE[material(self.cells[at + self.stride]) as usize];
-        cell >> 30 == 0 && (matches!(under.kind, Kind::Solid | Kind::Powder) || (under.kind == Kind::Liquid && under.density >= p.density))
+        let solid = under.kind == Kind::Solid;
+        let afloat = under.kind == Kind::Powder || (under.kind == Kind::Liquid && under.density >= p.density);
+        cell >> 30 == 0 && if ground == SOLID_GROUND { solid } else if ground == AFLOAT { afloat } else { solid || afloat }
     }
 
     /// Does line `k` to the cell at `at` and, for a line with a neighbor, the neighbor at `there`:

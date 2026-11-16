@@ -139,7 +139,9 @@ pub const ASH: u8 = 17;
 pub const PRIDE: u8 = 18;
 /// Oil that is burning: it keeps itself hot, gives off flames for a few seconds, and burns away.
 pub const BURNING_OIL: u8 = 19;
-/// What lava that meets water hardens into: loose stone that falls and settles, rather than a fixed slab.
+/// What lava that meets water, or hardens floating on molten lava, becomes: loose stone that falls and
+/// settles, rather than a fixed slab. Lighter than lava, so a crust of it floats on a pool; heavier than
+/// water, so it sinks in a lake.
 pub const ROCK: u8 = 20;
 
 /// The shade a material with `glow` 3 is given picks its color: a stripe's number times 4, with
@@ -170,7 +172,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
     Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [40, 40, 40], paint: true },
     Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [214, 92, 30, 245], vary: [60, 90, 30], paint: false },
-    Material { name: "rock", kind: Kind::Powder, density: 255, slide: 1, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [96, 92, 104, 255], vary: [22, 22, 22], paint: false },
+    Material { name: "rock", kind: Kind::Powder, density: 190, slide: 1, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [96, 92, 104, 255], vary: [22, 22, 22], paint: false },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -223,7 +225,20 @@ pub struct Reaction {
     pub hot: u8,
     /// Whether the cell must be at rest, not falling: lava hardens where it lands, not in the air.
     pub resting: bool,
+    /// For a line of a cell at rest, what must hold it up: `ANY_GROUND`, `SOLID_GROUND` (a solid) or
+    /// `AFLOAT` (loose ground: a powder, or a liquid at least as heavy as it). Lava hardening on solid
+    /// ground makes stone; on loose ground, such as molten lava or the rock it has already made, loose
+    /// rock, which floats on lava as a crust and falls when what holds it up is gone, where a fixed slab
+    /// of stone would be left hanging.
+    pub ground: u8,
 }
+
+/// A line of a cell at rest happens whatever holds it up.
+pub const ANY_GROUND: u8 = 0;
+/// A line of a cell at rest happens only where a solid holds it up.
+pub const SOLID_GROUND: u8 = 1;
+/// A line of a cell at rest happens only where loose ground holds it up: a powder, or a liquid at least as heavy.
+pub const AFLOAT: u8 = 2;
 
 /// The chance of a line that happens every time its cell is visited and can.
 pub const ALWAYS: u16 = 1024;
@@ -231,12 +246,12 @@ pub const ALWAYS: u16 = 1024;
 /// A line of `REACTIONS`, written short.
 #[allow(clippy::too_many_arguments)]
 const fn line(a: u8, b: u8, above: u8, below: u8, a_becomes: u8, b_becomes: u8, chance: u16, heat: Heat, hot: u8) -> Reaction {
-    Reaction { a, b, above, below, a_becomes, b_becomes, chance, heat, hot, resting: false }
+    Reaction { a, b, above, below, a_becomes, b_becomes, chance, heat, hot, resting: false, ground: ANY_GROUND }
 }
 
-/// A line of `REACTIONS` for a cell at rest only.
-const fn resting(line: Reaction) -> Reaction {
-    Reaction { resting: true, ..line }
+/// A line of `REACTIONS` for a cell at rest only, held up by `ground`.
+const fn resting(line: Reaction, ground: u8) -> Reaction {
+    Reaction { resting: true, ground, ..line }
 }
 
 /// Every reaction, those of one material together. A cell tries its lines in order each step and
@@ -260,13 +275,15 @@ pub const REACTIONS: &[Reaction] = &[
     // then, so a flame may lick a slick a few times before it catches
     line(OIL, OPEN, 85, 255, BURNING_OIL, SAME, 512, Heat::Kept, 200),
     line(OIL, LAVA, 0, 255, BURNING_OIL, SAME, 256, Heat::Kept, 200),
-    line(OIL, FIRE, 0, 255, BURNING_OIL, SAME, 96, Heat::Kept, 200),
+    line(OIL, FIRE, 0, 255, BURNING_OIL, SAME, 192, Heat::Kept, 200),
     // water hardens the lava it touches now and then, into loose rock that sinks and settles, and boils
     // away; lava, heavier, sinks through the water as it does
     line(LAVA, WATER, 0, 255, ROCK, STEAM, 64, Heat::Shared, 0),
     // lava that cools hardens where it comes to rest; beside water, into loose rock that sinks
-    resting(line(LAVA, WATER, 0, 100, ROCK, SAME, ALWAYS, Heat::Kept, 0)),
-    resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0)),
+    resting(line(LAVA, WATER, 0, 100, ROCK, SAME, ALWAYS, Heat::Kept, 0), ANY_GROUND),
+    resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0), SOLID_GROUND),
+    // on loose ground (molten lava, sand, rock), into loose rock, which floats on lava as a crust
+    resting(line(LAVA, ALONE, 0, 100, ROCK, SAME, ALWAYS, Heat::Kept, 0), AFLOAT),
     // ice that warms melts
     line(ICE, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
     // smoke thins to nothing
@@ -293,8 +310,9 @@ pub const REACTIONS: &[Reaction] = &[
     line(EMBER, ALONE, 0, 255, ASH, SAME, 2, Heat::Kept, 0),
     line(EMBER, EMPTY, 0, 255, SAME, FIRE, 128, Heat::Kept, 230),
     // burning oil gives off flames into the air above and beside it for a few seconds, its heat
-    // lighting the oil beside it, and burns away to nothing or now and then to smoke
+    // and creeping into the oil beside it, and burns away to nothing or now and then to smoke
     line(BURNING_OIL, EMPTY, 0, 255, SAME, FIRE, 160, Heat::Kept, 230),
+    line(BURNING_OIL, OIL, 0, 255, SAME, BURNING_OIL, 24, Heat::Kept, 185),
     line(BURNING_OIL, ALONE, 0, 255, SMOKE, SAME, 2, Heat::Kept, 0),
     line(BURNING_OIL, ALONE, 0, 255, EMPTY, SAME, 6, Heat::Kept, 0),
 ];

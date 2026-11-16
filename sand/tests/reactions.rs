@@ -81,18 +81,19 @@ fn lava_poured_in_one_place_makes_a_molten_pool_with_a_crust_and_not_a_pillar() 
         let mut world = World::new(240, 120, seed);
         let mut poured = 0;
         for _ in 0..600 {
-            let before = world.count(LAVA) + world.count(STONE);
+            let before = world.count(LAVA) + world.count(STONE) + world.count(ROCK);
             world.paint(LAVA, 120, 30, 120, 30, 4, 20, false);
-            poured += world.count(LAVA) + world.count(STONE) - before;
+            poured += world.count(LAVA) + world.count(STONE) + world.count(ROCK) - before;
             world.step();
         }
         // the top of what has landed: the highest row with six cells side by side of lava or stone at rest
-        let resting = |w: &World, x: i32, y: i32| matches!(w.at(x, y), LAVA | STONE) && w.get(x, y) >> 30 == 0;
+        let resting = |w: &World, x: i32, y: i32| matches!(w.at(x, y), LAVA | STONE | ROCK) && w.get(x, y) >> 30 == 0;
         let top = (0..120).find(|&y| (0..234).any(|x| (x..x + 6).all(|x| resting(&world, x, y)))).unwrap();
         let high = 120 - top;
-        let (lava, stone) = (world.count(LAVA), world.count(STONE));
-        println!("seed {seed}: poured {poured}, {lava} lava and {stone} stone, {high} high");
-        assert_eq!(lava + stone, poured, "every cell poured is lava or stone");
+        // stone where it hardened on the ground, loose rock where it hardened afloat on molten lava
+        let (lava, stone) = (world.count(LAVA), world.count(STONE) + world.count(ROCK));
+        println!("seed {seed}: poured {poured}, {lava} lava and {stone} stone and rock, {high} high");
+        assert_eq!(lava + stone, poured, "every cell poured is lava, stone or rock");
         assert!(high <= 40, "a pool, not a pillar: {high} high\n{}", picture(&world, 40, 20, 200, 119));
         assert!(lava > stone, "mostly molten\n{}", picture(&world, 40, 20, 200, 119));
         // left alone it hardens from its edges in: the share of its lava with air beside it falls as
@@ -122,7 +123,7 @@ fn lava_poured_in_one_place_makes_a_molten_pool_with_a_crust_and_not_a_pillar() 
             }
         }
         assert!(halfway.is_some_and(|(_, open)| open < at_first), "the lava open to the air hardens first");
-        assert_eq!((world.count(LAVA), world.count(STONE)), (0, poured), "and it all hardens in the end");
+        assert_eq!((world.count(LAVA), world.count(STONE) + world.count(ROCK)), (0, poured), "and it all hardens in the end");
     }
 }
 
@@ -262,7 +263,7 @@ fn a_lake_of_oil_lit_at_one_end_burns_as_a_fire_moving_across_it_for_seconds() {
         fill_rows(&mut world, OIL, 22, 218, 88, 93);
         let oil = world.count(OIL);
         // a few flames touching its surface at the left end
-        for _ in 0..5 {
+        for _ in 0..10 {
             world.paint(FIRE, 26, 86, 26, 86, 1, 60, false);
             world.step();
         }

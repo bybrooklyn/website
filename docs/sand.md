@@ -288,7 +288,7 @@ One line each in `MATERIALS`. Conduct is in 32nds of the most; `made` is the tem
 | wet dirt | powder | 170 | 12 | 40 | slides at about 72 degrees; stores 8; not offered to the brush |
 | ember (burning wood) | solid | 255 | 20 | 200 | warms 16 a step up to 200; shade flickers with heat; not offered |
 | ash | powder | 40 | 6 | 40 | floats; airy; not offered |
-| rock | powder | 255 | 24 | 40 | loose stone that lava makes in water: sinks and piles; not offered |
+| rock | powder | 190 | 24 | 40 | loose stone that lava makes in water or on loose ground: floats on lava, sinks in water, piles; not offered |
 | burning oil | liquid | 80 | 16 | 185 | warms 16 a step up to 185; shade flickers with heat; not offered |
 
 Fire is a new kind: each step it moves up, or up and to a side by chance (a quarter of the time each
@@ -314,7 +314,8 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | oil | anything airy | 85 or more | burning oil | as it was | 512 | it starts at 185 or more |
 | oil | lava | any | burning oil | as it was | 256 | it starts at 185 or more |
 | oil | fire | any | burning oil | as it was | 96 | it starts at 185 or more |
-| lava, at rest | alone | 100 or less | stone | | always | kept |
+| lava, at rest on a solid | alone | 100 or less | stone | | always | kept |
+| lava, at rest on a powder or on lava | alone | 100 or less | rock | | always | kept |
 | lava | water | any | rock | steam | 64 | shared |
 | lava, at rest | water | 100 or less | rock | | always | kept |
 | ice | alone | 28 or more | water | | always | kept (stores 8) |
@@ -1043,4 +1044,15 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   in a second as before.
 - **Flames for the finer grains**: fire passes heat at 1 (it was 2), so one flame lives 35 to 54 steps,
   about 48, and rises about 47 cells, as tall on the screen as about 23 of the old cells.
+- **No stone left hanging.** On the page, a poured stream of lava stood as a column above the water as
+  it sank, and its outside hardened into a shell of stone on lava that then sank away, leaving 435
+  cells of stone standing on the water. Lava now hardens into stone only where a solid holds it up; on
+  loose ground (a powder, rock, or molten lava) it hardens into rock, which is lighter than lava (190), so
+  a crust of it floats on a pool, and falls when what held it up is gone. The test pool still crusts from
+  its open edges first and hardens through in 4,000 to 5,100 steps. The owner's scene (sand hills, water
+  between, lava poured from above at the left) ends with 2,536 cells of rock heaped on the slope under
+  the water and none of stone, where the old page left 769 of stone as a raft on the water. A burning
+  cell of oil creeps into the oil beside it 24 times in 1024 a step, so a slick keeps burning where a
+  hole has opened in its top, and a flame touching oil lights it 192 times in 1024 (it was 96), as a
+  flame touches the surface only for the step it passes.
 
