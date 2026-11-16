@@ -296,3 +296,28 @@ test("Escape while typing a text keeps what was typed and leaves the typing, as 
     await page.tab.press("Escape");
     expect((await page.tab.run<unknown[]>("window.app.editing().steps()")).length).toBe(1);
 }, 30_000);
+
+test("a mouse's notch with Ctrl held zooms as gently as a notch of the plain wheel, while a touchpad's pinch, many small steps with Ctrl, is followed closely", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await page.tab.press("Escape");
+    /** How many times larger the picture is after the wheel's steps, each with Ctrl held or not, over the middle of the picture. */
+    const zoomedBy = (deltas: number[], ctrl: boolean, mode = 0) =>
+        page!.tab.run<number>(`(() => {
+            const stage = window.app.editing().stage;
+            stage.fit();
+            const before = stage.scale();
+            const room = document.querySelector('.quire-img-stage');
+            const box = room.getBoundingClientRect();
+            for (const deltaY of ${JSON.stringify(deltas)}) room.dispatchEvent(new WheelEvent('wheel', { deltaY, deltaMode: ${mode}, ctrlKey: ${ctrl}, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2, bubbles: true, cancelable: true }));
+            return stage.scale() / before;
+        })()`);
+    const plain = await zoomedBy([-100], false);
+    expect(plain).toBeCloseTo(Math.exp(0.15), 4);
+    expect(await zoomedBy([-100], true)).toBeCloseTo(plain, 4);
+    expect(await zoomedBy([100], true)).toBeCloseTo(1 / plain, 4);
+    // three lines, as a browser that counts the wheel in lines sends a notch
+    expect(await zoomedBy([-3], true, 1)).toBeCloseTo(plain, 4);
+    // a pinch: ten small steps, each followed as it comes, together about a fifth larger
+    expect(await zoomedBy(Array(10).fill(-2), true)).toBeCloseTo(Math.exp(0.2), 4);
+});

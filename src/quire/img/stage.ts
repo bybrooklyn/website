@@ -247,6 +247,20 @@ export function setTurn(steps: Kept[], degrees: number): Kept[] {
 /** The thickness of a mark from a pen, in the original's pixels: at least two. */
 export const thickness = (pen: Pen, size: { width: number; height: number }) => Math.max(2, Math.round(Math.max(size.width, size.height) * pen.weight));
 
+/** How many pixels a wheel's line is taken for, where the browser counts a wheel in lines: three lines to a notch, as a notch of a hundred pixels. */
+export const WHEEL_LINE = 100 / 3;
+
+/**
+ * How much the wheel zooms for a turn of `delta` pixels (down zooms out). A touchpad's pinch comes as the wheel with Ctrl
+ * held, in many small steps, and is followed closely; a mouse's notch with Ctrl held comes as one step of a hundred pixels
+ * or so, which is held to what a notch of the plain wheel zooms, so that it never leaps. They are told apart by the step's
+ * size alone.
+ */
+export function wheelZoom(delta: number, ctrl: boolean): number {
+    const notch = 100 * 0.0015;
+    return Math.exp(ctrl ? Math.max(-notch, Math.min(notch, -delta * 0.01)) : -delta * 0.0015);
+}
+
 /** Builds the stage on an element. */
 export function createStage(hooks: StageHooks) {
     const element = make("div", "quire-img-stage");
@@ -1496,8 +1510,7 @@ export function createStage(hooks: StageHooks) {
         (event) => {
             if (!loaded) return;
             event.preventDefault();
-            // a pinch on a touchpad comes as the wheel with Ctrl held, in small steps
-            zoom(Math.exp(-event.deltaY * (event.ctrlKey ? 0.01 : 0.0015)), pointer(event));
+            zoom(wheelZoom(event.deltaY * (event.deltaMode === 1 ? WHEEL_LINE : event.deltaMode === 2 ? element.clientHeight : 1), event.ctrlKey), pointer(event));
         },
         { passive: false },
     );

@@ -119,7 +119,9 @@ thicknesses in the strip, which also change a picked mark. Every mark, and every
 press and moved by a drag or the arrows, and removed with Delete.
 
 **Zoom and pan.** The wheel and a touchpad's pinch about the pointer, two fingers, Space and a drag or the
-middle button, Ctrl+0 to fit, Ctrl+1 for 100%, Ctrl+= and Ctrl+-.
+middle button, Ctrl+0 to fit, Ctrl+1 for 100%, Ctrl+= and Ctrl+-. A mouse's notch with Ctrl held zooms as a notch
+of the plain wheel does (about 1.16 times); a pinch, which the browser sends as many small steps with Ctrl,
+is followed step by step. They are told apart by the size of the step, never by guessing the device.
 
 **No list of steps.** Every step is still kept, but nothing lists them: marks and covers are picked by
 pressing them on the picture, and pressed again in the same place without moving, the one beneath is
