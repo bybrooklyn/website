@@ -49,6 +49,15 @@ export const LIGHT = 2;
 /** It is drawn faint and spread softly into the air around it. */
 export const SOFT = 4;
 
+/** It is drawn with depth: lighter in its top cell, darker the deeper below its surface. */
+export const DEEP = 8;
+
+/** How many cells below its surface a deep cell darkens through, and how much lighter its top cell is drawn. */
+const DEPTH = { cells: 12, top: 1.3, step: 0.03 };
+
+/** How much more strongly light shows in empty air than on a grain: the glow round flames and lava. */
+export const GLOW_AIR = 1.2;
+
 /** How strongly a soft cell is drawn itself, from 0 to 1; the rest of it is the haze spread around it. */
 export const SOFT_SHARP = 0.7;
 
@@ -199,7 +208,17 @@ void main() {
     ivec2 at = ivec2(inside);
     at.y = rows - 1 - at.y;
     uint mode;
-    vec4 cell = colorOf(texelFetch(cells, at, 0), mode);
+    uvec4 raw = texelFetch(cells, at, 0);
+    vec4 cell = colorOf(raw, mode);
+    if ((mode & 8u) != 0u) {
+        // a deep cell: lighter at the surface, darker the more of it lies above
+        int over = 0;
+        for (int k = 1; k <= ${DEPTH.cells}; k++) {
+            if (at.y - k < 0 || texelFetch(cells, ivec2(at.x, at.y - k), 0).r != raw.r) break;
+            over++;
+        }
+        cell.rgb = clamp(cell.rgb * (over == 0 ? ${DEPTH.top.toFixed(2)} : 1.06 - ${DEPTH.step.toFixed(3)} * float(over)), 0.0, 1.0);
+    }
     vec4 sharp = vec4(cell.rgb * cell.a, cell.a);
     // a soft cell is fainter itself, the rest of it in the haze around it; strong enough that a wisp of
     // steam reads as light and not as a grey grain
@@ -207,7 +226,9 @@ void main() {
     vec2 uv = inside / grid;
     vec4 haze = texture(soft, uv);
     vec4 out4 = sharp + haze * (1.0 - sharp.a);
-    out4.rgb = min(out4.rgb + texture(light, uv).rgb * glow, 1.0);
+    // the light falls on the grains near fire and lava, and glows more strongly in the air round them
+    vec3 lit = texture(light, uv).rgb * glow * (1.0 + ${GLOW_AIR.toFixed(2)} * (1.0 - sharp.a));
+    out4.rgb = min(out4.rgb + lit, 1.0);
     // light over empty cells is kept a color the page can blend: as opaque as it is bright
     out4.a = max(out4.a, max(out4.r, max(out4.g, out4.b)));
     color = out4;

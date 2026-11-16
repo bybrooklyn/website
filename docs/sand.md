@@ -1073,3 +1073,52 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   and the browser keeps the view where it was by scrolling. A second drag moves the page by 0. On a phone
   those rules apply from the start; nothing in the mini was changed for it.
 
+## The look, as chosen
+
+Three palettes, three kinds of light, water with and without depth, and four stages were shown as
+pictures from the page; one of each was chosen and built, and the rest left out (no switch remains).
+
+### Colors: dusk
+
+The natural hues kept, softened and leaned toward the site's violet (its colors are oklch, in
+`src/data/theme.ts`): sand (227, 198, 147), water (58, 132, 202), stone a cool grey (102, 104, 117), dirt
+a red brown (126, 76, 56), wood a tan (171, 124, 60), oil a plum (102, 44, 107), smoke a pale violet
+grey (177, 164, 194), steam near white (236, 238, 249), ice (146, 223, 242), acid (152, 227, 107), wet
+dirt (75, 44, 33), ash a warm grey (152, 146, 133), rock a dark slate (69, 78, 91). Fire, lava, burning
+wood and burning oil keep how far their shade moves with heat, so a flame still runs from red to yellow.
+Each pair of materials is at least 0.085 apart in OKLab (a test holds it; two that both give light are
+left out, as their shade is their heat): the closest are wood and ash at 0.090, then stone and rock,
+stone and dirt. Stone and smoke, water and stone, dirt and wood, oil and either, were each looked at
+side by side, touching, on the page. Smoke and steam still pass their brightness test: smoke stands
+well over the ground, steam well over stone.
+
+### Light and depth
+
+- **Light falls on the grains near fire and lava and glows more strongly in the air round them**: the
+  blurred light is added over a grain as before, and over empty air `GLOW_AIR` (1.2) times more
+  (`cells.ts`).
+- **Water has depth** (`DRAW_DEEP`, a fourth way of drawing in the palette, given to water): its top cell
+  is drawn 1.3 times as light, and each cell below darker by 0.03 for each cell of water over it, up to
+  twelve (`DEPTH` in `cells.ts`), so a lake is light at its surface and deep blue below.
+- On the page's busy world (a lake, a forest burning, a pour) in headless Chromium, with the look on:
+  26 to 38 frames a second and 60 steps a second, a step 7.2 to 7.6 ms. The light and depth cost no
+  measurable frames against the look before (the passes that blur the light run for smoke and steam
+  anyway; depth reads up to twelve cells above each cell of water).
+- At one CSS pixel a cell a flame is a single bright grain, so a fire reads as many sparks rising in
+  columns more than as solid tongues; the rules were not changed for it.
+
+### The stage
+
+- **The world on the site's ground, rounded and softly shaded at its edges, on a floor**, in a frame of
+  the panel's color: the canvas that takes the pointer is rounded, shades its own edges inward, and has a
+  band of stone under it (`--floor`) that the world rests on; the cells' canvas is laid exactly under it
+  by the scene (`fit` in `sand.ts`).
+- **The materials and controls in a column beside the stage**, in the Walker's grid, type, spacing and
+  rules: "materials" (the swatches, five a row, and the flags opening under them for pride sand),
+  "brush" (its size), "world" (pause, step and clear on one line, then copy link to this world, then open
+  a world). The mini is wider than the text, as the generalist is, up to 66rem.
+- At 1288 by 828 the stage with its floor ends at 797 pixels and the column at 824, with every material
+  in it: all in the first screen. The world there is 748 by 423 cells. Under 46rem the column goes under
+  the stage; at 390 by 800 the world is 324 by 464, and a finger pours with the page still (`touch-action:
+  none`).
+
