@@ -15,7 +15,8 @@ let site = "";
 beforeEach(async () => {
     site = await mkdtemp(join(tmpdir(), "photos-script-"));
     for (const folder of ["scripts", "src/data", "public/photos/s"]) await mkdir(join(site, folder), { recursive: true });
-    await $`cp scripts/photos.ts scripts/exif.ts scripts/lib.ts ${join(site, "scripts")}/`.cwd(repo).quiet();
+    // the script and every file of its own it reads from
+    await $`cp scripts/photos.ts scripts/exif.ts scripts/lib.ts scripts/avif.ts ${join(site, "scripts")}/`.cwd(repo).quiet();
     await symlink(join(repo, "node_modules"), join(site, "node_modules"));
     await Bun.write(join(site, "src/data/photos.json"), LISTED);
     for (const name of ["one.avif", "two.avif", "s/one.avif", "s/two.avif"]) await Bun.write(join(site, "public/photos", name), "picture");
