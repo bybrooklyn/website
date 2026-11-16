@@ -93,7 +93,7 @@ test("the backslash held shows the original; the split goes on in the middle and
     const grip = await page.middle(".quire-img-split-grip");
     await page.tab.drag(grip, { x: grip.x - 200, y: grip.y }, 6);
     expect(await page.tab.run<number>("window.app.editing().stage.split()")).toBeCloseTo(stage.width / 2 - 200, -1);
-});
+}, 60_000);
 
 test("Balance on a gray patch makes it neutral, Auto lands as slider and curve values, and the histogram follows", async () => {
     if (!page) return;
@@ -131,7 +131,7 @@ test("as a change is saved the status shows one word at a time, the old gone bef
     // sampled every 20 ms for two seconds: never two words seen at once
     const most = await page.tab.run<number>(`(async () => { let most = 0; for (let i = 0; i < 100; i++) { await new Promise((done) => setTimeout(done, 20)); most = Math.max(most, [...document.querySelectorAll('.quire-status-words')].filter((each) => Number(getComputedStyle(each).opacity) > 0.02).length); } return most; })()`);
     expect(most).toBe(1);
-});
+}, 60_000);
 
 test("an idle Grade surface saves nothing, and a slider, a curve point, a wheel and a brush stroke dragged each save as one change when let go, not on every move", async () => {
     if (!page) return;

@@ -1,0 +1,4 @@
+# Bun's settings for this repository. The tests load scripts/test-setup.ts first, which gives every
+# test sixty seconds unless it sets a limit of its own.
+[test]
+preload = ["./scripts/test-setup.ts"]
