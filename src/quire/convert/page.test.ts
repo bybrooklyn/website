@@ -1,5 +1,8 @@
-// What the converter's page is held to: its right-click menu and the line under the list; and in
-// Chromium, with imgQuire's real encoders served from the site's own files: pictures dropped, pasted and
+// What the converter's page is held to: its right-click menu and its words to press in lowercase, the
+// line under the list, and which groups of the column apply; in Chromium, that it is the small tools'
+// kit (one box, the work and the column, lowercase headings, labels and words, round dots, no boxed
+// buttons, the words for every file at the column's foot, the groups of kinds not in the list faint);
+// and, with imgQuire's real encoders served from the site's own files: pictures dropped, pasted and
 // pasted from the menu each become a row and convert a few at a time to the format and size chosen, with
 // their own names and a number for a second of one name; a phone's HEIC photograph is read; a picture
 // stopped stays stopped; a file of no kind the converter knows says so; one result saves alone and all
@@ -13,19 +16,19 @@ import { expect, test } from "bun:test";
 import type { Browser } from "../../../scripts/browser";
 import { corePage, quire } from "../../../scripts/core-page";
 import { readZip } from "../core/zip";
-import { menuLines, summaryOf } from "./page";
+import { kindsInUse, menuLines, ROW_WORDS, summaryOf, WORDS } from "./page";
 
 const PUBLIC = `${import.meta.dir}/../../../public`;
 
 /** Every address but this machine's own, for `serve` to refuse: the page's own files come from the test's server. */
 export const ELSEWHERE = ["https://", ..."abcdefghijkmnpqrstuvwxyz0123456789".split("").map((letter) => `http://${letter}`), ..."abcdefghijklmnpqrstuvwxyz".split("").map((letter) => `http://l${letter}`)];
 
-test("the right-click menu offers what can be done with the file pressed, then Paste and Choose files", () => {
+test("the right-click menu offers what can be done with the file pressed, then paste and choose files, every line in lowercase", () => {
     const run = { save() {}, copy() {}, stop() {}, again() {}, remove() {}, paste() {}, choose() {} };
-    expect(menuLines(undefined, run).map((each) => each.label)).toEqual(["Paste", "Choose files"]);
-    expect(menuLines({ state: "done", text: true }, run).map((each) => each.label || "-")).toEqual(["Save", "Copy", "Convert again", "Remove", "-", "Paste", "Choose files"]);
-    expect(menuLines({ state: "running", text: false }, run).map((each) => each.label || "-")).toEqual(["Stop", "Remove", "-", "Paste", "Choose files"]);
-    expect(menuLines({ state: "failed", text: false }, run).map((each) => each.label || "-")).toEqual(["Try again", "Remove", "-", "Paste", "Choose files"]);
+    expect(menuLines(undefined, run).map((each) => each.label)).toEqual(["paste", "choose files"]);
+    expect(menuLines({ state: "done", text: true }, run).map((each) => each.label || "-")).toEqual(["save", "copy", "convert again", "remove", "-", "paste", "choose files"]);
+    expect(menuLines({ state: "running", text: false }, run).map((each) => each.label || "-")).toEqual(["stop", "remove", "-", "paste", "choose files"]);
+    expect(menuLines({ state: "failed", text: false }, run).map((each) => each.label || "-")).toEqual(["try again", "remove", "-", "paste", "choose files"]);
 });
 
 test("the line under the list counts the files, those done and what they weigh before and after", () => {
@@ -34,12 +37,24 @@ test("the line under the list counts the files, those done and what they weigh b
     expect(summaryOf([{ state: "done", before: 3_400_000, after: 410_000 }, { state: "done", before: 600_000, after: 90_000 }, { state: "running", before: 5 }])).toBe("3 files · 2 done · 4.0 MB to 500 KB · 1 working");
 });
 
+test("the groups of the column that apply are those of the kinds in the list, or every one while the list is empty", () => {
+    const all = ["picture", "text", "audio", "video"] as const;
+    expect([...kindsInUse([], [...all])]).toEqual([...all]);
+    expect([...kindsInUse(["picture", "picture", "unknown"], [...all])]).toEqual(["picture"]);
+    expect([...kindsInUse(["unknown"], [...all])]).toEqual([]);
+});
+
+test("the words a visitor presses are lowercase, and the sentences keep their capitals", () => {
+    for (const each of [WORDS.choose, WORDS.paste, WORDS.convert, WORDS.stop, WORDS.zip, WORDS.folder, WORDS.clear, ...Object.values(ROW_WORDS)]) expect(each).toBe(each.toLowerCase());
+    expect(WORDS.empty.startsWith("Drop files here")).toBe(true);
+});
+
 /** A page with the converter and its sides, as the site's script builds it, served with the codecs and the worker. */
 export async function convertPage(sides: string, extra = "") {
     const built = await Bun.build({ entrypoints: [`${quire}/img/codec-run.ts`], target: "browser" });
     if (!built.success) throw new Error(built.logs.join("\n"));
     const worker = await built.outputs[0]!.text();
-    const css = await Bun.file(`${import.meta.dir}/../../styles/quire-convert.css`).text();
+    const css = (await Bun.file(`${import.meta.dir}/../../styles/quire-bench.css`).text()) + (await Bun.file(`${import.meta.dir}/../../styles/quire-convert.css`).text());
     return corePage(
         `
         import { createConvertPage } from "${quire}/convert/page.ts";
@@ -131,7 +146,7 @@ export async function convertPage(sides: string, extra = "") {
     );
 }
 
-/** Waiting for the page and pressing its buttons by their words. */
+/** Waiting for the page and pressing its words and choices by their words. */
 export function driver(tab: Browser) {
     const until = async (expression: string, ms = 60_000) => {
         const started = Date.now();
@@ -141,14 +156,49 @@ export function driver(tab: Browser) {
         }
         throw new Error(`waited for ${expression}: ${JSON.stringify(await tab.run("window.convert.rows()"))}`);
     };
+    // a word to press is a button, and a choice is the label of its dot
     const pressText = async (text: string, within = ".quire-convert") => {
-        const at = await tab.run<{ x: number; y: number }>(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(within + " button")})].find((each) => each.textContent.trim() === ${JSON.stringify(text)} && !each.closest('[inert]')); e.scrollIntoView({ block: "center", behavior: "instant" }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+        const at = await tab.run<{ x: number; y: number }>(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(`${within} button, ${within} label`)})].find((each) => each.textContent.trim() === ${JSON.stringify(text)} && !each.closest('[inert]')); e.scrollIntoView({ block: "center", behavior: "instant" }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
         await tab.click(at.x, at.y);
     };
     const paste = (text: string) => tab.run(`(() => { const data = new DataTransfer(); data.setData("text/plain", ${JSON.stringify(text)}); document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); })()`);
     const drop = (files: { name: string; text: string }[]) => tab.run(`(() => { const data = new DataTransfer(); for (const file of ${JSON.stringify(files)}) data.items.add(new File([file.text], file.name)); document.querySelector(".quire-convert").dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true })); })()`);
     return { until, pressText, paste, drop };
 }
+
+test("in Chromium, the page is the kit's box: lowercase group headings, labels and words, round dots for every choice, no boxed buttons, the words for every file at the column's foot, and the groups of kinds not in the list faint", async () => {
+    const page = await convertPage("[pictureSide(window.pictures), window.textSide(window.markdown), window.audioSide(), window.videoSide()]");
+    if (!page) return;
+    const { tab } = page;
+    const { until } = driver(tab);
+    try {
+        // the format names a label keeps as they are written: a unit, and HTML within words
+        const lower = "(text) => text.replace(/HTML|kHz|Mbps/g, '') === text.replace(/HTML|kHz|Mbps/g, '').toLowerCase()";
+        expect(await tab.run("[...document.querySelector('.quire-convert').children].map((each) => each.className)")).toEqual(["quire-bench-work", "quire-bench-side"]);
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side > .quire-bench-group')].map((each) => each.querySelector(':scope > .quire-bench-heading')?.textContent ?? '')")).toEqual(["pictures", "text and data", "sounds", "films", ""]);
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side .quire-bench-label')].map((each) => each.textContent)")).toEqual(["lossy", "lossless", "quality", "under", "size", "largest side", "percent", "metadata", "data into", "separator", "first row", "numbers", "into", "rate", "channels", "bitrate", "bits", "into", "size", "bitrate"]);
+        expect(await tab.run(`[...document.querySelectorAll('.quire-convert :is(.quire-bench-heading, .quire-bench-label, .quire-bench-choices label, .quire-bench-press:not(.quire-convert-offer))')].map((each) => each.textContent).filter((text) => !(${lower})(text))`)).toEqual([]);
+        // every choice of one is a row of round dots, and every thing to press is the kit's word
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side [role=radiogroup]')].every((each) => each.classList.contains('quire-bench-choices') && each.querySelectorAll('input[type=radio]').length > 1)")).toBe(true);
+        expect(await tab.run("[...document.querySelectorAll('.quire-convert button')].filter((each) => !each.classList.contains('quire-bench-press')).length")).toBe(0);
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-side > .quire-bench-stack:last-child .quire-bench-press')].map((each) => [each.textContent, each.classList.contains('quiet')])")).toEqual([
+            ["convert", false],
+            ["stop all", true],
+            ["save all as a zip", true],
+            ["save all into a folder", true],
+            ["clear the list", true],
+        ]);
+        // with the list empty every group can be set; with a picture in it, the others are faint
+        expect(await tab.run("[...document.querySelectorAll('.quire-convert-kind')].map((each) => each.inert)")).toEqual([false, false, false, false]);
+        await tab.run("(async () => window.convert.add(await window.picture(64, 48, 'small.png'), 'small.png'))()");
+        await until("window.convert.rows()[0]?.state === 'ready'");
+        expect(await tab.run("[...document.querySelectorAll('.quire-convert-kind')].map((each) => each.inert)")).toEqual([false, true, true, true]);
+        expect(await tab.run("document.querySelector('.quire-bench-said').textContent")).toBe("1 file");
+        expect(tab.errors).toEqual([]);
+    } finally {
+        await page.close();
+    }
+}, 60_000);
 
 test("in Chromium, pictures arrive four ways, convert with their own names to the size chosen, stop, save alone and as a zip, fetching nothing else", async () => {
     const page = await convertPage("[pictureSide(window.pictures)]");
@@ -184,23 +234,23 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         const workAt = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-convert-drop').getBoundingClientRect(); return { x: b.x + 20, y: b.y + 20 }; })()");
         await tab.run(`document.querySelector('.quire-convert-drop').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: ${workAt.x}, clientY: ${workAt.y} }))`);
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Paste')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('paste')).click()");
         await until("window.convert.rows().length === 5");
         expect(await tab.run<string>("window.convert.rows()[4].name")).toBe("Pasted picture.png");
         // choose a largest side of 256 and convert all
-        await pressText("Largest side");
+        await pressText("largest side");
         await tab.run("(() => { const input = document.querySelector('.quire-convert-fold.open input[type=number]'); input.value = '256'; input.dispatchEvent(new Event('change')); })()");
         expect(await tab.run<string>("document.querySelector('.quire-convert-row .quire-convert-becomes').textContent")).toBe("to WebP, 256 px at most");
-        await pressText("Convert");
+        await pressText("convert");
         await until("window.convert.rows().filter((row) => row.state === 'done').length === 4", 120_000);
         const done = await tab.run<{ name: string; status: string; made: { name: string; facts: string; blob: unknown } }[]>("window.convert.rows().filter((row) => row.made)");
         expect(done.map((row) => row.made.name)).toEqual(["photo.webp", "photo (1).webp", "screenshot.webp", "Pasted picture.webp"]);
         expect(done.map((row) => row.made.facts)).toEqual(["640 × 480 to 256 × 192", "800 × 400 to 256 × 128", "300 × 300 to 256 × 256", "200 × 100"]);
-        expect(await tab.run<string>("document.querySelector('.quire-convert-summary').textContent")).toMatch(/^5 files · 4 done · [\d.]+ KB to [\d.]+ KB$/);
+        expect(await tab.run<string>("document.querySelector('.quire-bench-said').textContent")).toMatch(/^5 files · 4 done · [\d.]+ KB to [\d.]+ KB$/);
         // one saved alone, then all as a zip that reads back with the four in it
         await tab.run("document.querySelector('.quire-convert-row[data-state=done] .quire-convert-row-main').click()");
         await until("window.downloads['photo.webp']");
-        await pressText("Save all as a zip");
+        await pressText("save all as a zip");
         await until("window.downloads['converted.zip']");
         const zip = await tab.run<number[]>("[...window.downloads['converted.zip']]");
         const inside = await readZip(new Uint8Array(zip));
@@ -210,15 +260,15 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         const heic = Buffer.from(await Bun.file(`${import.meta.dir}/../img/fixture.heic`).arrayBuffer()).toString("base64");
         await tab.run(`window.convert.add(new File([Uint8Array.from(atob("${heic}"), (c) => c.charCodeAt(0))], "IMG_0001.HEIC"), "IMG_0001.HEIC")`);
         await until("window.convert.rows().length === 6 && window.convert.rows()[5].label === 'HEIC picture'");
-        await pressText("Convert");
+        await pressText("convert");
         await until("window.convert.rows()[5].state === 'done'");
         expect(await tab.run("window.convert.rows()[5].made.name")).toBe("IMG_0001.webp");
         expect(await tab.run("window.convert.rows()[5].made.facts")).toBe("96 × 64");
         // a large picture as AVIF, stopped while it is written, stays stopped
-        await pressText("AVIF");
+        await pressText("avif");
         await tab.run("(async () => window.convert.add(await window.picture(3000, 2000, 'big.png'), 'big.png'))()");
         await until("window.convert.rows().length === 7");
-        await pressText("Convert");
+        await pressText("convert");
         await until("window.convert.rows()[6].state === 'running'");
         await tab.run("document.querySelector('.quire-convert-row:last-child .quire-convert-row-main').click()");
         expect(await tab.run<string>("window.convert.rows()[6].state")).toBe("stopped");
@@ -258,7 +308,7 @@ test("in Chromium, text pasted and dropped converts both ways, a shape that cann
             ["config.yaml", "YAML", "ready"],
         ]);
         expect(await tab.run("window.convert.rows()[3].notes")).toEqual(["This is JSON already. Choose another format for data."]);
-        await pressText("Convert");
+        await pressText("convert");
         await until("window.convert.rows().filter((row) => row.state === 'done' || row.state === 'failed').length === 4");
         const rows = await tab.run<{ name: string; state: string; notes: string[]; made?: { name: string; text: string } }[]>("window.convert.rows()");
         expect(JSON.parse(rows[0]!.made!.text)).toEqual([{ name: "Ada", age: "36" }, { name: "Hopper, Grace", age: "85" }]);
@@ -270,18 +320,18 @@ test("in Chromium, text pasted and dropped converts both ways, a shape that cann
         expect(rows[5]!.state).toBe("failed");
         expect(rows[5]!.notes[0]).toContain("anchor or an alias");
         // into CSV: the nested people are refused with an offer, and the offer converts them
-        await pressText("CSV", ".quire-convert-panel");
-        await pressText("Convert");
+        await pressText("csv", ".quire-bench-side");
+        await pressText("convert");
         await until("window.convert.rows()[3].state === 'failed' && window.convert.rows()[4].state === 'done'");
         expect(await tab.run("window.convert.rows()[3].notes")).toEqual(['CSV holds one plain value in each field, and the column "address" holds nested data in row 1.', "Spread nested values into columns named like address.city."]);
         await pressText("Spread nested values into columns named like address.city.");
         await until("window.convert.rows()[3].state === 'done'");
         expect(await tab.run("window.convert.rows()[3].made.text")).toBe("name,address.city\r\nAda,London\r\nGrace,New York\r\n");
         // into TOML: a list is refused and put under a name when the offer is taken
-        await pressText("TOML", ".quire-convert-panel");
+        await pressText("toml", ".quire-bench-side");
         await tab.run("(() => { const row = document.querySelectorAll('.quire-convert-row')[4]; row.scrollIntoView({ block: 'center', behavior: 'instant' }); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('convert again')).click()");
         await until("window.convert.rows()[4].state === 'failed'");
         expect(await tab.run("window.convert.rows()[4].notes")).toEqual(["TOML needs named values at the top, and this is a list.", "Put the list under the name items."]);
         await pressText("Put the list under the name items.");
@@ -307,8 +357,8 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
         await tab.run(`(() => { const data = new DataTransfer(); data.items.add(window.wavOf(2)); document.querySelector(".quire-convert").dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true })); })()`);
         await until("window.convert.rows()[0]?.label === 'WAV sound, 44.1 kHz stereo, 0:02'");
         // the browser is asked what it writes; AAC, which Chromium on Linux does not write, is said so
-        await until("!document.querySelector('[data-kind=audio] .quire-convert-choice[title^=\"Asking\"]')");
-        const aac = await tab.run<{ cannot: boolean; title: string }>("(() => { const b = [...document.querySelectorAll('[data-kind=audio] .quire-convert-choice')].find((each) => each.textContent === 'AAC M4A'); return { cannot: b.classList.contains('cannot'), title: b.title }; })()");
+        await until("!document.querySelector('[data-kind=audio] .quire-bench-choices label[title^=\"Asking\"]')");
+        const aac = await tab.run<{ cannot: boolean; title: string }>("(() => { const b = [...document.querySelectorAll('[data-kind=audio] .quire-bench-choices label')].find((each) => each.textContent === 'aac m4a'); return { cannot: b.classList.contains('cannot'), title: b.title }; })()");
         const writesAac = await tab.run<boolean>("AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }).then((answer) => answer.supported)");
         expect(aac.cannot).toBe(!writesAac);
         const notes = await tab.run<string[]>("[...document.querySelectorAll('[data-kind=audio] .quire-convert-note')].map((each) => each.textContent)");
@@ -317,15 +367,15 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
             expect(notes).toContain("This browser cannot write AAC, so it is not offered here.");
         }
         expect(notes).toContain("MP3 is read and not written: no MP3 encoder has a free license, and browsers do not write MP3.");
-        await pressText("Convert");
+        await pressText("convert");
         await until("window.convert.rows()[0].state === 'done'");
         expect(await tab.run("window.convert.rows()[0].made.name")).toBe("tone.flac");
         expect(await tab.run("window.convert.rows()[0].made.became")).toBe("FLAC, 44.1 kHz stereo, 0:02");
-        await pressText("Opus Ogg");
+        await pressText("opus ogg");
         expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to FLAC, 44.1 kHz stereo, 0:02");
         await tab.run("(() => { const row = document.querySelector('.quire-convert-row'); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('convert again')).click()");
         await until("window.convert.rows()[0].state === 'done' && window.convert.rows()[0].made.name === 'tone.opus'");
         expect(await tab.run("window.convert.rows()[0].made.became")).toBe("Opus in Ogg, 48 kHz stereo, 0:02");
         expect(tab.errors).toEqual([]);
@@ -344,15 +394,17 @@ test("in Chromium, a film dropped says what it holds, converts to WebM smaller a
         await tab.run(`(async () => { const data = new DataTransfer(); data.items.add(await window.filmOf(4)); document.querySelector(".quire-convert").dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true })); })()`);
         await until("window.convert.rows()[0]?.label.startsWith('MP4 film, H.264')");
         expect(await tab.run("window.convert.rows()[0].label")).toBe("MP4 film, H.264 320 × 240, Opus sound, 0:04");
-        await until("!document.querySelector('[data-kind=video] .quire-convert-choice[title^=\"Asking\"]')");
-        await pressText("WebM VP9");
+        await until("!document.querySelector('[data-kind=video] .quire-bench-choices label[title^=\"Asking\"]')");
+        await pressText("webm vp9");
         await pressText("360p");
         await pressText("0.5");
         expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to WebM VP9, 360p at most, 0.5 Mbps");
         // the bar moves only as the film is worked through: its shares, seen while it runs, only rise
         await tab.run("window.shares = []; window.watch = setInterval(() => { const bar = document.querySelector('.quire-convert-track i'); window.shares.push(parseFloat(bar.style.width) || 0); }, 20)");
-        await pressText("Convert");
+        await pressText("convert");
         await until("window.convert.rows()[0].state === 'done'");
+        // the watch is given a few of its turns after the film is done, as on a busy machine the test may hear of it first
+        await tab.wait(200);
         await tab.run("clearInterval(window.watch)");
         const shares = await tab.run<number[]>("window.shares");
         expect(shares.every((share, index) => index === 0 || share >= shares[index - 1]!)).toBe(true);
@@ -363,13 +415,13 @@ test("in Chromium, a film dropped says what it holds, converts to WebM smaller a
         // a longer film stopped while it runs stays stopped, and can be tried again
         await tab.run(`(async () => window.convert.add(await window.filmOf(12), "long.mp4"))()`);
         await until("window.convert.rows().length === 2 && window.convert.rows()[1].label.startsWith('MP4 film')");
-        await pressText("Convert");
+        await pressText("convert");
         await until("window.convert.rows()[1].state === 'running'");
         await tab.run("document.querySelectorAll('.quire-convert-row')[1].querySelector('.quire-convert-row-main').click()");
         expect(await tab.run("window.convert.rows()[1].state")).toBe("stopped");
         await tab.wait(800);
         expect(await tab.run("window.convert.rows()[1].state")).toBe("stopped");
-        expect(await tab.run<string>("document.querySelectorAll('.quire-convert-row')[1].querySelector('.quire-convert-row-main').textContent")).toBe("Try again");
+        expect(await tab.run<string>("document.querySelectorAll('.quire-convert-row')[1].querySelector('.quire-convert-row-main').textContent")).toBe("try again");
         expect(tab.errors).toEqual([]);
     } finally {
         await page.close();

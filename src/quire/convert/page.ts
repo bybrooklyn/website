@@ -1,16 +1,21 @@
-// The converter's page (/convert/): files in, files out, everything in this browser. The list of files
-// is the work: each a quiet row of its name, what it is, what it will become, its size before and
-// after, and how it is going, with a bar that fills only as steps are done. The choices for each kind
-// (pictures, text and data, sounds, films) have their own room beside the list (under it on a phone),
-// never over it. Files arrive by a drop, a paste, Choose files, or Paste in the list's right-click menu
-// (Shift leaves the browser's own), and on a phone a Paste button; text pasted becomes a file of its
-// own. Convert runs every file not yet done, a few at a time; each can be stopped, saved alone, or
-// tried again. Many leave as one zip or, where the browser allows it, straight into a folder, each
-// under its own name with the new ending, a second of one name numbered, nothing overwritten. Rows
-// arrive and leave by growing and shrinking; reduced motion turns the motion off.
+// The converter's page (/convert/): files in, files out, everything in this browser. It is built from
+// every small tool's kit (core/bench.ts), as the cut-out is: one box, the work on the left with one line
+// under it, and a column of groups on the right. The work is the place files are dropped and the list
+// of them: each a quiet row of its name, what it is, what it will become, its size before and after,
+// and how it is going, with a bar that fills only as steps are done. It stays in view while the long
+// column scrolls past. The column has a group for each kind (pictures, text and data, sounds, films),
+// those of no kind in the list drawn faint, and at its foot the words to press for them all, which
+// stay at the window's foot until the column ends. Files arrive by a drop, a paste, choose files, or
+// paste in the list's right-click menu (Shift leaves the browser's own), and on a phone a paste of its
+// own; text pasted becomes a file of its own. Convert runs every file not yet done, a few at a time;
+// each can be stopped, saved alone, or tried again. Many leave as one zip or, where the browser allows
+// it, straight into a folder, each under its own name with the new ending, a second of one name
+// numbered, nothing overwritten. Rows arrive and leave by growing and shrinking; reduced motion turns
+// the motion off.
 //
 //   createConvertPage(host, [pictureSide(engine), textSide(markdown), audioSide(), videoSide()]);
 
+import { bench, stack, word } from "../core/bench";
 import { flowMenu, make, RULE, type MenuItem } from "../core/ui";
 import { kindOf, type Found, type Kind } from "./kinds";
 import { changeSaid, outName, sizeSaid } from "./names";
@@ -18,18 +23,21 @@ import { download, foldersAllowed, intoFolder, pickFolder, zipOf } from "./out";
 import { Offered, type Item, type Made, type Side } from "./parts";
 import { createQueue, type Job } from "./queue";
 
-/** The words of the page a visitor reads first, and of its buttons. */
+/** The words of the page a visitor reads first, and the words to press, in lowercase as the site's labels are. */
 export const WORDS = {
     empty: "Drop files here, paste them, or choose them: pictures, text and data, sounds and films. Nothing leaves your browser.",
-    choose: "Choose files",
-    paste: "Paste",
-    convert: "Convert",
-    stop: "Stop all",
-    zip: "Save all as a zip",
-    folder: "Save all into a folder",
-    clear: "Clear the list",
+    choose: "choose files",
+    paste: "paste",
+    convert: "convert",
+    stop: "stop all",
+    zip: "save all as a zip",
+    folder: "save all into a folder",
+    clear: "clear the list",
     noFolder: "This browser cannot write into a folder, so many files leave as one zip.",
 };
+
+/** The words to press on a file's own row, for where it is. */
+export const ROW_WORDS = { stop: "stop", save: "save", again: "try again", copy: "copy" };
 
 /** Where a file in the list is. */
 export type RowState = "ready" | "waiting" | "running" | "done" | "stopped" | "failed" | "cannot";
@@ -45,20 +53,26 @@ export const STATE_WORDS: Record<RowState, string> = {
     cannot: "Cannot convert",
 };
 
-/** The lines of the list's right-click menu: for a file, what can be done with it; then Paste and Choose files. */
+/** The lines of the list's right-click menu, in lowercase as the page's own words to press are: for a file, what can be done with it; then paste and choose files. */
 export function menuLines(row: { state: RowState; text: boolean } | undefined, run: { save(): void; copy(): void; stop(): void; again(): void; remove(): void; paste(): void; choose(): void }): MenuItem[] {
     const always: MenuItem[] = [
-        { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste },
+        { label: WORDS.paste, icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste },
         { label: WORDS.choose, icon: "file", hint: "Ctrl+O", key: "choose", run: run.choose },
     ];
     if (!row) return always;
     const lines: MenuItem[] = [];
-    if (row.state === "done") lines.push({ label: "Save", icon: "download", key: "save", run: run.save });
-    if (row.state === "done" && row.text) lines.push({ label: "Copy", icon: "copy", key: "copy", run: run.copy });
-    if (row.state === "waiting" || row.state === "running") lines.push({ label: "Stop", icon: "close", key: "stop", run: run.stop });
-    if (row.state === "done" || row.state === "stopped" || row.state === "failed") lines.push({ label: row.state === "done" ? "Convert again" : "Try again", icon: "redo", key: "again", run: run.again });
-    lines.push({ label: "Remove", icon: "trash", hint: "Delete", key: "remove", run: run.remove });
+    if (row.state === "done") lines.push({ label: ROW_WORDS.save, icon: "download", key: "save", run: run.save });
+    if (row.state === "done" && row.text) lines.push({ label: ROW_WORDS.copy, icon: "copy", key: "copy", run: run.copy });
+    if (row.state === "waiting" || row.state === "running") lines.push({ label: ROW_WORDS.stop, icon: "close", key: "stop", run: run.stop });
+    if (row.state === "done" || row.state === "stopped" || row.state === "failed") lines.push({ label: row.state === "done" ? "convert again" : ROW_WORDS.again, icon: "redo", key: "again", run: run.again });
+    lines.push({ label: "remove", icon: "trash", hint: "Delete", key: "remove", run: run.remove });
     return [...lines, RULE, ...always];
+}
+
+/** The kinds of the files in the list whose groups of the column apply to them; with none in the list, every group applies. */
+export function kindsInUse(kinds: Kind[], all: Kind[]): Set<Kind> {
+    const known = kinds.filter((kind) => all.includes(kind));
+    return new Set(kinds.length ? known : all);
 }
 
 /** The line under the list: how many files, how many done, and what they weigh before and after. */
@@ -98,69 +112,66 @@ interface Row {
     share: number;
 }
 
-/** Builds the page on its host, with a side of the panel for each kind it converts. */
+/** Builds the page on its host, with a group of the column for each kind it converts. */
 export function createConvertPage(host: HTMLElement, sides: Side[]) {
-    const root = make("div", "quire-convert");
-    const work = make("div", "quire-convert-work");
-    const panel = make("div", "quire-convert-panel");
-    panel.setAttribute("aria-label", "Choices");
-    root.append(work, panel);
+    // the box every small tool is built from (core/bench.ts): the files' side, one line under it, and the column of groups
+    const box = bench("Convert", "quire-convert");
+    const { root, work, side: column } = box;
     host.append(root);
 
-    // ---- the work: where files arrive, what can be done with them all, and the list ----
+    // ---- the work: where files arrive, and the list ----
     const drop = make("div", "quire-convert-drop");
     const chooser = make("input");
     chooser.type = "file";
     chooser.multiple = true;
     chooser.hidden = true;
-    const choose = make("button", "quire-convert-main", WORDS.choose);
-    choose.type = "button";
+    const choose = word(WORDS.choose, () => chooser.click());
     choose.title = "Choose files (Ctrl+O)";
-    choose.addEventListener("click", () => chooser.click());
-    const pasteButton = make("button", "quire-convert-plain quire-convert-paste", WORDS.paste);
-    pasteButton.type = "button";
-    pasteButton.addEventListener("click", () => void pasteFromMenu());
+    const pasteButton = word(WORDS.paste, () => void pasteFromMenu(), true);
+    pasteButton.classList.add("quire-convert-paste");
     const dropActions = make("div", "quire-convert-actions");
     dropActions.append(choose, pasteButton, chooser);
     drop.append(make("p", "quire-convert-empty", WORDS.empty), dropActions);
+    const list = make("ol", "quire-convert-rows");
+    list.setAttribute("aria-label", "Files");
+    const room = make("div", "quire-convert-room");
+    room.append(drop, list);
+    box.hold(room);
 
-    const bar = make("div", "quire-convert-bar");
-    const convertButton = make("button", "quire-convert-main", WORDS.convert);
-    convertButton.type = "button";
+    // ---- the column: a group for each kind, then the words for every file at its foot ----
+    for (const side of sides) {
+        column.append(side.element);
+        side.element.classList.add("quire-convert-kind");
+        side.changed = () => refresh();
+    }
+    const convertButton = word(WORDS.convert, () => convertAll());
     convertButton.title = "Convert every file not yet done (Ctrl+Enter)";
-    convertButton.addEventListener("click", () => convertAll());
-    const stopButton = make("button", "quire-convert-plain", WORDS.stop);
-    stopButton.type = "button";
-    stopButton.addEventListener("click", () => queue.stopAll());
-    const zipButton = make("button", "quire-convert-plain", WORDS.zip);
-    zipButton.type = "button";
+    const stopButton = word(WORDS.stop, () => queue.stopAll(), true);
+    const zipButton = word(WORDS.zip, () => void saveZip(), true);
     zipButton.title = "Save every file done as one zip (Ctrl+S)";
-    zipButton.addEventListener("click", () => void saveZip());
-    const folderButton = make("button", "quire-convert-plain", WORDS.folder);
-    folderButton.type = "button";
+    const folderButton = word(WORDS.folder, () => void saveFolder(), true);
     folderButton.title = foldersAllowed() ? "Write every file done into a folder you choose (Ctrl+Shift+S)" : WORDS.noFolder;
     if (!foldersAllowed()) {
         folderButton.setAttribute("aria-disabled", "true");
         folderButton.classList.add("cannot");
     }
-    folderButton.addEventListener("click", () => void saveFolder());
-    const clearButton = make("button", "quire-convert-plain", WORDS.clear);
-    clearButton.type = "button";
-    clearButton.addEventListener("click", () => clear());
-    bar.append(convertButton, stopButton, zipButton, folderButton, clearButton);
-    const summary = make("p", "quire-convert-summary");
-    summary.setAttribute("aria-live", "polite");
-    const said = make("p", "quire-convert-said");
-    said.setAttribute("aria-live", "polite");
-    const list = make("ol", "quire-convert-rows");
-    list.setAttribute("aria-label", "Files");
-    work.append(drop, bar, summary, said, list);
-    const say = (words: string) => (said.textContent = words);
+    const clearButton = word(WORDS.clear, () => clear(), true);
+    const actions = stack(undefined, convertButton, stopButton, zipButton, folderButton, clearButton);
+    actions.classList.add("quire-convert-all");
+    column.append(actions);
 
-    for (const side of sides) {
-        panel.append(side.element);
-        side.changed = () => refresh();
-    }
+    // the one line under the work: what was just done, else how the list stands; while files are worked on, how many
+    let said = "";
+    let summary = "";
+    const sayLine = () => {
+        const working = rows.some((row) => row.state === "running" || row.state === "waiting");
+        box.busy(working, working ? summary : undefined);
+        box.say(said || summary);
+    };
+    const say = (words: string) => {
+        said = words;
+        sayLine();
+    };
 
     // ---- the rows ----
     const rows: Row[] = [];
@@ -175,10 +186,10 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
     });
     const sideOf = (row: Row) => sides.find((side) => side.kind === row.item.found.kind);
 
-    function button(label: string, className: string, press: () => void) {
-        const made = make("button", className, label);
-        made.type = "button";
-        made.addEventListener("click", press);
+    /** A word to press on a row, with the row's own class beside the kit's. */
+    function button(label: string, className: string, press: () => void, quiet = false) {
+        const made = word(label, press, quiet);
+        made.classList.add(...className.split(" "));
         return made;
     }
 
@@ -200,9 +211,9 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
         const status = make("span", "quire-convert-status");
         const actions = make("div", "quire-convert-row-actions");
         const row: Row = { id: ++count, item, state: "ready", element, what, becomes, sizes, status, bar: make("i"), notes: make("div", "quire-convert-notes"), main: undefined as unknown as HTMLButtonElement, copy: undefined as unknown as HTMLButtonElement, share: 0 };
-        row.main = button("", "quire-convert-small quire-convert-row-main", () => pressMain(row));
-        row.copy = button("Copy", "quire-convert-small quire-convert-copy", () => void copyText(row));
-        const remove = button("×", "quire-convert-small quire-convert-remove", () => removeRow(row));
+        row.main = button("", "quire-convert-row-main", () => pressMain(row));
+        row.copy = button(ROW_WORDS.copy, "quire-convert-copy", () => void copyText(row), true);
+        const remove = button("×", "quire-convert-remove", () => removeRow(row), true);
         remove.title = "Remove";
         remove.setAttribute("aria-label", `Remove ${name}`);
         actions.append(row.main, row.copy, remove);
@@ -247,7 +258,7 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
         if (state === "cannot" && "cannot" in becoming) showNotes(row, [becoming.cannot]);
         else if (state === "ready") showNotes(row, []);
         row.status.textContent = words ?? STATE_WORDS[state];
-        const main = state === "waiting" || state === "running" ? "Stop" : state === "done" ? "Save" : state === "stopped" || state === "failed" ? "Try again" : "";
+        const main = state === "waiting" || state === "running" ? ROW_WORDS.stop : state === "done" ? ROW_WORDS.save : state === "stopped" || state === "failed" ? ROW_WORDS.again : "";
         row.main.textContent = main;
         row.main.classList.toggle("away", !main);
         row.main.inert = !main;
@@ -265,7 +276,7 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
     function showNotes(row: Row, notes: string[], offer?: { label: string; options: Record<string, unknown> }) {
         const lines: HTMLElement[] = notes.map((each) => make("p", "quire-convert-row-note", each));
         if (offer) {
-            const take = button(offer.label, "quire-convert-small quire-convert-offer", () => {
+            const take = button(offer.label, "quire-convert-offer", () => {
                 row.item.options = { ...row.item.options, ...offer.options };
                 start(row);
             });
@@ -371,7 +382,16 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
         folderButton.disabled = !done.length && foldersAllowed();
         clearButton.disabled = !rows.length;
         root.classList.toggle("has-files", rows.length > 0);
-        summary.textContent = summaryOf(rows.map((row) => ({ state: row.state, before: row.item.file.size, after: row.made?.blob.size })));
+        // the groups for kinds not in the list are drawn faint, so the ones that act on these files stand out
+        const used = kindsInUse(
+            rows.map((row) => row.item.found.kind),
+            sides.map((side) => side.kind),
+        );
+        for (const side of sides) side.element.inert = !used.has(side.kind);
+        summary = summaryOf(rows.map((row) => ({ state: row.state, before: row.item.file.size, after: row.made?.blob.size })));
+        // a change in the list says how it stands again, in place of what was said before it
+        said = "";
+        sayLine();
     }
 
     // ---- getting results out ----
@@ -552,5 +572,5 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
     };
 }
 
-/** The kinds the page knows, in the order the panel shows them. */
+/** The kinds the page knows, in the order the column shows them. */
 export const KINDS: Kind[] = ["picture", "text", "audio", "video"];

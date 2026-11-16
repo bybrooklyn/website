@@ -1,11 +1,12 @@
-// The pictures' side of the converter's panel: the format (imgQuire's, those that lose a little then those that
+// The pictures' group of the converter's column: the format (imgQuire's, those that lose a little then those that
 // keep every pixel), the quality or a weight to come in under, the size (as it came, a largest side, or
 // a share), and what of the metadata goes with it, in imgQuire's words. A picture the browser cannot
 // read (a TIFF in Chromium, say) is said so in its row when it is tried.
 
+import { group, slide, typed } from "../core/bench";
 import { make } from "../core/ui";
 import { readWeight, sizeSaid } from "./names";
-import { choices, fold, line, note, numberField, section, type Becoming, type Item, type Made, type Side } from "./parts";
+import { choices, fold, note, numberField, type Becoming, type Item, type Made, type Side } from "./parts";
 import { attemptsFor, convertPicture, type Keep, type PictureChoice, type PictureEngine } from "./pictures";
 
 /** What of a picture's metadata goes with it, as imgQuire's export says it. */
@@ -24,7 +25,7 @@ export function pictureWords(choice: PictureChoice, label: string): string {
     return `${label}${size}`;
 }
 
-/** The pictures' side of the panel, working through imgQuire's engine. */
+/** The pictures' group of the column, working through imgQuire's engine. */
 export function pictureSide(engine: PictureEngine): Side {
     const choice: PictureChoice = { ...PICTURE_DEFAULT };
     const side: Side = {
@@ -57,23 +58,16 @@ export function pictureSide(engine: PictureEngine): Side {
         fillQuality();
         changed();
     };
-    for (const list of [lossyFormats, losslessFormats]) formatRows.push(choices("Format", list.map((each) => ({ value: each.key, label: each.label.replace(/ lossless$/, ""), tip: each.tip })), choice.format, pick));
+    for (const [label, list] of [["lossy", lossyFormats], ["lossless", losslessFormats]] as const) formatRows.push(choices(label, list.map((each) => ({ value: each.key, label: each.label.replace(/ lossless$/, "").toLowerCase(), tip: each.tip })), choice.format, pick));
 
-    const quality = make("input", "quire-convert-range");
-    quality.type = "range";
-    quality.min = "5";
-    quality.max = "100";
-    quality.value = String(Math.round(choice.quality * 100));
-    quality.setAttribute("aria-label", "Quality");
-    const qualityShown = make("output", "quire-convert-value", quality.value);
-    quality.addEventListener("input", () => {
-        choice.quality = Number(quality.value) / 100;
-        qualityShown.textContent = quality.value;
+    const quality = slide("quality", { min: 5, max: 100 }, (value) => {
+        choice.quality = value / 100;
         changed();
     });
-    const under = make("input", "quire-convert-field quire-convert-under");
-    under.placeholder = "No limit";
-    under.setAttribute("aria-label", "Under");
+    quality.set(Math.round(choice.quality * 100));
+    // the weight is read when it is left or Enter is pressed, so that a half typed weight is not refused
+    const underLine = typed("under", () => {}, { hint: "No limit" });
+    const under = underLine.input as HTMLInputElement;
     const underSaid = note();
     const readUnder = () => {
         const target = readWeight(under.value);
@@ -86,25 +80,23 @@ export function pictureSide(engine: PictureEngine): Side {
     };
     under.addEventListener("change", readUnder);
     under.addEventListener("keydown", (event) => event.key === "Enter" && readUnder());
-    const qualityLine = line("Quality", quality, qualityShown);
-    qualityLine.classList.add("with-value");
-    const lossyFold = fold(qualityLine, line("Under", under), underSaid);
+    const lossyFold = fold(quality.row, underLine.row, underSaid);
     function fillQuality() {
         const lossy = engine.formats.find((each) => each.key === choice.format)!.lossy;
         lossyFold.open(lossy);
-        quality.disabled = !!choice.target;
+        quality.input.disabled = !!choice.target;
     }
 
-    const longest = numberField("Largest side", "px", 2048, { least: 16, most: 16384 }, (value) => ((choice.size = { by: "side", value }), changed()));
-    const share = numberField("Percent of its size", "%", 50, { least: 1, most: 100 }, (value) => ((choice.size = { by: "percent", value }), changed()));
+    const longest = numberField("largest side", "px", 2048, { least: 16, most: 16384 }, (value) => ((choice.size = { by: "side", value }), changed()));
+    const share = numberField("percent", "%", 50, { least: 1, most: 100 }, (value) => ((choice.size = { by: "percent", value }), changed()));
     const sideFold = fold(longest.element);
     const shareFold = fold(share.element);
     const sizes = choices<"same" | "side" | "percent">(
-        "Size",
+        "size",
         [
-            { value: "same", label: "As it came" },
-            { value: "side", label: "Largest side", tip: "No side longer than this; a smaller picture is left as it is" },
-            { value: "percent", label: "Percent" },
+            { value: "same", label: "as it came" },
+            { value: "side", label: "largest side", tip: "No side longer than this; a smaller picture is left as it is" },
+            { value: "percent", label: "percent" },
         ],
         "same",
         (value) => {
@@ -114,18 +106,9 @@ export function pictureSide(engine: PictureEngine): Side {
             changed();
         },
     );
-    const keeps = choices<Keep>("Metadata", KEEPS.map((each) => ({ value: each.key, label: each.label, tip: each.tip })), choice.keep, (value) => ((choice.keep = value), changed()));
+    const keeps = choices<Keep>("metadata", KEEPS.map((each) => ({ value: each.key, label: each.label.toLowerCase(), tip: each.tip })), choice.keep, (value) => ((choice.keep = value), changed()));
 
-    side.element = section(
-        "Pictures",
-        line("Lossy", formatRows[0]!.element),
-        line("Lossless", formatRows[1]!.element),
-        lossyFold.element,
-        line("Size", sizes.element),
-        sideFold.element,
-        shareFold.element,
-        line("Metadata", keeps.element),
-    );
+    side.element = group("pictures", formatRows[0]!.element, formatRows[1]!.element, lossyFold.element, sizes.element, sideFold.element, shareFold.element, keeps.element);
     side.element.dataset.kind = "picture";
     fillQuality();
     return side;
