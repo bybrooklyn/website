@@ -48,6 +48,8 @@ const ortFiles = {
 export default defineConfig({
     site: "https://bybrooklyn.dev",
     trailingSlash: "always",
+    // Pictures are made by the site's own service: Astro's, with AVIF written progressive where this machine can (src/lib/progressive-image.ts).
+    image: { service: { entrypoint: fileURLToPath(new URL("./src/lib/progressive-image.ts", import.meta.url)) } },
     build: {
         // The stylesheets are small, and a page that carries its own styles
         // can be drawn after one round trip instead of three.

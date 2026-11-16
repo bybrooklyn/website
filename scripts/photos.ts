@@ -31,6 +31,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp, { type Sharp } from "sharp";
 import type { Photo } from "../src/lib/photos";
+import { avifOf, isProgressive } from "./avif";
 import { readExif } from "./exif";
 import { root, slug as words, stem, writeJson } from "./lib";
 
@@ -84,6 +85,21 @@ if (pictures.length + notes.size > 0) await mkdir(ADDED, { recursive: true });
 if (pictures.length > 0) await mkdir(OUT, { recursive: true });
 await mkdir(SMALL, { recursive: true });
 
+/**
+ * Writes a picture, already upright and no more than 2000 px on its long edge, into public/photos/ and its
+ * smaller copy into public/photos/s/, each as an AVIF that is progressive where that is worth it
+ * (avif.ts): in Chromium such a picture shows whole and slightly soft once a tenth of it has arrived.
+ * Effort 2 for the ordinary one: a little larger than the slowest setting would give, and several times
+ * quicker to make. Gives the full picture's size and how many of the two came out progressive.
+ */
+async function save(upright: Sharp, file: string): Promise<{ width: number; height: number; progressive: number }> {
+    const full = await avifOf(upright, 58, 2);
+    const smaller = await avifOf(upright.clone().resize({ width: SMALL_EDGE, height: SMALL_EDGE, fit: "inside", withoutEnlargement: true }), 58, 2);
+    await Bun.write(join(OUT, file), full.data);
+    await Bun.write(join(SMALL, file), smaller.data);
+    return { width: full.width, height: full.height, progressive: Number(full.progressive) + Number(smaller.progressive) };
+}
+
 /** `sub` is the folder inside photos/ it came from: none, "shitposts", or "by-" and a name for someone else's photographs. */
 async function add(name: string, sub: string): Promise<void> {
     const source = join(INBOX, sub, name);
@@ -95,9 +111,7 @@ async function add(name: string, sub: string): Promise<void> {
         for (let copy = 2; present.has(file); copy++) file = `${slug(name)}-${copy}.avif`;
         present.add(file);
         const upright = picture.rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true });
-        // Effort 2: a little larger than the slowest setting would give, and several times quicker to make.
-        const { width, height } = await upright.clone().avif({ quality: 58, effort: 2 }).toFile(join(OUT, file));
-        await upright.clone().resize({ width: SMALL_EDGE, height: SMALL_EDGE, fit: "inside", withoutEnlargement: true }).avif({ quality: 58, effort: 2 }).toFile(join(SMALL, file));
+        const { width, height } = await save(upright, file);
         // One color, shown where the picture will be until it arrives.
         const { dominant } = await upright.clone().resize(32).stats();
         const color = `#${[dominant.r, dominant.g, dominant.b].map((part) => part.toString(16).padStart(2, "0")).join("")}`;
@@ -171,6 +185,48 @@ for (const name of (await names(join(INBOX, "setup"))).filter((file) => PICTURE.
     } catch {
         console.log(`skipped  setup/${name}: it could not be read as a picture.`);
     }
+}
+
+// `bun scripts/photos.ts --again` makes the pictures already on the site again from their originals in
+// photos/added/, so that those large enough are progressive. A picture is made again only where one
+// original bears its name and comes out the size the site has for it; any other is left as it is, and so
+// is one that is progressive already (so a run that was stopped can be run again).
+if (process.argv.includes("--again")) {
+    const originals = new Map<string, string[]>();
+    for (const name of (await names(ADDED)).filter((file) => PICTURE.test(file))) originals.set(slug(name), [...(originals.get(slug(name)) ?? []), name]);
+    const count = { again: 0, progressive: 0, already: 0, noOriginal: 0, otherSize: 0, unread: 0 };
+    const todo = [...photos];
+    await Promise.all(
+        Array.from({ length: 4 }, async () => {
+            for (let photo = todo.shift(); photo; photo = todo.shift()) {
+                if (await isProgressive(join(OUT, photo.file))) {
+                    count.already++;
+                    continue;
+                }
+                const from = originals.get(stem(photo.file)) ?? [];
+                if (from.length !== 1) {
+                    count.noOriginal++;
+                    continue;
+                }
+                try {
+                    const { picture, clean } = await open(join(ADDED, from[0]!));
+                    const upright = picture.rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true });
+                    const size = await upright.clone().png({ compressionLevel: 0 }).toBuffer({ resolveWithObject: true });
+                    if (size.info.width !== photo.width || size.info.height !== photo.height) count.otherSize++;
+                    else {
+                        const made = await save(upright, photo.file);
+                        count.again++;
+                        count.progressive += made.progressive;
+                    }
+                    await clean();
+                } catch {
+                    count.unread++;
+                }
+                if ((count.again + count.otherSize + count.unread) % 25 === 0) console.log(`again    ${count.again} made, ${todo.length} to go`);
+            }
+        }),
+    );
+    console.log(`again    ${count.again} pictures made again from their originals, ${count.progressive} of their files progressive; ${count.already} were progressive already; left as they are: ${count.noOriginal} with no single original, ${count.otherSize} whose original is another size, ${count.unread} that could not be read`);
 }
 
 if (JSON.stringify(photos) !== before) await writeJson(DATA, { photos });
