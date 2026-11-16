@@ -146,7 +146,8 @@
         repeating-conic-gradient(oklch(0.34 0.02 300) 0 25%, oklch(0.27 0.02 300) 0 50%) 0 0 / 1rem 1rem;
 }
 
-.quire-cut-over {
+.quire-cut-over,
+.quire-cut-leaving {
     pointer-events: none;
 }
 

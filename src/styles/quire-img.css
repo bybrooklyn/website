@@ -48,7 +48,7 @@
 }
 
 /* the stage's layers; held to the stage, since the export panel's Under field shares the first one's name */
-.quire-img-stage > :is(.quire-img-under, .quire-img-canvas, .quire-img-over) {
+.quire-img-stage > :is(.quire-img-under, .quire-img-canvas, .quire-img-over, .quire-img-leaving) {
     position: absolute;
     inset: 0;
     width: 100%;

@@ -112,6 +112,9 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-cut-download').click()");
         await until("window.seen()", 90_000);
+        // the picture as it came fades out over the cut-out, and is gone when the fade is done
+        expect(await tab.run("!!document.querySelector('.quire-cut-leaving')")).toBe(true);
+        await until("!document.querySelector('.quire-cut-leaving')", 3000);
         let seen = await tab.run<{ width: number; height: number; head: number[]; ground: number[] }>("window.seen()");
         expect([seen.width, seen.height]).toEqual([1200, 800]);
         expect(seen.head[3]).toBeGreaterThan(200);
@@ -146,6 +149,8 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await tab.drag({ x: box.x + box.width * 0.07, y: box.y + box.height * 0.12 }, { x: box.x + box.width * 0.1, y: box.y + box.height * 0.13 }, 6);
         await until("window.cutout.cut()?.strokes?.length === 1");
         await until("window.seen()?.ground[3] > 200");
+        // a stroke of the brush is drawn at once, with no fade
+        expect(await tab.run("!!document.querySelector('.quire-cut-leaving')")).toBe(false);
         // a color behind it, then the old picture blurred: nothing clear is left
         await tab.run("[...document.querySelectorAll('.quire-cut-bar button')].find((each) => each.textContent === 'Color').click()");
         await until("window.seen() && window.seen().head[3] === 255 && window.cutout.cut().background === 'color'");

@@ -34,7 +34,7 @@ import { decodeRuns, type Shape } from "./masks";
 import { corners } from "./read/pixels";
 import { coverFor, type Line } from "./read/words";
 import type { Finding } from "./read/private";
-import { make } from "../core/ui";
+import { make, still as lessMotion } from "../core/ui";
 
 /** The tools: the crop's frame, hiding, the seven marks, reading text, grading (the picture then pans, and shows the grade's parts), or none (dragging then picks and moves, or selects words). */
 export type Tool = "crop" | "hide" | MarkKind | "read" | "grade" | "cutout" | "none";
@@ -451,6 +451,40 @@ export function createStage(hooks: StageHooks) {
 
     // ---- drawing, once a frame at most ----
     let asked = false;
+    // the fading copy and where the picture lay when it was made: a picture moved, zoomed or changed for another while it fades has no
+    // copy of the old place lying over it
+    let ghost: HTMLCanvasElement | undefined;
+    let ghostAt = "";
+    const viewKey = () => `${JSON.stringify(view)} ${canvas.width} ${canvas.height}`;
+    function dropGhost() {
+        ghost?.remove();
+        ghost = undefined;
+    }
+    /**
+     * A copy of the picture as it is drawn now, laid over the stage's own picture, to fade away once another has been put under it: gives
+     * what starts the fade, or nothing where less motion is asked for. The copy is of the stage's two picture layers, drawn afresh first.
+     */
+    function leaving(): (() => void) | undefined {
+        if (lessMotion()) return undefined;
+        ghost?.remove();
+        draw();
+        const copy = make("canvas", "quire-img-leaving");
+        [copy.width, copy.height] = [canvas.width, canvas.height];
+        const context = copy.getContext("2d")!;
+        context.drawImage(under, 0, 0);
+        context.drawImage(canvas, 0, 0);
+        canvas.after(copy);
+        ghost = copy;
+        ghostAt = viewKey();
+        return () => {
+            const fading = copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, easing: "ease" });
+            const gone = () => {
+                copy.remove();
+                if (ghost === copy) ghost = undefined;
+            };
+            fading.finished.then(gone, gone);
+        };
+    }
     const paint = () => {
         if (asked) return;
         asked = true;
@@ -465,6 +499,7 @@ export function createStage(hooks: StageHooks) {
         const width = Math.max(1, Math.round(element.clientWidth * ratio));
         const height = Math.max(1, Math.round(element.clientHeight * ratio));
         for (const each of [under, canvas, over]) if (each.width !== width || each.height !== height) [each.width, each.height] = [width, height];
+        if (ghost && ghostAt !== viewKey()) dropGhost();
         const ground = under.getContext("2d")!;
         ground.clearRect(0, 0, width, height);
         const context = over.getContext("2d")!;
@@ -1584,6 +1619,7 @@ export function createStage(hooks: StageHooks) {
         element,
         /** Shows a picture: its original, decoded once and put on the card. */
         async show(original: Blob | ImageBitmap) {
+            dropGhost();
             loaded?.destroy();
             loaded = undefined;
             lenses.clear();
@@ -1593,16 +1629,22 @@ export function createStage(hooks: StageHooks) {
             fitView();
             return loaded;
         },
-        /** Puts other pixels of the same picture in place of the original (the picture cut out of its background), keeping the view, the tool and what is picked. */
-        async swap(source: Blob | ImageBitmap) {
+        /**
+         * Puts other pixels of the same picture in place of the original (the picture cut out of its background), keeping the view, the tool
+         * and what is picked. With `fade`, what was shown fades out over what now is, so that a background cut away is seen to go and does
+         * not vanish between two frames; under reduced motion it is simply replaced.
+         */
+        async swap(source: Blob | ImageBitmap, fade = false) {
             const old = loaded;
             blob = source;
             const fresh = await prepare();
             if (blob !== source) return loaded;
+            const leave = fade && old ? leaving() : undefined;
             loaded = fresh;
             lenses.clear();
             old?.destroy();
             paint();
+            leave?.();
             return loaded;
         },
         /** Shows the original, ungraded, while `held` is true. */

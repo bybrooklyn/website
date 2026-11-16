@@ -60,6 +60,13 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         await tab.run("document.querySelector('.quire-cut-dialog .quire-img-read-card[data-tier=\"cut-quick\"]').click()");
         await tab.run("document.querySelector('.quire-cut-download').click()");
         await until("window.app.editing().steps().some((step) => step.type === 'cutout')", 90_000);
+        // the picture as it was fades out over the cut-out: a copy of it lies over the stage (the figure's head at its middle, no blank
+        // canvas), and is gone when the fade is done
+        await until("document.querySelector('.quire-img-leaving')", 5000);
+        const middle = await tab.run<number[]>("(() => { const copy = document.querySelector('.quire-img-leaving'); return [...copy.getContext('2d').getImageData(Math.round(copy.width / 2), Math.round(copy.height / 2), 1, 1).data]; })()");
+        expect(middle[3]).toBe(255);
+        expect(middle[0]! - middle[2]!).toBeGreaterThan(40);
+        await until("!document.querySelector('.quire-img-leaving')", 3000);
         // the export: clear where the ground was, whole on the figure, at full size
         const alpha = `(async () => { await new Promise((done) => setTimeout(done, 300)); const flat = await window.app.editing().flatten(); const at = (x, y) => flat.data[(y * flat.width + x) * 4 + 3]; return { width: flat.width, ground: at(100, 100), head: at(600, 360), sum: flat.data.reduce((sum, value, index) => (index % 97 ? sum : sum + value), 0) }; })()`;
         await until("window.app.editing().stage.loaded()");

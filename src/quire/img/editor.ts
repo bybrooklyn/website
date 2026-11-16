@@ -327,6 +327,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (showing.isOpen()) showing.fill();
         shownSource = await displayable(found).catch(() => found);
         cutKey = "";
+        cutShown = undefined;
+        cutOpened = false;
         await stage.show(shownSource);
         void showCut();
         if (token !== loading) return;
@@ -1462,6 +1464,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
     // the picture as it came (shown through a PNG for a HEIC), and the cut-out's pixels put on the stage in its place
     let shownSource: Blob | undefined;
     let cutKey = "";
+    // the cut-out as it was last put on the stage, and whether this picture has had its first look yet (a document that opens with a
+    // cut-out shows it at once; only a change made while it is open fades)
+    let cutShown: ReturnType<typeof look>["cutout"];
+    let cutOpened = false;
     let cutBrush: "keep" | "remove" | undefined;
     let cutBusy = false;
     const cutAsking = createAsking({ finder: () => sharedFinder, returnTo: () => buttons.cutout, moved: () => refresh() });
@@ -1683,11 +1689,18 @@ export function mountEditor(host: HTMLElement, context: Context) {
     async function showCut() {
         const cut = picture ? look(picture).cutout : undefined;
         const key = (cut ? JSON.stringify(cut) : "") + (picture && look(picture).repair && repairable ? ` repaired ${look(picture).repairModel ?? ""} ${look(picture).repairMade ?? ""}` : "");
+        const first = !cutOpened;
+        cutOpened = true;
         if (key === cutKey || !shownSource) return;
+        // what was shown fades out over what now is when a cut-out comes, goes, is cut again or laid on another ground, so a background
+        // is seen to go; a stroke of the brush alone is drawn at once, as it is painted
+        const apart = (each: typeof cut) => (each ? JSON.stringify({ ...each, strokes: undefined }) : "");
+        const fade = !first && apart(cut) !== apart(cutShown);
         cutKey = key;
+        cutShown = cut;
         if (!cut) {
             const base = await baseSource();
-            if (base && key === cutKey) await stage.swap(base);
+            if (base && key === cutKey) await stage.swap(base, fade);
             estimate.soon();
             return;
         }
@@ -1696,7 +1709,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const made = await cutOut(source, cut);
         source.close();
         if (!made || key !== cutKey) return;
-        await stage.swap(await createImageBitmap(made, { premultiplyAlpha: "none", colorSpaceConversion: "none" }));
+        await stage.swap(await createImageBitmap(made, { premultiplyAlpha: "none", colorSpaceConversion: "none" }), fade);
         estimate.soon();
     }
     /** The model run on the picture, its mask the cut-out step, laid on nothing to start. */

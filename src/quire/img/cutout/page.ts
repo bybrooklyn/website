@@ -13,7 +13,7 @@
 //
 //   createCutoutPage(host, { colors: [{ name: "White", value: "#ffffff" }, ...] });
 
-import { control, flowMenu, icon, make, ruled, RULE, type MenuItem } from "../../core/ui";
+import { control, flowMenu, icon, make, ruled, RULE, still, type MenuItem } from "../../core/ui";
 import { crc32 } from "../../core/zip";
 import type { FolderHandle } from "../../core/store-folder";
 import { decodeHeic, heicIn } from "../codec-run";
@@ -236,6 +236,8 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
             return;
         }
         picture?.close();
+        // another picture has no fading copy of the last one lying over it
+        view.querySelector(".quire-cut-leaving")?.remove();
         file = given;
         picture = bitmap;
         cut = kept && { ...kept, background: laid, ...(laid === "color" ? { color } : {}) };
@@ -283,7 +285,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
                 const answer = await findCut(finderNow(), asking.tier().id, () => createImageBitmap(shown), CUT_SIDE);
                 cut = { found: answer.found, background: laid, ...(laid === "color" ? { color } : {}) };
             }
-            await again();
+            await again(true);
             say(`${entries.length > 1 ? `${whichSaid(at, entries.length)} · ` : ""}Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s, ${picture.width} × ${picture.height}.`);
         } catch (error) {
             const said = error instanceof Error ? error.message : String(error);
@@ -295,8 +297,26 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         }
     }
 
-    /** Makes the cut-out again from what it is now (its mask, strokes, subject and background). */
-    async function again() {
+    /**
+     * What is on the screen now, laid over the picture's own canvas, to fade away once the cut-out has been drawn under it: a background
+     * cut away is seen to go and does not vanish between two frames. Gives what starts the fade, or nothing where less motion is asked for.
+     */
+    function leaving(): (() => void) | undefined {
+        if (still() || !canvas.width || !canvas.height) return undefined;
+        view.querySelector(".quire-cut-leaving")?.remove();
+        const copy = make("canvas", "quire-cut-leaving");
+        [copy.width, copy.height] = [canvas.width, canvas.height];
+        copy.getContext("2d", { colorSpace: space === "p3" ? "display-p3" : "srgb" })!.drawImage(canvas, 0, 0);
+        canvas.after(copy);
+        return () => {
+            const fading = copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, easing: "ease" });
+            const gone = () => copy.remove();
+            fading.finished.then(gone, gone);
+        };
+    }
+
+    /** Makes the cut-out again from what it is now (its mask, strokes, subject and background); with `fade`, what was shown fades out over it. */
+    async function again(fade = false) {
         if (!picture || !cut) return;
         cut = { ...cut, background: laid, ...(laid === "color" ? { color } : {}) };
         // one of many keeps its own mask, strokes and subject
@@ -308,12 +328,14 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         const shown = picture;
         const made = await cutOut(picture, cut);
         if (made && shown === picture) result = made;
+        const leave = fade ? leaving() : undefined;
         show();
+        leave?.();
     }
 
     function setLaid(next: Laid) {
         laid = next;
-        void again();
+        void again(true);
         fill();
     }
     function setBrush(next: "keep" | "remove" | undefined) {
