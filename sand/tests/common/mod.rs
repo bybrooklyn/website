@@ -55,6 +55,7 @@ pub fn picture(world: &World, x0: i32, y0: i32, x1: i32, y1: i32) -> String {
                 EMBER => 'e',
                 ASH => ',',
                 PRIDE => 'p',
+                sand::materials::BURNING_OIL => 'b',
                 _ => '?',
             });
         }

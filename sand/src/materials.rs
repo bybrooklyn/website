@@ -137,6 +137,8 @@ pub const EMBER: u8 = 16;
 pub const ASH: u8 = 17;
 /// Sand in the colors of a flag: sand in every way but its shade, which is a stripe's color.
 pub const PRIDE: u8 = 18;
+/// Oil that is burning: it keeps itself hot, gives off flames for a few seconds, and burns away.
+pub const BURNING_OIL: u8 = 19;
 
 /// The shade a material with `glow` 3 is given picks its color: a stripe's number times 4, with
 /// the lowest two bits a slight shade of its own, so stripes of 64 colors can be poured.
@@ -165,6 +167,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [196, 70, 26, 255], vary: [70, 80, 30], paint: false },
     Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
     Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [40, 40, 40], paint: true },
+    Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [214, 92, 30, 245], vary: [60, 90, 30], paint: false },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -250,9 +253,11 @@ pub const REACTIONS: &[Reaction] = &[
     line(WOOD, LAVA, 0, 255, EMBER, SAME, 64, Heat::Kept, 0),
     // a flame licking wood lights it now and then, however cool the wood still is
     line(WOOD, FIRE, 0, 255, EMBER, SAME, 192, Heat::Kept, 0),
-    // oil hot enough, with air beside it, bursts into flame; a flame lights the oil it touches
-    line(OIL, OPEN, 85, 255, FIRE, SAME, 512, Heat::Kept, 230),
-    line(OIL, LAVA, 0, 255, FIRE, SAME, 256, Heat::Kept, 230),
+    // oil hot enough, with air beside it, catches fire; so does oil a flame or lava touches, now and
+    // then, so a flame may lick a slick a few times before it catches
+    line(OIL, OPEN, 85, 255, BURNING_OIL, SAME, 512, Heat::Kept, 200),
+    line(OIL, LAVA, 0, 255, BURNING_OIL, SAME, 256, Heat::Kept, 200),
+    line(OIL, FIRE, 0, 255, BURNING_OIL, SAME, 96, Heat::Kept, 200),
     // lava that cools hardens where it comes to rest; water on it hardens it and boils away
     resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0)),
     line(LAVA, WATER, 0, 255, STONE, STEAM, 640, Heat::Shared, 0),    // ice that warms melts
@@ -263,7 +268,6 @@ pub const REACTIONS: &[Reaction] = &[
     line(FIRE, ALONE, 0, 60, EMPTY, SAME, ALWAYS, Heat::Kept, 0),
     line(FIRE, ALONE, 0, 90, SMOKE, SAME, 40, Heat::Kept, 0),
     line(FIRE, WATER, 0, 255, EMPTY, STEAM, 640, Heat::Shared, 0),
-    line(FIRE, OIL, 0, 255, SAME, FIRE, ALWAYS, Heat::Kept, 230),
     // acid eats stone, wood and dirt, a cell for a cell, and goes up in fumes
     line(ACID, STONE, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
     line(ACID, WOOD, 0, 255, SMOKE, EMPTY, 32, Heat::Kept, 0),
@@ -280,6 +284,11 @@ pub const REACTIONS: &[Reaction] = &[
     line(EMBER, ALONE, 0, 255, SMOKE, SAME, 4, Heat::Kept, 0),
     line(EMBER, ALONE, 0, 255, ASH, SAME, 2, Heat::Kept, 0),
     line(EMBER, EMPTY, 0, 255, SAME, FIRE, 128, Heat::Kept, 230),
+    // burning oil gives off flames into the air above and beside it for a few seconds, its heat
+    // lighting the oil beside it, and burns away to nothing or now and then to smoke
+    line(BURNING_OIL, EMPTY, 0, 255, SAME, FIRE, 160, Heat::Kept, 230),
+    line(BURNING_OIL, ALONE, 0, 255, SMOKE, SAME, 2, Heat::Kept, 0),
+    line(BURNING_OIL, ALONE, 0, 255, EMPTY, SAME, 6, Heat::Kept, 0),
 ];
 
 /// The reactions of `a` beside `b` (with `b` a material), in the order they are tried.
@@ -520,6 +529,7 @@ mod tests {
             (EMBER, "ember"),
             (ASH, "ash"),
             (PRIDE, "pride sand"),
+            (BURNING_OIL, "burning oil"),
         ];
         for (number, name) in named {
             assert_eq!(MATERIALS[number as usize].name, name);

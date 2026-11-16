@@ -288,6 +288,7 @@ One line each in `MATERIALS`. Conduct is in 32nds of the most; `made` is the tem
 | wet dirt | powder | 170 | 12 | 40 | slides at about 72 degrees; stores 8; not offered to the brush |
 | ember (burning wood) | solid | 255 | 20 | 200 | warms 16 a step up to 200; shade flickers with heat; not offered |
 | ash | powder | 40 | 6 | 40 | floats; airy; not offered |
+| burning oil | liquid | 80 | 16 | 185 | warms 16 a step up to 185; shade flickers with heat; not offered |
 
 Fire is a new kind: each step it moves up, or up and to a side by chance (a quarter of the time each
 way; an eighth since the owner's play, below), so a flame wavers; when it cannot rise it moves to a side now and then. It never levels. A falling
@@ -309,8 +310,9 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | wood | anything airy | 90 or more | burning wood | as it was | 384 | kept |
 | wood | fire | any | burning wood | as it was | 192 | kept |
 | wood | lava | any | burning wood | as it was | 64 | kept |
-| oil | anything airy | 85 or more | fire | as it was | 512 | the flame starts at 230 or more |
-| oil | lava | any | fire | as it was | 256 | the flame starts at 230 or more |
+| oil | anything airy | 85 or more | burning oil | as it was | 512 | it starts at 185 or more |
+| oil | lava | any | burning oil | as it was | 256 | it starts at 185 or more |
+| oil | fire | any | burning oil | as it was | 96 | it starts at 185 or more |
 | lava, at rest | alone | 100 or less | stone | | always | kept |
 | lava | water | any | stone | steam | 640 | shared |
 | ice | alone | 28 or more | water | | always | kept (stores 8) |
@@ -318,7 +320,6 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | fire | alone | 60 or less | air | | always | kept |
 | fire | alone | 90 or less | smoke | | 40 | kept |
 | fire | water | any | air | steam | 640 | shared |
-| fire | oil | any | as it was | fire | always | the flame starts at 230 or more |
 | acid | stone | any | smoke | air | 24 | kept |
 | acid | wood | any | smoke | air | 32 | kept |
 | acid | dirt | any | smoke | air | 40 | kept |
@@ -329,6 +330,9 @@ with a neighbor looks at the four sides from one picked by chance. Chances are i
 | burning wood | alone | any | smoke | | 4 | kept |
 | burning wood | alone | any | ash | | 2 | kept |
 | burning wood | air | any | as it was | fire | 128 | the flame starts at 230 or more |
+| burning oil | air | any | as it was | fire | 160 | the flame starts at 230 or more |
+| burning oil | alone | any | smoke | | 2 | kept |
+| burning oil | alone | any | air | | 6 | kept |
 
 What each line does to the counts follows from it (`changes` in `materials.rs`): wood becomes burning wood
 one for one, burning wood becomes smoke or ash one for one, smoke thins to nothing and fire dies to nothing
@@ -941,8 +945,9 @@ The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a 
   minutes.
 - Wet dirt dries only where it is hot and touches air, or where lava presses on it; dirt under a lake
   soaks only its top layer, as water does not pass through wet dirt.
-- A flame lights any oil it touches, every time, so a slick goes up in one front; a
-  slower burn would need a chance on that line.
+- Oil catches only where flames touch it or its own heat reaches 85 with air beside it: fire dragged
+  with two rows of air between it and a lake does not light it, as heat in this world goes up and not
+  down. The last thin layer of a slick on water, cooled by the water, may not catch.
 - A world sprinkled everywhere with single drops makes the first steps slow while the pass looks at each
   drop as a body (the slowest step of a sprinkled world of water is about 16 ms natively).
 - Sand poured faster than about twelve grains a step from one point still stands as a column under the
@@ -977,4 +982,20 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   A flame lives long enough to drift: fire now crosses gaps of up to about nine cells between burning
   columns (eleven now and then, thirteen in none of six seeds), and the test holds that a firebreak of
   fifteen is not crossed where it held seven.
+- **Oil burns as a moving fire.** A flame touching oil turned it into one short flame every time, so a
+  lake of 5,684 cells either never caught or went up in one flash (half gone 81 steps after fire touched
+  it). Oil now becomes burning oil (material 19, not offered): a liquid that keeps itself at 185 and gives
+  off flames into the air beside it, 160 times in 1024 a step, burning away in about two seconds a cell
+  (6 in 1024 a step to nothing, 2 to smoke). A flame lights the oil it touches 96 times in 1024 a step,
+  and burning oil's heat lights the oil beside it that has air above. The same lake lit at one end burns
+  as a front: 151 cells gone after 5 seconds, 741 after 10, half after 19. Fire dragged with two rows of
+  air between it and the surface still does not light it (heat here goes up, not down). Burning oil on
+  water boils some of the water under it: the test's slick of 1,083 cells on 3,743 of water leaves about
+  330 of oil, the last layer cooled by the water, and 3,200 of water.
+- **Fire stays bounded**: held on stone, sand and dirt for two seconds, none of them changes; poured into
+  water, it is out and every cell of water is still water or steam.
+- **The ice beside lava** (`ice_holds_in_still_air...`) melts to about half in 1,500 steps and then slows as
+  the lava crusts; how near half it comes moves by a cell or two with any change to the chances, so the
+  test now holds two fifths. Lava poured three cells from an ice column of 302 cells leaves 34 of it; the
+  tester's pour, 25 cells away, crusted before it reached the ice and left 239.
 
