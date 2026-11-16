@@ -1,23 +1,25 @@
 // A race on a marble run: two to eight marbles lined up behind a starting gate below each hopper and let
-// go together when the gates open, each with a look of its own in a pride flag's colors and named by it in
-// plain words, timed from the moment the gates open to the moment it first comes into a tray, to a
-// fraction of a step. Kept apart from the drawing (marbles.ts) so that a test can run the same race the
-// scene runs, step for step, and hold it the same to the bit.
+// through it one at a time at the hopper's own pace, each with a look of its own in a pride flag's colors
+// and named by it in plain words, every one timed from the moment the gates first open to the moment it
+// first comes into a tray, to a fraction of a step. Kept apart from the drawing (marbles.ts) so that a
+// test can run the same race the scene runs, step for step, and hold it the same to the bit.
 //
 //   const table = makeTable(); table.set(run);      // a new table, so that nothing before can change it
 //   const race = makeRace(table, 4, 417);            // four marbles, lined up in the order drawn by 417
-//   while (!race.done) race.step(1 / 120);           // stands, opens the gates, steps the table, times them
+//   while (!race.done) race.step(1 / 120);           // stands, lets them through, steps the table, times them
 //   standing(race);                                  // finished by time, then those that did not finish
 //
 // How a race starts, and is kept the same every time: the racers are put in a line, in an order drawn
 // from a number (`lineOf`), shown with the result and given again to run the same race again. The line
 // is dealt among the hoppers in the run's order, the first to the first hopper, the next to the next,
-// round again, and each hopper's share waits on its chute, front first, behind its starting gate
-// (table.ts). They stand for `SETTLE` seconds, so that each rests against the one before, and every gate
-// opens at that moment. A marble's time runs from then to the moment it first comes into any tray, so
-// the order is the order they arrive. One that leaves the track for the cloth, falls off the table,
-// stops (or waits in a seesaw or on a trapdoor) for `STOPPED` seconds, or is still going after
-// `LONGEST`, does not finish, and the reason is kept.
+// round again, and each hopper's share waits front first behind its starting gate (table.ts). They stand
+// for `SETTLE` seconds; then every gate lets its front marble through at the same step, and the next
+// every `PACE` seconds after, the pace a hopper lets marbles go at, which the runs were built and tested
+// for, so that the marbles stay apart as they were made to. Every marble's time runs from the first
+// opening to the moment it first comes into any tray, so a marble further back in the line has waited
+// its turn on its clock, and the order is the order they arrive. One that leaves the track for the cloth,
+// falls off the table, stops (or waits in a seesaw or on a trapdoor) for `STOPPED` seconds, or is still
+// going `LONGEST` seconds after it was let through, does not finish, and the reason is kept.
 //
 // In a groove one marble wide no marble can pass another, so on a run with nothing to mix them the
 // order they arrive in is the line's; `inLine` says so, and the result says so rather than call it close.
@@ -27,13 +29,13 @@ import type { V3 } from "../mote/solids";
 import { FLAGS, rgb } from "./flags";
 import { enters } from "./orbit";
 import { RADIUS } from "./pieces";
-import type { Table } from "./table";
+import { PACE, type Table } from "./table";
 
 /** The fewest and most marbles a race lets go. */
 export const RACE: [number, number] = [2, 8];
 /** The numbers a line's order is drawn from. */
 export const DRAWN: [number, number] = [1, 999];
-/** Seconds the line stands behind the gates before they open: each marble comes to rest against the one before. */
+/** Seconds the line stands behind the gates before they first open. */
 export const SETTLE = 0.5;
 /** How long a marble may be still before it is out, in seconds, and how long one may go on at most. */
 export const STOPPED = 1.5;
@@ -79,8 +81,9 @@ export interface Racer {
     lined: number;
     hopper: number;
     marble?: Solid;
-    /** The race's clock when the gates opened, and its own time from then to a tray, in seconds. */
+    /** The race's clock when the gates first opened, when it was let through, and its time from the first opening to a tray, in seconds. */
     left?: number;
+    leftAt?: number;
     time?: number;
     out?: Out;
     still: number;
@@ -144,7 +147,9 @@ export function makeRace(table: Table, count: number, drawn: number = DRAWN[0]):
         }
     }
     const trays = table.trays();
-    let opened = false;
+    /** How many times every gate has let a marble through, and the racers let through so far. */
+    let released = 0;
+    const going = new Set<Racer>();
     let steps = 0;
     const race: Race = {
         drawn: drawnOf(drawn),
@@ -154,23 +159,25 @@ export function makeRace(table: Table, count: number, drawn: number = DRAWN[0]):
         racerOf: (marble) => racers.find((racer) => racer.marble === marble),
         step(dt) {
             if (race.done) return;
-            // every gate opens at once, when the line has stood its time
-            if (!opened && race.clock >= SETTLE - 1e-9) {
-                opened = true;
-                table.open();
-                for (const racer of racers) {
-                    if (!racer.marble) continue;
-                    racer.left = race.clock;
-                    racer.was = [...racer.marble.p];
+            // every gate lets its front marble through at the same step, once the line has stood its time and then at the hopper's pace; every clock starts at the first
+            if (released < racers.length && race.clock >= SETTLE + released * PACE - 1e-9) {
+                if (!released) for (const racer of racers) racer.left = race.clock;
+                for (const hopper of hoppers) {
+                    const marble = table.release(hopper);
+                    const racer = racers.find((one) => one.marble === marble);
+                    if (!racer) continue;
+                    racer.was = [...marble!.p];
+                    racer.leftAt = race.clock;
+                    going.add(racer);
                 }
+                released++;
             }
             table.step(dt);
             steps++;
             race.clock = steps * dt;
-            if (!opened) return;
-            for (const racer of racers) {
-                const marble = racer.marble;
-                if (!marble || racer.time !== undefined || racer.out) continue;
+            for (const racer of going) {
+                const marble = racer.marble!;
+                if (racer.time !== undefined || racer.out) continue;
                 const now: V3 = [...marble.p];
                 // into a tray this step: the moment it crossed into the catch, by where along the step it crossed
                 const entered = trays.map((box) => ({ box, inside: [0, 1, 2].every((axis) => Math.abs(now[axis]! - box.at[axis]!) < box.half[axis]!) })).find((one) => one.inside);
@@ -187,9 +194,9 @@ export function makeRace(table: Table, count: number, drawn: number = DRAWN[0]):
                 racer.still = marble.rest || speed < SLOW ? racer.still + dt : 0;
                 if (!table.marbles.includes(marble) || now[1] < ON_CLOTH) racer.out = "fell";
                 else if (racer.still >= STOPPED) racer.out = "stopped";
-                else if (race.clock - racer.left! >= LONGEST) racer.out = "long";
+                else if (race.clock - racer.leftAt! >= LONGEST) racer.out = "long";
             }
-            race.done = racers.every((racer) => racer.time !== undefined || racer.out);
+            race.done = racers.every((racer) => racer.time !== undefined || racer.out || (!going.has(racer) && !racer.marble));
         },
     };
     return race;

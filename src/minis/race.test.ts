@@ -1,7 +1,8 @@
 // Tests for races: the same run and number give the same race every time, to the bit, in Bun and in
-// Chromium; the racers stand in a line drawn from the number behind a starting gate that holds them until
-// it opens, each with its own look; several hoppers are dealt the line in turn and every gate opens at
-// once; a marble that falls or stops does not finish; a race in the line's order is said to be so.
+// Chromium; the racers stand in a line drawn from the number behind a starting gate that lets them
+// through one at a time at the hopper's pace, each with its own look, every clock started at the first
+// opening; several hoppers are dealt the line in turn and their gates keep step; a marble that falls or
+// stops does not finish; a race in the line's order is said to be so.
 
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -11,7 +12,7 @@ import { browser, chromium } from "../../scripts/browser";
 import { DRAWN, RACE, RACERS, SETTLE, inLine, lineOf, makeRace, progress, runRace, standing, timeOf } from "./race";
 import { fit, jointsOf, read, type Placed } from "./run";
 import { RUNS } from "./runs";
-import { makeTable } from "./table";
+import { PACE, makeTable } from "./table";
 import type { Kind } from "./pieces";
 
 const kind = (family: Kind["family"], sizes: number[] = []): Kind => ({ family, sizes, mirror: false });
@@ -82,7 +83,7 @@ test("a line is drawn from a number: every racer once, the same line for the sam
     expect(Math.max(...fronts)).toBeLessThan(160);
 });
 
-test("a race lines up the number asked, two to eight, in the order drawn, each with a look and a name of its own; the gate holds them until it opens and all go then", () => {
+test("a race lines up the number asked, two to eight, in the order drawn, each with a look and a name of its own; the gate holds them, then lets them through one at a time at the hopper's pace, every clock started at its first opening", () => {
     expect(RACERS.length).toBe(RACE[1]);
     expect(new Set(RACERS.map((racer) => racer.name)).size).toBe(RACERS.length);
     expect(new Set(RACERS.map((racer) => `${racer.seed} ${racer.tints.flat().join(",")}`)).size).toBe(RACERS.length);
@@ -95,26 +96,36 @@ test("a race lines up the number asked, two to eight, in the order drawn, each w
         expect(race.racers.map((racer) => racer.name)).toEqual(RACERS.slice(0, count).map((one) => one.name));
         const line = lineOf(count, 40 + asked);
         expect(race.racers.map((racer) => line[racer.lined])).toEqual(race.racers.map((racer) => racer.index));
-        // standing behind the gate: the gate is a body in the table, and the line stays where it is until it opens
+        // standing behind the gate: the gate is a body in the table, and the line is held where it is until it opens
         const [gate] = table.movers().find((one) => one.id === table.mouths()[0]!.id)!.solids;
-        const before = race.racers.map((racer) => [...racer.marble!.p]);
-        const shut = [...gate!.p];
+        const before = race.racers.map((racer) => [...racer.marble!.p] as [number, number, number]);
+        const shut = gate!.p[1];
         while (race.clock < SETTLE - 1e-9) race.step(1 / 120);
-        // each closes the millimetre to the one before it, and no more
-        race.racers.forEach((racer, i) => expect(Math.hypot(...racer.marble!.p.map((x, axis) => x - before[i]![axis]!))).toBeLessThan(0.1 * racer.lined + 0.2));
-        // the front marble stands nearer the joint than the rest, and the rest a marble's width apart behind it
+        race.racers.forEach((racer, i) => expect(racer.marble!.p).toEqual(before[i]!));
+        // the front marble waits where a hopper's marble waits, and each of the rest more than a marble's width from the one before
         const front = race.racers.find((racer) => racer.lined === 0)!.marble!.p;
-        for (const racer of race.racers) if (racer.lined > 0) expect(Math.hypot(...racer.marble!.p.map((x, axis) => x - front[axis]!))).toBeGreaterThan(1.5 * racer.lined);
-        while (!race.done) race.step(1 / 120);
-        expect(gate!.p[1] - shut[1]!).toBeGreaterThan(3.5);
+        expect(front).toEqual(table.mouths()[0]!.at);
+        const waiting = [...race.racers].sort((a, b) => a.lined - b.lined).map((racer) => racer.marble!.p);
+        for (let i = 1; i < waiting.length; i++) expect(Math.hypot(...waiting[i]!.map((x, axis) => x - waiting[i - 1]![axis]!))).toBeGreaterThan(2 * 0.8);
+        // the gate rises for each and comes down again behind it
+        let highest = 0;
+        while (!race.done) {
+            race.step(1 / 120);
+            highest = Math.max(highest, gate!.p[1] - shut);
+        }
+        expect(highest).toBeGreaterThan(3.5);
+        expect(gate!.p[1] - shut).toBeCloseTo(0, 9);
         race.racers.forEach((racer) => expect(racer.left).toBeCloseTo(SETTLE, 9));
-        // one lane and nothing to mix them: they all finish, and in the line's order
+        race.racers.forEach((racer) => expect(racer.leftAt).toBeCloseTo(SETTLE + racer.lined * PACE, 9));
+        // one lane and nothing to mix them: they all finish, in the line's order, each a hopper's pace behind the one before
         expect(race.racers.every((racer) => racer.time !== undefined)).toBe(true);
         expect(inLine(race)).toBe(true);
+        const byLine = [...race.racers].sort((a, b) => a.lined - b.lined);
+        for (let i = 1; i < byLine.length; i++) expect(byLine[i]!.time! - byLine[i - 1]!.time!).toBeCloseTo(PACE, 2);
     }
 });
 
-test("with several hoppers, the line is dealt to them in turn in the run's order and every gate opens at the same moment; the first tray reached counts", () => {
+test("with several hoppers, the line is dealt to them in turn in the run's order and their gates keep step; the first tray reached counts", () => {
     const lane = [kind("d", [2, 2]), kind("d", [2, 2]), kind("s", [1]), kind("t")];
     const run = [...chain(12, lane, { x: 0, z: 0 }, 1), ...chain(12, lane, { x: 0, z: 6 }, 10)];
     const table = makeTable();
@@ -123,6 +134,7 @@ test("with several hoppers, the line is dealt to them in turn in the run's order
     const byLine = [...race.racers].sort((a, b) => a.lined - b.lined);
     expect(byLine.map((racer) => racer.hopper)).toEqual([1, 10, 1, 10, 1]);
     expect(new Set(race.racers.map((racer) => racer.left)).size).toBe(1);
+    expect(byLine.map((racer) => Math.round((racer.leftAt! - SETTLE) / PACE))).toEqual([0, 0, 1, 1, 2]);
     expect(race.racers.every((racer) => racer.time !== undefined)).toBe(true);
     // the two lanes are the same, moved: the fronts of the two lines take the same time to within a hundredth
     expect(Math.abs(byLine[0]!.time! - byLine[1]!.time!)).toBeLessThan(0.01);
