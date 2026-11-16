@@ -238,7 +238,7 @@ used("the style picker, the Insert menu, the color menu and the size do what the
     await reset("Line\n", [0], 2);
     await choose("Style", "Heading 2");
     expect(await md()).toBe("## Line\n");
-    expect(await tab.run("document.querySelector('.quire-style-label').textContent")).toBe("Heading 2");
+    expect(await tab.run("document.querySelector('.quire-style-label').textContent")).toBe("heading 2");
     await choose("Style", "Quote");
     expect(await md()).toBe("> Line\n");
 

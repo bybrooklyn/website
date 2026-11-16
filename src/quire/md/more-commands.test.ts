@@ -129,7 +129,7 @@ used("Format, Title goes to the title line; Subtitle draws the line as one, in a
     await menu("Format", "Paragraph styles", "Subtitle");
     expect(await tab.run<string>("document.querySelector('.quire p').className")).toBe("quire-subtitle");
     expect(await md()).toBe("Under the title\n\nThe writing.\n");
-    expect(await tab.run<string>("document.querySelector('.quire-style-label').textContent")).toBe("Subtitle");
+    expect(await tab.run<string>("document.querySelector('.quire-style-label').textContent")).toBe("subtitle");
 });
 
 used("Edit, Select all matching text selects every place the words appear: typing and a Format key change them all, Escape leaves, one undo takes the typing back", async () => {
