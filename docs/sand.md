@@ -283,7 +283,7 @@ One line each in `MATERIALS`. Conduct is in 32nds of the most; `made` is the tem
 | lava | liquid | 200 | 8 | 250 | creeps (moves sideways 96 steps in 256); hardens where it rests; shade follows heat |
 | ice | solid | 255 | 32 | 0 | |
 | smoke | gas | 3 | 10 | 90 | does not level: rises, drifts and thins; airy |
-| fire | fire (new kind) | 1 | 2 | 230 | rises and wavers; cools 2 a step; shade follows heat; airy |
+| fire | fire (new kind) | 1 | 1 | 230 | rises and wavers; cools 2 a step; shade follows heat; airy |
 | acid | liquid | 110 | 28 | 40 | levels; sinks under water |
 | wet dirt | powder | 170 | 12 | 40 | slides at about 72 degrees; stores 8; not offered to the brush |
 | ember (burning wood) | solid | 255 | 20 | 200 | warms 16 a step up to 200; shade flickers with heat; not offered |
@@ -1026,4 +1026,21 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   under the roof. It is now made at 160 and passes heat at 2. The same pour reaches the roof at once
   (1,021 cells in the rows under it), 3,069 are still steam after 90 steps, and it rains over about
   fifteen seconds. Steam boiled from water is made at 60 as before, and boils and condenses as it did.
+- **Grains twice as fine each way, four times as many.** A cell is now one CSS pixel (`CELL` in
+  `grains.ts`), rounded to whole device pixels as before: at 1288 by 828 the world is 717 by 513 cells
+  (367,821) where it was 358 by 256 (91,648). Measured on the page in headless Chromium with a busy
+  world (a lake over a fifth of the world, a forest burning across the left half, sand held pouring into
+  the lake): one CSS pixel a cell, a step takes 8.9 to 11.2 ms on the page's thread, and the page steps
+  41 to 60 times a second while drawing 14 to 27 frames a second; two CSS pixels, 3.1 ms, 60 steps and
+  48 to 55 frames; two thirds of a CSS pixel (three times as fine, 1076 by 769 at 1.5 device pixels a
+  CSS pixel, past `MOST`), 12.8 ms, 34 to 37 steps and 11 to 12 frames. So one CSS pixel a cell. The
+  frames are the software drawing of headless Chromium; the step is inside its budget. The brush's
+  slider is in the first page's cells and pours `FINER` (2) times as many cells either side; a held pour
+  is 40 grains of powder and 36 of lava a step (ten and nine, times four); the flag brush lays a block
+  twice as many cells high. A world opened from a link or file made at the old size opens at its own
+  size, drawn at two device pixels a cell in the middle of the canvas, as any smaller world does.
+  Things fall, spread and burn the same number of cells a step, so on the screen they move half as far
+  in a second as before.
+- **Flames for the finer grains**: fire passes heat at 1 (it was 2), so one flame lives 35 to 54 steps,
+  about 48, and rises about 47 cells, as tall on the screen as about 23 of the old cells.
 

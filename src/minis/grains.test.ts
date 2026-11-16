@@ -41,7 +41,7 @@ test("both builds are small and need nothing from the page to load", async () =>
 
 test("the busy world comes out to the byte as it does natively, with SIMD and without", async () => {
     // the number sand/tests/unchanged.rs holds the native build to
-    const native: [number, number] = [0x6a748119, 0xa6caac78];
+    const native: [number, number] = [0x6cad6a71, 0x38f3c8eb];
     expect(busy(await load(simd))).toEqual(native);
     expect(busy(await load(scalar))).toEqual(native);
 });
@@ -74,8 +74,9 @@ test("the brush is offered every material of the table it should be, and each is
     expect(fillOf(of("fire"))).toBeLessThan(100);
     expect(fillOf(of("solid"))).toBe(100);
     expect(fillOf(of("powder"))).toBeLessThan(100);
-    // a powder held still pours about ten grains a step, and lava about nine cells, whatever the brush's size; pride sand along a line is laid whole
-    for (const radius of [4, 8, 16, 24]) {
+    // a powder held still pours ten grains a step of the first page's size, and lava nine cells, whatever the brush's size once it is large enough; pride sand along a line is laid whole
+    expect(HELD).toEqual({ powder: 40, lava: 36 });
+    for (const radius of [16, 24, 32, 48]) {
         const grains = (fillOf(of("powder"), true, radius) / 100) * 4 * (2 * radius + 1);
         expect(grains).toBeGreaterThan(HELD.powder * 0.8);
         expect(grains).toBeLessThan(HELD.powder * 1.2);
@@ -131,16 +132,16 @@ test("the cells are where the engine says, four bytes each, in a frame of border
     expect(palette[3]).toBe(0);
 });
 
-test("a world is two CSS pixels a cell in whole device pixels, and never more than the plan's 1024 by 576", () => {
-    expect(worldFor(896, 544, 1)).toEqual({ columns: 448, rows: 272 });
-    // a cell is four device pixels where there are two to a CSS pixel, so the world is the same
-    expect(worldFor(896, 544, 2)).toEqual({ columns: 448, rows: 272 });
-    // a fractional ratio rounds to whole device pixels a cell: 1.5 makes three
-    expect(worldFor(800, 500, 1.5)).toEqual({ columns: 400, rows: 250 });
-    // a phone at three device pixels to a CSS pixel: six to a cell
-    expect(worldFor(360, 400, 3)).toEqual({ columns: 180, rows: 200 });
-    // another size of cell can be asked for
-    expect(worldFor(896, 544, 1, 1)).toEqual({ columns: 896, rows: 544 });
+test("a world is one CSS pixel a cell in whole device pixels, and never more than the plan's 1024 by 576", () => {
+    expect(worldFor(717, 513, 1)).toEqual({ columns: 717, rows: 513 });
+    // a cell is two device pixels where there are two to a CSS pixel, so the world is the same
+    expect(worldFor(717, 513, 2)).toEqual({ columns: 717, rows: 513 });
+    // a fractional ratio rounds to whole device pixels a cell: 1.5 makes two
+    expect(worldFor(800, 500, 1.5)).toEqual({ columns: 600, rows: 375 });
+    // a phone at three device pixels to a CSS pixel: three to a cell
+    expect(worldFor(360, 400, 3)).toEqual({ columns: 360, rows: 400 });
+    // another size of cell can be asked for: the first page's two
+    expect(worldFor(896, 544, 1, 2)).toEqual({ columns: 448, rows: 272 });
     // a very large canvas is held to the most
     const big = worldFor(4000, 2400, 1);
     expect(big.columns).toBeLessThanOrEqual(MOST.columns);
@@ -162,9 +163,12 @@ test("the row of materials puts like things together and every material has its 
 });
 
 test("a whole flag is two high to three wide, grows with the brush, and fits the world", () => {
-    expect(flagSize(0, 400, 250)).toEqual({ wide: 12, high: 8 });
-    expect(flagSize(4, 400, 250)).toEqual({ wide: 36, high: 24 });
-    expect(flagSize(24, 400, 250).high).toBe(104);
+    // at the first page's size of cell
+    expect(flagSize(0, 400, 250, 1)).toEqual({ wide: 12, high: 8 });
+    expect(flagSize(4, 400, 250, 1)).toEqual({ wide: 36, high: 24 });
+    expect(flagSize(24, 400, 250, 1).high).toBe(104);
+    // and with cells half as wide, twice as many of them
+    expect(flagSize(4, 800, 500)).toEqual({ wide: 72, high: 48 });
     // never more than half the world's height, nor wider than the world
     expect(flagSize(24, 400, 100).high).toBe(50);
     expect(flagSize(24, 60, 250).wide).toBeLessThanOrEqual(60);
