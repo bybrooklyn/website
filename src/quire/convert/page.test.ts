@@ -6,6 +6,7 @@
 // reads back, and nothing is fetched but the page's own files.
 
 import { expect, test } from "bun:test";
+import type { Browser } from "../../../scripts/browser";
 import { corePage, quire } from "../../../scripts/core-page";
 import { readZip } from "../core/zip";
 import { menuLines, summaryOf } from "./page";
@@ -42,6 +43,15 @@ export async function convertPage(sides: string, extra = "") {
         import { decodeHeic, heicIn } from "${quire}/img/codec-run.ts";
         import { FORMATS, formatOf, underWeight } from "${quire}/img/export.ts";
         import { blocksOut } from "${quire}/img/metadata.ts";
+        import { textSide } from "${quire}/convert/text-side.ts";
+        import { readHtml, writeHtml } from "${quire}/md/html.ts";
+        import { read } from "${quire}/md/read.ts";
+        import { write } from "${quire}/md/write.ts";
+        window.textSide = textSide;
+        window.markdown = {
+            toHtml: (text) => writeHtml(read(text).blocks),
+            fromHtml: (html) => write({ ...read(""), blocks: readHtml(html).map((block, index, all) => ({ ...block, gap: index < all.length - 1 ? "\\n\\n" : "\\n" })) }),
+        };
         ${extra}
         window.pictures = {
             formats: FORMATS.map(({ key, label, short, tip, type, ending, lossy }) => ({ key, label, short, tip, type, ending, lossy })),
@@ -88,10 +98,8 @@ export async function convertPage(sides: string, extra = "") {
     );
 }
 
-test("in Chromium, pictures arrive four ways, convert with their own names to the size chosen, stop, save alone and as a zip, fetching nothing else", async () => {
-    const page = await convertPage("[pictureSide(window.pictures)]");
-    if (!page) return console.warn("converter page test skipped: needs a Chromium");
-    const { tab } = page;
+/** Waiting for the page and pressing its buttons by their words. */
+export function driver(tab: Browser) {
     const until = async (expression: string, ms = 60_000) => {
         const started = Date.now();
         while (Date.now() - started < ms) {
@@ -100,10 +108,20 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         }
         throw new Error(`waited for ${expression}: ${JSON.stringify(await tab.run("window.convert.rows()"))}`);
     };
-    const pressText = async (text: string) => {
-        const at = await tab.run<{ x: number; y: number }>(`(() => { const e = [...document.querySelectorAll('.quire-convert button')].find((each) => each.textContent.trim() === ${JSON.stringify(text)} && !each.closest('[inert]')); e.scrollIntoView({ block: "center", behavior: "instant" }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+    const pressText = async (text: string, within = ".quire-convert") => {
+        const at = await tab.run<{ x: number; y: number }>(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(within + " button")})].find((each) => each.textContent.trim() === ${JSON.stringify(text)} && !each.closest('[inert]')); e.scrollIntoView({ block: "center", behavior: "instant" }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
         await tab.click(at.x, at.y);
     };
+    const paste = (text: string) => tab.run(`(() => { const data = new DataTransfer(); data.setData("text/plain", ${JSON.stringify(text)}); document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); })()`);
+    const drop = (files: { name: string; text: string }[]) => tab.run(`(() => { const data = new DataTransfer(); for (const file of ${JSON.stringify(files)}) data.items.add(new File([file.text], file.name)); document.querySelector(".quire-convert").dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true })); })()`);
+    return { until, pressText, paste, drop };
+}
+
+test("in Chromium, pictures arrive four ways, convert with their own names to the size chosen, stop, save alone and as a zip, fetching nothing else", async () => {
+    const page = await convertPage("[pictureSide(window.pictures)]");
+    if (!page) return console.warn("converter page test skipped: needs a Chromium");
+    const { tab } = page;
+    const { until, pressText } = driver(tab);
     try {
         await tab.serve(ELSEWHERE, async () => undefined);
         // a drop of two pictures of one name and a file of no known kind
@@ -165,7 +183,7 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         expect(await tab.run<string>("window.convert.rows()[5].state")).toBe("stopped");
         await tab.wait(1500);
         expect(await tab.run<string>("window.convert.rows()[5].state")).toBe("stopped");
-        // nothing was fetched but the page's own codec files and worker
+        // nothing was fetched but the page's own encoder files and worker
         const away = tab.requests.filter((request) => !/^http:\/\/localhost:\d+\/(quire\/codecs\/[a-z]+\.wasm|codec-run\.ts|page\.html)?$/.test(request.url) && !request.url.startsWith("blob:") && !request.url.startsWith("data:"));
         expect(away).toEqual([]);
         expect(tab.errors).toEqual([]);
@@ -173,3 +191,67 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         await page.close();
     }
 }, 240_000);
+
+test("in Chromium, text pasted and dropped converts both ways, a shape that cannot be carried is refused with an offer that works, and a result is copied", async () => {
+    const page = await convertPage("[pictureSide(window.pictures), window.textSide(window.markdown)]");
+    if (!page) return;
+    const { tab } = page;
+    const { until, pressText, paste, drop } = driver(tab);
+    try {
+        await tab.serve(ELSEWHERE, async () => undefined);
+        await paste("name,age\nAda,36\n\"Hopper, Grace\",85\n");
+        await drop([
+            { name: "notes.md", text: "# Notes\n\nSome **bold** words and [a link](https://example.com).\n\n- one\n- two\n" },
+            { name: "page.html", text: "<html><head><style>p{}</style><script>alert(1)</script></head><body><h2>Hello</h2><p>A <em>small</em> page.</p><form><input></form></body></html>" },
+            { name: "people.json", text: JSON.stringify([{ name: "Ada", address: { city: "London" } }, { name: "Grace", address: { city: "New York" } }]) },
+            { name: "list.json", text: JSON.stringify([1, 2, 3]) },
+            { name: "config.yaml", text: "base: &b\n  x: 1\nother: *b\n" },
+        ]);
+        await until("window.convert.rows().length === 6 && window.convert.rows().every((row) => row.state !== 'ready' || row.label !== 'Text')");
+        expect(await tab.run("window.convert.rows().map((row) => [row.name, row.label, row.state])")).toEqual([
+            ["Pasted text", "CSV", "ready"],
+            ["notes.md", "Markdown", "ready"],
+            ["page.html", "HTML", "ready"],
+            ["people.json", "JSON", "cannot"],
+            ["list.json", "JSON", "cannot"],
+            ["config.yaml", "YAML", "ready"],
+        ]);
+        expect(await tab.run("window.convert.rows()[3].notes")).toEqual(["This is JSON already. Choose another format for data."]);
+        await pressText("Convert");
+        await until("window.convert.rows().filter((row) => row.state === 'done' || row.state === 'failed').length === 4");
+        const rows = await tab.run<{ name: string; state: string; notes: string[]; made?: { name: string; text: string } }[]>("window.convert.rows()");
+        expect(JSON.parse(rows[0]!.made!.text)).toEqual([{ name: "Ada", age: "36" }, { name: "Hopper, Grace", age: "85" }]);
+        expect(rows[0]!.made!.name).toBe("Pasted text.json");
+        expect(rows[1]!.made!.text).toContain("<h1>Notes</h1>");
+        expect(rows[1]!.made!.text).toContain("<strong>bold</strong>");
+        expect(rows[1]!.made!.name).toBe("notes.html");
+        expect(rows[2]!.made!.text).toBe("## Hello\n\nA *small* page.\n");
+        expect(rows[5]!.state).toBe("failed");
+        expect(rows[5]!.notes[0]).toContain("anchor or an alias");
+        // into CSV: the nested people are refused with an offer, and the offer converts them
+        await pressText("CSV", ".quire-convert-panel");
+        await pressText("Convert");
+        await until("window.convert.rows()[3].state === 'failed' && window.convert.rows()[4].state === 'done'");
+        expect(await tab.run("window.convert.rows()[3].notes")).toEqual(['CSV holds one plain value in each field, and the column "address" holds nested data in row 1.', "Spread nested values into columns named like address.city."]);
+        await pressText("Spread nested values into columns named like address.city.");
+        await until("window.convert.rows()[3].state === 'done'");
+        expect(await tab.run("window.convert.rows()[3].made.text")).toBe("name,address.city\r\nAda,London\r\nGrace,New York\r\n");
+        // into TOML: a list is refused and put under a name when the offer is taken
+        await pressText("TOML", ".quire-convert-panel");
+        await tab.run("(() => { const row = document.querySelectorAll('.quire-convert-row')[4]; row.scrollIntoView({ block: 'center', behavior: 'instant' }); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
+        await until("document.querySelector('.quire-menu:popover-open')");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
+        await until("window.convert.rows()[4].state === 'failed'");
+        expect(await tab.run("window.convert.rows()[4].notes")).toEqual(["TOML needs named values at the top, and this is a list.", "Put the list under the name items."]);
+        await pressText("Put the list under the name items.");
+        await until("window.convert.rows()[4].state === 'done'");
+        expect(await tab.run("window.convert.rows()[4].made.text")).toBe("items = [1, 2, 3]\n");
+        // Copy gives the clipboard the text made
+        await tab.run("document.querySelector('.quire-convert-row .quire-convert-copy').click()");
+        await until("window.copied.length === 1");
+        expect(JSON.parse(await tab.run<string>("window.copied[0]"))).toEqual([{ name: "Ada", age: "36" }, { name: "Hopper, Grace", age: "85" }]);
+        expect(tab.errors).toEqual([]);
+    } finally {
+        await page.close();
+    }
+}, 120_000);

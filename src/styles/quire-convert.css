@@ -568,3 +568,17 @@
         animation: none !important;
     }
 }
+
+.quire-convert-html {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.quire-convert-more {
+    width: fit-content;
+}
+
+.quire-convert-html .quire-convert-fold-pad {
+    padding-left: 0.1rem;
+}
