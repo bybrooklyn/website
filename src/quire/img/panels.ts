@@ -417,8 +417,9 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
             height.value = String(size.height);
             if (enlarging) enlarging.textContent = hooks.enlarge!.said();
             const button = from.getBoundingClientRect();
-            // held inside the window by its own width (its sizes run to two rows), with the window's gutter of 8 pixels
-            const left = Math.max(8, Math.min(innerWidth - (box.offsetWidth || 300) - 8, button.left));
+            // held inside the window by its own width (its sizes run to two rows), with a gutter of 8 pixels, inside the app (whose right edge leaves the scroll bar's room out)
+            const room = box.parentElement?.getBoundingClientRect().right || innerWidth;
+            const left = Math.max(8, Math.min(room - (box.offsetWidth || 300) - 8, button.left));
             box.style.left = `${left}px`;
             box.style.top = `${button.bottom + 6}px`;
             box.style.transformOrigin = `${Math.max(0, button.left + button.width / 2 - left)}px 0`;
