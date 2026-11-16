@@ -23,11 +23,13 @@ const NAMES = ["Markdown", "Opus", "Ogg", "Mbps", "Google", "Drive", "Hugging", 
 
 /**
  * A label in the site's lowercase: every word made small but for names, which are written as they are properly written. A name is a
- * word with a capital after its first letter (PNG, WebP, Wi-Fi, GitHub, mdQuire, kHz) or one of the few listed that have only a first
- * capital (Markdown, Opus). So "Save PNG" is "save PNG" and "Network name" is "network name".
+ * word with a capital after its first letter (PNG, WebP, Wi-Fi, GitHub, mdQuire, kHz), one of two letters or more with no small letter
+ * in it (A4, OK, P3), or one of the few listed that have only a first capital (Markdown, Opus), with or without "'s" after it. So
+ * "Save PNG" is "save PNG", "Network name" is "network name" and "A third" is "a third". The hint inside a field is no label: it
+ * keeps its first capital, as a tooltip and a sentence do.
  */
 export function lowered(text: string): string {
-    return text.replace(/[A-Za-z][A-Za-z0-9.'-]*/g, (word) => (NAMES.includes(word) || /[A-Z]/.test(word.slice(1)) ? word : word.toLowerCase()));
+    return text.replace(/[A-Za-z][A-Za-z0-9.'-]*/g, (word) => (NAMES.includes(word.replace(/'s$/, "")) || /[A-Z]/.test(word.slice(1)) || (word.length > 1 && !/[a-z]/.test(word)) ? word : word.toLowerCase()));
 }
 
 /** A line of a menu from a label: its first letter a capital, as the lines of menus are written ("choose files" is "Choose files"). */

@@ -14,7 +14,7 @@ import { corePage, quire } from "../../../scripts/core-page";
 import { lowered, raised } from "./bench";
 
 test("a label is lowercase but for names, which keep their capitals, and a menu's line has a first capital", () => {
-    expect(["Save PNG", "PNG size", "Network name", "Wi-Fi", "Link or text", "JPEG XL", "WebP", "Opus Ogg", "AAC M4A", "48 kHz", "0.5 Mbps", "What HTML is understood", "Connect a GitHub repository", "Save to Google Drive", "Markdown", "As it came"].map(lowered)).toEqual(["save PNG", "PNG size", "network name", "Wi-Fi", "link or text", "JPEG XL", "WebP", "Opus Ogg", "AAC M4A", "48 kHz", "0.5 Mbps", "what HTML is understood", "connect a GitHub repository", "save to Google Drive", "Markdown", "as it came"]);
+    expect(["Save PNG", "PNG size", "Network name", "Wi-Fi", "Link or text", "JPEG XL", "WebP", "Opus Ogg", "AAC M4A", "48 kHz", "0.5 Mbps", "What HTML is understood", "Connect a GitHub repository", "Save to Google Drive", "Markdown", "As it came", "A4", "A third", "Markdown's own marks", "OK"].map(lowered)).toEqual(["save PNG", "PNG size", "network name", "Wi-Fi", "link or text", "JPEG XL", "WebP", "Opus Ogg", "AAC M4A", "48 kHz", "0.5 Mbps", "what HTML is understood", "connect a GitHub repository", "save to Google Drive", "Markdown", "as it came", "A4", "a third", "Markdown's own marks", "OK"]);
     // what is already so is left as it is
     for (const each of ["save PNG", "copy", "choose another picture", "Wi-Fi"]) expect(lowered(each)).toBe(each);
     expect(["choose files", "paste", "save as SVG", "Copy"].map(raised)).toEqual(["Choose files", "Paste", "Save as SVG", "Copy"]);

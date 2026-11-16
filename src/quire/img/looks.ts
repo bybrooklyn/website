@@ -96,7 +96,7 @@ export function gradeLooks(hooks: LooksHooks) {
     const element = make("div", "quire-img-looks");
     const save = make("div", "quire-img-look-save");
     const field = make("input", "quire-field quire-img-look-name");
-    field.placeholder = "name of the look";
+    field.placeholder = "Name of the look";
     field.setAttribute("aria-label", "Name of the look");
     field.maxLength = MOST_LOOKS.name;
     const keep = make("button", "quire-dialog-dismiss quire-img-grade-fix", "save look");

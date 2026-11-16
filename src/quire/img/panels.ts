@@ -227,7 +227,7 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     quality.setAttribute("aria-label", "Quality");
     const qualityShown = make("span", "quire-img-quality-number");
     const under = make("input", "quire-field quire-img-under");
-    under.placeholder = "no limit";
+    under.placeholder = "No limit";
     under.setAttribute("aria-label", "Under");
     const lossy = make("div", "quire-img-lossy");
     const qualityRow = make("label", "quire-img-row");

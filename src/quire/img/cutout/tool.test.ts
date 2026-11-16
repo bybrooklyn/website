@@ -193,8 +193,9 @@ test("in imgQuire, where the model finds nothing the tool says to press the thin
         await tab.click(box.x, box.y);
         await until("window.app.editing().steps().find((step) => step.type === 'cutout')?.presses?.length === 1");
         const alpha = "(async () => { const flat = await window.app.editing().flatten(); const at = (x, y) => flat.data[(y * flat.width + x) * 4 + 3]; return { box: at(850, 400), floor: at(200, 600) }; })()";
-        await until(`(async () => (await ${alpha}).box > 200)()`);
-        expect((await tab.run<{ box: number; floor: number }>(alpha)).floor).toBeLessThan(20);
+        // the floor gone is what says the cut-out is on the picture: before it is, every pixel is whole, the box too
+        await until(`(async () => (await ${alpha}).floor < 20)()`);
+        expect((await tab.run<{ box: number; floor: number }>(alpha)).box).toBeGreaterThan(200);
         expect(await tab.run("window.app.editing().steps().find((step) => step.type === 'cutout').presses")).toEqual([{ x: 850, y: 400, add: true }]);
         // another press adds to what is kept, in the same step
         const floor = await page.onScreen(200, 600);
