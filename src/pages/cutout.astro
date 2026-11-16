@@ -3,8 +3,8 @@
 // comes off, in this browser, at full size (src/quire/img/cutout/page.ts, the same piece imgQuire's
 // Cut out tool uses). It opens the way a mini or a project does (layouts/Opened.astro): the site's
 // name and the trail at the top, a small label, its name, one line saying what it does, then the
-// thing itself in one box. It is unlisted, kept out of search and the sitemap, and linked from
-// nowhere, until she says otherwise; with no list of tools yet, its way back is the front page.
+// thing itself in one box. Its way back is the list of tools (/tools/). It is unlisted, kept out of
+// search and the sitemap, and linked from nowhere but that list, until she says otherwise.
 import Opened from "../layouts/Opened.astro";
 import "../styles/blog.css";
 import "../styles/quire.css";
@@ -13,7 +13,7 @@ import "../styles/quire-bench.css";
 import "../styles/quire-cutout.css";
 ---
 
-<Opened title="Cut-out" description="Takes the background off a picture, in your browser." unlisted icon="/mdquire/icon.svg" back={{ href: "/", label: "tools" }}>
+<Opened title="Cut-out" description="Takes the background off a picture, in your browser." unlisted icon="/mdquire/icon.svg" back={{ href: "/tools/", label: "tools" }}>
     <article class="post">
         <header class="post-header">
             <p class="post-meta"><span>tool</span></p>

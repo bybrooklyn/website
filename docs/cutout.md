@@ -29,7 +29,7 @@ its working name.
 
 **The page.** It opens the way a mini or a project does (`layouts/Opened.astro`): the site's name and the
 trail "tools / Cut-out", a small label, its name, one line saying what it does, then one box with a rule round
-it. Its way back is the front page until there is a list of tools. In the box the picture is on the left and a
+it. Its way back is the list of tools (`/tools/`, unlisted as the tools are). In the box the picture is on the left and a
 column of controls on the right, written the way the Walker's column is: a small heading for each group, round
 dots for a choice of one, words in the accent to press, thin rules between, no boxed buttons, and every label
 in lowercase as the site's own are. The groups are background (clear, color, blur; the site's colors grow out

@@ -1,0 +1,37 @@
+---
+// /tools/: the small tools, each on a page of its own, listed as the posts are: a name and one line.
+// It is what a tool's trail and its way back lead to. Like the tools themselves it is unlisted, kept out
+// of search and the sitemap, and linked from nowhere but them, until she says otherwise.
+import "../styles/blog.css";
+import Base from "../layouts/Base.astro";
+
+/** The tools, in the order they are listed, each with the one line its own page says. */
+const tools = [
+    { href: "/mdquire/", name: "mdQuire", line: "A word processor for Markdown files." },
+    { href: "/imgquire/", name: "imgQuire", line: "A picture editor." },
+    { href: "/cutout/", name: "Cut-out", line: "Takes the background off a picture, in your browser." },
+    { href: "/qr/", name: "QR codes", line: "Makes and reads QR codes, in your browser." },
+    { href: "/convert/", name: "Convert", line: "Turns files into other formats, in your browser." },
+];
+---
+
+<Base title="tools" description="Small tools by Charlotte that run in your browser." unlisted>
+    <div class="page-head">
+        <h1>tools</h1>
+    </div>
+
+    <ul class="post-list">
+        {
+            tools.map((tool) => (
+                <li class="post-row compact">
+                    <a href={tool.href}>
+                        <div class="post-row-head">
+                            <h2>{tool.name}</h2>
+                        </div>
+                        <p>{tool.line}</p>
+                    </a>
+                </li>
+            ))
+        }
+    </ul>
+</Base>

@@ -136,7 +136,7 @@ export default defineConfig({
     integrations: [
         mdx(),
         // the page for trying the editor is not one for visitors to find
-        sitemap({ filter: (page) => !page.includes("/mdquire") && !page.includes("/imgquire") && !page.includes("/cutout") && !page.endsWith("/qr/") && !page.endsWith("/convert/") }),
+        sitemap({ filter: (page) => !page.includes("/mdquire") && !page.includes("/imgquire") && !page.includes("/cutout") && !page.endsWith("/qr/") && !page.endsWith("/convert/") && !page.endsWith("/tools/") }),
         resumePdf(),
         cspCheck(),
         privateLinks(),
