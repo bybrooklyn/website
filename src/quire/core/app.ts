@@ -136,7 +136,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
             if (menu.isOpen()) return menu.close(true);
             from = button;
             shown = editing.current().store ?? browser;
-            void showDocuments();
+            void showDocuments(undefined, true);
         },
         start: begin,
     });
@@ -278,7 +278,8 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
     };
 
     // ---- the documents list ----
-    async function showDocuments(problem?: string) {
+    /** Shows the documents list; `naming` when it was opened from the name, whose field then has the keyboard, its text selected, so that what is typed renames. */
+    async function showDocuments(problem?: string, naming = false) {
         const current = editing.current();
         let entries: Entry[] = [];
         let note = problem;
@@ -338,7 +339,16 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
                 await showDocuments();
             },
         });
-        if (from) menu.open(from, list);
+        if (!from) return;
+        const was = menu.isOpen();
+        menu.open(from, list);
+        if (!naming || was) return;
+        // the keyboard leaves the document at once, so that no key typed here reaches it as a shortcut; a name that cannot be changed leaves it with the list
+        const field = list.querySelector<HTMLInputElement>(".quire-documents-rename input");
+        if (field && !field.disabled) {
+            field.focus({ preventScroll: true });
+            field.select();
+        } else menu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
     }
 
     /** Closes the documents list and gives the text back. */

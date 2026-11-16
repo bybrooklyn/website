@@ -226,8 +226,10 @@ used("the documents list flows out of the name: a new document, a rename that En
     await tab.type("Second.");
     await tab.wait(1200);
     // renamed from the list's name field
+    // the name's field has the keyboard as soon as the list shows, its text selected, so that Ctrl+A and what is typed go to it
     await documents();
-    await tab.run("(() => { const field = document.querySelector('.quire-documents-rename input'); field.focus(); field.select(); })()");
+    expect(await tab.run("(() => { const field = document.querySelector('.quire-documents-rename input'); return document.activeElement === field && field.selectionStart === 0 && field.selectionEnd === field.value.length; })()")).toBe(true);
+    await tab.press("a", { ctrl: true });
     await tab.type("Plans");
     await tab.press("Enter");
     await tab.wait(400);

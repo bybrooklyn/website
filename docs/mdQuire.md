@@ -231,7 +231,8 @@ size and who it is for, the one that suits the machine picked; the download's pr
 **The look.** Chosen from the lab: two writing screens, no page (the writing on the site's ground at the
 blog's measure) and light paper; it opens on no page, and paper is chosen from View. The top is two lines:
 a trail (the site's name and flags, then mdQuire, then the document's name; the first leads home, the
-second to the shelf, the third opens the documents list) with the menu words, and under it the tools in
+second to the shelf, the third opens the documents list, whose name field then has the keyboard with its
+text selected, so that typing renames and no key reaches the document) with the menu words, and under it the tools in
 the order Google Docs has them, with the size as a number between minus and plus. Find, the status, the
 three dots and the microphone are at the right. An "About mdQuire" line is in Help, and opens a dialog. The
 browser tab shows an italic Q on a dark rounded square
