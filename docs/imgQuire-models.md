@@ -357,6 +357,141 @@ thousands of faces, so eyes, teeth and skin are made up, and the result can look
 Face restoration is not recommended for the first version. It invents faces and the good ones are either
 over 150 MB or non-commercial.
 
+### JPEG repair and enlarging: tried on the site's build (15 November 2026)
+
+The owner allowed nine files to be downloaded to this machine once for a trial, each from its repository at a
+pinned commit; they are in `~/.cache/quire-model-trials/restore/`, one folder each, and their SHA-256 were worked
+out from those copies (every size matched the listing's). The files were read only by ONNX Runtime in the browser
+and by a plain protobuf reader written for the trial.
+
+| Model | Repository at commit, file | Bytes | SHA-256 |
+|---|---|---|---|
+| Swin2SR lightweight x2, fp16 | `Xenova/swin2SR-lightweight-x2-64` 92a21aca5713f20faf9a87590cdfbdce2e34112c, onnx/model_fp16.onnx | 7,524,409 | 96a120768ff28d61591be145e5bc9d71be62cd3df7dcc386fdbd36f15f2235dd |
+| Swin2SR real-world x4, fp16 | `Xenova/swin2SR-realworld-sr-x4-64-bsrgan-psnr` d0e9926970c93e472ce2392373d72597fc849027, onnx/model_fp16.onnx | 32,357,522 | 492b744c779e549212b5e10ab6eb0dacbb53566bc8b55cb608f47cbfcfd29d7d |
+| Swin2SR real-world x4, fp32 | the same, onnx/model.onnx | 52,772,645 | f496dc73dcc01d778b1a12eb4c4038d6b27cd1c0b5bcd4258455ed6d7816c835 |
+| RealPLKSR x4 | `darktable-org/upscale-realplksr-onnx` 0bb636eeeed5fffd256571c3cc440d9fdf62467e, onnx/model_x4.onnx | 29,711,010 | 8ce692652494e2e5c31e1f7c7ab61eb084e9a450cde727a374f5d6746cfe054b |
+| Real-ESRGAN general x4v3, fp16 | `vlad-grig/realesr-general-x4v3-onnx` 0e95d93e454cf6b5de9bdf5a1c9e7ec340d38231, onnx/model_fp16.onnx | 2,444,980 | 19e86172c2f4345a40ac5b3467bcaa6702623d24f3defdf9feceb7a070f28288 |
+| NMKD Jaywreck3 Lite, fp16 | `colpona/dejpeg-models` 3cc3250ce83e61bffdc1c6ffcfb27161951f5e9f, other-models/1x-NMKD-Jaywreck3-Lite-fp16.onnx | 10,114,140 | 4f72d8532e0632e87bcb0d03ff611bdac348e615873bb7c990c6291b0f08a495 |
+| SCUNet real PSNR, fp16 | the same, scunet/scunet_color_real_psnr_fp16.onnx | 37,746,503 | 8923b09e240e0078b3247964e9b105cbfbb4da01e260b29a961d038f8fa7791a |
+| 1xDeJPG RealPLKSR otf, fp32 | `nesaorg/1xDeJPG_realplksr_otf_fp32_fullyoptimized` 29a817ea2316bcf1f36c60dfc72dd510e9a24444, 1xDeJPG_realplksr_otf_fp32_fullyoptimized.onnx | 29,620,809 | 70832d4536202d7e83603debb7b3e47a798553f0b534e708a498a23939c905b2 |
+| FBCNN colour, fp16 | `colpona/dejpeg-models` 3cc3250ce83e61bffdc1c6ffcfb27161951f5e9f, fbcnn/fbcnn_color_fp16.onnx | 143,910,675 | 1a678ff4f721b557fd8a7e560b99cb94ba92f201545c7181c703e7808b93e922 |
+
+**Where each runs.** On the site's onnxruntime-web 1.24.1 in headless Chromium 157, four cores (two WebAssembly
+threads), an RTX 3070 Ti for WebGPU, each model run through `tiles.ts` over a photograph from the photos page (1200
+by 1600 for the repair models, 600 by 800 for the enlarging ones), and each answer checked by making it back to the
+input's size and comparing (a right answer is near its input; a wrong one is far, whatever ONNX Runtime said). Times
+are seconds a megapixel of what the model is given, the first tile (which builds the card's programs) included.
+Memory is the browser's resident memory before and at the run's worst, and the card's memory in use, the whole
+card's (other programs use it too, so it is rough):
+
+| Model | Input | WebGPU | WebAssembly | Memory at worst |
+|---|---|---|---|---|
+| Swin2SR lightweight x2 fp16 | any size, given in whole steps of 8; loads only once its output is untied from its input's size (below) | **wrong answer, no error**: a fine pattern laced through the picture, 29.8 dB from the WebAssembly answer; 7.5 s | right; 98 s, with the "extended" rewriting only | 1.9 to 2.0 GB browser; card 3.0 to 3.3 GB |
+| Swin2SR real-world x4 fp16 | as above | **wrong**, nothing like the picture; 21 s | right; 670 s, "extended" only | 2.6 to 2.8 GB browser |
+| Swin2SR real-world x4 fp32 | steps of 8 | **wrong** at any rewriting and tile size (tiles of 256 and 128; the card's memory reached 7.8 of 8 GB at 256 with no error said); 16 to 27 s | right; 518 s | 2.6 to 3.2 GB browser |
+| RealPLKSR x4 | fixed, 256 square (a tile is reflected out to it) | right; 75 s | right; 520 s | 3.4 to 3.8 GB browser |
+| Real-ESRGAN general x4v3 fp16 | any size | right; 1.3 s | right; 69 s | 1.2 to 1.3 GB browser |
+| Jaywreck3 Lite fp16 | any size, given in 16 bits | right; 1.7 s | right; 233 s | 1.5 GB browser; card 2.1 to 3.4 GB |
+| SCUNet real PSNR fp16 | any size, in 16 bits | right with the "basic" rewriting only (the fuller ones fuse a convolution the card's runtime lacks); 8.7 s | right with "extended"; 93 s | 1.0 to 1.5 GB browser; card 3.1 to 5.0 GB |
+| 1xDeJPG RealPLKSR | fixed, 256 square | right; 123 s | right; 359 s | under 1.9 GB browser |
+| FBCNN colour fp16 | any size, with its quality as a second input | right; 1.0 s | right; 63 s | 1.6 GB browser; card 3.2 to 5.1 GB |
+
+Every model loads and gives an answer somewhere, so none is dropped for not running. Half precision works where
+the table says, on both. The fp16 Swin2SR exports name their output's height and width with their input's own
+names, so ONNX Runtime sets aside an output the input's size and the run fails; renaming those names in the file's
+bytes after its digest is checked (the output's and the half-precision value's before it, the last letter made
+`_`, every length kept: `src/quire/img/restore/graph.ts`) lets both load. That Swin2SR comes out wrong on the card
+in every file and every setting tried is ONNX Runtime 1.24.1's WebGPU, not the files: the same files are right on
+WebAssembly. A browser just started gives no graphics adapter for its first moments; the tests wait before asking.
+
+**What each is worth: repair.** The no-model repair's own pictures and qualities (`deblock.test.ts`: three
+photographs from the photos page made small, three screenshots kept as PNG, a chart drawn in the test and the
+Torrens Serif cover, each compressed by libjpeg through sharp at 4:2:0), each model run on the card over the decoded
+JPEG; PSNR of red, green and blue, and SSIM of the luminance, against the clean picture. Gain over the no-model
+repair, the mean of the kind, and in brackets the worst single picture's PSNR gain:
+
+| Kind and model | 10 | 20 | 30 | 50 | 75 | 90 |
+|---|---|---|---|---|---|---|
+| Photographs, Jaywreck3 | +0.11 dB / +0.002 (-0.03) | +0.45 / +0.007 | +0.38 / +0.004 | -0.18 / -0.005 | -1.52 / -0.015 | -4.40 / -0.024 |
+| Photographs, SCUNet | +1.00 / +0.016 (0.73) | +1.30 / +0.011 | +1.36 / +0.007 | +1.34 / +0.003 (0.59) | +1.10 / -0.001 (0.22) | -0.20 / -0.006 (-1.29) |
+| Photographs, FBCNN | +1.40 / +0.021 (1.18) | +1.62 / +0.017 | +1.77 / +0.015 | +1.92 / +0.012 (1.09) | +2.05 / +0.008 (1.16) | +2.00 / +0.003 (1.11) |
+| Photographs, DeJPG | | -1.82 / -0.055 (-4.19) | | -2.20 / -0.043 (-5.19) | | |
+| Screenshots, Jaywreck3 | +0.89 / +0.016 | +0.55 / +0.015 | +0.28 / +0.011 (-0.54) | -1.44 / +0.003 | -4.48 / -0.003 | -9.25 / -0.007 |
+| Screenshots, SCUNet | +1.09 / +0.013 (0.75) | +2.03 / +0.013 | +2.28 / +0.013 | +2.54 / +0.011 (0.59) | +1.43 / +0.004 (-0.62) | -2.70 / -0.001 (-4.99) |
+| Screenshots, FBCNN | +2.39 / +0.029 (2.17) | +2.81 / +0.022 | +3.14 / +0.020 | +3.06 / +0.012 (0.87) | +3.25 / +0.006 (2.18) | +1.82 / +0.002 (1.51) |
+| Screenshots, DeJPG | | +1.06 / +0.015 | | +0.18 / +0.007 (-0.53) | | |
+| Drawings, Jaywreck3 | +1.92 / +0.013 | +2.40 / +0.011 | +1.05 / +0.006 | +0.51 / +0.001 | -2.21 / -0.002 | -5.26 / -0.004 |
+| Drawings, SCUNet | +2.20 / +0.012 | +3.83 / +0.013 | +2.95 / +0.008 | +2.62 / +0.003 (1.00) | +1.53 / +0.000 (-0.78) | -1.24 / -0.003 (-3.06) |
+| Drawings, FBCNN | +2.99 / +0.019 (0.19) | +5.47 / +0.016 | +4.68 / +0.010 | +5.66 / +0.005 | +6.15 / +0.003 | +4.72 / +0.001 |
+
+(DeJPG was run at 20 and 50 only: at 123 seconds a megapixel on the card the full table would have taken an hour.)
+FBCNN is told the file's quality as `1 - quality / 100`, as its makers' code gives it; told the other way round at
+20 it gave 0.4 to 2.1 dB over the no-model repair, against 1.6 to 5.5 told right. In the editor, a 1280 by 960
+scene compressed by Chromium at quality 30 went from 31.93 dB to 32.17 with the no-model repair, 38.04 with SCUNet
+and 39.99 with FBCNN.
+
+**How much each invents, looked at at 200%.** FBCNN: the blocks and the ringing go and the texture that was there
+stays (bark, dew on grass, a screenshot's letters); nothing was seen that the clean picture lacks; it stays closest.
+SCUNet: the blocks go, and with them some fine texture, which it smooths into a soft wash (a tree's bark at 20, the
+dew drops at 50); it invents nothing but loses detail, more as the quality rises, which is why it does worse than
+the no-model repair above 50. Jaywreck3: smooths hard, takes the dew away at 50, and gives dark screenshots a warm
+cast they did not have; dropped. DeJPG: sharpens and adds contrast and halos round edges, the grass greener and
+crisper than the clean picture; it **invents visibly** and is not offered.
+
+**What each is worth: enlarging.** The same photographs and screenshots and the Torrens Serif cover, each made two
+and four times smaller (cut to a whole number of the factor first, made smaller by sharp's Lanczos-3), enlarged
+again, against the original. The editor's own filter is Lanczos-3 with pixel middles lined up; sharp's enlargement
+was found half a pixel off (best matched one pixel up and left), which cost it about 3 dB at twice, so the baseline
+is a Lanczos-3 written for the trial with the middles lined up. Gain over that, the mean of the kind (the worst
+picture's in brackets); the drawing is the cover alone:
+
+| Model | Photographs | Screenshots | Drawing |
+|---|---|---|---|
+| Swin2SR lightweight, twice | +1.93 dB / +0.029 (1.09) | +5.96 / +0.035 (3.78) | +8.42 / +0.020 |
+| Swin2SR lightweight run twice, four times | +1.08 / +0.073 (0.78) | +1.33 / +0.044 (0.76) | +4.35 / +0.041 |
+| RealPLKSR, four times | +0.40 / +0.061 (-0.44) | +1.07 / +0.035 (0.68) | +3.66 / +0.038 |
+| Swin2SR real-world fp16, four times | -0.35 / +0.026 (-0.96) | +0.95 / +0.036 (0.53) | +3.93 / +0.048 |
+| Real-ESRGAN general x4v3, four times | -1.83 / -0.021 (-2.73) | -0.72 / +0.018 (-1.47) | +0.65 / +0.022 |
+
+These pictures were made smaller by a clean filter, which is what the Swin2SR lightweight model was trained on; a
+picture that came small from a camera or a screenshot tool will gain less. Looked at at 200%: Swin2SR lightweight
+gives sharp, faithful edges and leaves soft what was soft; at four times its edges are crisp where the original's
+were, a little cleaner than the original in places, but nothing new appears. RealPLKSR is a little sharper than the
+filter, with some edges drawn harder than they were. Swin2SR real-world paints soft, smooth blobs, a watercolor of
+the flowers. Real-ESRGAN paints hard-edged shapes and texture over the flowers that were not there: it **invents
+visibly** and is not offered.
+
+**Chosen.** For repair, two sizes beside the no-model repair, which stays the first choice: Better, SCUNet (38 MB),
+offered for files at quality 50 or below; Best, FBCNN (144 MB), better than SCUNet everywhere and by a margin seen
+at 200% (texture kept against texture washed). Both on the graphics card only: on WebAssembly a megapixel takes 63
+(FBCNN) to 93 (SCUNet) seconds, about a quarter of an hour for a phone's photograph. There is no 10 MB size: the one
+candidate near it, Jaywreck3, does worse than the no-model repair above quality 30 and shifts colours.
+
+For enlarging, one size: Sharp, Swin2SR lightweight (8 MB), twice as large, run a second time over its own answer
+for four times. It beat every four-times model on photographs, invents least, and is the smallest; RealPLKSR and
+Swin2SR real-world, at 30 to 53 MB, are not better by any measure here, and Real-ESRGAN invents. It runs on
+WebAssembly everywhere, since it is wrong on the card: about a minute and a half for a megapixel given at twice,
+and five times that for four times (the second pass is over four times the pixels).
+
+Dropped: Jaywreck3 (worse above 30, a colour cast), DeJPG (invents), Real-ESRGAN (invents), RealPLKSR and both
+Swin2SR real-world files (not better than the smaller model, and slow: 75 seconds a megapixel on the card, 520 to
+670 on WebAssembly).
+
+**Licenses, as far as they could be confirmed.**
+
+- Swin2SR lightweight (offered): `Xenova/swin2SR-lightweight-x2-64` is tagged Apache-2.0 on its card; upstream,
+  `mv-lab/swin2sr`, is Apache-2.0. Xenova converts models for transformers.js from their makers' weights; the
+  conversion itself was not checked against the upstream weights.
+- SCUNet and FBCNN (offered): `colpona/dejpeg-models` is tagged Apache-2.0 as a whole repository, and its README
+  says only that the files were converted with the scripts at codeberg.org/dryerlint/dejpeg. The tag cannot be read
+  file by file: the same repository also holds BRIA's RMBG, whose own license is non-commercial, so the tag is not a
+  statement about each file. Upstream, `cszn/SCUNet` and `jiaxi-jiang/FBCNN` are Apache-2.0, and a plain conversion
+  of their weights carries that license. Not confirmed: that these files are those weights converted and nothing
+  else, and the converter's own terms. The converter's note that the fp16 files "may or may not work" was not seen
+  in the README read; both files were found to run right here.
+- Not offered, for the record: Jaywreck3 said to be WTFPL (not read); DeJPG's author's card says CC-BY-4.0 and the
+  upload has no card; RealPLKSR MIT (darktable's card); Real-ESRGAN BSD-3 upstream, a third party's upload.
+
 ## 4. Removing objects and filling gaps (inpainting, no text prompt)
 
 | Model | Repository | Licence | ONNX size | In the browser? | Resolution | Quality |
