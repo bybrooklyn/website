@@ -2653,6 +2653,27 @@ export function mountEditor(host: HTMLElement, context: Context) {
         openDialog(stage.element, { title: "Keyboard shortcuts", body: [list], dismiss: "close", returnTo: stage.element });
     }
 
+    /** What Escape does now, one level at a time: stops what runs, lets a press asked for go, the part or what is picked or selected, the corners, perspective, and last the tool. */
+    function escapeFor(): (() => void) | undefined {
+        if (running) return () => running?.stop.abort();
+        if (asking) return () => cancelPick();
+        if (grading.isOpen() && target)
+            return () => {
+                target = undefined;
+                fillGrade();
+                refresh();
+                stage.changed();
+                void measureGrade();
+            };
+        if (stage.picked()) return () => stage.pick(undefined);
+        if (stage.selected()) return () => stage.selectAll(false);
+        // setting the corners, Escape stops; with perspective open, it goes back to the crop's strip
+        if (stage.cornering()) return () => (stage.setCornering(false), refresh());
+        if (straightening && stage.tool() === "crop") return () => setStraightening(false);
+        if (stage.tool() !== "none") return () => stage.setTool("none");
+        return undefined;
+    }
+
     frame.keys((event) => {
         const control = event.ctrlKey || event.metaKey;
         const onPicture = event.target === stage.element;
@@ -2670,30 +2691,23 @@ export function mountEditor(host: HTMLElement, context: Context) {
             if (key === "-") return () => stage.zoom(0.8);
             return undefined;
         }
+        // Escape is answered from the tool's own controls too (the dial, a shape, a color), as from the picture, and the keyboard then goes back to the picture
+        if (!onPicture && event.key === "Escape" && !event.altKey && !control && event.target instanceof Element && event.target.closest(".quire-img-strip")) {
+            const run = escapeFor();
+            return (
+                run &&
+                (() => {
+                    run();
+                    stage.element.focus({ preventScroll: true });
+                })
+            );
+        }
         // single keys only while the picture, not a field, has the keyboard
         if (!onPicture || event.altKey || control) return undefined;
         const picked = TOOL_KEYS[event.code];
         if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : picked === "facts" ? showFacts() : picked === "grade" ? showGrade() : picked === "perspective" ? setStraightening(!(straightening && stage.tool() === "crop")) : pickTool(picked));
         if (event.key === "Enter" && stage.tool() === "crop") return applyCrop;
-        if (event.key === "Escape") {
-            if (running) return () => running?.stop.abort();
-            if (asking) return () => cancelPick();
-            if (grading.isOpen() && target)
-                return () => {
-                    target = undefined;
-                    fillGrade();
-                    refresh();
-                    stage.changed();
-                    void measureGrade();
-                };
-            if (stage.picked()) return () => stage.pick(undefined);
-            if (stage.selected()) return () => stage.selectAll(false);
-            // setting the corners, Escape stops; with perspective open, it goes back to the crop's strip
-            if (stage.cornering()) return () => (stage.setCornering(false), refresh());
-            if (straightening && stage.tool() === "crop") return () => setStraightening(false);
-            if (stage.tool() !== "none") return () => (stage.tool() === "crop" ? stage.setTool("none") : stage.setTool("none"));
-            return undefined;
-        }
+        if (event.key === "Escape") return escapeFor();
         if ((event.key === "Delete" || event.key === "Backspace") && stage.picked()) return removePicked;
         if ((event.key === "Delete" || event.key === "Backspace") && grading.isOpen() && target) return removePart;
         // in a batch: the next picture and the one before, and the first and the last, keys the crop's frame, a mark and a corner never use

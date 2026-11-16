@@ -321,3 +321,24 @@ test("a mouse's notch with Ctrl held zooms as gently as a notch of the plain whe
     // a pinch: ten small steps, each followed as it comes, together about a fifth larger
     expect(await zoomedBy(Array(10).fill(-2), true)).toBeCloseTo(Math.exp(0.2), 4);
 });
+
+test("Escape leaves the crop from the tool's own controls, the dial once dragged or a shape pressed, and gives the keyboard back to the picture", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    const dial = await page.middle(".quire-img-strip .quire-img-dial");
+    await page.tab.drag(dial, { x: dial.x + 30, y: dial.y }, 6);
+    expect(await page.tab.run("document.activeElement.classList.contains('quire-img-dial')")).toBe(true);
+    await page.tab.press("Enter");
+    await page.tab.press("Escape");
+    expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("none");
+    expect(await page.tab.run("document.activeElement === document.querySelector('.quire-img-stage')")).toBe(true);
+    // a shape pressed, and Escape while the shape's button has the keyboard
+    await page.tab.press("c");
+    await page.until("document.querySelector('.quire-img-strip [aria-label=\"Square shape\"]')");
+    await page.tab.wait(300);
+    const square = await page.middle(".quire-img-strip [aria-label='Square shape']");
+    await page.tab.click(square.x, square.y);
+    await page.tab.run("document.querySelector('.quire-img-strip [aria-label=\"Square shape\"]').focus()");
+    await page.tab.press("Escape");
+    expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("none");
+}, 30_000);

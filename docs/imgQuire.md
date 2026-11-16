@@ -478,7 +478,9 @@ red mark is the red picked (`profile.test.ts`).
 
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
-single keys C, R, A, T, B, N, H, M, S, E, I, W, G, K and P only while the picture has the keyboard, Enter and Escape; the palette is
+single keys C, R, A, T, B, N, H, M, S, E, I, W, G, K and P only while the picture has the keyboard, Enter and Escape;
+Escape also from the tool's own controls in its strip (the dial, a shape, a color), which then gives the keyboard
+back to the picture; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
 
 **A right-click's menu** (`press-menu.ts`, opened in `editor.ts`), as mdQuire's text has one. On the
