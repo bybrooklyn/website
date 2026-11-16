@@ -108,3 +108,43 @@ test("in Chromium, a tool's box, its words to press and its rows of dots are bui
         await page.close();
     }
 });
+
+test("in Chromium, a row of small pictures is a row of dots whose words are pictures: each named for assistive tools, the one shown chosen in the accent, and the one pressed told", async () => {
+    const css = await Bun.file(`${import.meta.dir}/../../styles/quire-bench.css`).text();
+    const page = await corePage(
+        `
+        import { bench, pictured } from "${quire}/core/bench.ts";
+        const box = bench("Try");
+        document.querySelector("#host").append(box.root);
+        const drawn = (d) => { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.innerHTML = '<path d="' + d + '"/>'; return svg; };
+        window.pressed = [];
+        const shapes = pictured("shape", [{ value: "square", picture: drawn("M0 0h4v4H0z"), tip: "Squares" }, { value: "dots", picture: drawn("M2 0a2 2 0 1 0 0 4a2 2 0 1 0 0-4"), tip: "Dots" }], (value) => (window.pressed.push(value), shapes.show(value)));
+        shapes.show("square");
+        box.side.append(shapes.group);
+        window.ready = true;
+    `,
+        { body: `<style>${css}</style><div id="host"></div>` },
+    );
+    if (!page) return;
+    const { tab } = page;
+    try {
+        for (let waited = 0; waited < 100 && !(await tab.run<boolean>("window.ready === true")); waited++) await tab.wait(100);
+        expect(await tab.run("[document.querySelector('.quire-bench-heading').textContent, document.querySelector('.quire-bench-choices').className, document.querySelector('.quire-bench-choices').getAttribute('role')]")).toEqual(["shape", "quire-bench-choices quire-bench-pictured", "radiogroup"]);
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-pictured label')].map((each) => [each.title, each.querySelector('input').type, each.querySelector('input').getAttribute('aria-label'), !!each.querySelector('svg'), each.textContent])")).toEqual([
+            ["Squares", "radio", "Squares", true, ""],
+            ["Dots", "radio", "Dots", true, ""],
+        ]);
+        const chosen = () => tab.run<string[]>("[...document.querySelectorAll('.quire-bench-pictured input:checked')].map((each) => each.value)");
+        expect(await chosen()).toEqual(["square"]);
+        // a press on the picture itself reaches its input, and the one chosen is drawn in the accent, the other not
+        const at = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelectorAll('.quire-bench-pictured label')[1].getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()");
+        await tab.click(at.x, at.y);
+        expect(await tab.run("window.pressed")).toEqual(["dots"]);
+        expect(await chosen()).toEqual(["dots"]);
+        await tab.wait(300);
+        const accent = await tab.run<string>("(() => { const probe = document.createElement('i'); probe.style.color = 'var(--accent)'; document.body.append(probe); return getComputedStyle(probe).color; })()");
+        expect(await tab.run("[...document.querySelectorAll('.quire-bench-pictured label')].map((each) => getComputedStyle(each).color)")).toEqual([expect.not.stringMatching(accent.replace(/[()]/g, "\\$&")), accent]);
+    } finally {
+        await page.close();
+    }
+});

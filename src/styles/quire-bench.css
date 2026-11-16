@@ -355,3 +355,80 @@ textarea.quire-bench-typed {
         transition: none;
     }
 }
+
+/* ---- a row of small pictures to choose one of (pictured in bench.ts): a row of dots whose words are
+   pictures, drawn quietly in the muted ink with no box round them, the one chosen in the accent with a
+   short rule under it ---- */
+.quire-bench-pictured {
+    gap: 0.15rem 0.25rem;
+    /* the first picture's edge on the column's edge, under the words */
+    margin-inline-start: -0.3rem;
+}
+
+.quire-bench-pictured label {
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 0.3rem 0.3rem 0.5rem;
+    border-radius: var(--radius);
+    color: var(--muted);
+    transition:
+        color 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+.quire-bench-pictured label:hover {
+    color: var(--ink);
+}
+
+.quire-bench-pictured label:active {
+    scale: 0.94;
+}
+
+/* the round input stays, out of sight over its picture, so the arrow keys and assistive tools still have it */
+.quire-bench-pictured input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+}
+
+.quire-bench-pictured label::after {
+    position: absolute;
+    right: 28%;
+    bottom: 0.1rem;
+    left: 28%;
+    height: 0.125rem;
+    border-radius: 0.125rem;
+    background: var(--accent);
+    content: "";
+    scale: 0 1;
+    transition: scale 0.25s var(--ease);
+}
+
+.quire-bench-pictured label:has(input:checked) {
+    color: var(--accent);
+}
+
+.quire-bench-pictured label:has(input:checked)::after {
+    scale: 1 1;
+}
+
+.quire-bench-pictured label:has(input:focus-visible) {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.0625rem;
+}
+
+.quire-bench-pictured svg {
+    display: block;
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-bench-pictured label,
+    .quire-bench-pictured label::after {
+        transition: none;
+    }
+}
