@@ -142,7 +142,7 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
     for (const side of sides) {
         column.append(side.element);
         side.element.classList.add("quire-convert-kind");
-        side.changed = () => refresh();
+        side.changed = () => refresh(side);
     }
     const convertButton = word(WORDS.convert, () => convertAll());
     convertButton.title = "Convert every file not yet done (Ctrl+Enter)";
@@ -158,6 +158,17 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
     const clearButton = word(WORDS.clear, () => clear(), true);
     const actions = stack(undefined, convertButton, stopButton, zipButton, folderButton, clearButton);
     actions.classList.add("quire-convert-all");
+    // a control the keyboard reaches is never left under the pinned words: the browser counts it as in view there and does not
+    // scroll, so the page is scrolled by as much as the words cover of it
+    column.addEventListener("focusin", (event) => {
+        const target = event.target as HTMLElement;
+        if (actions.contains(target) || !target.matches(":focus-visible")) return;
+        const reached = (target.closest("label") ?? target).getBoundingClientRect();
+        const pinned = actions.getBoundingClientRect();
+        if (reached.bottom <= pinned.top || reached.top >= pinned.bottom) return;
+        const scroller = root.closest<HTMLElement>(".opened-panel") ?? document.scrollingElement;
+        scroller?.scrollBy({ top: reached.bottom - pinned.top + 12, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    });
     column.append(actions);
 
     // the one line under the work: what was just done, else how the list stands; while files are worked on, how many
@@ -319,7 +330,8 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
                 if (signal.aborted || row.job !== job) return;
                 row.made = { ...made, name };
                 setShare(row, 1);
-                row.sizes.textContent = `${sizeSaid(row.item.file.size)} to ${sizeSaid(made.blob.size)}, ${changeSaid(row.item.file.size, made.blob.size)}`;
+                // an empty file has no share to say, and no comma waiting for one
+                row.sizes.textContent = [`${sizeSaid(row.item.file.size)} to ${sizeSaid(made.blob.size)}`, changeSaid(row.item.file.size, made.blob.size)].filter(Boolean).join(", ");
                 if (made.facts) row.what.textContent = `${row.item.found.label}, ${made.facts}`;
                 if (made.became) row.becomes.textContent = `to ${made.became}`;
                 setState(row, "done");
@@ -367,9 +379,24 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
         say("");
     }
 
-    /** Every row not yet done says again what it will become, after a choice changed. */
-    function refresh() {
-        for (const row of rows) if (row.state === "ready" || row.state === "cannot") setState(row, row.state);
+    /**
+     * After a choice changed: every row not yet done says again what it will become, and the rows of that kind already converted
+     * (or stopped, or failed) are ready again, since what they became is no longer what is chosen. Before, they stayed "to JPEG" with
+     * convert out of reach, and only a row's own menu could redo it.
+     */
+    function refresh(changed?: Side) {
+        for (const row of rows) {
+            if (row.state === "ready" || row.state === "cannot") setState(row, row.state);
+            else if (changed && sideOf(row) === changed && (row.state === "done" || row.state === "stopped" || row.state === "failed")) {
+                row.made = undefined;
+                row.sizes.textContent = sizeSaid(row.item.file.size);
+                row.what.textContent = row.item.found.label;
+                row.status.title = "";
+                showNotes(row, []);
+                setState(row, "ready");
+            }
+        }
+        refreshBar();
     }
 
     function refreshBar() {
@@ -404,12 +431,11 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
     async function saveZip() {
         const all = results();
         if (!all.length) return;
-        if (all.length === 1) return saveOne(rows.find((row) => row.made?.name === all[0]!.name)!);
         try {
-            say(`Making the zip of ${all.length} files`);
+            say(`Making the zip of ${all.length === 1 ? "one file" : `${all.length} files`}`);
             const zip = await zipOf(all, new Date(), (done) => say(`Making the zip, ${done} of ${all.length}`));
             download({ name: "converted.zip", blob: zip });
-            say(`Saved ${all.length} files as converted.zip, ${sizeSaid(zip.size)}.`);
+            say(`Saved ${all.length === 1 ? "one file" : `${all.length} files`} as converted.zip, ${sizeSaid(zip.size)}.`);
         } catch (error) {
             say(error instanceof Error ? error.message : String(error));
         }

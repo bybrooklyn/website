@@ -320,6 +320,13 @@ textarea.quire-bench-typed {
     cursor: default;
 }
 
+/* a word out of reach does not keep the line under it that says "press me" */
+.quire-bench-press:disabled,
+.quire-bench [inert] .quire-bench-press,
+.quire-bench-press[inert] {
+    text-decoration-color: transparent;
+}
+
 /* words that stand one under another, each on its own line */
 .quire-bench-stack {
     display: grid;

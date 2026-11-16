@@ -29,6 +29,12 @@
     line-height: 1.4;
 }
 
+/* with files in it the room is as tall as the window allows once it has stuck at the top, so the list has the room that stood
+   empty under it: at 828 high a list of four had shown two rows and a part of the third */
+.quire-convert.has-files .quire-convert-room {
+    height: max(var(--tall), calc(100svh - 4rem));
+}
+
 /* the drop place fills the room while the list is empty, and draws back to a strip over it when files come */
 .quire-convert-drop {
     display: flex;
@@ -388,6 +394,16 @@
 @media (max-width: 44rem) {
     .quire-convert .quire-bench-work {
         position: static;
+    }
+
+    /* the list is as long as its rows, with no scrolling box of its own inside the scrolling page */
+    .quire-convert.has-files .quire-convert-room {
+        height: auto;
+        min-height: var(--tall);
+    }
+
+    .quire-convert-rows {
+        overflow: visible;
     }
 
     .quire-convert-row-body {

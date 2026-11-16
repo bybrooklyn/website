@@ -77,6 +77,13 @@ the results' own blobs with small headers between, so a zip of films is not held
 file's checksum is worked out, reading it through once. A folder keeps what is in it: a name there already
 gets the next number in brackets.
 
+A choice changed after files were converted makes the files of that kind ready again, to become what is now
+chosen, and puts convert back in reach; before 16 November 2026 they stayed as they were with convert out of reach,
+and only a row's own menu could redo one. "save all as a zip" makes a zip of one file too. With files in it the
+list's room is as tall as the window allows once the work has stuck at the top, and in a narrow window the list is
+as long as its rows with no scrolling box of its own. A control the keyboard reaches is scrolled clear of the words
+pinned at the window's foot. A tester using the page by hand found each of these.
+
 The right-click menu on a row, each line with a first capital as menus have: Save, Copy (for text), Stop, Convert
 again or Try again, Remove; then Paste and Choose files. Shift with a right-click leaves the browser's own
 menu. Delete removes the row with the focus; the menu key or Shift+F10 opens the menu. Rows grow in from

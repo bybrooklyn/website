@@ -266,16 +266,25 @@ test("in Chromium, pictures arrive four ways, convert with their own names to th
         await until("window.convert.rows()[5].state === 'done'");
         expect(await tab.run("window.convert.rows()[5].made.name")).toBe("IMG_0001.webp");
         expect(await tab.run("window.convert.rows()[5].made.facts")).toBe("96 × 64");
-        // a large picture as AVIF, stopped while it is written, stays stopped
+        // another format chosen after converting: the files already converted are ready again, to become it, and convert is in reach
+        expect(await tab.run("document.querySelector('.quire-convert-all .quire-bench-press').disabled")).toBe(true);
+        const before = await tab.run<string[]>("window.convert.rows().map((row) => row.state)");
+        expect(before.filter((state) => state === "done").length).toBeGreaterThan(3);
         await pressText("AVIF");
+        expect(await tab.run<string[]>("window.convert.rows().map((row) => row.state)")).toEqual(before.map((state) => (state === "done" ? "ready" : state)));
+        expect(await tab.run<string>("document.querySelector('.quire-convert-row .quire-convert-becomes').textContent")).toStartWith("to AVIF");
+        expect(await tab.run("[document.querySelector('.quire-convert-all .quire-bench-press').textContent, document.querySelector('.quire-convert-all .quire-bench-press').disabled]")).toEqual(["convert", false]);
+        await pressText("clear the list");
+        await until("window.convert.rows().length === 0");
+        // a large picture as AVIF, stopped while it is written, stays stopped
         await tab.run("(async () => window.convert.add(await window.picture(3000, 2000, 'big.png'), 'big.png'))()");
-        await until("window.convert.rows().length === 7");
+        await until("window.convert.rows().length === 1 && window.convert.rows()[0].state === 'ready'");
         await pressText("convert");
-        await until("window.convert.rows()[6].state === 'running'");
+        await until("window.convert.rows()[0].state === 'running'");
         await tab.run("document.querySelector('.quire-convert-row:last-child .quire-convert-row-main').click()");
-        expect(await tab.run<string>("window.convert.rows()[6].state")).toBe("stopped");
+        expect(await tab.run<string>("window.convert.rows()[0].state")).toBe("stopped");
         await tab.wait(1500);
-        expect(await tab.run<string>("window.convert.rows()[6].state")).toBe("stopped");
+        expect(await tab.run<string>("window.convert.rows()[0].state")).toBe("stopped");
         // nothing was fetched but the page's own encoder files and worker
         const away = tab.requests.filter((request) => !/^http:\/\/localhost:\d+\/(quire\/codecs\/[a-z]+\.wasm|codec-run\.ts|page\.html)?$/.test(request.url) && !request.url.startsWith("blob:") && !request.url.startsWith("data:"));
         expect(away).toEqual([]);
@@ -330,19 +339,20 @@ test("in Chromium, text pasted and dropped converts both ways, a shape that cann
         await until("window.convert.rows()[3].state === 'done'");
         expect(await tab.run("window.convert.rows()[3].made.text")).toBe("name,address.city\r\nAda,London\r\nGrace,New York\r\n");
         // into TOML: a list is refused and put under a name when the offer is taken
+        // the format changed, the files already converted are ready again, and convert takes them all
         await pressText("TOML", ".quire-bench-side");
-        await tab.run("(() => { const row = document.querySelectorAll('.quire-convert-row')[4]; row.scrollIntoView({ block: 'center', behavior: 'instant' }); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
-        await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
+        expect(await tab.run<string>("window.convert.rows()[4].state")).toBe("ready");
+        await pressText("convert");
         await until("window.convert.rows()[4].state === 'failed'");
         expect(await tab.run("window.convert.rows()[4].notes")).toEqual(["TOML needs named values at the top, and this is a list.", "Put the list under the name items."]);
-        await pressText("Put the list under the name items.");
+        // the fifth row's own offer: other rows may be refused the same way now that convert takes them all
+        await pressText("Put the list under the name items.", ".quire-convert-row:nth-child(5)");
         await until("window.convert.rows()[4].state === 'done'");
         expect(await tab.run("window.convert.rows()[4].made.text")).toBe("items = [1, 2, 3]\n");
-        // Copy gives the clipboard the text made
-        await tab.run("document.querySelector('.quire-convert-row .quire-convert-copy').click()");
+        // copy gives the clipboard the text made, of the row it is pressed on
+        await tab.run("document.querySelectorAll('.quire-convert-row')[4].querySelector('.quire-convert-copy').click()");
         await until("window.copied.length === 1");
-        expect(JSON.parse(await tab.run<string>("window.copied[0]"))).toEqual([{ name: "Ada", age: "36" }, { name: "Hopper, Grace", age: "85" }]);
+        expect(await tab.run<string>("window.copied[0]")).toBe("items = [1, 2, 3]\n");
         expect(tab.errors).toEqual([]);
     } finally {
         await page.close();
@@ -374,10 +384,10 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
         expect(await tab.run("window.convert.rows()[0].made.name")).toBe("tone.flac");
         expect(await tab.run("window.convert.rows()[0].made.became")).toBe("FLAC, 44.1 kHz stereo, 0:02");
         await pressText("Opus Ogg");
-        expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to FLAC, 44.1 kHz stereo, 0:02");
-        await tab.run("(() => { const row = document.querySelector('.quire-convert-row'); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
-        await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
+        // the format changed: the file already converted is ready again and says what it will now become
+        expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to Opus in Ogg, 48 kHz");
+        expect(await tab.run<string>("window.convert.rows()[0].state")).toBe("ready");
+        await pressText("convert");
         await until("window.convert.rows()[0].state === 'done' && window.convert.rows()[0].made.name === 'tone.opus'");
         expect(await tab.run("window.convert.rows()[0].made.became")).toBe("Opus in Ogg, 48 kHz stereo, 0:02");
         expect(tab.errors).toEqual([]);
