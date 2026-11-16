@@ -16,8 +16,10 @@ its working name.
   the same on the processor.
 - `asking.ts`: the first-use dialog (the qualities as cards, fetched only when told) and the one for the
   model that picks a subject by a press.
-- `page.ts`: the page; `src/pages/cutout.astro`, `src/scripts/cutout.ts` (the site's colors offered),
-  `src/styles/quire-cutout.css`.
+- `page.ts`: the page, one picture or many; `src/pages/cutout.astro`, `src/scripts/cutout.ts` (the site's
+  colors offered), `src/styles/quire-cutout.css`. Many pictures use imgQuire's batch pieces: the strip
+  (`batch-strip.ts`), the names and the zip or folder (`batch.ts`, `batch-out.ts`) and the small copies
+  (`thumbs.ts`).
 - The models run in the part models' worker (`parts/finder.ts`), pinned in `parts/models.ts`
   (`CUT_TIERS`), fetched and kept as the text models are.
 
@@ -36,14 +38,37 @@ Choose another picture. A press on the picture keeps the thing pressed when ther
 opens a menu in the site's family: Paste and Choose a picture when empty; Copy, Save, Paste, then Keep and
 Remove with a cut-out; Shift leaves the browser's own.
 
-**The qualities.** Quick, MODNet (13 MB, made for people); Better, ormbg (44 MB); Best, BiRefNet lite's
-rebuild for WebGPU (123 MB), offered only where there is a graphics card. Each card says its time in plain
-words: "Under a second a picture, people only", "About 20 seconds a picture, most things", "About a second a
-picture, hair and fine edges". With nothing remembered, the dialog comes with Best picked where a graphics
-card gives WebGPU, and Better where there is none (with Quick beside it); a quality chosen on a past visit
-wins (`quire-cutout`). While Better works the line says "Cutting out, usually about 20 seconds".
+**The qualities.** Two, standing two in a row as cards of their usual size: Quick, MODNet (13 MB, made for
+people), and Best, BiRefNet lite at 512 by 512 (98 MB, `studioludens/birefnet-lite-512`, a converted copy of
+ZhengPeng7/BiRefNet_lite's weights, MIT). Each card says its time in plain words: "Under a second a picture,
+people only", "A few seconds a picture, most things". With nothing remembered, the dialog comes with Best picked;
+a quality chosen on a past visit wins (`quire-cutout`). Both run on WebAssembly on every machine, and nothing in
+the cut-out runs on the graphics card: there the 512 file gives an empty mask with no error from ONNX Runtime,
+since the card refuses one of its shaders ("no matching constructor for 'i32(vec4<u32>)'", in the pipeline
+`computeSliceOffsets`). On WebAssembly Best takes 2.7 to 2.8 s a picture warm in the test here, 2.0 to 3.4 s on
+the owner's photographs, 4 to 6 s the first time.
 
-**Edges.** The model's mask is found at its own size and kept at most 1024 a side, and applied at full size:
+When the model finds nothing (a mask with next to nothing kept, or everything), the picture is left as it was and
+the page says "Nothing was found to cut out, so the picture is left as it was." (imgQuire's status says the same,
+"Nothing found"); it is not run again, since on WebAssembly a second run gives the same answer. On one of seven of
+the owner's photographs tried (a mineral on a wall, `20251109-135135`) Best found nothing.
+
+How the qualities came to be: until 15 November 2026 there were three, Quick, Better (ormbg, 44 MB, about 20 s on
+WebAssembly) and Best (BiRefNet lite at 1024, the rebuild for WebGPU, 123 MB, on a graphics card only). The 1024
+model took more than 4.4 GB of the card's memory and ran it out beside the owner's other programs, so Best mostly
+ended with "the graphics card was too busy to finish". ormbg's masks on things that are not people came out
+washed-out and patchy (on her photographs, in 12 to 17 s), where the 512 BiRefNet's raw mask was clean and solid on
+six of seven. So the 512 BiRefNet became Best, on WebAssembly, and ormbg and the 1024 BiRefNet left the cut-out
+(imgQuire's Find keeps ormbg and SAM). A choice a browser kept as the old Better (`cut-better`) or the old Best
+(`cut-best`) reads as the new Best, whose id is `cut-best`. The old files a browser fetched (ormbg is still Find's;
+the 1024 BiRefNet's 123 MB) are left in its private storage: the model store has no way yet to take one model's
+files out, and a way to do it safely (never a file another tool still uses) is its own small piece of work; clearing
+the site's data takes them away. With nothing on the card, the cut-out's watching of the card (its error scopes,
+the run made again in a fresh worker, "the graphics card was too busy to finish") was taken out; the repair models
+keep their own.
+
+**Edges.** The model's mask is found at its own size and kept at that size (at most 1024 a side, never read up
+larger than the model answered: Best's is 512 on the picture's longer side), and applied at full size:
 a guided filter in the picture's colors (radius 2, epsilon 1e-4) fits at each place of the mask the plane
 `a · rgb + b` that best matches it (from the colors' 3 by 3 spread there), the planes averaged, worked out on
 the processor at the mask's size; on the card each full-size pixel takes its mask from that plane at its own
@@ -66,6 +91,17 @@ lightness, its mask given at a quarter size and softened once more as a model's 
 pixels (a share from 0.05 to 0.95) is 1.0 pixel wide in the cut against 11 in the mask enlarged (held to at
 most 1.5).
 
+With Best's mask at 512, a 4000 pixel picture's mask is an eighth of its size, not a quarter. The same two
+measures with the mask given at an eighth: kept at that size and laid on by the guided filter, the strands' mask
+error is 8.1 of 255 (6.0 at a quarter), the halo 8.4 of 255, and the band across the sharp edge 3 pixels wide
+(1.0 at a quarter, 22 in the eighth's mask enlarged). Read up to a quarter first, as the mask was before (kept at
+up to 1024 whatever the model gave), the same eighth came out at an error of 79 of 255, a halo of 32 and a band 33
+pixels wide: the edge step's reach and its tightening of sharp edges are counted in the mask's own pixels, and a
+mask read up spreads its soft edge over more of them. So a mask is now never kept larger than the model answered.
+On a 12 megapixel photograph Best's edge is therefore about three pixels soft across a sharp edge where the 1024
+model's was about one and a half; by eye on photographs from the photos page (the pictures with the report that
+made this change) the outline follows the subject, with hair and fur a little softer than the old Best's.
+
 **Full size out.** A 12 megapixel picture is cut and saved at 12 megapixels. Saved as a PNG through the
 browser's own encoder, with the picture's colour profile when it has one (a Display P3 photograph keeps its
 colors); the clipboard takes sRGB. Measured in headless Chromium (four cores, two WebAssembly threads, an RTX
@@ -75,8 +111,9 @@ size), warm:
 | Quality | WebAssembly | WebGPU |
 |---|---|---|
 | Quick (MODNet) | 0.6 s | runs on WebAssembly: 0.6 s |
-| Better (ormbg) | 19.5 s | runs on WebAssembly: 19.5 s |
-| Best (BiRefNet lite) | does not run: out of memory | 0.86 s (2 MP), 0.90 s (12 MP); 2.5 s the first time |
+| Best (BiRefNet lite at 512) | 2.7 s (2 MP), 2.8 s (12 MP); 7.6 s the first time | never put there: an empty mask, one shader refused |
+| ormbg, Better until 15 November 2026, taken out | 19.5 s | runs on WebAssembly: 19.5 s |
+| BiRefNet lite at 1024, Best until 15 November 2026, taken out | does not run: out of memory | 0.86 s (2 MP), 0.90 s (12 MP); 2.5 s the first time, when the card had the memory |
 
 and the edges worked out and the cut-out laid at full size, 12 megapixels: 1.3 s (the color guide and the
 stretch at the mask's size on the processor, the full-size pass through WebGL2 on software drawing, in
@@ -89,6 +126,21 @@ place of the original's, on a checkerboard where clear; covers, marks and grades
 strip: Clear, the mark colors, Blur, Keep, Remove, the quality, Take away. Export keeps the transparency
 in PNG, WebP, AVIF and JPEG XL; with JPEG it says "JPEG has no transparency: what is clear comes out white."
 and offers Lay it on a color or Use PNG.
+
+**Many at once.** Several pictures pasted, dropped or chosen together sit in imgQuire's strip of small pictures
+under the one shown (`batch-strip.ts`, taking room of its own, the picture fitted into what is left). The first is
+cut out as one picture is; the rest are cut out one after another behind it, one model run at a time, each decoded
+only while it is cut and let go, its mask kept; the line under the bar says "Cutting out 3 of 12", then "All 12 cut
+out." A press on a small picture, Page Down and Page Up, or Home and End show another, which keeps its own mask,
+strokes and subject pressed; Clear, Color and Blur are the page's, for every picture, and a new quality cuts them all
+again. The bar gains Save all 12 as a zip and Save all into a folder (where the browser has `showDirectoryPicker`),
+with Stop while they are saved: each cut-out laid as the page lays them, as a PNG at full size with its colour
+profile, under its picture's own name with `.png` (the second of one name `photo (1).png`), never over a file in the
+folder, two at a time, by the same code as imgQuire's Export all (`batch-out.ts`, `batch.ts`). A small picture's
+right-click menu holds Save this one, Copy this one, Add pictures, Paste and Take out; one of many saved alone keeps
+its own name as in the zip. One picture alone works as it always has (`field-cut-out.png`). Measured with the real
+Quick model (`page.test.ts`): three pictures pasted at once were all cut out, Page Down showed the second, and Save
+all gave one zip of `walk.png`, `walk (1).png` and `shore.png`, each at its own full size.
 
 **Nothing leaves the browser.** The tests hold that the only requests are the page's own files, ONNX
 Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cutout/tool.test.ts`).
@@ -107,26 +159,16 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
 
 ## Open
 
-- Many pictures at once as a zip: not built. The page holds one picture and its cut-out; a batch wants a
-  list of pictures, a way to see and fix each, and an export of all, which is imgQuire's batch slice.
-- The page's words are hers to approve (listed in the report that built it).
+- The page's words are hers to approve (listed in the reports that built it, the batch's too).
 
 ## Known weak spots
 
-- Better takes about 20 s, since ormbg runs on WebAssembly only; Best needs a graphics card. On a machine
-  with no card the choice is Quick (made for people) or a slow Better.
-- Best's rebuild (wonfy/BiRefNet_lite-ONNX-webgpu, MIT, a third party's rewrite of the stock graph with
-  the same weights) could not be checked against the stock export here: the stock file runs out of memory on
-  the site's runtime both on WebAssembly and on the card. Its card says its fp16 file differs from the fp32
-  stock one by at most 0.07 percent of pixels; that is its maker's claim.
-- Best beside another browser drawing hard on the same graphics card: a buffer of the model fails to be made,
-  every buffer after it is invalid ("Invalid Buffer is invalid due to a previous error"), and ONNX Runtime goes
-  on giving answers of nothing (all kept) or of part nothing, run after run, without a word. Reproduced three
-  times in about sixty runs beside the drawing tests. The card's errors are now watched for each run (error scopes for
-  memory, validation and internal errors, the device's loss and errors no one caught), such a run is no
-  answer named by its cause, and the cut-out runs it once more by itself in a fresh worker (a fresh runtime
-  and hold on the card) before telling the person "the graphics card was too busy to finish". A mask all kept
-  or all gone is refused the same way. A wrong mask that raised no error on the card would still not be caught.
+- Best's mask is 512 on the picture's longer side, so on a large photograph its edges are softer than the 1024
+  model's were (about three pixels across a sharp edge on a 12 megapixel picture); the guided filter keeps hair
+  following the picture, but fine strands far apart lose some of themselves.
+- Best found nothing on one of seven photographs tried (a mineral on a wall); the brush cannot help there, since it
+  works on a cut-out, so Quick is the other way to try.
+- The files of the qualities taken out stay in a browser that fetched them until the site's data is cleared.
 - The brush's strokes are painted into the mask at its own size (at most 1024 a side), so on a large
   picture their edge is soft by a few pixels, then follows the picture by the guided filter.
 - A press keeps what the cut-out found inside the thing pressed (its outline by SlimSAM, widened a little);
@@ -135,6 +177,10 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
   over 8 of the mask's pixels, so a background that changes quickly behind fine hair can leave some of
   itself.
 - Saving uses the browser's PNG encoder (quick), not oxipng; the files are larger than they could be.
+- Many at once: the background a cut-out is laid on and the quality are the page's for every picture, not each
+  picture's; what is shown is held in this tab only, so leaving the page loses the masks and strokes; a picture
+  that cannot be cut out is said in its small picture's label and in the line under the bar, and left out of Save
+  all, which says how many could not be.
 - Tried in Chromium only; not on a real phone.
 
 ## How to run and test

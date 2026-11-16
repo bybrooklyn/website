@@ -37,27 +37,16 @@ export function blank(found: Found): boolean {
 /** What finding a cut needs of the part models' worker. */
 interface Matting {
     matte(tier: string, picture: ImageBitmap, prefer?: "webgpu" | "wasm", side?: number): Promise<{ found: Found; ms: number }>;
-    destroy(): void;
 }
 
-/**
- * The model's mask for a picture, run once more by itself in a fresh worker (a fresh runtime and hold
- * on the graphics card) when the first answer is no answer: the card can let the model go beside other
- * heavy drawing, and every answer is then nothing until the runtime is made again. Only a second blank
- * answer is said to the person.
- */
+/** What is said when the model finds nothing to cut out (next to nothing kept, or everything): the picture is left as it was. */
+export const FOUND_NOTHING = "nothing was found to cut out, so the picture is left as it was";
+
+/** The model's mask for a picture; a mask with next to nothing kept (or all of it) is no cut-out, and is said so. */
 export async function findCut(finder: Matting, tier: string, picture: () => Promise<ImageBitmap>, side = CUT_SIDE): Promise<{ found: Found; ms: number }> {
-    for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-            const answer = await finder.matte(tier, await picture(), undefined, side);
-            if (!blank(answer.found)) return answer;
-        } catch (error) {
-            if (!(error as { again?: boolean }).again) throw error;
-            if (attempt) throw new Error("the graphics card was too busy to finish; try again in a moment");
-        }
-        finder.destroy();
-    }
-    throw new Error("the model found nothing to cut out; try again, or another quality");
+    const answer = await finder.matte(tier, await picture(), undefined, side);
+    if (blank(answer.found)) throw new Error(FOUND_NOTHING);
+    return answer;
 }
 
 /** A found mask's values from 0 to 1, or nothing if its runs do not read. */

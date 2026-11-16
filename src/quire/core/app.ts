@@ -212,42 +212,52 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
     chooser.tabIndex = -1;
     chooser.setAttribute("aria-hidden", "true");
     host.append(chooser);
+    // many files can be chosen at once, which a kind that takes many (imgQuire's pictures) makes one document of
+    chooser.multiple = true;
     chooser.addEventListener("change", async () => {
-        const picked = chooser.files?.[0];
+        const all = [...(chooser.files ?? [])];
+        const picked = all[0];
         chooser.value = "";
         if (!picked) return;
-        if (await takeIn(picked)) return;
+        if (await takeIn(all)) return;
         const entry = await files.add(picked).catch((error) => void editing.say("Not opened", `${picked.name} was not opened: ${error instanceof Error ? error.message : String(error)}`));
         if (!entry) return;
         if (!(await openIn(files, entry))) return;
         await showEditor();
         editing.focus();
     });
-    /** A file some kind makes a new document of (a picture, for imgQuire): that kind's editor takes it, and the home screen makes way. True when a kind took it. */
-    async function takeIn(file: File): Promise<boolean> {
-        const taker = offered.find((each) => each.takes?.(file));
+    /**
+     * Files some kind makes a new document of (pictures, for imgQuire): that kind's editor takes them, one as a
+     * document of its own, several as one document where the kind takes many at once, and the home screen makes way.
+     * True when a kind took them.
+     */
+    async function takeIn(given: File[]): Promise<boolean> {
+        const taker = offered.find((each) => given.some((file) => each.takes?.(file)));
         if (!taker) return false;
-        if (!(await into(taker)) || !(await editing.take?.(file))) return true;
+        const files = given.filter((file) => taker.takes?.(file));
+        if (!(await into(taker))) return true;
+        const took = files.length > 1 && editing.takeMany ? await editing.takeMany(files) : await editing.take?.(files[0]!);
+        if (!took) return true;
         await showEditor();
         editing.focus();
         return true;
     }
-    // a picture pasted or dropped on the home screen becomes a document of the kind that takes it; in an editor, the editor's own
-    const fileIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((file) => offered.some((each) => each.takes?.(file)));
+    // pictures pasted or dropped on the home screen become a document of the kind that takes them; in an editor, the editor's own
+    const filesIn = (data: DataTransfer | null) => [...(data?.files ?? [])].filter((file) => offered.some((each) => each.takes?.(file)));
     document.addEventListener("paste", (event) => {
-        const file = shelf.shown() && !event.defaultPrevented ? fileIn(event.clipboardData) : undefined;
-        if (!file) return;
+        const files = shelf.shown() && !event.defaultPrevented ? filesIn(event.clipboardData) : [];
+        if (!files.length) return;
         event.preventDefault();
-        void takeIn(file);
+        void takeIn(files);
     });
     host.addEventListener("dragover", (event) => {
         if (shelf.shown() && [...(event.dataTransfer?.items ?? [])].some((item) => item.kind === "file")) event.preventDefault();
     });
     host.addEventListener("drop", (event) => {
-        const file = shelf.shown() ? fileIn(event.dataTransfer) : undefined;
-        if (!file) return;
+        const files = shelf.shown() ? filesIn(event.dataTransfer) : [];
+        if (!files.length) return;
         event.preventDefault();
-        void takeIn(file);
+        void takeIn(files);
     });
     const pickers = globalThis as unknown as { showOpenFilePicker?: (options: object) => Promise<FileHandle[]>; showDirectoryPicker?: (options: object) => Promise<FolderHandle> };
     const able = canOpen();

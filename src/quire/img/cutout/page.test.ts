@@ -16,6 +16,7 @@ import { corePage, quire } from "../../../../scripts/core-page";
 import { CUT_TIERS } from "../parts/models";
 import { cutMenuLines, cutName } from "./page";
 import { packageAt } from "../../../../scripts/lib";
+import { readZip } from "../../core/zip";
 
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
 const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
@@ -42,7 +43,7 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         window.copied = [];
         navigator.clipboard.write = async (items) => { for (const item of items) { const blob = await item.getType("image/png"); const bitmap = await createImageBitmap(blob); window.copied.push({ width: bitmap.width, height: bitmap.height }); } };
         window.downloads = {};
-        HTMLAnchorElement.prototype.click = function () { if (this.download) fetch(this.href).then((answer) => answer.arrayBuffer()).then((buffer) => (window.downloads[this.download] = buffer.byteLength)); };
+        HTMLAnchorElement.prototype.click = function () { const name = this.download; if (name) fetch(this.href).then((answer) => answer.arrayBuffer()).then((buffer) => (window.downloads[name] = name.endsWith(".zip") ? [...new Uint8Array(buffer)] : buffer.byteLength)); };
         // a figure on green, at a size
         window.scene = async (width, height, name) => {
             const canvas = new OffscreenCanvas(width, height);
@@ -151,6 +152,26 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         seen = await tab.run("window.seen()");
         await tab.run("[...document.querySelectorAll('.quire-cut-bar button')].find((each) => each.textContent === 'Blur').click()");
         await until("window.cutout.cut()?.background === 'blur'");
+        await tab.run("[...document.querySelectorAll('.quire-cut-bar button')].find((each) => each.textContent === 'Clear').click()");
+        // many pictures at once: a strip of small pictures, each cut out in turn, and all saved as one zip under their own names
+        await tab.run("Promise.all([window.scene(800, 600, 'walk.png'), window.scene(600, 800, 'walk.jpg'), window.scene(700, 500, 'shore.png')]).then((files) => { const data = new DataTransfer(); for (const file of files) data.items.add(file); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })");
+        await until("window.cutout.many().count === 3 && window.cutout.many().cut === 3", 120_000);
+        expect(await tab.run("document.querySelectorAll('.quire-img-thumb').length")).toBe(3);
+        expect(await tab.run("document.querySelector('.quire-img-thumb.current').getAttribute('aria-label')")).toBe("1 of 3, walk.png");
+        await tab.press("PageDown");
+        await until("window.cutout.many().at === 1 && window.seen()?.width === 600");
+        await tab.run("window.showSaveFilePicker = undefined");
+        await tab.run("[...document.querySelectorAll('.quire-cut-group-all button')].find((each) => each.textContent.includes('zip')).click()");
+        await until("window.downloads['cut-outs.zip']", 60_000);
+        const zip = await readZip(new Uint8Array(await tab.run<number[]>("window.downloads['cut-outs.zip']")));
+        expect([...zip.keys()]).toEqual(["walk.png", "walk (1).png", "shore.png"]);
+        // each at its own full size, as a PNG (its width and height read from its header)
+        const size = (bytes: Uint8Array) => [new DataView(bytes.buffer, bytes.byteOffset).getUint32(16), new DataView(bytes.buffer, bytes.byteOffset).getUint32(20)];
+        expect([...zip.values()].map(size)).toEqual([
+            [800, 600],
+            [600, 800],
+            [700, 500],
+        ]);
         // the only requests: the page's own, ONNX Runtime's and the model's one file, each a GET with no body
         const outside = tab.requests.filter((each) => !each.url.startsWith("http://localhost:"));
         expect(outside.map((each) => each.url.replace(/resolve\/[0-9a-f]{40}/, "resolve/C"))).toEqual(["https://huggingface.co/Xenova/modnet/resolve/C/onnx/model_fp16.onnx"]);

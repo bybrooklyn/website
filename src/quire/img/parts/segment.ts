@@ -11,7 +11,7 @@
 
 import { encodeRuns, type Found } from "../masks";
 
-/** How a model takes a picture: BiRefNet as ormbg does, 1024 square, but with ImageNet's mean and spread, and logits out. */
+/** How a model takes a picture: BiRefNet lite stretched to 512 square with ImageNet's mean and spread, its answer logits. */
 export type Way = "sam2" | "slim" | "ormbg" | "modnet" | "birefnet";
 
 /** Where a picture lies in a model's input: the input's size, the part of it the picture fills, and the picture's own size. */
@@ -28,7 +28,8 @@ export const FOUND_SIDE = 512;
 /** Where a picture of a size lies in a model's input. */
 export function fitOf(way: Way, width: number, height: number): Fit {
     const picture = { width, height };
-    if (way === "sam2" || way === "ormbg" || way === "birefnet") return { way, input: { width: 1024, height: 1024 }, filled: { width: 1024, height: 1024 }, picture };
+    if (way === "sam2" || way === "ormbg") return { way, input: { width: 1024, height: 1024 }, filled: { width: 1024, height: 1024 }, picture };
+    if (way === "birefnet") return { way, input: { width: 512, height: 512 }, filled: { width: 512, height: 512 }, picture };
     if (way === "slim") {
         const scale = 1024 / Math.max(width, height);
         return { way, input: { width: 1024, height: 1024 }, filled: { width: Math.round(width * scale), height: Math.round(height * scale) }, picture };

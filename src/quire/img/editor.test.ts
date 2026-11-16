@@ -102,7 +102,7 @@ test("a saved picture is named from its document and carries no metadata", async
     await page.tab.wait(700);
     const png = await page.tab.run<{ x: number; y: number }>("(() => { const box = [...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === 'PNG').getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()");
     await page.tab.click(png.x, png.y);
-    const save = await page.middle(".quire-img-export .quire-dialog-dismiss");
+    const save = await page.middle(".quire-img-export .quire-img-actions .quire-dialog-dismiss");
     await page.tab.click(save.x, save.y);
     await page.until("Object.keys(window.downloads).some((name) => name.endsWith('.png'))");
     const [name, bytes] = await page.tab.run<[string, number[]]>("Object.entries(window.downloads).find(([name]) => name.endsWith('.png'))");

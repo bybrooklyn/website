@@ -6,20 +6,28 @@
 // Color with the site's colors, Blur), the brush (Keep, Remove), and the quality. A press on the
 // picture keeps the thing pressed when there are several; the backslash or the Original button held
 // shows the picture as it came. A right-click opens a menu of the same (Shift leaves the browser's).
+// Many pictures at once sit in a strip of small pictures under the one shown (batch-strip.ts), each cut out
+// in turn behind it, and are saved together as one zip or into a folder under their own names, by the
+// same code as imgQuire's Export all (batch-out.ts); one picture works as it always has.
 // Nothing leaves the browser: the only requests are for the page, ONNX Runtime and the model's files.
 //
 //   createCutoutPage(host, { colors: [{ name: "White", value: "#ffffff" }, ...] });
 
-import { control, flowMenu, icon, make, RULE, type MenuItem } from "../../core/ui";
+import { control, flowMenu, icon, make, ruled, RULE, type MenuItem } from "../../core/ui";
 import { crc32 } from "../../core/zip";
+import type { FolderHandle } from "../../core/store-folder";
 import { decodeHeic, heicIn } from "../codec-run";
 import { profileOf } from "../metadata";
 import { deflated, pixelsToSrgb, withProfile } from "../profile";
 import { createFinder, type Finder } from "../parts/finder";
 import { PART_TIERS } from "../parts/models";
 import type { Stroke } from "../masks";
+import { namesFor, picturesSaid, whichSaid } from "../batch";
+import { atOnce, blobSink, fileSink, folderOut, runEach, zipOut, type Destination } from "../batch-out";
+import { batchStrip, type StripItem } from "../batch-strip";
+import { pixelsOf, smallLook, smallOf } from "../thumbs";
 import { createAsking } from "./asking";
-import { cutOut, CUT_SIDE, findCut, type Cut, type Laid } from "./cut";
+import { cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from "./cut";
 
 /** The words of the page that a visitor reads first. */
 export const CUT_WORDS = {
@@ -41,6 +49,13 @@ export interface PageOptions {
     colors?: Swatch[];
     finder?: () => Finder;
 }
+
+/** The words of the page when many pictures are cut out together. */
+export const ALL_WORDS = {
+    zip: (count: number) => `Save all ${count} as a zip`,
+    folder: "Save all into a folder",
+    stop: "Stop",
+};
 
 /** A file's name made the cut-out's: its stem and "cut out", as a PNG. */
 export function cutName(name: string | undefined): string {
@@ -72,6 +87,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     const chooser = make("input");
     chooser.type = "file";
     chooser.accept = "image/png,image/jpeg,image/webp,image/avif,image/gif,image/bmp,image/heic,image/heif,.heic,.heif";
+    chooser.multiple = true;
     chooser.hidden = true;
     const choose = make("button", "quire-dialog-action", CUT_WORDS.choose);
     choose.type = "button";
@@ -145,9 +161,29 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         made.append(...items);
         return made;
     };
-    bar.append(group("out", copyButton, saveButton), group("brush", keepButton, removeButton), group("laid", ...layButtons), group("more", quality, original, another), swatches);
+    // with many pictures: every cut-out saved together, as one zip or into a folder, with how far it has come and Stop
+    const zipAll = make("button", "quire-dialog-dismiss", ALL_WORDS.zip(0));
+    zipAll.type = "button";
+    zipAll.addEventListener("click", () => void saveAll("zip"));
+    const folderAll = make("button", "quire-dialog-dismiss", ALL_WORDS.folder);
+    folderAll.type = "button";
+    folderAll.addEventListener("click", () => void saveAll("folder"));
+    const stopAll = make("button", "quire-dialog-dismiss", ALL_WORDS.stop);
+    stopAll.type = "button";
+    stopAll.addEventListener("click", () => saving?.stop.abort());
+    const all = group("all", zipAll, folderAll, stopAll);
+    bar.append(group("out", copyButton, saveButton), group("brush", keepButton, removeButton), group("laid", ...layButtons), group("more", quality, original, another), all, swatches);
+    const pickers = globalThis as unknown as { showDirectoryPicker?: (options: object) => Promise<FolderHandle>; showSaveFilePicker?: (options: object) => Promise<{ name: string; createWritable(): Promise<{ write(data: string | Blob): Promise<void>; close(): Promise<void>; abort?(): Promise<void> }> }> };
 
     function fill() {
+        const many = entries.length > 1;
+        root.classList.toggle("batched", many);
+        all.classList.toggle("away", !many);
+        all.inert = !many;
+        zipAll.textContent = ALL_WORDS.zip(entries.length);
+        folderAll.classList.toggle("away", !pickers.showDirectoryPicker);
+        stopAll.classList.toggle("away", !saving);
+        zipAll.disabled = folderAll.disabled = !!saving;
         root.classList.toggle("shown", !!picture);
         root.classList.toggle("cut", !!result);
         root.classList.toggle("clear", laid === "clear" && !!result && !holding);
@@ -185,11 +221,16 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     }
 
     // ---- a picture arriving ----
-    async function take(given: Blob & { name?: string }) {
+    /** A picture decoded as the browser draws it, its numbers as they are (a HEIC by the HEIC module). */
+    async function decode(given: Blob): Promise<ImageBitmap> {
         const head = new Uint8Array(await given.slice(0, 16).arrayBuffer());
+        return heicIn(head) ? createImageBitmap(await decodeHeic(given)) : createImageBitmap(given, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+    }
+    /** Shows a picture and cuts it out; given the cut it already has (a picture of many, stepped to again), that is laid as it was. */
+    async function take(given: Blob & { name?: string }, kept?: Cut) {
         let bitmap: ImageBitmap;
         try {
-            bitmap = heicIn(head) ? await createImageBitmap(await decodeHeic(given)) : await createImageBitmap(given, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+            bitmap = await decode(given);
         } catch {
             say("That is not a picture this browser can read.");
             return;
@@ -197,15 +238,17 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         picture?.close();
         file = given;
         picture = bitmap;
-        cut = undefined;
+        cut = kept && { ...kept, background: laid, ...(laid === "color" ? { color } : {}) };
         result = undefined;
         brush = undefined;
         const colored = await profileOf(new Uint8Array(await given.arrayBuffer()));
+        if (file !== given) return;
         space = colored.space.space;
         profile = colored.icc;
         show();
-        say("");
-        await cutNow();
+        say(entries.length > 1 ? `${whichSaid(at, entries.length)} · ${entries[at]?.file.name ?? ""}` : "");
+        if (cut) await again();
+        else await cutNow();
     }
 
     /** Runs the model on the picture and makes the cut-out, asking for the model first if it is not kept. */
@@ -213,6 +256,12 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         if (!picture) return;
         if (!(await asking.ready(from ?? (choose.isConnected ? choose : undefined)))) {
             say(`${CUT_WORDS.notCut}. Choose a quality to cut it out.`);
+            return fill();
+        }
+        // one of many that could not be cut out is said again, not run again: the same model gives the same answer
+        const failedBefore = entries.length > 1 ? entries[at]?.failed : undefined;
+        if (failedBefore) {
+            say(`${whichSaid(at, entries.length)} · ${failedBefore === FOUND_NOTHING ? "Nothing was found to cut out, so the picture is left as it was." : `${CUT_WORDS.notCut}: ${failedBefore}`}`);
             return fill();
         }
         busy++;
@@ -223,23 +272,42 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         const started = performance.now();
         try {
             const shown = picture;
-            const answer = await findCut(finderNow(), asking.tier().id, () => createImageBitmap(shown), CUT_SIDE);
-            cut = { found: answer.found, background: laid, ...(laid === "color" ? { color } : {}) };
+            const entry = entries[at];
+            if (entries.length > 1 && entry) {
+                // one of many: cut by the same run as the rest, never twice
+                const made = await cutEntry(entry);
+                if (!made) throw new Error(entry.failed ?? "the model found nothing to cut out");
+                if (entries[at] !== entry) return;
+                cut = { ...made, background: laid, ...(laid === "color" ? { color } : {}) };
+            } else {
+                const answer = await findCut(finderNow(), asking.tier().id, () => createImageBitmap(shown), CUT_SIDE);
+                cut = { found: answer.found, background: laid, ...(laid === "color" ? { color } : {}) };
+            }
             await again();
-            say(`Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s, ${picture.width} × ${picture.height}.`);
+            say(`${entries.length > 1 ? `${whichSaid(at, entries.length)} · ` : ""}Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s, ${picture.width} × ${picture.height}.`);
         } catch (error) {
-            say(`${CUT_WORDS.notCut}: ${error instanceof Error ? error.message : String(error)}`);
+            const said = error instanceof Error ? error.message : String(error);
+            // a model that found nothing leaves the picture as it was, and says so plainly
+            say(said === FOUND_NOTHING ? "Nothing was found to cut out, so the picture is left as it was." : `${CUT_WORDS.notCut}: ${said}`);
+        } finally {
+            busy--;
+            fill();
         }
-        busy--;
-        fill();
     }
 
     /** Makes the cut-out again from what it is now (its mask, strokes, subject and background). */
     async function again() {
         if (!picture || !cut) return;
         cut = { ...cut, background: laid, ...(laid === "color" ? { color } : {}) };
+        // one of many keeps its own mask, strokes and subject
+        const entry = entries[at];
+        if (entries.length > 1 && entry) {
+            entry.cut = cut;
+            fillStrip();
+        }
+        const shown = picture;
         const made = await cutOut(picture, cut);
-        if (made) result = made;
+        if (made && shown === picture) result = made;
         show();
     }
 
@@ -256,20 +324,34 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         const was = asking.tier().id;
         if (!(await asking.choose(button))) return fill();
         fill();
-        if (asking.tier().id !== was || !cut) await cutNow(button);
+        if (asking.tier().id === was && cut) return;
+        // with many, every picture is cut again with the quality chosen, the one shown first
+        if (entries.length > 1) {
+            for (const entry of entries) {
+                entry.cut = undefined;
+                entry.cutting = undefined;
+                entry.failed = undefined;
+            }
+            cut = undefined;
+        }
+        await cutNow(button);
+        if (entries.length > 1) void cutRest();
     }
 
     // ---- getting it out ----
     /** The cut-out as a PNG at full size; with its colour profile when it is kept in its own colors, made sRGB for the clipboard. */
     async function pngOf(srgb: boolean): Promise<Blob> {
         if (!result) throw new Error("nothing is cut out yet");
-        const convert = srgb && space === "p3";
-        const data = convert ? pixelsToSrgb(result.data) : result.data;
-        const canvas = new OffscreenCanvas(result.width, result.height);
-        canvas.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(data), result.width, result.height), 0, 0);
+        return pngFrom(result, srgb && space === "p3", profile);
+    }
+    /** Pixels as a PNG through the browser's own encoder, made sRGB from Display P3 when `convert`, else with their colour profile when they have one. */
+    async function pngFrom(pixels: ImageData, convert: boolean, icc: Uint8Array | undefined): Promise<Blob> {
+        const data = convert ? pixelsToSrgb(pixels.data) : pixels.data;
+        const canvas = new OffscreenCanvas(pixels.width, pixels.height);
+        canvas.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(data), pixels.width, pixels.height), 0, 0);
         const blob = await canvas.convertToBlob({ type: "image/png" });
-        if (convert || !profile) return blob;
-        return new Blob([withProfile(new Uint8Array(await blob.arrayBuffer()), profile, crc32, result, await deflated(profile)) as BlobPart], { type: "image/png" });
+        if (convert || !icc) return blob;
+        return new Blob([withProfile(new Uint8Array(await blob.arrayBuffer()), icc, crc32, pixels, await deflated(icc)) as BlobPart], { type: "image/png" });
     }
     async function copy() {
         if (!result) return;
@@ -284,7 +366,8 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         if (!result) return;
         const link = make("a");
         link.href = URL.createObjectURL(await pngOf(false));
-        link.download = cutName(file?.name);
+        // one of many keeps its own name, as it does when all are saved; one alone is named as it always was
+        link.download = entries.length > 1 ? namesFor([file?.name], ".png")[0]! : cutName(file?.name);
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
         say(`Saved as ${link.download}.`);
@@ -302,13 +385,13 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     }
 
     // ---- the four ways in: paste, drop, choose, and Paste from the menu or the phone's button ----
-    const pictureIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((each) => each.type.startsWith("image/") || /\.(heic|heif)$/i.test(each.name));
+    const picturesIn = (data: DataTransfer | null) => [...(data?.files ?? [])].filter((each) => each.type.startsWith("image/") || /\.(heic|heif)$/i.test(each.name));
     const pasted = (event: ClipboardEvent) => {
         if (event.defaultPrevented || (event.target instanceof HTMLElement && event.target.closest("input, textarea"))) return;
-        const found = pictureIn(event.clipboardData);
-        if (!found) return;
+        const found = picturesIn(event.clipboardData);
+        if (!found.length) return;
         event.preventDefault();
-        void take(found);
+        void takeAll(found);
     };
     document.addEventListener("paste", pasted);
     room.addEventListener("dragover", (event) => {
@@ -319,18 +402,279 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     room.addEventListener("dragleave", () => root.classList.remove("dropping"));
     room.addEventListener("drop", (event) => {
         root.classList.remove("dropping");
-        const found = pictureIn(event.dataTransfer);
-        if (!found) return;
+        const found = picturesIn(event.dataTransfer);
+        if (!found.length) return;
         event.preventDefault();
-        void take(found);
+        void takeAll(found, { x: event.clientX, y: event.clientY });
     });
     choose.addEventListener("click", () => chooser.click());
     pasteButton.addEventListener("click", () => void pasteFromMenu());
+    // true while the chooser is open to add pictures to the many shown rather than to start again
+    let addingByChooser = false;
     chooser.addEventListener("change", () => {
-        const found = chooser.files?.[0];
+        const found = [...(chooser.files ?? [])];
         chooser.value = "";
-        if (found) void take(found);
+        if (found.length) void (addingByChooser ? addAll(found) : takeAll(found));
+        addingByChooser = false;
     });
+
+    // ---- many pictures: a strip of small pictures under the one shown, each cut out in turn, and all saved together ----
+    /** One picture of many: its file, its cut once made (its own mask, strokes and subject), the run making it, why it could not be, and its small copy. */
+    interface Entry {
+        key: string;
+        file: Blob & { name?: string };
+        cut?: Cut;
+        cutting?: Promise<Cut | undefined>;
+        failed?: string;
+        small?: ImageData;
+        drawn?: StripItem["pixels"];
+        drawnFor?: string;
+    }
+    let entries: Entry[] = [];
+    let at = 0;
+    let made = 0;
+    const strip = batchStrip({
+        pick: (index) => void showEntry(index),
+        menu: (index, x, y, keyboard) => openEntryMenu(index, x, y, keyboard),
+        drop: (files, place) => void addAll(files, place),
+    });
+    root.insertBefore(strip.element, bar);
+    /** A small picture drawn as its cut-out is laid, or as it came until it is cut. */
+    function drawnOf(entry: Entry): StripItem["pixels"] {
+        if (!entry.small) return undefined;
+        const key = entry.cut ? `${entry.cut.found.runs.length} ${entry.cut.strokes?.length ?? 0} ${!!entry.cut.pick} ${laid} ${color}` : "";
+        if (entry.drawn && entry.drawnFor === key) return entry.drawn;
+        const size = { width: entry.small.width, height: entry.small.height };
+        entry.drawn = entry.cut ? smallLook(entry.small, { original: { name: "", ...size, type: "", bytes: 0 }, steps: [{ id: "s1", type: "cutout", ...entry.cut, background: laid, ...(laid === "color" ? { color } : {}) }] }, "srgb") : entry.small;
+        entry.drawnFor = key;
+        return entry.drawn;
+    }
+    function fillStrip(from?: { x: number; y: number }) {
+        if (entries.length < 2) strip.fill([], 0);
+        else strip.fill(entries.map((entry, index) => ({ key: entry.key, label: `${whichSaid(index, entries.length)}, ${entry.file.name ?? "picture"}${entry.failed ? ", not cut out" : ""}`, pixels: drawnOf(entry) })), at, from);
+        fill();
+    }
+    /** Many pictures at once: the first shown and cut out, the rest cut out one after another behind it; one picture is shown as it always was. */
+    async function takeAll(files: (Blob & { name?: string })[], from?: { x: number; y: number }) {
+        saving?.stop.abort();
+        rest++;
+        if (files.length < 2) {
+            entries = [];
+            fillStrip();
+            return take(files[0]!);
+        }
+        entries = files.map((file) => ({ key: `c${++made}`, file }));
+        at = -1;
+        fillStrip(from);
+        void readSmalls();
+        await showEntry(0);
+        void cutRest();
+    }
+    /** Pictures added to the many shown (a picture shown alone becomes the first of them). */
+    async function addAll(files: (Blob & { name?: string })[], from?: { x: number; y: number }) {
+        const found = files.filter((each) => each.type.startsWith("image/") || /\.(heic|heif)$/i.test(each.name ?? ""));
+        if (!found.length) return;
+        if (!entries.length && file) entries = [{ key: `c${++made}`, file, ...(cut ? { cut } : {}) }];
+        if (!entries.length) return takeAll(found, from);
+        entries.push(...found.map((each) => ({ key: `c${++made}`, file: each })));
+        if (at < 0) at = 0;
+        fillStrip(from);
+        void readSmalls();
+        void cutRest();
+    }
+    /** Each picture's small copy, made in turn as the strip fills in. */
+    async function readSmalls() {
+        for (const entry of [...entries]) {
+            if (entry.small || !entries.includes(entry)) continue;
+            entry.small = await smallOf(entry.file)
+                .then(pixelsOf)
+                .catch(() => undefined);
+            fillStrip();
+        }
+    }
+    /** Shows another of the many: the one shown keeps its cut, and the one stepped to is laid as it was, or cut out now. */
+    async function showEntry(index: number) {
+        if (index < 0 || index >= entries.length || index === at) return;
+        const before = entries[at];
+        if (before && cut) before.cut = cut;
+        at = index;
+        fillStrip();
+        const entry = entries[at]!;
+        await take(entry.file, entry.cut);
+    }
+    // one model run at a time, whether for the picture shown or the rest behind it
+    let line: Promise<unknown> = Promise.resolve();
+    /** A picture of many cut out, once: decoded, run through the model, and let go, its mask kept. */
+    function cutEntry(entry: Entry): Promise<Cut | undefined> {
+        if (entry.cut) return Promise.resolve(entry.cut);
+        entry.cutting ??= (async () => {
+            const job = line.then(async () => {
+                if (entry.cut) return entry.cut;
+                const bitmap = await decode(entry.file);
+                try {
+                    const answer = await findCut(finderNow(), asking.tier().id, () => createImageBitmap(bitmap), CUT_SIDE);
+                    entry.cut = { found: answer.found, background: laid, ...(laid === "color" ? { color } : {}) };
+                    return entry.cut;
+                } finally {
+                    bitmap.close();
+                }
+            });
+            line = job.catch(() => undefined);
+            try {
+                return await job;
+            } catch (error) {
+                entry.failed = error instanceof Error ? error.message : String(error);
+                return undefined;
+            } finally {
+                entry.cutting = undefined;
+            }
+        })();
+        return entry.cutting;
+    }
+    // a number for each run over the rest, so a new set of pictures stops the old run
+    let rest = 0;
+    /** The pictures not cut out yet, one after another behind the one shown, the line under the bar saying how far. */
+    async function cutRest() {
+        const run = ++rest;
+        if (!(await asking.ready())) return;
+        for (const entry of [...entries]) {
+            if (run !== rest) return;
+            if (entry.cut || entry.failed || !entries.includes(entry)) continue;
+            const done = entries.filter((each) => each.cut).length;
+            if (entries[at] !== entry) say(`Cutting out ${done + 1} of ${entries.length}`);
+            await cutEntry(entry);
+            if (run !== rest) return;
+            fillStrip();
+        }
+        if (run !== rest) return;
+        const failed = entries.filter((each) => each.failed).length;
+        say(failed ? `${picturesSaid(entries.length - failed)} cut out; ${failed} could not be` : `All ${entries.length} cut out.`);
+    }
+    /** Takes one picture out of the many; the one beside it is shown if it was the one shown. */
+    async function takeOut(index: number) {
+        const current = index === at;
+        entries.splice(index, 1);
+        if (index < at) at--;
+        if (current) {
+            at = -1;
+            await showEntry(Math.min(index, entries.length - 1));
+        }
+        fillStrip();
+    }
+    // the menu a right-click on a small picture opens
+    const entryMenu = flowMenu("Picture", { className: "quire-img-press-menu" });
+    const entryAnchor = make("span", "quire-anchor");
+    entryAnchor.setAttribute("aria-hidden", "true");
+    function openEntryMenu(index: number, x: number, y: number, keyboard: boolean) {
+        Object.assign(entryAnchor.style, { left: `${x}px`, top: `${y}px`, height: "0px" });
+        if (!entryAnchor.isConnected) document.body.append(entryAnchor);
+        const adding: MenuItem[] = [
+            { label: "Add pictures", icon: "plus", key: "add-pictures", run: () => ((addingByChooser = true), chooser.click()) },
+            { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste-into", run: () => void pasteInto() },
+        ];
+        const lines = index < 0 ? adding : ruled([{ label: "Save this one", icon: "download", key: "save-one", run: () => void showEntry(index).then(() => save()) }, { label: "Copy this one", icon: "copy", key: "copy-one", run: () => void showEntry(index).then(() => copy()) }], adding, [{ label: "Take out", icon: "trash", key: "take-out", disabled: !!saving, run: () => void takeOut(index) }]);
+        entryMenu.open(entryAnchor, lines, keyboard);
+        if (!keyboard) entryMenu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
+    }
+    /** Paste from the strip's menu: the clipboard's picture added to the many. */
+    async function pasteInto() {
+        try {
+            for (const item of await navigator.clipboard.read()) {
+                const type = item.types.find((each) => each.startsWith("image/"));
+                if (type) return void (await addAll([new File([await item.getType(type)], "image.png", { type })]));
+            }
+            say("There is no picture on the clipboard.");
+        } catch {
+            say("Press Ctrl+V to paste.");
+        }
+    }
+    /** A run of Save all: how far it has come, and its stop. */
+    let saving: { done: number; count: number; stop: AbortController } | undefined;
+    /**
+     * Every cut-out saved together, each laid as the page lays them, as a PNG under its picture's own name with
+     * the ending `.png` (the second of one name `photo (1).png`): into one zip written as it goes, or straight
+     * into a folder chosen, never over a file there. Each picture is decoded only while it is made; Stop keeps
+     * what was written.
+     */
+    async function saveAll(how: "zip" | "folder") {
+        if (entries.length < 2 || saving) return;
+        const before = entries[at];
+        if (before && cut) before.cut = cut;
+        const zipName = "cut-outs.zip";
+        let out: Destination;
+        let place: string;
+        try {
+            if (how === "folder") {
+                const handle = await pickers.showDirectoryPicker?.({ mode: "readwrite", id: "quire-cutout" });
+                if (!handle) return;
+                out = folderOut(handle);
+                place = handle.name;
+            } else if (pickers.showSaveFilePicker) {
+                const handle = await pickers.showSaveFilePicker({ suggestedName: zipName, types: [{ description: "Zip", accept: { "application/zip": [".zip"] } }] });
+                out = zipOut(await fileSink(handle));
+                place = handle.name;
+            } else {
+                out = zipOut(blobSink());
+                place = zipName;
+            }
+        } catch {
+            return;
+        }
+        const list = [...entries];
+        const names = namesFor(
+            list.map((entry) => entry.file.name),
+            ".png",
+            await out.taken().catch(() => []),
+        );
+        const stop = new AbortController();
+        saving = { done: 0, count: list.length, stop };
+        fill();
+        const ran = await runEach(
+            list.length,
+            async (index) => {
+                const entry = list[index]!;
+                const kept = entry.cut ?? (await cutEntry(entry));
+                if (!kept) throw new Error(entry.failed ?? "not cut out");
+                const bitmap = await decode(entry.file);
+                try {
+                    const pixels = await cutOut(bitmap, { ...kept, background: laid, ...(laid === "color" ? { color } : {}) });
+                    if (!pixels) throw new Error("not cut out");
+                    const colored = await profileOf(new Uint8Array(await entry.file.arrayBuffer()));
+                    return await pngFrom(pixels, false, colored.icc);
+                } finally {
+                    bitmap.close();
+                }
+            },
+            async (index, blob) => void (await out.write(names[index]!, blob)),
+            {
+                atOnce: Math.min(2, atOnce()),
+                signal: stop.signal,
+                progress: (done) => {
+                    if (saving) saving.done = done;
+                    say(`Saving ${done} of ${list.length}`);
+                },
+            },
+        );
+        let zip: Blob | undefined;
+        try {
+            zip = await out.finish();
+        } catch (error) {
+            await out.abort();
+            say(`Not saved: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        saving = undefined;
+        fill();
+        if (zip) {
+            const link = make("a");
+            link.href = URL.createObjectURL(zip);
+            link.download = zipName;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+        }
+        if (ran.stopped) say(`Stopped: ${picturesSaid(ran.done)} of ${list.length} saved to ${place}.`);
+        else if (ran.failed.length) say(`${picturesSaid(ran.done)} of ${list.length} saved to ${place}; ${ran.failed.length} could not be cut out.`);
+        else say(`${picturesSaid(ran.done)} saved to ${place}.`);
+    }
 
     // ---- the right-click menu ----
     const menu = flowMenu("Cut-out", { className: "quire-img-press-menu" });
@@ -358,6 +702,13 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
             void save();
         } else if (event.key === "\\" && result) hold(event.type === "keydown");
         else if (event.key === "Escape" && brush) setBrush(undefined);
+        else if (event.type === "keydown" && entries.length > 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && !(event.target instanceof Element && event.target.closest(".quire-img-thumbs, .quire-menu"))) {
+            // the next and the one before, the first and the last, as in imgQuire
+            const to = event.key === "PageDown" ? at + 1 : event.key === "PageUp" ? at - 1 : event.key === "Home" ? 0 : event.key === "End" ? entries.length - 1 : undefined;
+            if (to === undefined) return;
+            event.preventDefault();
+            void showEntry(Math.max(0, Math.min(entries.length - 1, to)));
+        }
     };
     document.addEventListener("keydown", keys);
     document.addEventListener("keyup", keys);
@@ -436,16 +787,25 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     return {
         element: root,
         take,
+        takeAll,
         /** The cut-out shown, for tests. */
         result: () => result,
         cut: () => cut,
+        /** How many pictures there are, which is shown, and how many are cut out, for tests. */
+        many: () => ({ count: entries.length, at, cut: entries.filter((entry) => entry.cut).length }),
+        showEntry,
+        saveAll,
         destroy() {
+            rest++;
+            saving?.stop.abort();
             document.removeEventListener("paste", pasted);
             document.removeEventListener("keydown", keys);
             document.removeEventListener("keyup", keys);
             finder?.destroy();
             root.remove();
             anchor.remove();
+            entryMenu.close(false);
+            entryAnchor.remove();
         },
     };
 }

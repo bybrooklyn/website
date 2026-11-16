@@ -177,8 +177,43 @@ export function sidePanel(title: string, className: string, closed?: () => void)
     };
 }
 
-/** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save. */
-export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean; note?(): { text: string; actions: { label: string; press(): void }[] } | undefined }) {
+/** What a Give to all control is given: what it will do in plain words (nothing outside a batch; empty when this picture has nothing of the kind to give), its button's word, and what a press does. */
+export interface GiveHooks {
+    said(): string | undefined;
+    label(): string;
+    press(): void;
+}
+
+/** A Give to all button with a plain line beside it saying what it will do before it is pressed; the two grow in only in a batch, and fold away outside one. */
+export function giveRow(hooks: GiveHooks) {
+    const row = make("div", "quire-img-give away");
+    row.inert = true;
+    const button = make("button", "quire-dialog-dismiss quire-img-give-button");
+    button.type = "button";
+    button.addEventListener("click", () => hooks.press());
+    const said = make("p", "quire-img-give-said");
+    row.append(button, said);
+    function fill() {
+        const words = hooks.said();
+        row.classList.toggle("away", words === undefined);
+        row.inert = words === undefined;
+        button.textContent = hooks.label();
+        button.disabled = !words;
+        said.textContent = words || "This picture has none of this to give";
+    }
+    return { row, fill };
+}
+
+/** What the export panel shows in a batch: how many pictures, whether a folder can be chosen, what giving the settings to all will do, and how far saving all has come. */
+export interface BatchOut {
+    count: number;
+    folder: boolean;
+    give: string;
+    running?: string;
+}
+
+/** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save; in a batch, the settings given to all and every picture saved together. */
+export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean; note?(): { text: string; actions: { label: string; press(): void }[] } | undefined; batch?(): BatchOut | undefined; giveAll?(): void; saveAll?(how: "zip" | "folder"): void; stopAll?(): void }) {
     const side = sidePanel("Export", "quire-img-export", () => hooks.closed?.());
     const formats = make("div", "quire-img-formats");
     formats.setAttribute("role", "radiogroup");
@@ -228,7 +263,34 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     // a plain word when the format chosen cannot keep what the picture has (a cut-out's transparency in a JPEG), with what can be done
     const note = make("div", "quire-img-note");
     note.setAttribute("role", "status");
-    side.body.append(formats, lossy, keeping, colors, note, result, pair, actions);
+    // in a batch: whose settings these are, giving them to all, and every picture saved together, with how far it has come and Stop
+    const all = make("section", "quire-img-all away");
+    all.setAttribute("aria-label", "All pictures");
+    all.inert = true;
+    const own = make("p", "quire-img-all-said");
+    const give = make("button", "quire-dialog-dismiss quire-img-give-button", "Give to all");
+    give.type = "button";
+    give.addEventListener("click", () => hooks.giveAll?.());
+    const giveSaid = make("p", "quire-img-give-said");
+    const zip = make("button", "quire-dialog-dismiss", "Save all as a zip");
+    zip.type = "button";
+    zip.addEventListener("click", () => hooks.saveAll?.("zip"));
+    const folder = make("button", "quire-dialog-dismiss", "Save all into a folder");
+    folder.type = "button";
+    folder.addEventListener("click", () => hooks.saveAll?.("folder"));
+    const ways = make("div", "quire-img-all-ways");
+    ways.append(zip, folder);
+    const going = make("div", "quire-img-all-going away");
+    going.setAttribute("role", "status");
+    const goingSaid = make("span", "quire-img-all-said");
+    const stop = make("button", "quire-dialog-dismiss", "Stop");
+    stop.type = "button";
+    stop.addEventListener("click", () => hooks.stopAll?.());
+    going.append(goingSaid, stop);
+    const giving = make("div", "quire-img-give");
+    giving.append(give, giveSaid);
+    all.append(own, giving, ways, going);
+    side.body.append(formats, lossy, keeping, colors, note, all, result, pair, actions);
 
     const changed = (to: Partial<Settings>) => {
         const next = { ...hooks.settings(), ...to };
@@ -290,6 +352,20 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
         qualityShown.textContent = quality.value;
         quality.disabled = !!settings.target;
         if (document.activeElement !== under) under.value = settings.target ? weightSaid(settings.target) : "";
+        const batch = hooks.batch?.();
+        all.classList.toggle("away", !batch);
+        all.inert = !batch;
+        if (batch) {
+            own.textContent = `These settings are this picture's own. Each of the ${batch.count} pictures is saved with its own.`;
+            give.textContent = `Give to the other ${batch.count - 1}`;
+            giveSaid.textContent = batch.give;
+            zip.textContent = `Save all ${batch.count} as a zip`;
+            folder.classList.toggle("away", !batch.folder);
+            folder.inert = !batch.folder;
+            going.classList.toggle("away", !batch.running);
+            goingSaid.textContent = batch.running ?? "";
+            for (const button of [give, zip, folder]) button.disabled = !!batch.running;
+        }
     }
 
     /** Shows what the export came to: its size and weight, and the same part of the original and the result at their own pixels. */
@@ -324,7 +400,7 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
  * four times as large; and how a picture made larger is enlarged (the filter, or a model), which opens the choice
  * in a dialog. Enter applies and Escape closes it.
  */
-export function resizeBox(hooks: { size(): { width: number; height: number }; apply(width: number, height?: number): void; back(): void; done(): void; enlarge?: { said(): string; choose(from: HTMLElement): void } }) {
+export function resizeBox(hooks: { size(): { width: number; height: number }; apply(width: number, height?: number): void; back(): void; done(): void; enlarge?: { said(): string; choose(from: HTMLElement): void }; give?: GiveHooks }) {
     const box = make("div", "quire-img-resize");
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-label", "Resize");
@@ -364,6 +440,9 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
         enlarging.addEventListener("click", () => hooks.enlarge?.choose(enlarging));
         box.append(enlarging);
     }
+    // in a batch, this picture's size given to the others, said in plain words before it is pressed
+    const giving = hooks.give && giveRow({ ...hooks.give, press: () => (hooks.give!.press(), close(true)) });
+    if (giving) box.append(giving.row);
     const shape = () => hooks.size().height / hooks.size().width;
     function follow(changed: HTMLInputElement) {
         if (!linked) return;
@@ -416,6 +495,7 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
             width.value = String(size.width);
             height.value = String(size.height);
             if (enlarging) enlarging.textContent = hooks.enlarge!.said();
+            giving?.fill();
             const button = from.getBoundingClientRect();
             // held inside the window by its own width (its sizes run to two rows), with a gutter of 8 pixels, inside the app (whose right edge leaves the scroll bar's room out)
             const room = box.parentElement?.getBoundingClientRect().right || innerWidth;

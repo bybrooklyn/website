@@ -298,45 +298,61 @@ export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "res
     return there ? change(steps, there.id, step) : add(steps, step);
 }
 
-/** Undo and redo over the list: each change keeps the list before it. */
+/**
+ * Undo and redo over the list: each change keeps the list before it. A change may carry a group's number,
+ * as a change given to every picture of a batch does (batch.ts), so that undoing it on one picture can undo
+ * it on the others, whose own histories hold the same number at their tops.
+ */
 export function createHistory(first: Kept[]) {
     let now = first;
-    const past: Kept[][] = [];
-    let future: Kept[][] = [];
+    let group: number | undefined;
+    const past: { steps: Kept[]; group?: number }[] = [];
+    let future: { steps: Kept[]; group?: number }[] = [];
     return {
         now: () => now,
-        /** A change: the list before it can be had back. */
-        set(next: Kept[]) {
+        /** A change: the list before it can be had back. With a group's number, the change is one of a group made on many pictures at once. */
+        set(next: Kept[], inGroup?: number) {
             if (next === now) return;
-            past.push(now);
+            past.push({ steps: now, ...(group !== undefined ? { group } : {}) });
             if (past.length > 500) past.shift();
             future = [];
             now = next;
+            group = inGroup;
         },
         /** Puts another list in place with nothing to undo, as when a version is loaded. */
         reset(next: Kept[]) {
             now = next;
+            group = undefined;
             past.length = 0;
             future = [];
         },
         undo(): boolean {
             const back = past.pop();
             if (!back) return false;
-            future.push(now);
-            now = back;
+            future.push({ steps: now, ...(group !== undefined ? { group } : {}) });
+            now = back.steps;
+            group = back.group;
             return true;
         },
         redo(): boolean {
             const on = future.pop();
             if (!on) return false;
-            past.push(now);
-            now = on;
+            past.push({ steps: now, ...(group !== undefined ? { group } : {}) });
+            now = on.steps;
+            group = on.group;
             return true;
         },
         canUndo: () => past.length > 0,
         canRedo: () => future.length > 0,
+        /** The group of the change undo would take back, if it was one of a group. */
+        undoGroup: (): number | undefined => (past.length ? group : undefined),
+        /** The group of the change redo would make again, if it was one of a group. */
+        redoGroup: (): number | undefined => future.at(-1)?.group,
     };
 }
+
+/** Undo and redo over one picture's steps. */
+export type History = ReturnType<typeof createHistory>;
 
 // ---- steps.json ----
 
@@ -551,13 +567,20 @@ function readPart(step: Record<string, unknown>): PartStep | undefined {
  */
 export function readSteps(text: string): (Picture & { dropped: number }) | undefined {
     if (text.length > LIMITS.file) return undefined;
-    let raw: { quire?: unknown; original?: Record<string, unknown>; steps?: unknown };
+    let raw: { quire?: unknown };
     try {
         raw = JSON.parse(text);
     } catch {
         return undefined;
     }
     if (!raw || typeof raw !== "object" || raw.quire !== 1) return undefined;
+    return readPicture(raw);
+}
+
+/** One picture's original, steps and what she wrote, from what a file holds already parsed (steps.json itself, or one picture of a batch's), checked as `readSteps` says. */
+export function readPicture(value: unknown): (Picture & { dropped: number }) | undefined {
+    const raw = value as { original?: Record<string, unknown>; steps?: unknown } | null;
+    if (!raw || typeof raw !== "object") return undefined;
     const given = raw.original;
     const width = isNumber(given?.width) && given.width >= 1 ? number(given.width, 1, 100_000) : undefined;
     const height = isNumber(given?.height) && given.height >= 1 ? number(given.height, 1, 100_000) : undefined;

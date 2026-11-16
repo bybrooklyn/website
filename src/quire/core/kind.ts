@@ -90,6 +90,8 @@ export interface Editing {
     started?(): void;
     /** For a kind that `takes` files: makes a new document of one and opens it; false when it could not. */
     take?(file: File): Promise<boolean>;
+    /** For a kind that takes many files at once (imgQuire's batch): makes one document of them all and opens it; false when it could not. */
+    takeMany?(files: File[]): Promise<boolean>;
     destroy(): void;
 }
 

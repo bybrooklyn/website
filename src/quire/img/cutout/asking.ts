@@ -1,7 +1,7 @@
 // Asking before the cut-out's model is fetched, in the reading dialog's family: the first time, a dialog
 // grown from what was pressed says what is needed (a model, downloaded once from Hugging Face and kept
-// in this browser, run on this machine, the picture never leaving it); Choose shows the three qualities
-// as cards (Quick, Better, Best, each with its size and who it suits, "On this device" once kept);
+// in this browser, run on this machine, the picture never leaving it); Choose shows the two qualities
+// as cards (Quick and Best, each with its size and who it suits, "On this device" once kept);
 // Download and cut out fetches it, its progress in the buttons' place with Cancel. The quality is
 // remembered (`quire-cutout`). Nothing is fetched until she says so; after that there is no dialog.
 // The same asks once for the model that picks a subject by a press.
@@ -11,10 +11,9 @@
 
 import { filledButton, openDialog, type Dialog } from "../../core/dialog";
 import { make } from "../../core/ui";
-import { graphicsCard } from "../../core/onnx";
 import { HOST, megabytes } from "../read/models";
 import type { Finder } from "../parts/finder";
-import { CUT_TIERS, partSize, PART_TIERS, type PartTier } from "../parts/models";
+import { CUT_RENAMED, CUT_TIERS, partSize, PART_TIERS, type PartTier } from "../parts/models";
 
 /** Where the quality chosen is kept in this browser. */
 export const KEPT_CUT = "quire-cutout";
@@ -27,15 +26,17 @@ export const PICK_INTRO = "Pressing a thing to keep it needs one more model, dow
 /** The quality remembered in this browser from a past visit, if one is. */
 export function rememberedCut(): PartTier | undefined {
     try {
-        const id = globalThis.localStorage?.getItem(KEPT_CUT);
+        const kept = globalThis.localStorage?.getItem(KEPT_CUT);
+        // the old Better (ormbg) is the new Best by another name; the old Best (BiRefNet) is gone, and its id is Best's
+        const id = (kept && CUT_RENAMED[kept]) ?? kept;
         return CUT_TIERS.find((tier) => tier.id === id);
     } catch {
         return undefined;
     }
 }
 
-/** The quality to start on: the one remembered, else by the machine: Best where a graphics card gives WebGPU (about a second a picture), else Better (about 20 seconds; Quick, under a second, is made for people). */
-export const startingCut = (card: boolean, remembered = rememberedCut()): PartTier => remembered ?? CUT_TIERS.find((tier) => tier.id === (card ? "cut-best" : "cut-better"))!;
+/** The quality to start on: the one remembered, else Best (about 20 seconds a picture; Quick, under a second, is made for people). */
+export const startingCut = (remembered = rememberedCut()): PartTier => remembered ?? CUT_TIERS.find((tier) => tier.id === "cut-best")!;
 
 /** Builds the asking, over a finder (the part models' worker, which the cut-out shares). */
 export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement | undefined; moved?(): void }) {
@@ -69,7 +70,7 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
                 if (count) count.textContent = `${Math.min(Math.round(fetched / 1e6), Math.round(partSize(tier) / 1e6))} of ${megabytes(partSize(tier))}`;
             };
             const cards = () => {
-                // three qualities stand three in a row, as reading's sizes do; two (with no graphics card for Best) stand side by side, so that no card is left alone on a row of its own
+                // the two qualities stand two in a row, each card its usual size, as Find's two do
                 const group = make("div", choices.length === 2 ? "quire-img-read-cards quire-img-find-cards" : "quire-img-read-cards");
                 group.setAttribute("role", "radiogroup");
                 group.setAttribute("aria-label", "Quality");
@@ -170,21 +171,17 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
         });
     }
 
-    // Best runs only on a graphics card, so it is offered only where there is one
-    let card: boolean | undefined;
-    const offered = async () => {
-        card ??= await graphicsCard().catch(() => false);
-        return CUT_TIERS.filter((each) => each.matte !== "birefnet" || card);
-    };
+    // both qualities run on any machine
+    const offered = async () => CUT_TIERS;
     return {
         /** The quality in use. */
         tier: () => tier,
         /** True once the quality's model is kept, asking first (once) if it is not. */
         async ready(from?: HTMLElement): Promise<boolean> {
             const choices = await offered();
-            // with nothing remembered, the machine says where to start
+            // with nothing remembered, it starts on Best
             if (chosenByMachine) {
-                tier = startingCut(!!card, undefined);
+                tier = startingCut(undefined);
                 chosenByMachine = false;
             }
             if (!choices.includes(tier)) tier = choices.at(-1)!;

@@ -65,6 +65,12 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
   its parts. `finding.ts`, Find as the surface offers it; `parts/`, the part models pinned (`models.ts`), their
   arithmetic before and after a run (`segment.ts`) and their worker (`finder.ts`).
 - `panels.ts`: the export panel, the resize box and the tool's strip.
+- `batch.ts`: a batch: one steps.json listing every picture with its own steps, name, small copy and export
+  settings (a document of one picture written as it always was), the names a batch's files go out under, and
+  what Give to all hands on. `batch-strip.ts`, the strip of small pictures under the picture; `batch-out.ts`, a
+  zip written as it goes, a folder written file by file, and the work run a few pictures at a time;
+  `picture-out.ts`, one picture written out by the same rules on the stage and off it, and a picture flattened
+  away from the stage; `thumbs.ts`, each picture's small copy and how it is drawn as the picture looks.
 - `editor.ts`: the frame, the session, the bar, the menus' table, the keys, copying and pictures arriving.
 - `kind.ts`: `img()`.
 - `src/pages/imgquire.astro`, `src/scripts/imgquire.ts` and `src/scripts/quire-page.ts` (shared with
@@ -452,8 +458,11 @@ as the page `/cutout/`, its result a step. Asked once in the reading dialog's fa
 worker Find uses; the stage then shows the cut-out's pixels in place of the original's, on a checkerboard
 where clear, everything else drawn over them; the strip lays it on nothing, one of the mark colors or the old
 picture blurred, paints Keep and Remove, changes the quality and takes it away, and a press keeps the thing
-pressed. A JPEG export says it has no transparency and offers a color or PNG. What it is and what was
-measured are in [cutout](cutout.md).
+pressed. A JPEG export says it has no transparency and offers a color or PNG. Its two qualities are Quick
+(MODNet) and Best (BiRefNet lite at 512, on WebAssembly, since 15 November 2026; the 1024 BiRefNet before it ran out
+the owner's graphics card beside her other programs, and ormbg, then Better, gave washed-out masks on things that
+are not people). When Best finds nothing the picture is left as it was and the status says "Nothing found". What it is
+and what was measured are in [cutout](cutout.md).
 
 **Since the horizon.** Round a turned picture the room shows through: the crop's dimming only darkens what
 is drawn and adds nothing where there is no picture (the corners used to be a black box), and when the turn
@@ -736,6 +745,95 @@ the filter (and 28.90 for the browser's smooth enlargement), in 11.6 s on two We
 73.7 dB of the whole picture's answer; four times by twice over, 28.63 against 25.32. The document reopened draws
 the same pixels with no request; the only request outside the page is the model's file, a GET with no body.
 
+**Batches.** Several pictures chosen, dropped or pasted at once (on the home screen or in the editor) become one
+document, one row on the shelf, named "Pictures, 15 Nov 2026 14:30". The first is shown at once; the rest are read
+a few at a time and added in the order given, the strip growing in from where they were dropped and each small
+picture arriving as it is read, the status saying "Bringing in 12 of 24". More are added by a drop on the strip,
+File, Add pictures, or Add pictures and Paste in a small picture's menu; a document of one picture becomes a batch
+that way. One is taken out from its menu; down to one picture, the document is a picture's document again.
+
+*How it is kept.* One `.quire`, as the slice's notes suggested: steps.json lists the pictures, each with its
+original (as before), the name its file came with (`given`), its small copy (`small`, `pictures/IMG_1.small.webp`,
+192 on its longer side, made once as it arrives) and its own export settings, and its steps one to a line; every
+original and small copy sits in `pictures/` beside it. A document of one picture is written exactly as before, byte
+for byte (`writeBatch` hands it to `writeSteps`; a test holds it). What it costs: the browser's store keeps each
+picture as its own record, so a batch costs what its originals weigh plus about 10 KB a picture for the small
+copies; but a `.quire` written whole (downloaded, or kept in a folder or on Drive) holds every original in one zip,
+and the core reads a zip of at most 256 MB, so a batch of phone photographs past that opens only from the browser's
+store. steps.json is read with at most 1,000 pictures, 40,000 steps in all and 64 MB. Each picture keeps its own
+undo while the document is open, and a picture's place in the batch on the stage is remembered in this browser
+(`quire-img-batch-at`), so a batch opens again on the picture last worked on.
+
+*The strip.* Under the picture and the line under it, taking room of its own: the picture is fitted into what is
+left and glides there as the strip grows in. Small pictures 3.6 rem high (2.9 on a phone) in their own shapes,
+quiet until the one on the stage, which has a ring in the accent inside its edge; drawn on the processor as each
+picture looks (its crop, its whole grade, its covers and its cut-out, not its marks). It scrolls sideways by a
+finger, a touchpad or the wheel, and brings the current picture into view. A press steps to a picture; Page Down
+and Page Up step to the next and the one before, Home and End to the first and the last, keys that the crop's frame,
+a mark and a corner never use; with the strip holding the keyboard its arrow keys step too. Stepping applies a crop
+being dragged first and keeps the tool in hand if it is Hide or a mark (else the crop's frame, as a new picture
+has); every picture keeps its own steps and undo. The line under the picture says "3 of 24 · 1400 × 788 px · 146
+KB WebP". A small picture's right-click menu (Shift leaves the browser's): Save this one, Copy this one; Give its
+changes to the other 23, with what they are said under it ("the grade, 1920 wide, WebP at 85"); Add pictures,
+Paste; Take out of the batch. Pressed between small pictures it holds Add pictures and Paste.
+
+*Give to all.* On the Grade surface under its fixes, in the resize box under the sizes, in the export panel, in the
+cut-out's strip, in Image, Give to all (the grade, the size, the repair, the cut-out, the export settings, or all of
+its changes) and in a small picture's menu. Each says in a few words what it will do before it is pressed ("Give this
+grade to the other 23 pictures; their crops, marks and hidden areas stay their own"; "Make the other 23 pictures 1920
+wide too"). The grade (the whole picture's, never a part's) and the size are put in place of each picture's own, a
+size exactly as set; the export settings are given; the repair by hand is put in on each picture that is a JPEG
+worth repairing; crops, covers, marks, parts, turns and perspectives are never touched. It is one undo step: every
+picture's own undo holds the same group, so undo on any picture that still has it at the top takes it back from all
+(and puts their export settings back), redo gives it again; a picture changed since keeps its own change on top. A
+repair by a model or a cut-out is made for each picture in turn, each one joining the group as it is done, the strip
+saying "Cutting out 3 of 23" (a repair also how far through that picture) with Stop, after which every picture is
+done or as it was.
+
+*Out.* The export panel in a batch says that its settings are this picture's own, offers Give to the other 23, and
+Save all 24 as a zip and Save all into a folder. Each picture is written with its own settings, under its own name
+with the format's ending (`IMG_1042.webp`), the second of one name `photo (1).webp`, then `photo (2).webp`, names
+compared without case. The zip is written as it goes, into a file chosen with the browser's save picker where it has
+one (else handed over when done, its parts the encoded files themselves); a folder chosen with `showDirectoryPicker`
+is listed first and each name checked again just before it is written, so nothing there is written over. A few
+pictures at a time (three, fewer on a machine of few cores): each is decoded, repaired and cut out as its steps say,
+put on a card of its own and flattened in pieces of 1024, then encoded in its codec's worker while the next is
+flattened; written in the batch's order, which also keeps no more pictures made and waiting than are being made. The
+panel says "Saving 12 of 24" with Stop, which keeps what was written; the status says where they went and how long it
+took. Any one picture is still copied or saved alone (Copy and Save, or its menu), a batch's under its own name.
+File, Download has All pictures as a zip and All pictures into a folder.
+
+Measured (`batch-strip.test.ts`, `batch.test.ts`, `batch-out.test.ts`, `picture-out.test.ts`): three pictures pasted
+are one batch; Page Down and Page Up step, a cover and its undo staying with its picture; the grade given from the
+surface reaches all three as one undo, no cover moving; the zip's files are `photo.png`, `photo (1).png` and
+`other.png`; a folder holding `photo.png` gets `photo (1).png` and `photo (2).png` and keeps its own; a picture
+flattened away from the stage is the stage's own flattening within one; the batch is one row on the shelf and opens
+on the picture left; taken down to one picture it is written as one picture's steps.json. With the real Quick
+model, the cut-out given to the others cuts each out laid on the same color, and one undo takes it from both
+(`cutout/tool.test.ts`).
+
+A hundred pictures, measured in headless Chromium on software drawing (SwiftShader), four cores, memory as the
+proportional share (PSS) of all of the run's Chromium processes, the empty editor itself about 300 MB:
+
+| | 100 phone-sized photographs made in code (4000 × 3000 JPEG with grain, 570 MB, chosen as files on disk) | 100 photographs from the photos page (AVIF, 19 MB) |
+|---|---|---|
+| First picture shown | 0.4 s | 1.5 s |
+| All in the batch, every small picture drawn | 8.7 s | 17.7 s |
+| Opened again (steps read, the picture shown, 100 small pictures drawn) | 2.7 s | 3.7 s |
+| A step with Page Down | 0.23 to 0.46 s | 0.37 to 0.71 s |
+| A grade given to all | 1.9 s | 2.4 s |
+| Export all as one zip, WebP at 85, graded | 331 s, 499 MB | 84 s, 31 MB |
+| Memory at its worst | 1.54 GB (while exporting) | 0.88 GB |
+
+Memory stays where it is with the number of pictures: it rises while three pictures are made at once and falls
+back between them (the 12 megapixel run swung between 0.6 and 1.5 GB through its five minutes of export and ended
+at 0.62 GB). Most of a step's time and of the export is the software drawing; a grade given to all spends its time
+drawing the hundred small pictures again. A first run that pasted the 570 MB of pictures as Blobs held in the page,
+rather than files on disk, lost 9 of them to Chromium ("the requested file could not be read"); the status then said
+so, with the reason, and the rest went on.
+
+## Decided
+
 ## Decided
 
 - Its uses, all four: crop, resize and convert; photo fixing; screenshots marked up and things hidden;
@@ -785,7 +883,7 @@ the same pixels with no request; the only request outside the page is the model'
   reachable from the menus or the keys (removing, bringing forward and sending back what is picked).
 - **A panel never covers the picture.** A surface that stays open makes room: the picture is fitted into
   what is left and glides there. A popover (the resize box, a menu) may lie over it while it is open.
-- **Batches, as chosen on 15 November 2026** (not built yet). Many pictures dropped at once sit in a strip of
+- **Batches, as chosen on 15 November 2026** (built: Batches, above, says how, and which keys step through them). Many pictures dropped at once sit in a strip of
   small pictures under the one being worked on, which makes room for it; a press on one works on it and the
   arrow keys step through, the line under it saying which of how many. A change belongs to its own picture
   until it is given on: Give to all hands a change of a kind that fits any picture (the look, the resize, the
@@ -1015,9 +1113,27 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
+- Batches, kept: a `.quire` written whole (downloaded, or in a folder or on Drive) holds every original in one
+  zip, which is made in memory when it is downloaded, and the core reads no zip past 256 MB, so a large batch of
+  photographs is at home only in the browser's store. Taking a picture out is not undone by Ctrl+Z (version history
+  brings it back, its original being kept with the document until the document is deleted). A conflict with a batch
+  changed elsewhere, and restoring a batch's version, open it whole with nothing to undo.
+- Batches, undo: a change given to all is one step on every picture that still has it on top; a picture changed
+  since keeps its own change on top, and undoing that change and then the next takes the given change back from that
+  picture alone.
+- Batches, the strip: a small picture is drawn as its picture looks by its crop, whole grade, covers and cut-out, but
+  not its marks, parts, turn or perspective, and always as sRGB. Stepping to another picture is refused while a model
+  works on the one on the stage (a repair, a cut-out, an enlargement); a model run over the batch does not stop it.
+- Batches, giving: a size is given exactly as set, so a smaller picture is made larger, and a size given with both
+  width and height stretches a picture of another shape. What metadata goes out (None, No place, All) is chosen for
+  the whole document while it is open, not for each picture. Ctrl+V in the editor still makes a new document; a
+  picture is added to a batch from its strip (a drop, or Add pictures or Paste in a small picture's menu) or File,
+  Add pictures.
+- Batches, out: on a machine drawing without a graphics card, each piece of a picture flattened waits on the page's
+  thread, so the page answers late while a batch is exported (up to about 3 s at a time for a 12 megapixel picture on SwiftShader). A zip past 4 GB (no zip64) is refused and
+  saving into a folder offered. Where the browser has no save picker the zip is handed over when done, its parts held
+  by the browser until then. Tried in Chromium only, by mouse and in a headless browser; not on a real touch screen.
 
 ## Next slices, in order
 
-1. Many at once: batches through the same steps and export (a look given to a batch), and the cut-out's
-   pictures as a zip.
-2. From the phone, and opening a picture from mdQuire and back.
+1. From the phone, and opening a picture from mdQuire and back.

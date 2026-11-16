@@ -263,10 +263,34 @@ sky with an Alt-press on the figure gave 94 to 95 percent of the sky and none of
 took 81 percent of the figure and nothing else. SAM 2.1's ONNX copy says no licence on its card; its upstream,
 `facebookresearch/sam2`, is Apache-2.0.
 
+### For the cut-out: BiRefNet lite at 512 on WebAssembly (15 November 2026)
+
+| Repository | Commit | File | Bytes | SHA-256 |
+|---|---|---|---|---|
+| `studioludens/birefnet-lite-512` | 962e67969ec6acec9c19fab76acee4f5e22e990c | onnx/model_fp16.onnx | 98,484,532 | eff9216bb2f9d3f023d9c2b7196845a7485739ab1f231593633e4d2344ffc516 |
+
+MIT; its card says the weights are a converted copy of ZhengPeng7/BiRefNet_lite (MIT), copyright ZhengPeng (2024)
+and Studio Ludens V.O.F. (2026); both are credited in the models' notices. It takes the picture stretched to 512 by
+512 with ImageNet's mean and spread and gives logits at 512 by 512. The owner allowed the download; it was fetched
+once into `~/.cache/quire-model-trials/parts/`.
+
+Why it is Best: the 1024 BiRefNet took more than 4.4 GB of the graphics card's memory and ran it out beside the
+owner's programs, so it mostly ended with "the graphics card was too busy to finish". ormbg at 1024 on WebAssembly
+took 12 to 17 s on seven of her photographs and came out washed-out and patchy on things that are not people; the
+512 BiRefNet's raw mask was clean and solid on six of the seven (on the seventh, a mineral on a wall, it found
+nothing), in 2.0 to 3.4 s warm on four WebAssembly threads, 4 to 6 s the first time. On the graphics card the 512
+file gives an empty mask with no failure from ONNX Runtime: the card refuses one shader ("no matching constructor
+for 'i32(vec4<u32>)'", pipeline `computeSliceOffsets`), so it is never put there. In this repository's test
+(`cutout/real.test.ts`, the drawn figure on green) it kept 94 percent of the figure and none of the ground, in 2.7
+to 2.8 s warm at 2 and 12 megapixels. Its mask is kept at 512 a side and laid on by the cut-out's edge step at that
+size; what that does to the edges is in [cutout](cutout.md).
+
 ### For the cut-out: verified on the site's build (14 November 2026)
 
-The cut-out offers three qualities, quietly, as reading text does: Quick, MODNet fp16 (13 MB); Better, ormbg int8
-(44 MB), where it starts; Best, BiRefNet lite fp16 (123 MB), only where there is a graphics card. The owner
+The cut-out offers two qualities, quietly, as reading text does: Quick, MODNet fp16 (13 MB), and Best, BiRefNet
+lite at 512 by 512 fp16 (98 MB), where it starts, both on WebAssembly. The section after this one says how Best came
+to be. Until 15 November 2026 there were three: Quick, Better (ormbg int8, 44 MB) and Best, BiRefNet lite at 1024
+fp16 (123 MB) on a graphics card only. What follows here is kept as what was tried then. The owner
 allowed exactly two more files to be fetched to this machine once, with their small config files, into
 `~/.cache/quire-model-trials/parts/`; each was checked against its listing's digest:
 
@@ -275,7 +299,7 @@ allowed exactly two more files to be fetched to this machine once, with their sm
 | `onnx-community/BiRefNet_lite-ONNX` | de15b22ba131738a16dff04aab8bdf8dc32e3ac1 | onnx/model_fp16.onnx | 114,538,221 | d39b897c…8bfec402 |
 | `wonfy/BiRefNet_lite-ONNX-webgpu` | c40eaa22fb1af9edcf75c7b79d25ed8a8e901140 | onnx/model_fp16.onnx | 123,210,389 | 2290313b…e9cff2d7 |
 
-The full digests are in `src/quire/img/parts/models.ts` (`BIREFNET_FILES`). The rebuild's card says MIT, names
+The full digests were in `src/quire/img/parts/models.ts` (`BIREFNET_FILES`) until BiRefNet was taken out; they are in that file's history. The rebuild's card says MIT, names
 `ZhengPeng7/BiRefNet_lite` as its base and `onnx-community/BiRefNet_lite-ONNX` as where it started, says the weights
 are unchanged and only the graph rewritten (constants folded, wide Concat and Split nodes made trees, Sum nodes
 made chains of Add, the deformable convolutions' GatherND made a Gather with no int64 left, so every node uses at
@@ -293,7 +317,7 @@ and 12 megapixels (the model's own work is the same; times warm):
 | BiRefNet lite, stock fp16 | out of memory (`std::bad_alloc` in OrtRun) | out of memory in its operators that fall back to the processor | |
 | BiRefNet lite, rebuild fp16 | out of memory (`std::bad_alloc`) | 0.86 s (2.5 s the first time), 0.90 s at 12 MP | 94, 0 |
 
-So the rebuild is the one offered, on the card only. Whether it gives the stock export's mask within a small
+So the rebuild was the one offered, on the card only, until it was taken out. Whether it gives the stock export's mask within a small
 bound could not be checked here, since the stock file runs nowhere on the site's runtime, and no other runtime
 is on this machine; its card's own comparison (fp16 against the fp32 stock on the processor: at most 0.07
 percent of pixels moved by more than 1/255) is its maker's claim. Once, with the machine busy with another

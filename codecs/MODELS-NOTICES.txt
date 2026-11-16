@@ -22,3 +22,25 @@ ONNX by Xenova: https://huggingface.co/Xenova/swin2SR-lightweight-x2-64, commit
 92a21aca5713f20faf9a87590cdfbdce2e34112c, onnx/model_fp16.onnx (tagged Apache-2.0).
 
 The Apache License 2.0 is at https://www.apache.org/licenses/LICENSE-2.0.
+
+================ The model imgQuire's cut-out offers as Best ================
+
+Not in this folder and never served by this site: when Best is chosen, the visitor's browser downloads it from
+Hugging Face at the commit named here and keeps it in its own storage.
+
+Best, for cutting a picture out of its background: BiRefNet lite by Peng Zheng and others, from
+https://github.com/ZhengPeng7/BiRefNet (weights ZhengPeng7/BiRefNet_lite), licensed under the MIT License there,
+Copyright (c) 2024 ZhengPeng. Converted to ONNX at 512 by 512 in half precision by Studio Ludens V.O.F.:
+https://huggingface.co/studioludens/birefnet-lite-512, commit 962e67969ec6acec9c19fab76acee4f5e22e990c,
+onnx/model_fp16.onnx, licensed under the MIT License, Copyright (c) 2026 Studio Ludens V.O.F.
+
+The MIT License: Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so, subject to the following
+conditions: The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
