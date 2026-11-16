@@ -19,9 +19,9 @@ import { blockAt, insertBlock, moveBlock, removeBlock, type Block, type Document
 
 /** The widths a picture being resized is drawn to when it comes near them, as shares of the text's width, with their names. */
 export const SNAPS: [number, string][] = [
-    [100, "Full width"],
-    [50, "Half"],
-    [33, "A third"],
+    [100, "full width"],
+    [50, "half"],
+    [33, "a third"],
 ];
 
 /** How near, in percent of the text's width, a width must come to one of the snaps to be drawn to it. */

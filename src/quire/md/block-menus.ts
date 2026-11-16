@@ -9,6 +9,7 @@
 //   const menus = createBlockMenus(surface);   // menus.destroy()
 
 import { blockAt, changeKind, setBox, type Position } from "./document";
+import { lowered } from "../core/bench";
 import { finishes, flowMenu, make, type MenuItem, menuLine } from "../core/ui";
 import { LANGUAGES, languageOf } from "./highlight";
 import type { Surface } from "./surface";
@@ -29,6 +30,15 @@ export const calloutName = (kind: string): string => kind.charAt(0).toUpperCase(
 export function languageLabel(language: string): string {
     if (!language.trim()) return "Plain text";
     return languageOf(language)?.label ?? language.trim();
+}
+
+/** The languages whose names have only a first capital, kept by hand where the code block's control says its language in lowercase. */
+const LANGUAGE_NAMES = ["Rust", "Go", "Python"];
+
+/** What the code block's control shows for its language, in the page's lowercase: names keep their capitals (TypeScript, Rust, Markdown), while plain text, shell and diff are words. The menu's lines keep a first capital. */
+export function languageWord(language: string): string {
+    const label = languageLabel(language);
+    return LANGUAGE_NAMES.includes(label) ? label : lowered(label);
 }
 
 /**

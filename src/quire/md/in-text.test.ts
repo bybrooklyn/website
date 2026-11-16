@@ -124,7 +124,7 @@ test("a code block with no language says Plain text while the caret is in it, an
     await tab.run("q.select([1], 2)");
     await tab.wait(250);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-lang-corner')).opacity")).toBe("1");
-    expect(await tab.run("document.querySelector('.quire-lang').textContent")).toBe("Plain text");
+    expect(await tab.run("document.querySelector('.quire-lang').textContent")).toBe("plain text");
 });
 
 test("a callout's kind is chosen from a menu of the five, not stepped round by pressing it", async () => {
@@ -347,7 +347,7 @@ test("an empty definition list says which line is the term and which the definit
     await tab.type("Word");
     expect(await tab.run("[...document.querySelectorAll('.quire-terms [data-empty]')].map((each) => each.dataset.empty)")).toEqual(["Definition"]);
     await page!.reset("$$\nx^2\n$$\n\n```mermaid\nflowchart LR\n  A --> B\n```\n", [0], 0);
-    expect(await tab.run("[...document.querySelectorAll('.quire-drawn .quire-lang')].map((each) => each.tagName + ' ' + each.textContent)")).toEqual(["SPAN Maths", "SPAN Diagram"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-drawn .quire-lang')].map((each) => each.tagName + ' ' + each.textContent)")).toEqual(["SPAN maths", "SPAN diagram"]);
 });
 
 test("a table of contents has its own Update, which brings it up to the headings", async () => {

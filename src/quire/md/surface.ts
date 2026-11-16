@@ -48,7 +48,7 @@ import { fieldsOf, KNOWN, readTag, setProp, type Tag } from "./components";
 import { diagram } from "./diagram";
 import { emojiOf } from "./emoji";
 import { highlight } from "./highlight";
-import { calloutName, languageLabel } from "./block-menus";
+import { calloutName, languageLabel, languageWord } from "./block-menus";
 import { maths } from "./maths";
 import { namesIn } from "./check/names";
 import { bookmarkName } from "./bookmarks";
@@ -363,7 +363,7 @@ function drawCode(block: Code, inner: number[], how: Drawing, kind?: string): HT
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quire-lang";
-    button.textContent = languageLabel(block.language);
+    button.textContent = languageWord(block.language);
     button.setAttribute("aria-haspopup", "menu");
     button.setAttribute("aria-label", `Code language: ${languageLabel(block.language)}`);
     button.dataset.lang = inner.join(",");
@@ -391,7 +391,7 @@ function drawDrawn(block: Code, inner: number[], how: Drawing): HTMLElement {
         box.classList.add("quire-drawn-plain");
         preview.textContent = drawnNote(block.language, block.code);
     }
-    box.append(preview, drawCode(block, inner, how, block.language === "math" ? "Maths" : "Diagram"));
+    box.append(preview, drawCode(block, inner, how, block.language === "math" ? "maths" : "diagram"));
     return box;
 }
 
@@ -513,7 +513,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                 readers.type = "button";
                 readers.className = "quire-fold-readers";
                 readers.dataset.readers = inner.join(",");
-                readers.textContent = "Closed for readers";
+                readers.textContent = "closed for readers";
                 readers.setAttribute("aria-pressed", String(!block.details.open));
                 head.append(turn, summary, readers);
                 const body = document.createElement("div");
@@ -532,7 +532,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                 kind.type = "button";
                 kind.className = "quire-callout-kind";
                 kind.dataset.calloutKind = inner.join(",");
-                kind.textContent = calloutName(block.callout);
+                kind.textContent = calloutName(block.callout).toLowerCase();
                 kind.title = "Change type";
                 kind.setAttribute("aria-haspopup", "menu");
                 kind.setAttribute("aria-label", `Callout type: ${calloutName(block.callout)}`);
@@ -579,7 +579,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                 update.type = "button";
                 update.className = "quire-contents-update";
                 update.dataset.contents = "";
-                update.textContent = "Update";
+                update.textContent = "update";
                 update.setAttribute("aria-label", "Update the table of contents");
                 element.append(update);
                 return element;
@@ -589,7 +589,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                 const element = document.createElement("div");
                 element.className = "quire-break";
                 element.contentEditable = "false";
-                element.dataset.label = "Page break";
+                element.dataset.label = "page break";
                 return element;
             }
             const pre = document.createElement("pre");

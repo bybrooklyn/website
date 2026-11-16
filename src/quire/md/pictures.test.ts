@@ -85,10 +85,10 @@ test("text flowing round a picture is HTML's own align on the <img>, with no <di
 });
 
 test("a width being dragged is drawn to the whole, half and a third of the text when near them, and kept within a tenth and the whole", () => {
-    expect(snapWidth(98)).toEqual({ width: 100, snap: "Full width" });
-    expect(snapWidth(140)).toEqual({ width: 100, snap: "Full width" });
-    expect(snapWidth(52.4)).toEqual({ width: 50, snap: "Half" });
-    expect(snapWidth(31)).toEqual({ width: 33, snap: "A third" });
+    expect(snapWidth(98)).toEqual({ width: 100, snap: "full width" });
+    expect(snapWidth(140)).toEqual({ width: 100, snap: "full width" });
+    expect(snapWidth(52.4)).toEqual({ width: 50, snap: "half" });
+    expect(snapWidth(31)).toEqual({ width: 33, snap: "a third" });
     expect(snapWidth(42.4)).toEqual({ width: 42 });
     expect(snapWidth(2)).toEqual({ width: 10 });
 });

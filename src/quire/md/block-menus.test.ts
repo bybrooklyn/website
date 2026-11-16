@@ -2,7 +2,7 @@
 // the text say. The menus themselves are opened and chosen from in the browser, in in-text.test.ts.
 
 import { expect, test } from "bun:test";
-import { calloutName, languageLabel, matchLanguages } from "./block-menus";
+import { calloutName, languageLabel, languageWord, matchLanguages } from "./block-menus";
 import { LANGUAGES } from "./highlight";
 
 test("with nothing typed the menu offers Plain text and then every language mdQuire highlights", () => {
@@ -33,4 +33,8 @@ test("the control says the language by its own name, the words as written for on
     expect(languageLabel("kotlin")).toBe("kotlin");
     expect(languageLabel("")).toBe("Plain text");
     expect(calloutName("WARNING")).toBe("Warning");
+});
+
+test("the code block's control says its language in lowercase, names keeping their capitals, while the menu's lines keep a first capital", () => {
+    expect(["", "sh", "diff", "ts", "rs", "go", "py", "md", "json", "kotlin"].map(languageWord)).toEqual(["plain text", "shell", "diff", "TypeScript", "Rust", "Go", "Python", "Markdown", "JSON", "kotlin"]);
 });
