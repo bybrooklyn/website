@@ -187,35 +187,58 @@ export interface Ran {
 }
 
 /**
- * Makes each of `count` things with `work`, at most `atOnce` at a time, and hands each to `keep` as it is
- * made, one at a time; `progress` hears how many are done after each. Stopped by the signal, nothing new is
- * started and what was being made is let go unkept. One that fails is said in `failed` and the rest go on.
+ * Makes each of `count` things with `work`, at most `atOnce` at a time, and hands each to `keep` in their
+ * order, one at a time, so a zip lists its files as the batch does; one made before its turn waits for it,
+ * which also keeps no more than `atOnce` made and unkept. `progress` hears how many are done after each.
+ * Stopped by the signal, nothing new is started and what was being made is let go unkept. One that fails is
+ * said in `failed` and the rest go on.
  */
 export async function runEach<T>(count: number, work: (at: number, signal: AbortSignal) => Promise<T>, keep: (at: number, made: T) => Promise<void>, options: { atOnce?: number; signal?: AbortSignal; progress?(done: number, count: number): void } = {}): Promise<Ran> {
     const signal = options.signal ?? new AbortController().signal;
     const failed: Ran["failed"] = [];
     let next = 0;
     let done = 0;
-    let keeping: Promise<unknown> = Promise.resolve();
+    // whose turn it is to be kept, and those waiting for theirs
+    let turn = 0;
+    const waiting = new Map<number, () => void>();
+    const myTurn = (at: number) => (at === turn || signal.aborted ? Promise.resolve() : new Promise<void>((go) => waiting.set(at, go)));
+    const passTurn = () => {
+        turn++;
+        waiting.get(turn)?.();
+        waiting.delete(turn);
+    };
+    const stopped = () => {
+        for (const go of waiting.values()) go();
+        waiting.clear();
+    };
+    signal.addEventListener("abort", stopped);
     const lane = async () => {
         while (next < count && !signal.aborted) {
             const at = next++;
+            let made: T | undefined;
+            let error: unknown;
+            let ok = false;
             try {
-                const made = await work(at, signal);
-                if (signal.aborted) return;
-                const kept = keeping.then(() => keep(at, made));
-                keeping = kept.catch(() => undefined);
-                await kept;
-                done++;
-            } catch (error) {
-                if (signal.aborted) return;
-                failed.push({ at, error });
+                made = await work(at, signal);
+                ok = true;
+            } catch (problem) {
+                error = problem;
             }
+            await myTurn(at);
+            if (signal.aborted) return;
+            try {
+                if (!ok) throw error;
+                await keep(at, made as T);
+                done++;
+            } catch (problem) {
+                failed.push({ at, error: problem });
+            }
+            passTurn();
             options.progress?.(done + failed.length, count);
         }
     };
     await Promise.all(Array.from({ length: Math.max(1, Math.min(options.atOnce ?? 3, count)) }, lane));
-    await keeping;
+    signal.removeEventListener("abort", stopped);
     return { done, stopped: signal.aborted && done + failed.length < count, failed };
 }
 

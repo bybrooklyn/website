@@ -1,7 +1,7 @@
 // What a batch going out is held to: the zip written as it goes reads back, every file byte for byte under
 // its name, a second of one name moved on to `photo (1)`; a folder is never written over, a name taken while
 // the batch runs moved on too; and the work runs a few at a time, no more, keeps each thing it makes in turn,
-// goes on past one that fails, and stops starting new work when asked.
+// keeps them in their order, goes on past one that fails, and stops starting new work when asked.
 
 import { expect, test } from "bun:test";
 import { readZip } from "../core/zip";
@@ -78,7 +78,8 @@ test("the work runs a few at a time, each kept in turn; one that fails is said a
     expect(most).toBe(3);
     expect(ran.done).toBe(11);
     expect(ran.failed.map((each) => each.at)).toEqual([4]);
-    expect(kept.sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11]);
+    // kept in their order, whichever was made first
+    expect(kept).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11]);
 
     const stop = new AbortController();
     const started: number[] = [];
