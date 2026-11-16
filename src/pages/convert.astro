@@ -1,0 +1,35 @@
+---
+// The file converter as a page of its own: pictures, text and data, sounds and films turned into other
+// formats, many at once, all in this browser (src/quire/convert/page.ts). It is unlisted, kept out of
+// search and the sitemap, and linked from nowhere, until she says otherwise.
+import Document from "../layouts/Document.astro";
+import Flags from "../components/Flags.astro";
+import { site } from "../data/site";
+import "../styles/quire.css";
+import "../styles/quire-img.css";
+import "../styles/quire-convert.css";
+---
+
+<Document title="Convert" description="Turns files into other formats, in your browser." unlisted bodyClass="quire-app quire-convert-page" icon="/mdquire/icon.svg">
+    <header class="quire-top">
+        <div class="quire-top-in">
+            <div class="quire-top-line">
+                <nav class="quire-trail" aria-label="Where you are">
+                    <div class="site-id">
+                        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+                        <Flags />
+                    </div>
+                    <span class="quire-stroke quire-word-stroke" aria-hidden="true">/</span>
+                    <a class="quire-word" href="/convert/">convert</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+    <main id="main" tabindex="-1">
+        <div id="convert" class="quire-convert-host"></div>
+    </main>
+</Document>
+
+<script>
+    import "../scripts/convert";
+</script>
