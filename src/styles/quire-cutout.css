@@ -1,49 +1,66 @@
-/* The cut-out's page (src/quire/img/cutout/page.ts): the picture in the room under the top, the cut-out
-   on a checkerboard, and under it, never over it, the bar of what can be done with it. Its buttons are
-   the editor's own (quire-img.css); what is new is laid out here. */
+/* The cut-out's page (src/quire/img/cutout/page.ts), drawn as a mini is: one box with a rule round it,
+   the picture on the left and a column of controls on the right, written the way the Walker's column
+   is (minis.css): a small heading for each group, round dots for a choice of one, words in the accent
+   to press, thin rules between, and no boxed buttons. The dialog and the right-click menu are the
+   editor's own (quire.css). */
 
-.quire-cut-page main {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    flex: 1;
+/* the editor's own things on this page (its dialog and menus) are given the two sizes its buttons are
+   drawn with, which the editor's pages set on their body */
+.quire-dialog,
+.quire-menu,
+.quire-cut {
+    --press: 2.1rem;
+    --inset: 0.5rem;
 }
 
 .quire-cut-host {
-    display: flex;
-    flex: 1;
-    min-height: calc(100dvh - 4.5rem);
+    margin-bottom: var(--line);
+}
+
+/* the box takes the page's whole width, the room a post keeps for its contents list included, so the picture has it */
+.post > .quire-cut-host {
+    grid-column: 1 / -1;
 }
 
 .quire-cut {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem;
+    /* how tall the picture's room is: what a window has left under the page's name and its line, so the whole box and the line under the
+       picture are in the first screen */
+    --tall: clamp(18rem, calc(100svh - 27rem), 36rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--ground);
     font-family: var(--font-text);
+    font-size: 1rem;
+}
+
+.quire-cut-left {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .quire-cut-room {
     position: relative;
     display: flex;
-    flex: 1;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    min-height: 16rem;
-    border-radius: var(--quire-round);
-    transition: outline-color 0.15s ease;
+    /* at least its own height, and what the column beside it has over, so the line under the picture stands at the box's foot */
+    flex: 1;
+    min-height: var(--tall);
+    padding: 1rem;
     outline: 0.125rem dashed transparent;
-    outline-offset: -0.25rem;
+    outline-offset: -0.5rem;
+    transition: outline-color 0.15s ease;
 }
 
 .quire-cut.dropping .quire-cut-room {
     outline-color: var(--accent);
 }
 
-/* the empty page: one line and its buttons, folding away when a picture comes */
+/* the empty box: one line and its words to press, folding away when a picture comes */
 .quire-cut-empty {
     position: absolute;
     inset: 0;
@@ -51,8 +68,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1.1rem;
-    padding: 1rem;
+    gap: 0.9rem;
+    padding: 1.5rem;
     color: var(--muted);
     text-align: center;
     transition:
@@ -72,45 +89,72 @@
 }
 
 .quire-cut-line {
-    max-width: 30rem;
+    max-width: 26rem;
     margin: 0;
-    font-size: 1.1rem;
     line-height: 1.5;
 }
 
 .quire-cut-empty-actions {
     display: flex;
-    gap: 0.5rem;
+    align-items: baseline;
 }
 
-.quire-cut :is(.quire-dialog-action, .quire-dialog-dismiss) {
-    min-height: 2.4rem;
-    padding: 0 1.1rem;
+/* a thing to press is a word in the accent, underlined as a link is (as in a mini's panel) */
+.quire-cut-press {
+    padding: 0;
     border: 0;
-    border-radius: var(--quire-round-small);
+    border-radius: 0;
+    background: none;
+    color: var(--accent);
     font: inherit;
+    text-align: start;
+    text-decoration: underline 0.06em color-mix(in oklch, var(--accent) 45%, transparent);
+    text-underline-offset: 0.2em;
     cursor: pointer;
+    transition:
+        color 0.15s ease,
+        text-decoration-color 0.15s ease,
+        opacity 0.2s ease,
+        scale 0.2s var(--ease);
 }
 
-.quire-cut .quire-dialog-action {
-    background: var(--accent);
-    color: var(--ground);
-    font-weight: 600;
+.quire-cut-press:hover:not(:disabled) {
+    text-decoration-color: var(--accent);
 }
 
-.quire-cut .quire-dialog-dismiss {
-    background: color-mix(in oklch, var(--ink) 8%, transparent);
+.quire-cut-press:active:not(:disabled) {
+    scale: 0.96;
+}
+
+/* two side by side are a clear step apart, so that they read as two */
+.quire-cut-press + .quire-cut-press {
+    margin-inline-start: 1.1rem;
+}
+
+/* the lesser ones are quiet until pointed at */
+.quire-cut-press.quiet {
+    color: var(--muted);
+    text-decoration-color: transparent;
+}
+
+.quire-cut-press.quiet:hover:not(:disabled) {
     color: var(--ink);
+    text-decoration-color: var(--muted);
 }
 
-/* a phone has no right-click and no keys to paste with: there, and only there, a plain Paste button */
+.quire-cut-press:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* a phone has no right-click and no keys to paste with: there, and only there, a plain paste */
 .quire-cut-paste {
     display: none;
 }
 
 @media (pointer: coarse) {
     .quire-cut-paste {
-        display: inline-block;
+        display: inline;
     }
 }
 
@@ -119,7 +163,6 @@
     position: relative;
     display: grid;
     max-width: 100%;
-    max-height: 100%;
     opacity: 0;
     scale: 0.98;
     transition:
@@ -134,8 +177,8 @@
 
 .quire-cut-view > canvas {
     grid-area: 1 / 1;
-    max-width: min(100%, calc(100vw - 2rem));
-    max-height: calc(100dvh - 13rem);
+    max-width: 100%;
+    max-height: calc(var(--tall) - 2rem);
     width: auto;
     height: auto;
     touch-action: none;
@@ -160,31 +203,39 @@
     cursor: pointer;
 }
 
-/* while the picture is cut out, a quiet line over its foot, which grows in and fades away */
-.quire-cut-working {
-    position: absolute;
-    bottom: 0.75rem;
-    left: 50%;
+/* one line under the picture, in the small type a mini's status has: what is being done while it is,
+   and what was done after, each in the other's place */
+.quire-cut-status {
+    display: grid;
+    min-height: 2.5rem;
+    padding: 0.65rem 1rem;
+    border-top: 0.0625rem solid var(--rule);
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.quire-cut-status > p {
+    grid-area: 1 / 1;
     margin: 0;
-    padding: 0.35rem 0.8rem;
-    border-radius: 999rem;
-    background: color-mix(in oklch, var(--ground) 80%, transparent);
+    transition: opacity 0.2s ease;
+}
+
+.quire-cut-said {
     color: var(--muted);
-    font-size: 0.9rem;
+}
+
+.quire-cut.busy .quire-cut-said {
     opacity: 0;
-    scale: 0.92;
-    translate: -50% 0.3rem;
-    transition:
-        opacity 0.2s ease,
-        scale 0.2s var(--ease),
-        translate 0.2s var(--ease);
-    pointer-events: none;
+}
+
+.quire-cut-working {
+    color: var(--muted);
+    opacity: 0;
 }
 
 .quire-cut-working.shown {
     opacity: 1;
-    scale: 1;
-    translate: -50% 0;
     animation: quire-cut-breathe 1.6s ease-in-out infinite;
 }
 
@@ -194,170 +245,164 @@
     }
 }
 
-/* the bar under the picture: quiet until there is a cut-out, only what is chosen tinted */
-.quire-cut-bar {
+/* ---- the column: groups under small headings, a thin rule between them ---- */
+.quire-cut-side {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    max-width: 100%;
-    opacity: 0;
-    translate: 0 0.4rem;
-    transition:
-        opacity 0.25s ease,
-        translate 0.3s var(--ease);
-}
-
-.quire-cut.cut .quire-cut-bar {
-    opacity: 1;
-    translate: 0 0;
-}
-
-/* each group keeps its buttons together; on a wide screen a fine line goes between groups, never at a row's ends */
-.quire-cut-group {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.quire-cut-group + .quire-cut-group {
-    padding-left: 0.5rem;
+    flex-direction: column;
+    padding: 1rem;
     border-left: 0.0625rem solid var(--rule);
 }
 
-.quire-cut-group-out .quire-dialog-action {
-    min-width: 6rem;
+.quire-cut-group {
+    transition: opacity 0.25s ease;
 }
 
-/* on a narrow screen the groups stand two to a row, lined up, with no lines between them; the colors take a row of their own */
-@media (max-width: 40rem) {
-    .quire-cut-bar {
-        display: grid;
-        grid-template-columns: repeat(2, auto);
-        justify-content: center;
-        justify-items: start;
-        column-gap: 1rem;
-        row-gap: 0.4rem;
-    }
-
-    .quire-cut-group + .quire-cut-group {
-        padding-left: 0;
-        border-left: 0;
-    }
-
-    .quire-cut-swatches {
-        grid-column: 1 / -1;
-        justify-self: center;
-        max-width: none;
-        max-height: 0;
-        transition:
-            max-height 0.35s var(--ease),
-            opacity 0.2s ease;
-    }
-
-    .quire-cut-swatches.open {
-        max-height: 3rem;
-    }
+.quire-cut-group + .quire-cut-group {
+    margin-top: 0.85rem;
+    padding-top: 0.8rem;
+    border-top: 0.0625rem solid var(--rule);
 }
 
-.quire-cut-word {
-    min-height: 2.2rem;
-    padding: 0 0.7rem;
-    font: inherit;
-    font-size: 0.92rem;
+/* what has nothing to act on yet is there, and faint */
+.quire-cut-side [inert] {
+    opacity: 0.4;
 }
 
+.quire-cut-heading {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    color: var(--ink);
+}
+
+.quire-cut-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.85rem;
+}
+
+.quire-cut-choices label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.quire-cut-choices input {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* the colors to lay it on grow out under "color" and go back the same way */
 .quire-cut-swatches {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.1rem;
-    max-width: 0;
+    max-height: 0;
+    /* the first dot's edge on the column's edge, under the words */
+    margin-inline-start: -0.35rem;
     overflow: hidden;
     opacity: 0;
     transition:
-        max-width 0.35s var(--ease),
+        max-height 0.35s var(--ease),
+        margin-top 0.35s var(--ease),
         opacity 0.2s ease;
 }
 
 .quire-cut-swatches.open {
-    max-width: 22rem;
+    max-height: 5rem;
+    margin-top: 0.4rem;
     opacity: 1;
 }
 
-.quire-cut-said {
-    min-height: 1.4rem;
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
-    text-align: center;
+/* eight of them stand in one row of the column */
+.quire-cut-swatches > button {
+    min-width: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+}
+
+/* the lesser words and the words for all of many stand one under another, each on its own line */
+.quire-cut-more,
+.quire-cut-all {
+    display: grid;
+    justify-items: start;
+    gap: 0.35rem;
+}
+
+.quire-cut-more > .quire-cut-press,
+.quire-cut-all > .quire-cut-press {
+    margin-inline-start: 0;
+}
+
+/* saving all of many: there only with many, growing in under the rest */
+.quire-cut-all {
+    max-height: 8rem;
+    overflow: hidden;
+    transition:
+        max-height 0.35s var(--ease),
+        margin-top 0.35s var(--ease),
+        padding-top 0.35s var(--ease),
+        border-color 0.35s ease,
+        opacity 0.2s ease;
+}
+
+.quire-cut-side .quire-cut-all.away {
+    max-height: 0;
+    margin-top: 0;
+    padding-top: 0;
+    border-top-color: transparent;
+    opacity: 0;
+}
+
+.quire-cut-all > .quire-cut-press {
+    max-height: 2rem;
+    overflow: hidden;
+    transition:
+        max-height 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-cut-all > .quire-cut-press.away {
+    max-height: 0;
+    opacity: 0;
+}
+
+/* many pictures: the strip of small pictures (quire-img.css) takes a row of its own under the picture */
+.quire-cut .quire-img-thumbs {
+    align-self: stretch;
+}
+
+/* a narrow window: the column goes under the picture, its rule across the top */
+@media (max-width: 44rem) {
+    .quire-cut {
+        --tall: clamp(14rem, 50svh, 26rem);
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .quire-cut-side {
+        border-top: 0.0625rem solid var(--rule);
+        border-left: 0;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .quire-cut-working.shown {
         animation: none;
     }
-}
 
-/* many pictures: the strip of small pictures (quire-img.css) takes room of its own under the picture, which is
-   fitted into what is left and glides there; the bar gains the way to save them all, which grows in */
-.quire-cut .quire-img-thumbs {
-    align-self: stretch;
-}
-
-.quire-cut-view > canvas {
-    transition: max-height 0.45s var(--ease);
-}
-
-.quire-cut.batched .quire-cut-view > canvas {
-    max-height: calc(100dvh - 18rem);
-}
-
-.quire-cut-group-all {
-    max-width: 34rem;
-    overflow: hidden;
-    transition:
-        max-width 0.35s var(--ease),
-        opacity 0.2s ease;
-}
-
-.quire-cut-group-all.away {
-    max-width: 0;
-    padding-left: 0 !important;
-    border-left-color: transparent !important;
-    opacity: 0;
-}
-
-.quire-cut-group-all > .quire-dialog-dismiss {
-    max-width: 16rem;
-    overflow: hidden;
-    white-space: nowrap;
-    transition:
-        max-width 0.3s var(--ease),
-        opacity 0.2s ease;
-}
-
-.quire-cut-group-all > .quire-dialog-dismiss.away {
-    max-width: 0;
-    padding: 0;
-    opacity: 0;
-}
-
-@media (max-width: 40rem) {
-    .quire-cut-group-all:not(.away) {
-        grid-column: 1 / -1;
-        justify-self: center;
-    }
-
-    .quire-cut.batched .quire-cut-view > canvas {
-        max-height: calc(100dvh - 22rem);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .quire-cut-view > canvas,
-    .quire-cut-group-all,
-    .quire-cut-group-all > .quire-dialog-dismiss {
+    .quire-cut-swatches,
+    .quire-cut-all,
+    .quire-cut-all > .quire-cut-press,
+    .quire-cut-group {
         transition: none;
     }
 }

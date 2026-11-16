@@ -1,12 +1,16 @@
-// What the cut-out's page is held to: its right-click menu holds Paste and Choose a picture when empty,
-// and Copy, Save, Paste, Keep and Remove with a cut-out; and in Chromium with the real Quick model
-// (Hugging Face answered from the trial copies, ONNX Runtime from the site's build, the model in its
-// own worker), a picture pasted is cut out once she has said to fetch the model (nothing is fetched
-// before), at its full size, the figure kept and the ground gone; a drop, a file chosen and Paste from
-// the right-click menu each bring a new picture and cut it with no dialog; Copy gives the clipboard the
-// full-size PNG; Save gives a PNG named from the file; Keep paints the ground back in; a color or the
-// blurred picture fills what was clear; and the only requests are the page's own, ONNX Runtime's and
-// the model's one file, each a GET with no body.
+// What the cut-out's page is held to: its right-click menu holds paste and choose a picture when empty,
+// and copy, save, paste, keep and remove with a cut-out, in lowercase as every label of the page is; and
+// in Chromium with the real Quick model (Hugging Face answered from the trial copies, ONNX Runtime from
+// the site's build, the model in its own worker), the column of controls is there from the start and out
+// of reach until it has something to act on; a picture chosen is cut out once she has said to fetch the
+// model (nothing is fetched before), the dialog opening on the two qualities in one step, at its full
+// size, the figure kept and the ground gone, the picture as it was fading out over it; a quality whose
+// model is not kept is asked for alone and left as it was when told no; a drop, a paste and paste from
+// the right-click menu each bring a new picture and cut it with no dialog; copy gives the clipboard the
+// full-size PNG; save gives a PNG named from the file; keep paints the ground back in and, pressed again,
+// is put down; a color or the blurred picture fills what was clear; many pictures are cut in turn and
+// saved as one zip; and the only requests are the page's own, ONNX Runtime's and the model's one file,
+// each a GET with no body.
 
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -21,12 +25,12 @@ import { readZip } from "../../core/zip";
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
 const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 
-test("the right-click menu holds Paste and Choose a picture when empty, and Copy, Save, Paste, Keep and Remove with a cut-out", () => {
+test("the right-click menu holds paste and choose a picture when empty, and copy, save, paste, keep and remove with a cut-out, in lowercase", () => {
     const run = { copy() {}, save() {}, paste() {}, choose() {}, brush() {} };
-    expect(cutMenuLines({ cut: false }, run).map((each) => each.label)).toEqual(["Paste", "Choose a picture"]);
+    expect(cutMenuLines({ cut: false }, run).map((each) => each.label)).toEqual(["paste", "choose a picture"]);
     const lines = cutMenuLines({ cut: true, brush: "keep" }, run);
-    expect(lines.map((each) => each.label || "-")).toEqual(["Copy", "Save", "Paste", "-", "Keep", "Remove"]);
-    expect(lines.find((each) => each.label === "Keep")!.pressed).toBe(true);
+    expect(lines.map((each) => each.label || "-")).toEqual(["copy", "save", "paste", "-", "keep", "remove"]);
+    expect(lines.find((each) => each.label === "keep")!.pressed).toBe(true);
     expect(cutName("Harbour at dusk.jpg")).toBe("Harbour-at-dusk-cut-out.png");
     expect(cutName(undefined)).toBe("picture-cut-out.png");
 });
@@ -95,19 +99,23 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         // a right-click on the empty page: Paste and Choose a picture
         await tab.run("document.querySelector('.quire-cut-room').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 300 }))");
         await until("document.querySelector('.quire-menu:popover-open')");
-        expect(await menuLines()).toEqual(["PasteCtrl+V", "Choose a picture"].map((each) => expect.stringContaining(each.replace("Ctrl+V", ""))) as unknown as string[]);
+        expect(await menuLines()).toEqual(["pasteCtrl+V", "choose a picture"].map((each) => expect.stringContaining(each.replace("Ctrl+V", ""))) as unknown as string[]);
         await tab.press("Escape");
+        // the column is there from the start, faint and out of reach until it has something to act on; its words are lowercase
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-heading')].map((each) => each.textContent)")).toEqual(["background", "touch up", "quality"]);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-side label, .quire-cut-side .quire-cut-press')].map((each) => each.textContent)")).toEqual(["clear", "color", "blur", "keep", "remove", "quick", "best", "copy", "save", "hold to see the original", "choose another picture", "save all 0 as a zip", "save all into a folder", "stop"]);
+        expect(await tab.run<boolean[]>("[...document.querySelectorAll('.quire-cut-side > .quire-cut-group')].map((each) => each.inert || [...each.children].every((child) => child.inert))")).toEqual([true, true, true, true, true, true]);
         // 1. a file chosen by a press on Choose a picture: the dialog first, nothing fetched until told
         const png = await tab.run<number[]>("window.scene(1200, 800, 'field.png').then(async (file) => [...new Uint8Array(await file.arrayBuffer())])");
         await Bun.write(`${folder}/field.png`, new Uint8Array(png));
         await tab.files([`${folder}/field.png`]);
-        const chooseAt = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-cut-empty .quire-dialog-action').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()");
+        const chooseAt = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-cut-empty .quire-cut-press').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()");
         await tab.click(chooseAt.x, chooseAt.y);
         await until("document.querySelector('.quire-cut-dialog')");
         expect(await tab.run<string>("document.querySelector('.quire-cut-dialog').textContent")).toContain("the picture never leaves it");
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
-        await tab.run("document.querySelector('.quire-cut-dialog .quire-dialog-action').click()");
-        await until("document.querySelectorAll('.quire-cut-dialog .quire-img-read-card').length >= 2");
+        // one step: the two qualities are there as it opens, with what is pressed in lowercase
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-dialog .quire-img-read-card-name, .quire-cut-dialog .quire-dialog-actions button')].map((each) => each.textContent)")).toEqual(["quick", "best", "not now", "download and cut out"]);
         await tab.run("document.querySelector('.quire-cut-dialog .quire-img-read-card[data-tier=\"cut-quick\"]').click()");
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
         await tab.run("document.querySelector('.quire-cut-download').click()");
@@ -122,14 +130,26 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         // the right-click menu on the cut-out
         await tab.run("document.querySelector('.quire-cut-view').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 300 }))");
         await until("document.querySelector('.quire-menu:popover-open')");
-        expect((await menuLines()).map((each) => each.replace(/Ctrl\+.$/, ""))).toEqual(["Copy", "Save", "Paste", "Keep", "Remove"]);
+        expect((await menuLines()).map((each) => each.replace(/Ctrl\+.$/, ""))).toEqual(["copy", "save", "paste", "keep", "remove"]);
         // Copy from the menu: the full-size PNG on the clipboard
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('Copy')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('copy')).click()");
         await until("window.copied.length === 1");
         expect(await tab.run("window.copied[0]")).toEqual({ width: 1200, height: 800 });
         // Save: a PNG named from the file
-        await tab.run("document.querySelector('.quire-cut-bar .quire-dialog-dismiss').click()");
+        await tab.run("[...document.querySelectorAll('.quire-cut-out .quire-cut-press')].find((each) => each.textContent === 'save').click()");
         await until("window.downloads['field-cut-out.png'] > 1000");
+        // with a cut-out the whole column is in reach, and the dots say what is on: clear behind it, no brush, quick
+        expect(await tab.run<boolean>("[...document.querySelectorAll('.quire-cut-side > .quire-cut-group:not(.quire-cut-all)')].some((each) => each.inert || [...each.children].some((child) => child.inert))")).toBe(false);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-choices input:checked')].map((each) => each.value)")).toEqual(["clear", "cut-quick"]);
+        // best, whose model is not kept, asks for that one model alone; told not now, quick is still the quality and its dot is back
+        await tab.run("document.querySelector('.quire-cut-choices input[value=\"cut-best\"]').click()");
+        await until("document.querySelector('.quire-cut-dialog')");
+        expect(await tab.run("document.querySelectorAll('.quire-cut-dialog .quire-img-read-card').length")).toBe(0);
+        expect(await tab.run<string>("document.querySelector('.quire-cut-dialog').textContent")).toContain("98 MB");
+        await tab.run("document.querySelector('.quire-cut-dialog .quire-dialog-dismiss').click()");
+        await until("!document.querySelector('.quire-cut-dialog')");
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-cut-choices input:checked')].map((each) => each.value)")).toEqual(["clear", "cut-quick"]);
+        expect(tab.requests.filter((each) => each.url.includes("birefnet"))).toEqual([]);
         // 2. a drop: cut with no dialog
         await tab.run("window.scene(1500, 1000, 'dropped.png').then((file) => { const data = new DataTransfer(); data.items.add(file); document.querySelector('.quire-cut-room').dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true })); })");
         await until("window.seen()?.width === 1500", 60_000);
@@ -141,23 +161,28 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await tab.run("window.scene(1000, 700, 'clip.png').then((file) => (window.clipboardPicture = file))");
         await tab.run("document.querySelector('.quire-cut-view').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 300 }))");
         await until("document.querySelector('.quire-menu:popover-open')");
-        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('Paste')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.startsWith('paste')).click()");
         await until("window.seen()?.width === 1000", 60_000);
         // Keep painted on the ground brings it back
-        await tab.run("[...document.querySelectorAll('.quire-cut-bar button')].find((each) => each.textContent === 'Keep').click()");
+        await tab.run("document.querySelector('.quire-cut-choices input[value=\"keep\"]').click()");
+        expect(await tab.run("document.querySelector('.quire-cut-view').dataset.brush")).toBe("keep");
         const box = await tab.run<{ x: number; y: number; width: number; height: number }>("(() => { const b = document.querySelector('.quire-cut-canvas').getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; })()");
         await tab.drag({ x: box.x + box.width * 0.07, y: box.y + box.height * 0.12 }, { x: box.x + box.width * 0.1, y: box.y + box.height * 0.13 }, 6);
         await until("window.cutout.cut()?.strokes?.length === 1");
         await until("window.seen()?.ground[3] > 200");
         // a stroke of the brush is drawn at once, with no fade
         expect(await tab.run("!!document.querySelector('.quire-cut-leaving')")).toBe(false);
+        // the brush pressed again is put down, and its dot is empty
+        await tab.run("document.querySelector('.quire-cut-choices input[value=\"keep\"]').click()");
+        expect(await tab.run("document.querySelector('.quire-cut-view').dataset.brush")).toBe("");
+        expect(await tab.run("document.querySelector('.quire-cut-choices input[value=\"keep\"]').checked")).toBe(false);
         // a color behind it, then the old picture blurred: nothing clear is left
-        await tab.run("[...document.querySelectorAll('.quire-cut-bar button')].find((each) => each.textContent === 'Color').click()");
+        await tab.run("document.querySelector('.quire-cut-choices input[value=\"color\"]').click()");
         await until("window.seen() && window.seen().head[3] === 255 && window.cutout.cut().background === 'color'");
         seen = await tab.run("window.seen()");
-        await tab.run("[...document.querySelectorAll('.quire-cut-bar button')].find((each) => each.textContent === 'Blur').click()");
+        await tab.run("document.querySelector('.quire-cut-choices input[value=\"blur\"]').click()");
         await until("window.cutout.cut()?.background === 'blur'");
-        await tab.run("[...document.querySelectorAll('.quire-cut-bar button')].find((each) => each.textContent === 'Clear').click()");
+        await tab.run("document.querySelector('.quire-cut-choices input[value=\"clear\"]').click()");
         // many pictures at once: a strip of small pictures, each cut out in turn, and all saved as one zip under their own names
         await tab.run("Promise.all([window.scene(800, 600, 'walk.png'), window.scene(600, 800, 'walk.jpg'), window.scene(700, 500, 'shore.png')]).then((files) => { const data = new DataTransfer(); for (const file of files) data.items.add(file); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })");
         await until("window.cutout.many().count === 3 && window.cutout.many().cut === 3", 120_000);
@@ -166,7 +191,7 @@ test("in Chromium, the four ways in each cut a picture out at full size, Copy, S
         await tab.press("PageDown");
         await until("window.cutout.many().at === 1 && window.seen()?.width === 600");
         await tab.run("window.showSaveFilePicker = undefined");
-        await tab.run("[...document.querySelectorAll('.quire-cut-group-all button')].find((each) => each.textContent.includes('zip')).click()");
+        await tab.run("[...document.querySelectorAll('.quire-cut-all button')].find((each) => each.textContent.includes('zip')).click()");
         await until("window.downloads['cut-outs.zip']", 60_000);
         const zip = await readZip(new Uint8Array(await tab.run<number[]>("window.downloads['cut-outs.zip']")));
         expect([...zip.keys()]).toEqual(["walk.png", "walk (1).png", "shore.png"]);

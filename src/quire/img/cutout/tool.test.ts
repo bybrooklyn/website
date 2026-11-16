@@ -55,7 +55,7 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         await tab.press("k");
         await until("document.querySelector('.quire-cut-dialog')");
         expect(tab.requests.filter((each) => each.url.includes("huggingface"))).toEqual([]);
-        await tab.run("document.querySelector('.quire-cut-dialog .quire-dialog-action').click()");
+        // one step: the qualities are there as the dialog opens
         await until("document.querySelector('.quire-cut-dialog .quire-img-read-card[data-tier=\"cut-quick\"]')");
         await tab.run("document.querySelector('.quire-cut-dialog .quire-img-read-card[data-tier=\"cut-quick\"]').click()");
         await tab.run("document.querySelector('.quire-cut-download').click()");

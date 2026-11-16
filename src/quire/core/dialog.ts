@@ -41,6 +41,8 @@ export interface DialogParts {
     className?: string;
     /** Told once the dialog has closed, however it was closed. */
     onClose?: () => void;
+    /** Fills the body and the buttons before it opens, for parts that need the dialog itself (a button that changes it); it then opens at the size of what was put in. */
+    fill?: (dialog: Dialog) => void;
 }
 
 /** An open dialog. */
@@ -304,6 +306,7 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
         stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]!.focus();
     });
 
+    parts.fill?.(dialog);
     document.body.append(element);
     element.showModal();
     current = dialog;

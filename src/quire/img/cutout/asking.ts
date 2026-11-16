@@ -1,10 +1,12 @@
 // Asking before the cut-out's model is fetched, in the reading dialog's family: the first time, a dialog
 // grown from what was pressed says what is needed (a model, downloaded once from Hugging Face and kept
-// in this browser, run on this machine, the picture never leaving it); Choose shows the two qualities
-// as cards (Quick and Best, each with its size and who it suits, "On this device" once kept);
-// Download and cut out fetches it, its progress in the buttons' place with Cancel. The quality is
-// remembered (`quire-cutout`). Nothing is fetched until she says so; after that there is no dialog.
-// The same asks once for the model that picks a subject by a press.
+// in this browser, run on this machine, the picture never leaving it) and shows the two qualities as
+// cards in the same step (quick and best, each with its size and who it suits, "On this device" once
+// kept); "download and cut out" fetches it, its progress in the buttons' place with "cancel". The
+// quality is remembered (`quire-cutout`). Nothing is fetched until she says so; after that there is no
+// dialog. A quality picked by name (`use`) is asked for alone, and only if it is not kept. The same
+// asks once for the model that picks a subject by a press. What is pressed is written in lowercase,
+// as the site's own labels are.
 //
 //   const asking = createAsking({ finder, returnTo });
 //   if (await asking.ready(button)) ... the model is kept
@@ -79,7 +81,7 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
                     card.type = "button";
                     card.dataset.tier = each.id;
                     card.setAttribute("role", "radio");
-                    card.append(make("span", "quire-img-read-card-name", each.name), make("span", "quire-img-read-card-size", kept.get(each.id) ? "On this device" : megabytes(partSize(each))), make("span", "quire-img-read-card-who", each.who));
+                    card.append(make("span", "quire-img-read-card-name", each.name.toLowerCase()), make("span", "quire-img-read-card-size", kept.get(each.id) ? "On this device" : megabytes(partSize(each))), make("span", "quire-img-read-card-who", each.who));
                     card.addEventListener("click", () => pick(each));
                     return card;
                 });
@@ -111,13 +113,14 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
                 const parts: HTMLElement[] = [make("p", "quire-img-read-plain", intro), group, make("p", "quire-img-read-where", `From ${new URL(HOST).host}: ${credits}; Apache-2.0 and MIT.`)];
                 if (failure) parts.push(make("p", "quire-img-read-warn", `The last try failed: ${failure}`));
                 dialog.body.replaceChildren(...parts);
-                const quiet = make("button", "quire-dialog-dismiss", "Not now");
+                const quiet = make("button", "quire-dialog-dismiss", "not now");
                 quiet.type = "button";
                 quiet.addEventListener("click", () => void dialog.close());
                 const button = filledButton(go, (pressed) => {
                     dialog.change(() => downloading(dialog), pressed);
                     void fetchIt(dialog);
                 }, "quire-dialog-action quire-cut-download");
+                button.autofocus = true;
                 dialog.actions.replaceChildren(quiet, button);
                 button.focus({ preventScroll: true });
                 return group;
@@ -130,7 +133,7 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
                 bar.setAttribute("aria-label", "Downloading the model");
                 bar.append(make("i"));
                 count = make("p", "quire-img-read-count");
-                const cancel = make("button", "quire-dialog-dismiss", "Cancel");
+                const cancel = make("button", "quire-dialog-dismiss", "cancel");
                 cancel.type = "button";
                 cancel.addEventListener("click", () => hooks.finder().cancel());
                 row.append(bar, count, cancel);
@@ -155,12 +158,12 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
                     fetching = false;
                 }
             };
+            // one step: it opens on the choice itself, with what it needs said over it
             openDialog(from, {
                 title,
                 className: "quire-img-read-dialog quire-img-find-dialog quire-cut-dialog",
-                body: [make("p", "quire-img-read-plain", intro)],
-                dismiss: "Not now",
-                action: { label: "Choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
+                body: [],
+                fill: (dialog) => void choosing(dialog),
                 returnTo: hooks.returnTo(),
                 onClose: () => {
                     if (fetching) hooks.finder().cancel();
@@ -187,18 +190,33 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
             if (!choices.includes(tier)) tier = choices.at(-1)!;
             for (const each of choices) void have(each);
             if (await have(tier)) return true;
-            return ask(from, choices, "Cut out the background", CUT_INTRO, "Download and cut out");
+            return ask(from, choices, "Cut out the background", CUT_INTRO, "download and cut out");
         },
         /** Lets her choose another quality: the cards again; true when one is kept and chosen. */
         choose(from?: HTMLElement): Promise<boolean> {
-            return offered().then((choices) => ask(from, choices, "Quality", CUT_INTRO, "Use this quality"));
+            return offered().then((choices) => ask(from, choices, "Quality", CUT_INTRO, "use this quality"));
+        },
+        /** Takes a quality by its id: true once its model is kept, asking for that one model first if it is not. Told no, the quality in use is the one it was. */
+        async use(id: string, from?: HTMLElement): Promise<boolean> {
+            const next = CUT_TIERS.find((each) => each.id === id);
+            if (!next) return false;
+            const was = tier;
+            tier = next;
+            chosenByMachine = false;
+            if (await have(next)) {
+                remember(next.id);
+                return true;
+            }
+            const answer = await ask(from, [next], "Cut out the background", CUT_INTRO, "download and cut out");
+            if (!answer) tier = was;
+            return answer;
         },
         /** True once the model that picks a subject by a press is kept, asking first if it is not. */
         async picking(from?: HTMLElement): Promise<boolean> {
             const small = PART_TIERS[0]!;
             if (await have(small)) return true;
             const was = tier;
-            const answer = await ask(from, [small], "Choose the subject", PICK_INTRO, "Download");
+            const answer = await ask(from, [small], "Choose the subject", PICK_INTRO, "download");
             tier = was;
             return answer;
         },

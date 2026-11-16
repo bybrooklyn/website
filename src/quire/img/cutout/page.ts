@@ -1,26 +1,31 @@
 // The cut-out as a page of its own (/cutout/): drop, paste or choose a picture and its background comes
-// off, at its full size, in this browser. An empty page says one line and offers Choose a picture (and,
-// on a phone, Paste). A picture arriving is shown at once with a quiet line saying it is being cut out;
-// the first time, the quality is asked for and fetched only when she says so. Then the cut-out shows on
-// a checkerboard, and under it, never over it: Copy (the main button), Save, what it is laid on (Clear,
-// Color with the site's colors, Blur), the brush (Keep, Remove), and the quality. A press on the
-// picture keeps the thing pressed when there are several; the backslash or the Original button held
-// shows the picture as it came. A right-click opens a menu of the same (Shift leaves the browser's).
-// Many pictures at once sit in a strip of small pictures under the one shown (batch-strip.ts), each cut out
-// in turn behind it, and are saved together as one zip or into a folder under their own names, by the
-// same code as imgQuire's Export all (batch-out.ts); one picture works as it always has.
-// Nothing leaves the browser: the only requests are for the page, ONNX Runtime and the model's files.
+// off, at its full size, in this browser. It is one box, as a mini's is: the picture on the left and a
+// column of controls on the right, written the way the site's own controls are (the Walker's column):
+// a small heading for each group, round dots for a choice of one, words in the accent to press, thin
+// rules between, everything in lowercase. The groups are background (clear, color with the site's
+// colors, blur), touch up (keep, remove: a brush, pressed again to put it down), quality (quick, best)
+// and, at the foot, copy (the main one), save, hold to see the original and choose another picture.
+// An empty box says one line and offers choose a picture (and, on a phone, paste); the column is there
+// from the start, faint until it has something to act on, so nothing appears from nowhere. A picture
+// arriving is shown at once with a line under it saying it is being cut out; the first time, the
+// quality is asked for and fetched only when she says so. A press on the picture keeps the thing
+// pressed when there are several; the backslash held shows the picture as it came. A right-click opens
+// a menu of the same (Shift leaves the browser's). Many pictures at once sit in a strip of small
+// pictures under the one shown (batch-strip.ts), each cut out in turn behind it, and are saved together
+// as one zip or into a folder under their own names, by the same code as imgQuire's Export all
+// (batch-out.ts). Nothing leaves the browser: the only requests are for the page, ONNX Runtime and the
+// model's files.
 //
 //   createCutoutPage(host, { colors: [{ name: "White", value: "#ffffff" }, ...] });
 
-import { control, flowMenu, icon, make, ruled, RULE, still, type MenuItem } from "../../core/ui";
+import { control, flowMenu, make, ruled, RULE, still, type MenuItem } from "../../core/ui";
 import { crc32 } from "../../core/zip";
 import type { FolderHandle } from "../../core/store-folder";
 import { decodeHeic, heicIn } from "../codec-run";
 import { profileOf } from "../metadata";
 import { deflated, pixelsToSrgb, withProfile } from "../profile";
 import { createFinder, type Finder } from "../parts/finder";
-import { PART_TIERS } from "../parts/models";
+import { CUT_TIERS, PART_TIERS } from "../parts/models";
 import type { Stroke } from "../masks";
 import { namesFor, picturesSaid, whichSaid } from "../batch";
 import { atOnce, blobSink, fileSink, folderOut, runEach, zipOut, type Destination } from "../batch-out";
@@ -32,8 +37,8 @@ import { cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from ".
 /** The words of the page that a visitor reads first. */
 export const CUT_WORDS = {
     empty: "Drop, paste or choose a picture, and its background comes off. It never leaves your browser.",
-    choose: "Choose a picture",
-    paste: "Paste",
+    choose: "choose a picture",
+    paste: "paste",
     working: "Cutting out",
     notCut: "Not cut out",
 };
@@ -52,9 +57,9 @@ export interface PageOptions {
 
 /** The words of the page when many pictures are cut out together. */
 export const ALL_WORDS = {
-    zip: (count: number) => `Save all ${count} as a zip`,
-    folder: "Save all into a folder",
-    stop: "Stop",
+    zip: (count: number) => `save all ${count} as a zip`,
+    folder: "save all into a folder",
+    stop: "stop",
 };
 
 /** A file's name made the cut-out's: its stem and "cut out", as a PNG. */
@@ -63,17 +68,17 @@ export function cutName(name: string | undefined): string {
     return `${stem}-cut-out.png`;
 }
 
-/** The lines of the right-click menu: Paste and Choose a picture with nothing shown; Copy, Save and Paste, then Keep and Remove, with a cut-out. */
+/** The lines of the right-click menu, in lowercase as the page's own controls are: paste and choose a picture with nothing shown; copy, save and paste, then keep and remove, with a cut-out. */
 export function cutMenuLines(state: { cut: boolean; brush?: "keep" | "remove" }, run: { copy(): void; save(): void; paste(): void; choose(): void; brush(which: "keep" | "remove"): void }): MenuItem[] {
-    const paste: MenuItem = { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
-    if (!state.cut) return [paste, { label: "Choose a picture", icon: "image", key: "choose", run: run.choose }];
+    const paste: MenuItem = { label: "paste", icon: "paste", hint: "Ctrl+V", key: "paste", run: run.paste };
+    if (!state.cut) return [paste, { label: "choose a picture", icon: "image", key: "choose", run: run.choose }];
     return [
-        { label: "Copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
-        { label: "Save", icon: "download", hint: "Ctrl+S", key: "save", run: run.save },
+        { label: "copy", icon: "copy", hint: "Ctrl+C", key: "copy", run: run.copy },
+        { label: "save", icon: "download", hint: "Ctrl+S", key: "save", run: run.save },
         paste,
         RULE,
-        { label: "Keep", icon: "pen", key: "keep", pressed: state.brush === "keep", run: () => run.brush("keep") },
-        { label: "Remove", icon: "clear", key: "remove", pressed: state.brush === "remove", run: () => run.brush("remove") },
+        { label: "keep", icon: "pen", key: "keep", pressed: state.brush === "keep", run: () => run.brush("keep") },
+        { label: "remove", icon: "clear", key: "remove", pressed: state.brush === "remove", run: () => run.brush("remove") },
     ];
 }
 
@@ -82,6 +87,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     let finder: Finder | undefined;
     const finderNow = () => (finder ??= options.finder?.() ?? createFinder());
     const root = make("div", "quire-cut");
+    const left = make("div", "quire-cut-left");
     const room = make("div", "quire-cut-room");
     const empty = make("div", "quire-cut-empty");
     const chooser = make("input");
@@ -89,10 +95,16 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     chooser.accept = "image/png,image/jpeg,image/webp,image/avif,image/gif,image/bmp,image/heic,image/heif,.heic,.heif";
     chooser.multiple = true;
     chooser.hidden = true;
-    const choose = make("button", "quire-dialog-action", CUT_WORDS.choose);
-    choose.type = "button";
-    const pasteButton = make("button", "quire-dialog-dismiss quire-cut-paste", CUT_WORDS.paste);
-    pasteButton.type = "button";
+    /** A word to press, in the accent and underlined as the site's are; a `quiet` one is muted until pointed at. */
+    const word = (text: string, press: () => void, quiet = false) => {
+        const button = make("button", quiet ? "quire-cut-press quiet" : "quire-cut-press", text);
+        button.type = "button";
+        button.addEventListener("click", press);
+        return button;
+    };
+    const choose = word(CUT_WORDS.choose, () => chooser.click());
+    const pasteButton = word(CUT_WORDS.paste, () => void pasteFromMenu(), true);
+    pasteButton.classList.add("quire-cut-paste");
     const emptyActions = make("div", "quire-cut-empty-actions");
     emptyActions.append(choose, pasteButton);
     empty.append(make("p", "quire-cut-line", CUT_WORDS.empty), emptyActions, chooser);
@@ -100,15 +112,19 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     let canvas = make("canvas", "quire-cut-canvas");
     const over = make("canvas", "quire-cut-over");
     view.append(canvas, over);
+    room.append(empty, view);
+    // one line under the picture: what is being done while it is, and what was done after
     const working = make("p", "quire-cut-working", CUT_WORDS.working);
     working.setAttribute("role", "status");
-    room.append(empty, view, working);
-    const bar = make("div", "quire-cut-bar");
-    bar.setAttribute("role", "toolbar");
-    bar.setAttribute("aria-label", "Cut-out");
     const said = make("p", "quire-cut-said");
     said.setAttribute("aria-live", "polite");
-    root.append(room, bar, said);
+    const status = make("div", "quire-cut-status");
+    status.append(working, said);
+    left.append(room, status);
+    const side = make("div", "quire-cut-side");
+    side.setAttribute("role", "group");
+    side.setAttribute("aria-label", "Cut-out");
+    root.append(left, side);
     host.append(root);
 
     const asking = createAsking({ finder: finderNow, returnTo: () => (picture ? copyButton : choose) });
@@ -125,23 +141,42 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     let busy = 0;
     const say = (text: string) => (said.textContent = text);
 
-    // ---- the bar under the picture ----
-    const copyButton = make("button", "quire-dialog-action quire-cut-copy", "Copy");
-    copyButton.type = "button";
-    copyButton.addEventListener("click", () => void copy());
-    const saveButton = make("button", "quire-dialog-dismiss", "Save");
-    saveButton.type = "button";
-    saveButton.addEventListener("click", () => void save());
-    const lays: [Laid, string, string][] = [
-        ["clear", "Clear", "Nothing behind it, saved with transparency"],
-        ["color", "Color", "A color behind it"],
-        ["blur", "Blur", "The old background behind it, blurred"],
-    ];
-    const layButtons = lays.map(([key, label, tip]) => {
-        const button = control(tip, label, () => setLaid(key), "quire-button quire-cut-word");
-        button.dataset.laid = key;
-        return button;
-    });
+    // ---- the column beside the picture ----
+    let named = 0;
+    /**
+     * A group of the column: its small heading, then round dots to choose one of its words. `press` is told the word pressed, also when it
+     * is the one already chosen, so a brush can be put down by pressing it again.
+     */
+    const dots = <T extends string>(heading: string, options: { value: T; text: string; tip: string }[], press: (value: T, input: HTMLInputElement) => void) => {
+        const group = make("div", "quire-cut-group");
+        const set = make("div", "quire-cut-choices");
+        set.setAttribute("role", "radiogroup");
+        set.setAttribute("aria-label", heading);
+        const name = `quire-cut-${named++}`;
+        const inputs = options.map((option) => {
+            const input = make("input");
+            input.type = "radio";
+            input.name = name;
+            input.value = option.value;
+            input.addEventListener("click", () => press(option.value, input));
+            const label = make("label");
+            label.title = option.tip;
+            label.append(input, option.text);
+            set.append(label);
+            return input;
+        });
+        group.append(make("h3", "quire-cut-heading", heading), set);
+        return { group, set, show: (chosen: string | undefined) => inputs.forEach((input) => (input.checked = input.value === chosen)) };
+    };
+    const lays = dots<Laid>(
+        "background",
+        [
+            { value: "clear", text: "clear", tip: "Nothing behind it, saved with transparency" },
+            { value: "color", text: "color", tip: "A color behind it" },
+            { value: "blur", text: "blur", tip: "The old background behind it, blurred" },
+        ],
+        (value) => laid !== value && setLaid(value),
+    );
     const swatches = make("div", "quire-cut-swatches");
     for (const each of options.colors ?? [{ name: "White", value: "#ffffff" }]) {
         const mark = make("span", "quire-img-swatch");
@@ -150,29 +185,38 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         button.dataset.color = each.value;
         swatches.append(button);
     }
-    const keepButton = control("Keep: paint what should stay", "Keep", () => setBrush(brush === "keep" ? undefined : "keep"), "quire-button quire-cut-word");
-    const removeButton = control("Remove: paint what should go", "Remove", () => setBrush(brush === "remove" ? undefined : "remove"), "quire-button quire-cut-word");
-    const quality = control("Quality", asking.tier().name, (button) => void chooseQuality(button), "quire-button quire-cut-word");
-    const original = control("Hold to see the original (\\)", icon("paper"), () => {}, "quire-button quire-cut-hold");
-    const another = control("Choose another picture", icon("image"), () => chooser.click());
-    // the bar in groups that wrap whole: getting it out, what it is laid on, the brush, and the rest; the colors grow out as a row of their own
-    const group = (name: string, ...items: HTMLElement[]) => {
-        const made = make("div", `quire-cut-group quire-cut-group-${name}`);
-        made.append(...items);
-        return made;
-    };
-    // with many pictures: every cut-out saved together, as one zip or into a folder, with how far it has come and Stop
-    const zipAll = make("button", "quire-dialog-dismiss", ALL_WORDS.zip(0));
-    zipAll.type = "button";
-    zipAll.addEventListener("click", () => void saveAll("zip"));
-    const folderAll = make("button", "quire-dialog-dismiss", ALL_WORDS.folder);
-    folderAll.type = "button";
-    folderAll.addEventListener("click", () => void saveAll("folder"));
-    const stopAll = make("button", "quire-dialog-dismiss", ALL_WORDS.stop);
-    stopAll.type = "button";
-    stopAll.addEventListener("click", () => saving?.stop.abort());
-    const all = group("all", zipAll, folderAll, stopAll);
-    bar.append(group("out", copyButton, saveButton), group("brush", keepButton, removeButton), group("laid", ...layButtons), group("more", quality, original, another), all, swatches);
+    lays.group.append(swatches);
+    const brushes = dots<"keep" | "remove">(
+        "touch up",
+        [
+            { value: "keep", text: "keep", tip: "Paint what should stay; press again to put the brush down" },
+            { value: "remove", text: "remove", tip: "Paint what should go; press again to put the brush down" },
+        ],
+        (value) => setBrush(brush === value ? undefined : value),
+    );
+    const qualities = dots<string>(
+        "quality",
+        CUT_TIERS.map((tier) => ({ value: tier.id, text: tier.name.toLowerCase(), tip: tier.who })),
+        (value, input) => void chooseQuality(value, input),
+    );
+    const copyButton = word("copy", () => void copy());
+    copyButton.classList.add("quire-cut-copy");
+    const saveButton = word("save", () => void save(), true);
+    const out = make("div", "quire-cut-group quire-cut-out");
+    out.append(copyButton, saveButton);
+    const original = word("hold to see the original", () => {}, true);
+    original.classList.add("quire-cut-hold");
+    original.title = "Hold to see the original (\\)";
+    const another = word("choose another picture", () => chooser.click(), true);
+    const more = make("div", "quire-cut-group quire-cut-more");
+    more.append(original, another);
+    // with many pictures: every cut-out saved together, as one zip or into a folder, with how far it has come and its stop
+    const zipAll = word(ALL_WORDS.zip(0), () => void saveAll("zip"));
+    const folderAll = word(ALL_WORDS.folder, () => void saveAll("folder"));
+    const stopAll = word(ALL_WORDS.stop, () => saving?.stop.abort(), true);
+    const all = make("div", "quire-cut-group quire-cut-all");
+    all.append(zipAll, folderAll, stopAll);
+    side.append(lays.group, brushes.group, qualities.group, out, more, all);
     const pickers = globalThis as unknown as { showDirectoryPicker?: (options: object) => Promise<FolderHandle>; showSaveFilePicker?: (options: object) => Promise<{ name: string; createWritable(): Promise<{ write(data: string | Blob): Promise<void>; close(): Promise<void>; abort?(): Promise<void> }> }> };
 
     function fill() {
@@ -187,13 +231,15 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         root.classList.toggle("shown", !!picture);
         root.classList.toggle("cut", !!result);
         root.classList.toggle("clear", laid === "clear" && !!result && !holding);
-        bar.inert = !result;
-        for (const button of layButtons) button.classList.toggle("pressed", button.dataset.laid === laid);
+        root.classList.toggle("busy", busy > 0);
+        // what acts on a cut-out waits for one; the quality and another picture need only a picture, so a quality that found nothing can be changed
+        for (const each of [lays.group, brushes.group, out, original]) each.inert = !result;
+        qualities.group.inert = another.inert = !picture;
+        lays.show(laid);
         swatches.classList.toggle("open", laid === "color");
         for (const button of swatches.querySelectorAll<HTMLElement>("button")) button.classList.toggle("pressed", button.dataset.color === color);
-        keepButton.classList.toggle("pressed", brush === "keep");
-        removeButton.classList.toggle("pressed", brush === "remove");
-        quality.textContent = asking.tier().name;
+        brushes.show(brush);
+        qualities.show(asking.tier().id);
         working.classList.toggle("shown", busy > 0);
         view.dataset.brush = brush ?? "";
     }
@@ -342,11 +388,12 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         brush = next;
         fill();
     }
-    async function chooseQuality(button: HTMLElement) {
+    /** Takes the quality whose dot was pressed (its model asked for first if it is not kept) and cuts the picture out again with it. */
+    async function chooseQuality(id: string, button: HTMLElement) {
         const was = asking.tier().id;
-        if (!(await asking.choose(button))) return fill();
+        if (id === was && cut) return fill();
+        if (!(await asking.use(id, button))) return fill();
         fill();
-        if (asking.tier().id === was && cut) return;
         // with many, every picture is cut again with the quality chosen, the one shown first
         if (entries.length > 1) {
             for (const entry of entries) {
@@ -429,8 +476,6 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         event.preventDefault();
         void takeAll(found, { x: event.clientX, y: event.clientY });
     });
-    choose.addEventListener("click", () => chooser.click());
-    pasteButton.addEventListener("click", () => void pasteFromMenu());
     // true while the chooser is open to add pictures to the many shown rather than to start again
     let addingByChooser = false;
     chooser.addEventListener("change", () => {
@@ -460,7 +505,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         menu: (index, x, y, keyboard) => openEntryMenu(index, x, y, keyboard),
         drop: (files, place) => void addAll(files, place),
     });
-    root.insertBefore(strip.element, bar);
+    left.insertBefore(strip.element, status);
     /** A small picture drawn as its cut-out is laid, or as it came until it is cut. */
     function drawnOf(entry: Entry): StripItem["pixels"] {
         if (!entry.small) return undefined;
@@ -591,10 +636,10 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         Object.assign(entryAnchor.style, { left: `${x}px`, top: `${y}px`, height: "0px" });
         if (!entryAnchor.isConnected) document.body.append(entryAnchor);
         const adding: MenuItem[] = [
-            { label: "Add pictures", icon: "plus", key: "add-pictures", run: () => ((addingByChooser = true), chooser.click()) },
-            { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste-into", run: () => void pasteInto() },
+            { label: "add pictures", icon: "plus", key: "add-pictures", run: () => ((addingByChooser = true), chooser.click()) },
+            { label: "paste", icon: "paste", hint: "Ctrl+V", key: "paste-into", run: () => void pasteInto() },
         ];
-        const lines = index < 0 ? adding : ruled([{ label: "Save this one", icon: "download", key: "save-one", run: () => void showEntry(index).then(() => save()) }, { label: "Copy this one", icon: "copy", key: "copy-one", run: () => void showEntry(index).then(() => copy()) }], adding, [{ label: "Take out", icon: "trash", key: "take-out", disabled: !!saving, run: () => void takeOut(index) }]);
+        const lines = index < 0 ? adding : ruled([{ label: "save this one", icon: "download", key: "save-one", run: () => void showEntry(index).then(() => save()) }, { label: "copy this one", icon: "copy", key: "copy-one", run: () => void showEntry(index).then(() => copy()) }], adding, [{ label: "take out", icon: "trash", key: "take-out", disabled: !!saving, run: () => void takeOut(index) }]);
         entryMenu.open(entryAnchor, lines, keyboard);
         if (!keyboard) entryMenu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
     }

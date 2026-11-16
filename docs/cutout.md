@@ -14,8 +14,8 @@ its working name.
   and of the old background near each place; `applyOne`, one full-size pixel as the card makes it.
 - `render.ts`: the full-size pass on the card through WebGL2, in pieces of at most 2048 a side; `cutHere`,
   the same on the processor.
-- `asking.ts`: the first-use dialog (the qualities as cards, fetched only when told) and the one for the
-  model that picks a subject by a press.
+- `asking.ts`: the first-use dialog (the qualities as cards in one step, fetched only when told), a quality
+  taken by name, and the dialog for the model that picks a subject by a press.
 - `page.ts`: the page, one picture or many; `src/pages/cutout.astro`, `src/scripts/cutout.ts` (the site's
   colors offered), `src/styles/quire-cutout.css`. Many pictures use imgQuire's batch pieces: the strip
   (`batch-strip.ts`), the names and the zip or folder (`batch.ts`, `batch-out.ts`) and the small copies
@@ -25,18 +25,34 @@ its working name.
 
 ## Built
 
-**The page.** Empty, it says one line and offers Choose a picture (and on a phone, where there is no
-right-click and no keys, a plain Paste button). A picture comes in four ways: Ctrl+V, a drop, a file chosen,
-and Paste from the right-click menu (the clipboard read through the browser; where it refuses, the page says
-to press Ctrl+V). It is shown at once; the first time a dialog in the reading dialog's family says what is
-needed (a model, downloaded once from Hugging Face, kept in this browser, run on this machine, the picture
-never leaving it), then the qualities as cards, and Download and cut out; nothing is fetched until then, and
-after that there is no dialog. While it works a quiet line breathes over the picture's foot. Then the
-cut-out on a checkerboard, and under it, never over it: Copy (the main button), Save, Clear, Color (the
-site's colors grow out beside it), Blur, Keep, Remove, the quality, Original (held, as the backslash is) and
-Choose another picture. A press on the picture keeps the thing pressed when there are several. A right-click
-opens a menu in the site's family: Paste and Choose a picture when empty; Copy, Save, Paste, then Keep and
-Remove with a cut-out; Shift leaves the browser's own.
+**The page.** It opens the way a mini or a project does (`layouts/Opened.astro`): the site's name and the
+trail "tools / Cut-out", a small label, its name, one line saying what it does, then one box with a rule round
+it. Its way back is the front page until there is a list of tools. In the box the picture is on the left and a
+column of controls on the right, written the way the Walker's column is: a small heading for each group, round
+dots for a choice of one, words in the accent to press, thin rules between, no boxed buttons, and every label
+in lowercase as the site's own are. The groups are background (clear, color, blur; the site's colors grow out
+under "color"), touch up (keep, remove: a brush, pressed again to put it down), quality (quick, best), then
+copy (the main one) and save, then hold to see the original (as the backslash is) and choose another picture.
+The column is there from the start, faint and out of reach until it has something to act on, so nothing appears
+from nowhere; the quality and another picture need only a picture, so a quality that found nothing can be
+changed. In a narrow window the column goes under the picture. Before 16 November 2026 the page stood bare
+under the editor's top line with one row of boxed buttons under the picture; the owner found the row
+confusing and the tools unlike each other and unlike the site, and chose this frame, the column, lowercase and
+the same words under headings. The cut-out is the first tool brought to it.
+
+Empty, the box says one line and offers "choose a picture" (and on a phone, where there is no right-click and
+no keys, a plain "paste"). A picture comes in four ways: Ctrl+V, a drop, a file chosen, and paste from the
+right-click menu (the clipboard read through the browser; where it refuses, the page says to press Ctrl+V).
+It is shown at once; the first time a dialog in the reading dialog's family says what is needed (a model,
+downloaded once from Hugging Face, kept in this browser, run on this machine, the picture never leaving it)
+and shows the two qualities as cards in the same step, with "download and cut out"; nothing is fetched until
+then, and after that there is no dialog. A quality whose dot is pressed and whose model is not kept is asked
+for alone; told "not now", the quality in use is the one it was. While it works a line under the picture says
+so; when it is done the same line says what was done. Then the cut-out on a checkerboard, the picture as it
+was fading out over it in 0.6 s (also when the cut-out is laid on another ground or cut again; a stroke of the
+brush is drawn at once, and under reduced motion nothing fades). A press on the picture keeps the thing
+pressed when there are several. A right-click opens a menu in the site's family: paste and choose a picture
+when empty; copy, save, paste, then keep and remove with a cut-out; Shift leaves the browser's own.
 
 **The qualities.** Two, standing two in a row as cards of their usual size: Quick, MODNet (13 MB, made for
 people), and Best, BiRefNet lite at 512 by 512 (98 MB, `studioludens/birefnet-lite-512`, a converted copy of
