@@ -440,6 +440,11 @@ textarea.quire-img-writing {
     padding-right: var(--beside);
 }
 
+/* version history (core/versions.ts) is the core's panel, wider than the editor's own, and the room gives it its whole width */
+.quire-img-editor .quire-img-room.beside.history {
+    --beside: calc(min(26rem, 100vw - 2rem) + 1.5rem);
+}
+
 @media (max-width: 40rem) {
     .quire-img-export {
         top: auto;
@@ -455,6 +460,12 @@ textarea.quire-img-writing {
         --beside: 0px;
         padding-right: 0;
         padding-bottom: calc(min(26rem, 55dvh) + 0.5rem);
+    }
+
+    /* on a phone version history fills the screen from the bar down, so there is no room to give it; the picture stays as it is under it */
+    .quire-img-editor .quire-img-room.beside.history {
+        --beside: 0px;
+        padding-bottom: 0;
     }
 }
 

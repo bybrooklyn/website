@@ -488,6 +488,8 @@ single keys C, R, A, T, B, N, H, M, S, E, I, W, G, K and P only while the pictur
 Escape also from the tool's own controls in its strip (the dial, a shape, a color), which then gives the keyboard
 back to the picture; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
+Like the editor's own panels it never lies over the picture: the room gives it its width while it is open, and
+the picture glides into what is left and back when it closes (on a phone it fills the screen, as everywhere).
 
 **A right-click's menu** (`press-menu.ts`, opened in `editor.ts`), as mdQuire's text has one. On the
 picture: Copy, Copy text when words were read, Paste, and Export under a rule. On a mark or a cover, that

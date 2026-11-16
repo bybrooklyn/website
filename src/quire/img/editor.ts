@@ -1071,6 +1071,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 void open(snapshotParts(text).markdown).then(() => session.changed());
             },
             focus: () => stage.element.focus({ preventScroll: true }),
+            closed: () => beside(),
         },
         session.versions,
         session.historyKey,
@@ -1990,8 +1991,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
     }
     /** The picture keeps its room narrowed while one of the panels is open, and has it back when none is. */
     const beside = () => {
-        room.classList.toggle("beside", exporting.isOpen() || showing.isOpen() || grading.isOpen());
+        room.classList.toggle("beside", exporting.isOpen() || showing.isOpen() || grading.isOpen() || historyPanel.isOpen());
         room.classList.toggle("grading", grading.isOpen());
+        // version history is wider than the editor's own panels, and its room is as wide as it is
+        room.classList.toggle("history", historyPanel.isOpen());
     };
     const showing = factsPanel({
         closed: () => (beside(), refresh()),
@@ -2412,7 +2415,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     ],
                     [
                         { label: "Rename", icon: "rename", form: () => fieldForm({ value: where.name, label: "Name", button: "Rename" }, { set: (value) => void session.rename(value) }), run: () => {} },
-                        { label: "Version history", icon: "history", disabled: !picture, run: () => void historyPanel.open() },
+                        { label: "Version history", icon: "history", disabled: !picture, run: () => void historyPanel.open().then(beside) },
                     ],
                 ),
         },

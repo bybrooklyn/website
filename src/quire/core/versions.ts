@@ -231,6 +231,8 @@ export interface VersionView {
     restore(text: string): void;
     /** Gives the keyboard back to the writing. */
     focus(): void;
+    /** The panel has been closed, however it was (Escape, a press outside, a version restored), for an editor that made room for it. */
+    closed?(): void;
 }
 
 /** Builds the history panel for a kind of document. */
@@ -326,6 +328,7 @@ export function createHistoryPanel(view: VersionView, storage: VersionStorage, n
         panel.inert = true;
         document.removeEventListener("keydown", keys);
         document.removeEventListener("pointerdown", outside, true);
+        view.closed?.();
     }
 
     return { element: panel, open, close, isOpen: () => panel.classList.contains("open") };

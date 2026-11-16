@@ -131,16 +131,29 @@ test("every line of the menus has an icon, and the menu words are File, Edit, Vi
     await page.tab.press("Escape");
 }, 30_000);
 
-test("version history draws a version's steps over the original", async () => {
+test("version history draws a version's steps over the original, and never lies over the picture, which glides aside as it opens and back as it closes", async () => {
     if (!page) return;
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
+    // the room as it is with no panel open, once an earlier panel has given its width back
+    await page.tab.wait(700);
+    const wide = await page.boxOf(".quire-img-stage");
     await page.tab.press("f", { alt: true });
     await page.until("document.querySelector('.quire-menu:popover-open .quire-menu-line')");
     await page.tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-line')].find((line) => line.textContent.includes('Version history')).click()");
     await page.until("document.querySelector('.quire-history.open .quire-history-item')");
+    // the room has given the panel its width once both have moved, and the picture is fitted into what is left
+    await page.tab.wait(900);
+    const panel = await page.boxOf(".quire-history");
+    const stage = await page.boxOf(".quire-img-stage");
+    expect(stage.x + stage.width).toBeLessThanOrEqual(panel.x);
+    const right = await page.tab.run<number>("(() => { const s = window.app.editing().stage; const size = s.loaded().size; return Math.max(...[[0, 0], [size.width, 0], [size.width, size.height], [0, size.height]].map(([x, y]) => s.toScreen({ x, y }).x)) + document.querySelector('.quire-img-stage').getBoundingClientRect().x; })()");
+    expect(right).toBeLessThanOrEqual(panel.x);
     await page.tab.run("document.querySelector('.quire-history-item').click()");
     await page.until("document.querySelector('.quire-history-preview canvas.quire-img-version')?.width > 0");
     expect(await page.tab.run<number>("document.querySelector('.quire-img-version').width")).toBeLessThanOrEqual(360);
     await page.tab.press("Escape");
     await page.tab.press("Escape");
+    // closed, the room is whole again
+    await page.tab.wait(900);
+    expect(await page.boxOf(".quire-img-stage")).toEqual(wide);
 }, 30_000);
