@@ -1,21 +1,26 @@
 // A picture that has just arrived is poured in: its place, which was holding one calm color taken
 // from the picture, opens in a few blobs that swell from different points, wobble and run together
-// until the whole picture shows. The blobs are worked out here, frame by frame, and the same picture
-// always pours the same way. Nothing is drawn for a picture that was already there, or for anyone
-// who has asked for less motion.
+// until the whole picture shows. The blobs are liquid: where two come near they reach for each other
+// and join by a neck, and their edges are soft. They are worked out here, frame by frame, and the same picture always pours the same way.
+// Nothing is drawn for a picture that was already there, or for anyone who has asked for less motion.
 //
 //   pour(img)                 pours a picture that has arrived, over its own color
 //   watchPictures(document)   pours each marked picture (`data-pour`) as it arrives
 
 import { still } from "./opening";
 
-/** How a pour goes: how long it takes in milliseconds, and how many blobs there are. */
+/**
+ * How a pour goes: how long it takes in milliseconds; how many blobs there are; how soft their edges are (0 a hard edge, 1 the
+ * usual, more softer still); and how far out of focus the picture starts, in hundredths of its shorter side (0 for sharp throughout).
+ */
 export interface Pouring {
     time: number;
     blobs: number;
+    soft: number;
+    focus: number;
 }
 
-const USUAL: Pouring = { time: 620, blobs: 5 };
+const USUAL: Pouring = { time: 1600, blobs: 5, soft: 1, focus: 0 };
 const SVG = "http://www.w3.org/2000/svg";
 let made = 0;
 
@@ -107,7 +112,7 @@ function roundingOf(img: HTMLElement): string {
  * blob, and the holes grow until nothing of the cover is left. Resolves when the picture is whole.
  */
 export function pour(img: HTMLImageElement, how: Partial<Pouring> = {}): Promise<void> {
-    const { time, blobs: count } = { ...USUAL, ...how };
+    const { time, blobs: count, soft, focus } = { ...USUAL, ...how };
     const width = img.offsetWidth;
     const height = img.offsetHeight;
     const home = img.offsetParent ?? img.parentElement;
@@ -125,12 +130,31 @@ export function pour(img: HTMLImageElement, how: Partial<Pouring> = {}): Promise
     whole.setAttribute("width", String(width));
     whole.setAttribute("height", String(height));
     whole.setAttribute("fill", "#fff");
-    mask.append(whole);
+    // What makes the blobs liquid: they are blurred together, the blur is drawn back to an edge (so two near each other join by a
+    // neck, as drops do), and that edge is blurred a little again, so it is soft. All of it by the frame's own size.
+    const side = Math.min(width, height);
+    const [join, soften] = [Math.max(4, side * 0.045), side * 0.03 * soft];
+    const room = Math.ceil((join + soften) * 3);
+    const liquid = document.createElementNS(SVG, "filter");
+    liquid.id = `${id}-liquid`;
+    liquid.setAttribute("filterUnits", "userSpaceOnUse");
+    liquid.setAttribute("color-interpolation-filters", "sRGB");
+    for (const [name, value] of [["x", -room], ["y", -room], ["width", width + room * 2], ["height", height + room * 2]] as const) liquid.setAttribute(name, String(value));
+    const joined = document.createElementNS(SVG, "feGaussianBlur");
+    joined.setAttribute("stdDeviation", join.toFixed(1));
+    const edged = document.createElementNS(SVG, "feColorMatrix");
+    edged.setAttribute("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9");
+    const softened = document.createElementNS(SVG, "feGaussianBlur");
+    softened.setAttribute("stdDeviation", soften.toFixed(1));
+    liquid.append(joined, edged, ...(soften > 0.2 ? [softened] : []));
+    const pool = document.createElementNS(SVG, "g");
+    pool.setAttribute("filter", `url(#${liquid.id})`);
+    mask.append(whole, pool);
     const shapes = blobsFor(seedOf(img.currentSrc || img.src), count);
     const holes = shapes.map(() => {
         const hole = document.createElementNS(SVG, "path");
         hole.setAttribute("fill", "#000");
-        mask.append(hole);
+        pool.append(hole);
         return hole;
     });
     const ground = document.createElementNS(SVG, "rect");
@@ -138,8 +162,15 @@ export function pour(img: HTMLImageElement, how: Partial<Pouring> = {}): Promise
     ground.setAttribute("height", String(height));
     ground.setAttribute("fill", color);
     ground.setAttribute("mask", `url(#${id})`);
-    cover.append(mask, ground);
+    cover.append(liquid, mask, ground);
     img.after(cover);
+    // if asked, the picture itself comes into focus as it is poured; its blur is kept inside its own frame, where it would spread past the edges
+    const framed = img.style.clipPath;
+    let focusing: Animation | undefined;
+    if (focus > 0) {
+        img.style.clipPath = `inset(0 round ${roundingOf(img)})`;
+        focusing = img.animate([{ filter: `blur(${((side * focus) / 100).toFixed(1)}px)` }, { filter: "blur(0px)" }], { duration: time, easing: "cubic-bezier(0.3, 0, 0.2, 1)" });
+    }
     return new Promise((done) => {
         const started = performance.now();
         const frame = (now: number) => {
@@ -147,6 +178,8 @@ export function pour(img: HTMLImageElement, how: Partial<Pouring> = {}): Promise
             shapes.forEach((shape, index) => holes[index]!.setAttribute("d", outline(shape, at, width, height)));
             if (at < 1 && cover.isConnected) return void requestAnimationFrame(frame);
             cover.remove();
+            focusing?.cancel();
+            img.style.clipPath = framed;
             done();
         };
         requestAnimationFrame(frame);
