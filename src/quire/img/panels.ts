@@ -290,7 +290,7 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     const giving = make("div", "quire-img-give");
     giving.append(give, giveSaid);
     all.append(own, giving, ways, going);
-    side.body.append(formats, lossy, keeping, colors, note, result, pair, all, actions);
+    side.body.append(formats, lossy, keeping, colors, note, all, result, pair, actions);
 
     const changed = (to: Partial<Settings>) => {
         const next = { ...hooks.settings(), ...to };

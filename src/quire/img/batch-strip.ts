@@ -117,6 +117,11 @@ export function batchStrip(hooks: StripHooks) {
         row.scrollTo({ left: goal, behavior: instant || still() ? "instant" : "smooth" });
     }
 
+    // when the strip's width changes (the window, a phone turned) the current picture is brought into view again
+    let width = 0;
+    const watcher = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => row.clientWidth !== width && ((width = row.clientWidth), reveal(true)));
+    watcher?.observe(row);
+
     /**
      * Shows the batch's small pictures, the current one marked and brought into view. With fewer than two the
      * strip shrinks away. A small picture new to the strip arrives after the one before it; one taken out
