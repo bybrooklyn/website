@@ -15,11 +15,16 @@ export const WAV_MOST = 0xffffffff;
 /** The usual speakers for each number of channels up to eight, as WAVE_FORMAT_EXTENSIBLE's mask writes them. */
 const SPEAKERS = [0, 0x4, 0x3, 0x7, 0x33, 0x37, 0x3f, 0x13f, 0x63f];
 
-/** A sample from -1 to 1 as an integer of so many bits: scaled by half the range, rounded to the nearest, and held inside the range. FLAC uses the same, so that the two give the same numbers. */
+/**
+ * A sample from -1 to 1 as an integer of so many bits: scaled by half the range, rounded to the nearest,
+ * and held inside the range. FLAC uses the same, so that the two give the same numbers. A positive 16-bit
+ * sample is scaled by 32767, as Chromium's decoder divides it, so that a 16-bit sound read by the browser
+ * is written back with exactly the integers it had (its 24-bit samples are divided by 2 to the 23rd both ways).
+ */
 export function toInteger(value: number, bits: number): number {
     const half = 2 ** (bits - 1);
     if (!(value === value)) return 0;
-    const scaled = Math.round(value * half);
+    const scaled = Math.round(value * (bits === 16 && value > 0 ? half - 1 : half));
     return scaled >= half ? half - 1 : scaled < -half ? -half : scaled + 0;
 }
 

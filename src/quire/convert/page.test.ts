@@ -44,6 +44,10 @@ export async function convertPage(sides: string, extra = "") {
         import { FORMATS, formatOf, underWeight } from "${quire}/img/export.ts";
         import { blocksOut } from "${quire}/img/metadata.ts";
         import { textSide } from "${quire}/convert/text-side.ts";
+        import { audioSide } from "${quire}/convert/audio-side.ts";
+        import { wavHeader, wavSamples } from "${quire}/convert/wav.ts";
+        window.audioSide = audioSide;
+        window.wavOf = (seconds, rate = 44100) => { const frames = seconds * rate; const tone = Float32Array.from({ length: frames }, (_, at) => 0.5 * Math.sin(2 * Math.PI * 440 * at / rate)); return new File([wavHeader({ sampleRate: rate, channels: 2, bits: 16, frames }), wavSamples([tone, tone], 16)], "tone.wav", { type: "audio/wav" }); };
         import { readHtml, writeHtml } from "${quire}/md/html.ts";
         import { read } from "${quire}/md/read.ts";
         import { write } from "${quire}/md/write.ts";
@@ -250,6 +254,43 @@ test("in Chromium, text pasted and dropped converts both ways, a shape that cann
         await tab.run("document.querySelector('.quire-convert-row .quire-convert-copy').click()");
         await until("window.copied.length === 1");
         expect(JSON.parse(await tab.run<string>("window.copied[0]"))).toEqual([{ name: "Ada", age: "36" }, { name: "Hopper, Grace", age: "85" }]);
+        expect(tab.errors).toEqual([]);
+    } finally {
+        await page.close();
+    }
+}, 120_000);
+
+test("in Chromium, a sound dropped says its rate and length, converts to FLAC and to Opus, and what this browser cannot write is said beside the choice", async () => {
+    const page = await convertPage("[window.audioSide()]");
+    if (!page) return;
+    const { tab } = page;
+    const { until, pressText } = driver(tab);
+    try {
+        await tab.serve(ELSEWHERE, async () => undefined);
+        await tab.run(`(() => { const data = new DataTransfer(); data.items.add(window.wavOf(2)); document.querySelector(".quire-convert").dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true })); })()`);
+        await until("window.convert.rows()[0]?.label === 'WAV sound, 44.1 kHz stereo 0:02'");
+        // the browser is asked what it writes; AAC, which Chromium on Linux does not write, is said so
+        await until("!document.querySelector('[data-kind=audio] .quire-convert-choice[title^=\"Asking\"]')");
+        const aac = await tab.run<{ cannot: boolean; title: string }>("(() => { const b = [...document.querySelectorAll('[data-kind=audio] .quire-convert-choice')].find((each) => each.textContent === 'AAC M4A'); return { cannot: b.classList.contains('cannot'), title: b.title }; })()");
+        const writesAac = await tab.run<boolean>("AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }).then((answer) => answer.supported)");
+        expect(aac.cannot).toBe(!writesAac);
+        const notes = await tab.run<string[]>("[...document.querySelectorAll('[data-kind=audio] .quire-convert-note')].map((each) => each.textContent)");
+        if (!writesAac) {
+            expect(aac.title).toBe("This browser cannot write AAC.");
+            expect(notes).toContain("This browser cannot write AAC, so it is not offered here.");
+        }
+        expect(notes).toContain("MP3 is read and not written: no MP3 encoder has a free license, and browsers do not write MP3.");
+        await pressText("Convert");
+        await until("window.convert.rows()[0].state === 'done'");
+        expect(await tab.run("window.convert.rows()[0].made.name")).toBe("tone.flac");
+        expect(await tab.run("window.convert.rows()[0].made.facts")).toBe("44.1 kHz stereo, 0:02");
+        await pressText("Opus Ogg");
+        expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to FLAC");
+        await tab.run("(() => { const row = document.querySelector('.quire-convert-row'); const b = row.getBoundingClientRect(); row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 30, clientY: b.y + 20 })); })()");
+        await until("document.querySelector('.quire-menu:popover-open')");
+        await tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-items button')].find((each) => each.textContent.includes('Convert again')).click()");
+        await until("window.convert.rows()[0].state === 'done' && window.convert.rows()[0].made.name === 'tone.opus'");
+        expect(await tab.run("window.convert.rows()[0].made.facts")).toBe("48 kHz stereo, 0:02");
         expect(tab.errors).toEqual([]);
     } finally {
         await page.close();
