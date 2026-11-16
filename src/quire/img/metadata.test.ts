@@ -174,17 +174,17 @@ test("on the built /imgquire/ page, a phone's photograph shows upright with its 
             saved[`${label} ${keep}`] = Uint8Array.from(Buffer.from(base64, "base64"));
             await tab.run("delete window.saved[" + JSON.stringify(name) + "]");
         }
-        const none = factsOf(saved["JPEG None"]!);
+        const none = factsOf(saved["JPEG none"]!);
         // a picture with no steps going out in its own format is its original with where, when and with what cut out: only how it is turned and its colour profile, which change how it looks, stay
         expect(none.rows.map(([name]) => name).filter((name) => name !== "Color profile" && name !== "Orientation")).toEqual([]);
         expect(none.found.caption).toBeUndefined();
-        for (const key of ["JPEG No place", "WebP No place", "PNG No place"]) {
+        for (const key of ["JPEG no place", "WebP no place", "PNG no place"]) {
             const read = factsOf(saved[key]!);
             expect({ key, caption: read.found.caption, place: read.place, camera: read.rows.find(([name]) => name === "Camera")?.[1] }).toEqual({ key, caption: "A cat on a wall", place: undefined, camera: "PhoneMaker Pocket 9" });
             const theirs = await sharp(saved[key]!).metadata();
             expect([theirs.width, theirs.height, theirs.orientation ?? 1]).toEqual([8, 12, 1]);
         }
-        for (const key of ["AVIF All", "JXL All"]) {
+        for (const key of ["AVIF all", "JXL all"]) {
             const read = factsOf(saved[key]!);
             expect({ key, caption: read.found.caption, place: !!read.place }).toEqual({ key, caption: "A cat on a wall", place: true });
         }
