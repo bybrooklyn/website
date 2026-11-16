@@ -16,9 +16,6 @@ function film(seconds: number) {
     return { video, audio };
 }
 
-const avcC = new Uint8Array([1, 0x64, 0, 0x28, 0xff, 0xe1, 0, 4, 0x67, 0x64, 0, 0x28, 1, 0, 4, 0x68, 0xee, 0x3c, 0x80]);
-const asc = new Uint8Array([0x11, 0x90]);
-
 test("WebM: samples of a film and its sound come back in time order, byte for byte, with times, lengths and key frames", async () => {
     const { video, audio } = film(4);
     const writer = createWebm([

@@ -31,7 +31,7 @@ export function pictureSide(engine: PictureEngine): Side {
         kind: "picture",
         element: make("div"),
         lane: "picture",
-        becomes(item: Item): Becoming {
+        becomes(): Becoming {
             const format = engine.formats.find((each) => each.key === choice.format)!;
             return { label: pictureWords(choice, format.label), ending: format.ending };
         },

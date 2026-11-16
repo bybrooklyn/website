@@ -184,8 +184,8 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
 
     /** Adds a file to the list, its row growing in. */
     async function add(file: Blob, name: string) {
-        const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
-        let found: Found = kindOf(head, name, file.type);
+        // the row is made at once, so that files keep the order they came in; what each is follows from its first bytes
+        let found: Found = kindOf(new Uint8Array(), name, file.type);
         const item: Item = { file, name, found, options: {} };
         const element = make("li", "quire-convert-row arriving");
         const inner = make("div", "quire-convert-row-in");
@@ -217,6 +217,10 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
         list.append(element);
         // the row grows from no height on the next frame, so the change is seen
         requestAnimationFrame(() => requestAnimationFrame(() => element.classList.remove("arriving")));
+        row.status.textContent = "Reading";
+        found = kindOf(new Uint8Array(await file.slice(0, 64).arrayBuffer()), name, file.type);
+        item.found = found;
+        what.textContent = found.label;
         // a closer look by the side of its kind, and by the side of another kind if the first finds it is one (a film's container holding only sound)
         for (let look = 0; look < 2; look++) {
             const side = sides.find((each) => each.kind === found.kind);
