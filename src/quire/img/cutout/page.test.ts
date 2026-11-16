@@ -262,6 +262,7 @@ test("in Chromium, where the model finds nothing the page says to press the thin
     const said = () => tab.run<string>("document.querySelector('.quire-bench-said').textContent");
     try {
         await until("window.ready === true");
+        expect(await tab.run("document.querySelector('.quire-cut-view').inert")).toBe(true);
         await tab.run("window.scene().then((file) => { const data = new DataTransfer(); data.items.add(file); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })); })");
         // the model found nothing: the picture is left as it was, and the line says the next step
         await until("document.querySelector('.quire-bench-said').textContent.includes('Press')");
@@ -284,6 +285,19 @@ test("in Chromium, where the model finds nothing the page says to press the thin
         expect(await tab.run<number>("window.alphaAt(300, 400)")).toBeGreaterThan(200);
         expect(await tab.run<number>("window.alphaAt(600, 80)")).toBeLessThan(20);
         expect(await tab.run("window.asked")).toEqual(["matte cut-best", "select small 1", "select small 2"]);
+        // Ctrl+Z takes one press back, then the other, to the picture as the model left it; Ctrl+Shift+Z brings a press again
+        await tab.press("z", { ctrl: true });
+        await until("window.cutout.cut()?.presses?.length === 1 && window.alphaAt(900, 400) < 20");
+        expect(await tab.run<number>("window.alphaAt(300, 400)")).toBeGreaterThan(200);
+        await tab.press("z", { ctrl: true });
+        await until("!window.cutout.cut() && !window.cutout.result()");
+        expect(await said()).toBe(CUT_WORDS.nothing);
+        expect(await tab.run("document.querySelector('.quire-cut').classList.contains('pressable')")).toBe(true);
+        await tab.press("z", { ctrl: true, shift: true });
+        await until("window.cutout.cut()?.presses?.length === 1 && window.cutout.result()");
+        expect(await tab.run<number>("window.alphaAt(300, 400)")).toBeGreaterThan(200);
+        // with no picture the picture's place takes no press, so the box's own "choose a picture" can be pressed through it
+        expect(await tab.run("document.querySelector('.quire-cut-view').inert")).toBe(false);
     } finally {
         await page.close();
     }

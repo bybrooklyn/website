@@ -52,8 +52,15 @@ then, and after that there is no dialog. A quality whose dot is pressed and whos
 for alone; told "not now", the quality in use is the one it was. While it works a line under the picture says
 so; when it is done the same line says what was done. Then the cut-out on a checkerboard, the picture as it
 was fading out over it in 0.6 s (also when the cut-out is laid on another ground or cut again; a stroke of the
-brush is drawn at once, and under reduced motion nothing fades). A press on the picture keeps the thing
-pressed when there are several. A right-click opens a menu in the site's family: paste and choose a picture
+brush is drawn at once, and under reduced motion nothing fades). A press on the picture with a cut-out, as `pressedCut` in `cut.ts` has it: pressed on
+something the cut-out keeps, only that thing stays, as when a picture holds several and one is wanted; pressed on
+something it left out, that thing is added; a press that would leave next to nothing changes nothing and says so.
+Before 16 November 2026 a press always kept only the thing pressed, so a press on the background threw the whole
+cut-out away, with no way back. Ctrl+Z now takes back a press or a stroke of the brush, one at a time, and
+Ctrl+Shift+Z brings it again. With no picture the picture's place takes no press, so the box's own "choose a
+picture" can be pressed (an empty canvas had lain over it); a picture smaller than the room is shown at whole
+multiples of itself with its pixels square; a file that is no picture is named in the line, since the picture
+shown stays the one before; Page Down and Up step through many pictures wherever the keyboard is. A right-click opens a menu in the site's family: paste and choose a picture
 when empty; copy, save, paste, then keep and remove with a cut-out; Shift leaves the browser's own.
 
 **The qualities.** Two, standing two in a row as cards of their usual size: Quick, MODNet (13 MB, made for

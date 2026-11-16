@@ -77,6 +77,8 @@
     max-width: 100%;
     opacity: 0;
     scale: 0.98;
+    /* with no picture it is an empty canvas over the box's own words: it takes no press, or "choose a picture" could not be pressed */
+    pointer-events: none;
     transition:
         opacity 0.25s ease,
         scale 0.35s var(--ease);
@@ -85,6 +87,14 @@
 .quire-cut.shown .quire-cut-view {
     opacity: 1;
     scale: 1;
+    pointer-events: auto;
+}
+
+/* a picture smaller than the room is grown to whole multiples of itself, its pixels kept square and sharp */
+.quire-cut-view.small > canvas {
+    width: var(--grown);
+    max-height: none;
+    image-rendering: pixelated;
 }
 
 .quire-cut-view > canvas {

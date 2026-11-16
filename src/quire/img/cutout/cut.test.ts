@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { encodeRuns } from "../masks";
-import { blank, FOUND_NOTHING, findCut, maskOf } from "./cut";
+import { blank, FOUND_NOTHING, findCut, maskOf, pressedCut, valuesOf } from "./cut";
 
 const SIZE = { width: 20, height: 10 };
 const half = () => {
@@ -47,4 +47,30 @@ test("a mask with next to nothing kept, or all of it, is no cut-out: it is said 
     await expect(findCut(finder(whole), "cut-best", picture)).rejects.toThrow(FOUND_NOTHING);
     expect(runs).toBe(3);
     expect(FOUND_NOTHING).toBe("nothing was found to cut out, so the picture is left as it was");
+});
+
+test("a press on a cut-out keeps only the thing pressed where it was kept, adds the thing where it was left out, and never throws the cut-out away", () => {
+    // a picture 40 by 20, its mask at the same size: the left half was found
+    const mask = (inside: (x: number, y: number) => boolean) => ({ width: 40, height: 20, runs: encodeRuns(Uint8Array.from({ length: 800 }, (_, index) => (inside(index % 40, Math.floor(index / 40)) ? 255 : 0))) });
+    const picture = { width: 40, height: 20 };
+    const cut = { found: mask((x) => x < 20), background: "clear" as const };
+    const at = (found: { width: number; height: number; runs: string }, x: number, y: number) => valuesOf(found)![y * 40 + x]!;
+    // pressed on what is kept: only the thing pressed stays, the mask found left as it was
+    const thing = mask((x, y) => x >= 4 && x < 12 && y >= 4 && y < 12);
+    const kept = pressedCut(cut, thing, { x: 8, y: 8 }, picture)!;
+    expect(kept.found).toEqual(cut.found);
+    expect(kept.pick).toEqual(thing);
+    // pressed on what was left out: that thing is added to what is kept, and nothing that was kept is lost
+    const other = mask((x, y) => x >= 26 && x < 34 && y >= 4 && y < 12);
+    const more = pressedCut(cut, other, { x: 30, y: 8 }, picture)!;
+    expect(more.pick).toBeUndefined();
+    expect([at(more.found, 8, 8), at(more.found, 30, 8), at(more.found, 37, 16)]).toEqual([1, 1, 0]);
+    // with one thing already kept alone, another pressed is added to that one, and the rest stays out
+    const both = pressedCut(kept, other, { x: 30, y: 8 }, picture)!;
+    expect(both.pick).toBeUndefined();
+    expect([at(both.found, 8, 8), at(both.found, 30, 8), at(both.found, 16, 16)]).toEqual([1, 1, 0]);
+    // a press whose thing hardly meets what is kept would keep nothing: the cut-out is left as it was
+    expect(pressedCut(cut, other, { x: 8, y: 8 }, picture)).toBeUndefined();
+    // a mask that does not read changes nothing
+    expect(pressedCut(cut, { width: 40, height: 20, runs: "!" }, { x: 8, y: 8 }, picture)).toBeUndefined();
 });

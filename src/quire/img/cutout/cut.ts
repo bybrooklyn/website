@@ -8,7 +8,7 @@
 //   const pixels = await cutOut(bitmap, { found, background: "clear" });
 
 import type { Press } from "../parts/segment";
-import { decodeRuns, stamp, type Found, type Stroke } from "../masks";
+import { decodeRuns, encodeRuns, stamp, type Found, type Stroke } from "../masks";
 import { boxMean, lowOf, type Background, type Low } from "./refine";
 import { renderCut, type Behind } from "./render";
 
@@ -80,6 +80,35 @@ function resized(values: Float32Array, from: { width: number; height: number }, 
             out[y * to.width + x] = upper + (lower - upper) * (v - top);
         }
     return out;
+}
+
+/**
+ * What a press on the picture makes of a cut-out the model found, given the press model's outline of the thing pressed (`thing`) and
+ * the place pressed in the picture's pixels. Pressed on something the cut-out keeps, only that thing stays, as when a picture holds
+ * several and one is wanted. Pressed on something it left out, that thing is added to what is kept. A press that would leave next
+ * to nothing changes nothing, and gives nothing back: a press never throws a cut-out away.
+ */
+export function pressedCut(cut: Cut, thing: Found, at: { x: number; y: number }, picture: { width: number; height: number }): Cut | undefined {
+    const found = valuesOf(cut.found);
+    const pressed = valuesOf(thing);
+    if (!found || !pressed) return undefined;
+    const size = { width: cut.found.width, height: cut.found.height };
+    const outline = resized(pressed, thing, size);
+    const narrowed = cut.pick && valuesOf(cut.pick);
+    // what the cut-out keeps now, the brush aside: what was found, within the thing pressed before if one was
+    const kept = narrowed ? resized(narrowed, cut.pick!, size).map((value, index) => Math.min(value, found[index]!)) : found;
+    const x = Math.min(size.width - 1, Math.max(0, Math.floor((at.x / picture.width) * size.width)));
+    const y = Math.min(size.height - 1, Math.max(0, Math.floor((at.y / picture.height) * size.height)));
+    if (kept[y * size.width + x]! > 0.5) {
+        let inside = 0;
+        for (let index = 0; index < kept.length; index++) inside += Math.min(kept[index]!, outline[index]!);
+        // the thing pressed and what is kept hardly meet: keeping only that would keep nothing
+        if (inside / kept.length < 0.002) return undefined;
+        return { ...cut, pick: thing };
+    }
+    const joined = Uint8Array.from(kept, (value, index) => Math.round(Math.max(value, outline[index]!) * 255));
+    const { pick: _narrowed, ...rest } = cut;
+    return { ...rest, found: { ...size, runs: encodeRuns(joined) } };
 }
 
 /**

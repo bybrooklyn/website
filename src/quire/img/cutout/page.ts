@@ -34,7 +34,7 @@ import { atOnce, blobSink, fileSink, folderOut, runEach, zipOut, type Destinatio
 import { batchStrip, type StripItem } from "../batch-strip";
 import { pixelsOf, smallLook, smallOf } from "../thumbs";
 import { createAsking } from "./asking";
-import { blank, cutOut, CUT_SIDE, findCut, FOUND_NOTHING, NOTHING_SAID, type Cut, type Laid } from "./cut";
+import { blank, cutOut, CUT_SIDE, findCut, FOUND_NOTHING, NOTHING_SAID, pressedCut, type Cut, type Laid } from "./cut";
 import type { Press } from "../parts/segment";
 
 /** The words of the page that a visitor reads first. */
@@ -120,6 +120,41 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     let cut: Cut | undefined;
     // true when the model found nothing in the picture shown: a press on the thing wanted is then the way to cut it out
     let nothing = false;
+    // the cut-outs this picture had before each press and each stroke of the brush, and those stepped back from: Ctrl+Z and Ctrl+Shift+Z
+    const past: (Cut | undefined)[] = [];
+    const future: (Cut | undefined)[] = [];
+    const remember = () => {
+        past.push(cut);
+        if (past.length > 100) past.shift();
+        future.length = 0;
+    };
+    /** Puts a cut-out of before (or none, where the model had found nothing) in place of the one shown. */
+    const restore = async (to: Cut | undefined) => {
+        cut = to && { ...to, background: laid, ...(laid === "color" ? { color } : {}) };
+        const entry = entries[at];
+        if (entries.length > 1 && entry) entry.cut = cut;
+        if (cut) await again(true);
+        else {
+            result = undefined;
+            nothing = true;
+            show();
+            fillStrip();
+            say(CUT_WORDS.nothing);
+        }
+        fill();
+    };
+    const back = async () => {
+        if (!past.length || busy) return;
+        future.push(cut);
+        await restore(past.pop());
+        if (cut) say("One step back.");
+    };
+    const forward = async () => {
+        if (!future.length || busy) return;
+        past.push(cut);
+        await restore(future.pop());
+        if (cut) say("One step forward.");
+    };
     let result: ImageData | undefined;
     let laid: Laid = "clear";
     let color = options.colors?.[0]?.value ?? "#ffffff";
@@ -186,6 +221,8 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         root.classList.toggle("cut", !!result);
         root.classList.toggle("clear", laid === "clear" && !!result && !holding);
         root.classList.toggle("pressable", nothing && !result);
+        // with no picture the picture's place is an empty canvas over the box's own words: it takes no press
+        view.inert = !picture;
         box.busy(busy > 0);
         // what acts on a cut-out waits for one; the quality and another picture need only a picture, so a quality that found nothing can be changed
         for (const each of [lays.group, brushes.group, out, original]) each.inert = !result;
@@ -214,6 +251,12 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         canvas.height = source.height;
         over.width = source.width;
         over.height = source.height;
+        // a picture smaller than the room is shown as large as the room allows, each of its pixels a whole square: a picture of 8 by 6
+        // was a dot in the middle of the box
+        const room2 = room.getBoundingClientRect();
+        const grown = Math.floor(Math.min((room2.width - 32) / source.width, (room2.height - 32) / source.height));
+        view.classList.toggle("small", grown >= 2);
+        view.style.setProperty("--grown", grown >= 2 ? `${source.width * grown}px` : "auto");
         const context = canvas.getContext("2d", { colorSpace: space === "p3" ? "display-p3" : "srgb" })!;
         context.clearRect(0, 0, canvas.width, canvas.height);
         if (source instanceof ImageData) context.putImageData(new ImageData(source.data, source.width, source.height, { colorSpace: space === "p3" ? "display-p3" : "srgb" }), 0, 0);
@@ -233,7 +276,8 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         try {
             bitmap = await decode(given);
         } catch {
-            say("That is not a picture this browser can read.");
+            // named, since the picture shown stays the one before it
+            say(given.name ? `${given.name} is not a picture this browser can read.` : "That is not a picture this browser can read.");
             return;
         }
         picture?.close();
@@ -244,6 +288,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         cut = kept && { ...kept, background: laid, ...(laid === "color" ? { color } : {}) };
         result = undefined;
         nothing = false;
+        past.length = future.length = 0;
         brush = undefined;
         const colored = await profileOf(new Uint8Array(await given.arrayBuffer()));
         if (file !== given) return;
@@ -717,6 +762,8 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     });
 
     // ---- the keys: Ctrl+C, Ctrl+S, the backslash held ----
+    /** Whether the keyboard is in the strip of small pictures, which takes the arrows, Home and End itself; Page Down and Up are the page's everywhere. */
+    const inStrip = (target: EventTarget | null) => target instanceof Element && !!target.closest(".quire-img-thumbs");
     const keys = (event: KeyboardEvent) => {
         if (event.target instanceof HTMLElement && event.target.closest("input, textarea")) return;
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && result) {
@@ -727,7 +774,11 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
             void save();
         } else if (event.key === "\\" && result) hold(event.type === "keydown");
         else if (event.key === "Escape" && brush) setBrush(undefined);
-        else if (event.type === "keydown" && entries.length > 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && !(event.target instanceof Element && event.target.closest(".quire-img-thumbs, .quire-menu"))) {
+        else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "z" && event.type === "keydown") {
+            // one step back, or with Shift forward again: a press, a stroke of the brush
+            event.preventDefault();
+            void (event.shiftKey ? forward() : back());
+        } else if (event.type === "keydown" && entries.length > 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && !(event.target instanceof Element && event.target.closest(".quire-menu")) && !(inStrip(event.target) && (event.key === "Home" || event.key === "End"))) {
             // the next and the one before, the first and the last, as in imgQuire
             const to = event.key === "PageDown" ? at + 1 : event.key === "PageUp" ? at - 1 : event.key === "Home" ? 0 : event.key === "End" ? entries.length - 1 : undefined;
             if (to === undefined) return;
@@ -783,6 +834,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
         stroke = undefined;
         over.getContext("2d")!.clearRect(0, 0, over.width, over.height);
         if (done && cut) {
+            remember();
             cut = { ...cut, strokes: [...(cut.strokes ?? []), done] };
             void again();
             return;
@@ -810,6 +862,7 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
                 if (blank(answer.found)) say(CUT_WORDS.nothing);
                 else {
                     const first = !cut;
+                    remember();
                     cut = { ...cut, found: answer.found, presses, background: laid, ...(laid === "color" ? { color } : {}) };
                     nothing = false;
                     // one of many is no longer one that could not be cut out
@@ -820,9 +873,15 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
                 }
             } else {
                 const answer = await finderNow().select(PART_TIERS[0]!.id, key, await createImageBitmap(picture), [press]);
-                cut = { ...cut, pick: answer.found };
-                await again();
-                say("Kept the thing pressed.");
+                // on something kept, only that stays; on something left out, it is added; a press never throws the cut-out away
+                const next = pressedCut(cut, answer.found, press, picture);
+                if (!next) say("Nothing was kept there, so the cut-out is as it was.");
+                else {
+                    remember();
+                    cut = next;
+                    await again();
+                    say("Kept the thing pressed.");
+                }
             }
         } catch (error) {
             say(`Not chosen: ${error instanceof Error ? error.message : String(error)}`);
