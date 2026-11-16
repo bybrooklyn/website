@@ -98,7 +98,10 @@ their lists so the shelf knows the kind without opening it. Nothing in the origi
 **The first second.** The picture fitted under the bar with the crop's frame on it and the strip for the
 crop (five shapes and Apply), the bar above (undo, redo; crop, resize, hide; arrow, box, text; steps and
 export at the right end), and under the picture its size and weight, then the weight it will export at,
-worked out a moment after the steps stop changing.
+worked out a moment after the steps stop changing. While a crop's frame is being set, the line says instead the size the picture
+will be once the frame is applied (a resize after it counted), following every drag, nudge, shape and turn;
+a frame that gives the size there already is leaves the whole line. A new size is said at once, its weight
+when it is worked out.
 
 **Crop.** Handles, the frame dragged, a new frame dragged out from outside it, arrow keys (Shift for ten
 pixels), Shift on a corner or a shape from the strip to hold its shape, Enter to apply; outside dimmed. A

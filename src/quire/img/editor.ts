@@ -49,7 +49,7 @@ import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
 import { gradeOne, hueOf, isNeutral, MOST, neutral, space, trimGrade, type Grade } from "./grade";
 import { megabytes, sizeOf, TIERS } from "./read/models";
-import { add, createHistory, fresh, gradeOf, isMark, look, MARK_KINDS, move, MOST_NUMBER, numbersOf, remove, setOnly, shapeOf, writeSteps, type Align, type Filter, type History, type Kept, type Mark, type MarkKind, type Picture } from "./steps";
+import { add, createHistory, fresh, gradeOf, isMark, look, MARK_KINDS, move, MOST_NUMBER, numbersOf, remove, setOnly, shapeOf, within, writeSteps, type Align, type Filter, type History, type Kept, type Mark, type MarkKind, type Picture, type Rect } from "./steps";
 import { batchName, changesSaid, giveRepair, giveStep, givables, namesFor, picturesSaid, readBatch, resizeSaid, settingsSaid, smallName, whichSaid, writeBatch, type BatchPicture, type Givable } from "./batch";
 import { atOnce, blobSink, fileSink, folderOut, runEach, zipOut, type Destination } from "./batch-out";
 import { batchStrip, type StripItem } from "./batch-strip";
@@ -140,6 +140,25 @@ export function mountEditor(host: HTMLElement, context: Context) {
     empty.append(make("p", "", "Paste or drop a picture"), choose, chooser);
     const facts = make("p", "quire-img-facts");
     facts.setAttribute("aria-live", "polite");
+    // the line's words for the picture as it is, and the crop's frame while one is being set, when the line says the size it would give instead
+    let factsWhole = "";
+    let framing: Rect | undefined;
+    /**
+     * Shows the line under the picture: for the picture as it is, or while a crop's frame is being set, the size the picture will
+     * be once the frame is applied (a resize after the crop counted, as Apply makes it); a frame that gives the size the picture
+     * has already leaves the line whole, its weight with it.
+     */
+    function fillFacts() {
+        if (!framing || !picture) return void (facts.textContent = factsWhole);
+        const size = look({ ...picture, steps: setOnly(history.now(), { type: "crop", rect: within(framing, picture.original) }) });
+        const now = look(picture);
+        facts.textContent = size.width === now.width && size.height === now.height ? factsWhole : sizeLine(size);
+    }
+    /** Puts the line under the picture for the picture as it is. */
+    const setFacts = (text: string) => {
+        factsWhole = text;
+        fillFacts();
+    };
 
     let picture: Picture | undefined;
     let original: Blob | undefined;
@@ -181,6 +200,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
         change: (steps) => commit(steps),
         pen: () => pen,
         moved: () => refresh(),
+        framed: (rect) => {
+            framing = rect;
+            fillFacts();
+        },
         turned: (degrees) => turnTo(degrees),
         cornered: (corners) => cornerTo(corners),
         clear: () => !!picture && look(picture).cutout?.background === "clear",
@@ -292,7 +315,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         colors = { space: "srgb", known: true };
         profile = undefined;
         // the new picture's size at once, its weight when it is worked out; never the last document's
-        facts.textContent = picture ? factsLine(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
+        setFacts(picture ? factsLine(look(picture), picture.original.bytes, kindOf(picture.original)) : "");
         reading.clear();
         stage.clear();
         originalBytes = undefined;
@@ -362,6 +385,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
     function changed() {
         if (!picture) return;
         picture = { ...picture, steps: history.now() };
+        // a new size is said at once, its weight once it is worked out, so that the line never says the size there was
+        const size = look(picture);
+        if (!factsWhole.includes(`${size.width} × ${size.height} px`)) setFacts(sizeLine(size));
         keepCurrent();
         fillStrip();
         void showCut();
@@ -511,7 +537,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 came++;
                 said();
                 fillStrip(from);
-                facts.textContent = picture ? factsLine(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
+                setFacts(picture ? factsLine(look(picture), picture.original.bytes, kindOf(picture.original)) : "");
                 session.changed();
             },
             { atOnce: atOnce() },
@@ -537,7 +563,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             picture = undefined;
             await showItem(at);
         } else if (batched()) keepAt(at);
-        facts.textContent = picture ? factsLine(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
+        setFacts(picture ? factsLine(look(picture), picture.original.bytes, kindOf(picture.original)) : "");
         fillStrip();
         refresh();
         estimate.soon();
@@ -623,7 +649,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     const done = await exported().catch(() => undefined);
                     if (done && now === picture) {
                         const size = look(now);
-                        facts.textContent = factsLine(size, done.blob.size, formatOf(settings.format).label);
+                        setFacts(factsLine(size, done.blob.size, formatOf(settings.format).label));
                         if (exporting.isOpen()) void showExport();
                     }
                 }, 700);
@@ -1058,6 +1084,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         drop: (files, place) => void addPictures(files, place),
     });
     room.append(thumbs.element);
+    /** The line under the picture with its size alone, while its weight is not known yet. */
+    const sizeLine = (size: { width: number; height: number }) => `${batched() ? `${whichSaid(at, items.length)} · ` : ""}${size.width} × ${size.height} px`;
     /** The line under the picture: which of how many in a batch, then its size and the weight it will be given out at. */
     const factsLine = (size: { width: number; height: number }, bytes: number, format: string) => `${batched() ? `${whichSaid(at, items.length)} · ` : ""}${factsSaid(size, bytes, format)}`;
     /** A picture's small copy drawn as it looks, made again only when its steps changed. */
@@ -2347,8 +2375,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (stage.tool() !== "crop") straightening = false;
         const kind = !has ? "none" : running ? "busy" : stage.tool() === "crop" ? (straightening ? "perspective" : "crop") : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : marking || pickedMark() ? "mark" : "none";
         strip.fill(kind);
-        if (picture && !facts.textContent) facts.textContent = factsLine(look(picture), picture.original.bytes, kindOf(picture.original));
-        if (!picture) facts.textContent = "";
+        if (picture && !factsWhole) setFacts(factsLine(look(picture), picture.original.bytes, kindOf(picture.original)));
+        if (!picture) setFacts("");
     }
 
     // ---- the menus, as one table, and the keys ----

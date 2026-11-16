@@ -366,6 +366,39 @@ test("a crop's shape holds while the dial levels the picture, during the drag an
     expect(crop?.rect).toMatchObject({ width: back.width, height: back.height });
 }, 30_000);
 
+test("while a crop's frame is set, the line under the picture says the size the picture will be once it is applied, through a drag, a shape and the dial, and the whole line comes back after", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    const line = () => page!.tab.run<string>("document.querySelector('.quire-img-facts').textContent");
+    await page.until("/1200 × 700 px · /.test(document.querySelector('.quire-img-facts').textContent)");
+    // held part way through a drag of the corner, and let go
+    const corner = await page.onScreen(1200, 700);
+    const to = await page.onScreen(900, 500);
+    await page.tab.down(corner.x, corner.y);
+    for (let at = 1; at <= 6; at++) {
+        await page.tab.move(corner.x + ((to.x - corner.x) * at) / 6, corner.y + ((to.y - corner.y) * at) / 6);
+        await page.tab.wait(16);
+    }
+    await page.tab.wait(50);
+    const held = await frameOf();
+    expect(await line()).toBe(`${held.width} × ${held.height} px`);
+    await page.tab.up(to.x, to.y);
+    const square = await page.middle(".quire-img-strip [aria-label='Square shape']");
+    await page.tab.click(square.x, square.y);
+    await page.tab.wait(50);
+    const shaped = await frameOf();
+    expect(shaped.width).toBe(shaped.height);
+    expect(await line()).toBe(`${shaped.width} × ${shaped.height} px`);
+    await page.tab.run("document.querySelector('.quire-img-dial').focus()");
+    for (let at = 0; at < 4; at++) await page.tab.press("ArrowRight", { shift: true });
+    await page.tab.wait(50);
+    const turned = await frameOf();
+    expect(await line()).toBe(`${turned.width} × ${turned.height} px`);
+    // left without applying: the line is the picture's own again
+    await page.tab.press("Escape");
+    await page.until("/^\\d+ × \\d+ px · /.test(document.querySelector('.quire-img-facts').textContent)");
+}, 30_000);
+
 test("Escape leaves the crop from the tool's own controls, the dial once dragged or a shape pressed, and gives the keyboard back to the picture", async () => {
     if (!page) return;
     await page.paste("screenshot");

@@ -151,6 +151,8 @@ export interface StageHooks {
     pen(): Pen;
     /** The tool changed, or the frame, or what is picked: the bar and the strip follow. */
     moved(): void;
+    /** The crop's frame as it is being set, each time it changes (dragged, nudged, held to a shape, or turned with the picture), or none once no frame is being set. */
+    framed?(frame: Rect | undefined): void;
     /** A line drawn along the horizon asks for this turn, in degrees. */
     turned?(degrees: number): void;
     /** Corners set by hand, a handle let go or nudged: true when they were taken, false when they cannot make a rectangle. */
@@ -472,6 +474,8 @@ export function createStage(hooks: StageHooks) {
 
     // ---- drawing, once a frame at most ----
     let asked = false;
+    // the frame last told to the editor, to tell it only of a change
+    let framedKey = "null";
     // the fading copy and where the picture lay when it was made: a picture moved, zoomed or changed for another while it fades has no
     // copy of the old place lying over it
     let ghost: HTMLCanvasElement | undefined;
@@ -528,6 +532,12 @@ export function createStage(hooks: StageHooks) {
         context.clearRect(0, 0, width, height);
         frame.classList.toggle("shown", !!now && !!loaded && cropping() && !!cropFrame && !cornering);
         for (const handle of cornerGrips) handle.classList.toggle("shown", !!now && !!loaded && cornering);
+        const framing = now && loaded && cropping() && cropFrame && !cornering ? cropFrame : undefined;
+        const key = JSON.stringify(framing ?? null);
+        if (key !== framedKey) {
+            framedKey = key;
+            hooks.framed?.(framing);
+        }
         if (!now || !loaded) return;
         const live = perspectiveNow();
         const { perspective: _kept, turn: _turned, ...flat } = now;
