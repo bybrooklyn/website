@@ -47,6 +47,31 @@ export async function convertPage(sides: string, extra = "") {
         import { audioSide } from "${quire}/convert/audio-side.ts";
         import { wavHeader, wavSamples } from "${quire}/convert/wav.ts";
         window.audioSide = audioSide;
+        import { videoSide } from "${quire}/convert/video-side.ts";
+        import { createMp4 } from "${quire}/convert/mp4.ts";
+        window.videoSide = videoSide;
+        // a short film made in code: H.264 pictures of a moving square, and an Opus tone, in an MP4
+        window.filmOf = async (seconds) => {
+            const W = 320, H = 240, canvas = new OffscreenCanvas(W, H), context = canvas.getContext("2d");
+            const chunks = [], sounds = [];
+            let description, soundDescription;
+            const encoder = new VideoEncoder({ output: (chunk, meta) => { const data = new Uint8Array(chunk.byteLength); chunk.copyTo(data); chunks.push({ data, timestamp: chunk.timestamp, duration: chunk.duration, key: chunk.type === "key" }); if (meta?.decoderConfig?.description) description = new Uint8Array(meta.decoderConfig.description); }, error: (e) => { throw e; } });
+            encoder.configure({ codec: "avc1.42001f", width: W, height: H, bitrate: 1_000_000, framerate: 30, avc: { format: "avc" } });
+            for (let index = 0; index < seconds * 30; index++) {
+                context.fillStyle = "#406080"; context.fillRect(0, 0, W, H); context.fillStyle = "#e04060"; context.fillRect(index * 2 % 280, 100, 40, 40);
+                const frame = new VideoFrame(canvas, { timestamp: Math.round(index * 1e6 / 30), duration: 33333 });
+                encoder.encode(frame, { keyFrame: index % 30 === 0 }); frame.close();
+            }
+            await encoder.flush();
+            const audio = new AudioEncoder({ output: (chunk, meta) => { const data = new Uint8Array(chunk.byteLength); chunk.copyTo(data); sounds.push({ data, timestamp: chunk.timestamp, duration: chunk.duration }); if (meta?.decoderConfig?.description) soundDescription = new Uint8Array(meta.decoderConfig.description); }, error: (e) => { throw e; } });
+            audio.configure({ codec: "opus", sampleRate: 48000, numberOfChannels: 2, bitrate: 96000 });
+            audio.encode(new AudioData({ format: "f32-planar", sampleRate: 48000, numberOfFrames: 48000 * seconds, numberOfChannels: 2, timestamp: 0, data: new Float32Array(96000 * seconds).map((_, at) => 0.3 * Math.sin(at / 20)) }));
+            await audio.flush();
+            const writer = createMp4([{ kind: "video", codec: "avc1.42001f", description, width: W, height: H }, { kind: "audio", codec: "opus", description: soundDescription, sampleRate: 48000, channels: 2 }]);
+            for (const chunk of chunks) writer.add(0, chunk.data, chunk.timestamp, chunk.duration, chunk.key);
+            for (const chunk of sounds) writer.add(1, chunk.data, chunk.timestamp, chunk.duration, true);
+            return new File([writer.end()], "holiday.mp4", { type: "video/mp4" });
+        };
         window.wavOf = (seconds, rate = 44100) => { const frames = seconds * rate; const tone = Float32Array.from({ length: frames }, (_, at) => 0.5 * Math.sin(2 * Math.PI * 440 * at / rate)); return new File([wavHeader({ sampleRate: rate, channels: 2, bits: 16, frames }), wavSamples([tone, tone], 16)], "tone.wav", { type: "audio/wav" }); };
         import { readHtml, writeHtml } from "${quire}/md/html.ts";
         import { read } from "${quire}/md/read.ts";
@@ -296,3 +321,45 @@ test("in Chromium, a sound dropped says its rate and length, converts to FLAC an
         await page.close();
     }
 }, 120_000);
+
+test("in Chromium, a film dropped says what it holds, converts to WebM smaller and at a lower bitrate with a true bar, and can be stopped", async () => {
+    const page = await convertPage("[window.audioSide(), window.videoSide()]");
+    if (!page) return;
+    const { tab } = page;
+    const { until, pressText } = driver(tab);
+    try {
+        await tab.serve(ELSEWHERE, async () => undefined);
+        await tab.run(`(async () => { const data = new DataTransfer(); data.items.add(await window.filmOf(4)); document.querySelector(".quire-convert").dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true })); })()`);
+        await until("window.convert.rows()[0]?.label.startsWith('MP4 film, H.264')");
+        expect(await tab.run("window.convert.rows()[0].label")).toBe("MP4 film, H.264 320 × 240, Opus sound, 0:04");
+        await until("!document.querySelector('[data-kind=video] .quire-convert-choice[title^=\"Asking\"]')");
+        await pressText("WebM VP9");
+        await pressText("360p");
+        await pressText("0.5");
+        expect(await tab.run<string>("document.querySelector('.quire-convert-becomes').textContent")).toBe("to WebM VP9, 360p at most, 0.5 Mbps");
+        // the bar moves only as the film is worked through: its shares, seen while it runs, only rise
+        await tab.run("window.shares = []; window.watch = setInterval(() => { const bar = document.querySelector('.quire-convert-track i'); window.shares.push(parseFloat(bar.style.width) || 0); }, 20)");
+        await pressText("Convert");
+        await until("window.convert.rows()[0].state === 'done'");
+        await tab.run("clearInterval(window.watch)");
+        const shares = await tab.run<number[]>("window.shares");
+        expect(shares.every((share, index) => index === 0 || share >= shares[index - 1]!)).toBe(true);
+        expect(shares.at(-1)).toBe(100);
+        const row = await tab.run<{ made: { name: string; facts: string } }>("window.convert.rows()[0]");
+        expect(row.made.name).toBe("holiday.webm");
+        expect(row.made.facts).toBe("320 × 240, 0.5 Mbps, Opus sound carried over");
+        // a longer film stopped while it runs stays stopped, and can be tried again
+        await tab.run(`(async () => window.convert.add(await window.filmOf(12), "long.mp4"))()`);
+        await until("window.convert.rows().length === 2 && window.convert.rows()[1].label.startsWith('MP4 film')");
+        await pressText("Convert");
+        await until("window.convert.rows()[1].state === 'running'");
+        await tab.run("document.querySelectorAll('.quire-convert-row')[1].querySelector('.quire-convert-row-main').click()");
+        expect(await tab.run("window.convert.rows()[1].state")).toBe("stopped");
+        await tab.wait(800);
+        expect(await tab.run("window.convert.rows()[1].state")).toBe("stopped");
+        expect(await tab.run<string>("document.querySelectorAll('.quire-convert-row')[1].querySelector('.quire-convert-row-main').textContent")).toBe("Try again");
+        expect(tab.errors).toEqual([]);
+    } finally {
+        await page.close();
+    }
+}, 180_000);

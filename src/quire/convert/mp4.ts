@@ -368,6 +368,10 @@ export async function readMp4(source: Source): Promise<Demuxed> {
         }
         const stss = path(stbl, "stss");
         const keys = stss ? new Set(Array.from({ length: viewOf(stss).getUint32(4) }, (_, index) => viewOf(stss).getUint32(8 + index * 4) - 1)) : undefined;
+        if (track.kind === "video" && times.length) {
+            track.start = Math.round((Math.min(...times.slice(0, 64)) * 1e6) / scale);
+            if (mediaDuration) track.rate = Math.round((times.length * scale * 100) / mediaDuration) / 100;
+        }
         tables.push({ track, scale, offsets, sizes, times: times.slice(0, offsets.length), durations, keys });
     }
     const duration = Math.max(0, ...tables.map((table) => table.track.duration ?? 0));

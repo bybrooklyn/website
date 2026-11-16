@@ -217,14 +217,17 @@ export function createConvertPage(host: HTMLElement, sides: Side[]) {
         list.append(element);
         // the row grows from no height on the next frame, so the change is seen
         requestAnimationFrame(() => requestAnimationFrame(() => element.classList.remove("arriving")));
-        const side = sides.find((each) => each.kind === found.kind);
-        if (side?.identify) {
+        // a closer look by the side of its kind, and by the side of another kind if the first finds it is one (a film's container holding only sound)
+        for (let look = 0; look < 2; look++) {
+            const side = sides.find((each) => each.kind === found.kind);
+            if (!side?.identify) break;
             const better = await side.identify(item).catch(() => undefined);
-            if (better) {
-                found = better;
-                item.found = better;
-                what.textContent = better.label;
-            }
+            if (!better) break;
+            const other = better.kind !== found.kind;
+            found = better;
+            item.found = better;
+            what.textContent = better.label;
+            if (!other) break;
         }
         setState(row, "ready");
     }

@@ -99,6 +99,7 @@ export function audioSide(): Side {
     const bits = choices<string>("Bits", [{ value: "16", label: "16" }, { value: "24", label: "24" }, { value: "32", label: "32 float", tip: "Floating point, for further work" }], "16", (value) => ((choice.bits = Number(value) as 16 | 24 | 32), changed()));
     const rateNote = note();
     const bitrateLine = line("Bitrate", bitrates.element, make("span", "quire-convert-unit", "kbps"));
+    bitrateLine.classList.add("with-value");
     const lossyFold = fold(bitrateLine);
     const bitsFold = fold(line("Bits", bits.element));
     function fill() {

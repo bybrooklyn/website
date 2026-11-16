@@ -19,6 +19,10 @@ export interface Track {
     channels?: number;
     /** Its length in seconds, where the container says it. */
     duration?: number;
+    /** Pictures a second, where the container says it. */
+    rate?: number;
+    /** When its first picture is shown, in microseconds, where the container says it before its samples are read. */
+    start?: number;
     /** The words for its codec, for a person: "H.264", "AAC". */
     label: string;
 }

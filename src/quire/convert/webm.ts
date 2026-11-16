@@ -399,6 +399,7 @@ export async function readWebm(source: Source): Promise<Demuxed> {
                         ...(decoder?.description ? { description: decoder.description.slice() } : {}),
                         ...(type === 1 ? { width, height } : { sampleRate: rate, channels }),
                         label: decoder ? codecLabel(decoder.codec) : codecId.replace(/^[AV]_/, ""),
+                        ...(type === 1 && defaultDuration ? { rate: Math.round(1e8 / defaultDuration) / 100 } : {}),
                         defaultDuration,
                     });
                 }

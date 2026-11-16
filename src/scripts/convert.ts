@@ -8,6 +8,7 @@ import { pictureSide } from "../quire/convert/picture-side";
 import type { PictureEngine } from "../quire/convert/pictures";
 import { audioSide } from "../quire/convert/audio-side";
 import { textSide } from "../quire/convert/text-side";
+import { videoSide } from "../quire/convert/video-side";
 import { decodeHeic, heicIn } from "../quire/img/codec-run";
 import { FORMATS, formatOf, underWeight } from "../quire/img/export";
 import { blocksOut } from "../quire/img/metadata";
@@ -40,4 +41,4 @@ const markdown: MarkdownEngine = {
 };
 
 const host = document.querySelector<HTMLElement>("#convert");
-if (host) createConvertPage(host, [pictureSide(pictures), textSide(markdown), audioSide()]);
+if (host) createConvertPage(host, [pictureSide(pictures), textSide(markdown), audioSide(), videoSide()]);
