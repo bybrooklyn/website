@@ -459,8 +459,9 @@ worker Find uses; the stage then shows the cut-out's pixels in place of the orig
 where clear, everything else drawn over them; the strip lays it on nothing, one of the mark colors or the old
 picture blurred, paints Keep and Remove, changes the quality and takes it away, and a press keeps the thing
 pressed. A JPEG export says it has no transparency and offers a color or PNG. Its two qualities are Quick
-(MODNet) and Best (ormbg, called Better until 15 November 2026, when BiRefNet, the Best before it, was taken out
-because the owner's graphics card could not give it the memory it needed beside her other programs). What it is
+(MODNet) and Best (BiRefNet lite at 512, on WebAssembly, since 15 November 2026; the 1024 BiRefNet before it ran out
+the owner's graphics card beside her other programs, and ormbg, then Better, gave washed-out masks on things that
+are not people). When Best finds nothing the picture is left as it was and the status says "Nothing found". What it is
 and what was measured are in [cutout](cutout.md).
 
 **Since the horizon.** Round a turned picture the room shows through: the crop's dimming only darkens what

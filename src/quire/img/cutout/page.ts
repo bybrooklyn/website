@@ -27,7 +27,7 @@ import { atOnce, blobSink, fileSink, folderOut, runEach, zipOut, type Destinatio
 import { batchStrip, type StripItem } from "../batch-strip";
 import { pixelsOf, smallLook, smallOf } from "../thumbs";
 import { createAsking } from "./asking";
-import { cutOut, CUT_SIDE, findCut, type Cut, type Laid } from "./cut";
+import { cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from "./cut";
 
 /** The words of the page that a visitor reads first. */
 export const CUT_WORDS = {
@@ -258,6 +258,12 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
             say(`${CUT_WORDS.notCut}. Choose a quality to cut it out.`);
             return fill();
         }
+        // one of many that could not be cut out is said again, not run again: the same model gives the same answer
+        const failedBefore = entries.length > 1 ? entries[at]?.failed : undefined;
+        if (failedBefore) {
+            say(`${whichSaid(at, entries.length)} · ${failedBefore === FOUND_NOTHING ? "Nothing was found to cut out, so the picture is left as it was." : `${CUT_WORDS.notCut}: ${failedBefore}`}`);
+            return fill();
+        }
         busy++;
         // a slow quality says how long it usually takes, so the wait is known
         const wait = asking.tier().wait;
@@ -280,7 +286,9 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
             await again();
             say(`${entries.length > 1 ? `${whichSaid(at, entries.length)} · ` : ""}Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s, ${picture.width} × ${picture.height}.`);
         } catch (error) {
-            say(`${CUT_WORDS.notCut}: ${error instanceof Error ? error.message : String(error)}`);
+            const said = error instanceof Error ? error.message : String(error);
+            // a model that found nothing leaves the picture as it was, and says so plainly
+            say(said === FOUND_NOTHING ? "Nothing was found to cut out, so the picture is left as it was." : `${CUT_WORDS.notCut}: ${said}`);
         } finally {
             busy--;
             fill();

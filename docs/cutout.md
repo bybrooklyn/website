@@ -39,21 +39,36 @@ opens a menu in the site's family: Paste and Choose a picture when empty; Copy, 
 Remove with a cut-out; Shift leaves the browser's own.
 
 **The qualities.** Two, standing two in a row as cards of their usual size: Quick, MODNet (13 MB, made for
-people), and Best, ormbg (44 MB). Each card says its time in plain words: "Under a second a picture, people
-only", "About 20 seconds a picture, most things". With nothing remembered, the dialog comes with Best picked;
-a quality chosen on a past visit wins (`quire-cutout`). While Best works the line says "Cutting out, usually
-about 20 seconds". Both run on WebAssembly, so nothing in the cut-out runs on the graphics card.
+people), and Best, BiRefNet lite at 512 by 512 (98 MB, `studioludens/birefnet-lite-512`, a converted copy of
+ZhengPeng7/BiRefNet_lite's weights, MIT). Each card says its time in plain words: "Under a second a picture,
+people only", "A few seconds a picture, most things". With nothing remembered, the dialog comes with Best picked;
+a quality chosen on a past visit wins (`quire-cutout`). Both run on WebAssembly on every machine, and nothing in
+the cut-out runs on the graphics card: there the 512 file gives an empty mask with no error from ONNX Runtime,
+since the card refuses one of its shaders ("no matching constructor for 'i32(vec4<u32>)'", in the pipeline
+`computeSliceOffsets`). On WebAssembly Best takes 2.7 to 2.8 s a picture warm in the test here, 2.0 to 3.4 s on
+the owner's photographs, 4 to 6 s the first time.
 
-Until 15 November 2026 there were three: Quick, Better (ormbg) and Best (BiRefNet lite's rebuild for WebGPU,
-123 MB, offered only where there was a graphics card). On the owner's machine BiRefNet could not get the card's
-memory it needed while her other programs were open, so Best mostly ended with "the graphics card was too busy";
-asked, she chose to take BiRefNet out and to call ormbg Best. A choice a browser kept as the old Better
-(`cut-better`) or the old Best (`cut-best`) now reads as the new Best, whose id is `cut-best`. BiRefNet's file,
-where a browser had fetched it, is left in the browser's private storage, unused: nothing reads or fetches it
-any more, and the store has no way to take one model's files out without a way to clear the rest being built
-for it; clearing the site's data takes it away.
+When the model finds nothing (a mask with next to nothing kept, or everything), the picture is left as it was and
+the page says "Nothing was found to cut out, so the picture is left as it was." (imgQuire's status says the same,
+"Nothing found"); it is not run again, since on WebAssembly a second run gives the same answer. On one of seven of
+the owner's photographs tried (a mineral on a wall, `20251109-135135`) Best found nothing.
 
-**Edges.** The model's mask is found at its own size and kept at most 1024 a side, and applied at full size:
+How the qualities came to be: until 15 November 2026 there were three, Quick, Better (ormbg, 44 MB, about 20 s on
+WebAssembly) and Best (BiRefNet lite at 1024, the rebuild for WebGPU, 123 MB, on a graphics card only). The 1024
+model took more than 4.4 GB of the card's memory and ran it out beside the owner's other programs, so Best mostly
+ended with "the graphics card was too busy to finish". ormbg's masks on things that are not people came out
+washed-out and patchy (on her photographs, in 12 to 17 s), where the 512 BiRefNet's raw mask was clean and solid on
+six of seven. So the 512 BiRefNet became Best, on WebAssembly, and ormbg and the 1024 BiRefNet left the cut-out
+(imgQuire's Find keeps ormbg and SAM). A choice a browser kept as the old Better (`cut-better`) or the old Best
+(`cut-best`) reads as the new Best, whose id is `cut-best`. The old files a browser fetched (ormbg is still Find's;
+the 1024 BiRefNet's 123 MB) are left in its private storage: the model store has no way yet to take one model's
+files out, and a way to do it safely (never a file another tool still uses) is its own small piece of work; clearing
+the site's data takes them away. With nothing on the card, the cut-out's watching of the card (its error scopes,
+the run made again in a fresh worker, "the graphics card was too busy to finish") was taken out; the repair models
+keep their own.
+
+**Edges.** The model's mask is found at its own size and kept at that size (at most 1024 a side, never read up
+larger than the model answered: Best's is 512 on the picture's longer side), and applied at full size:
 a guided filter in the picture's colors (radius 2, epsilon 1e-4) fits at each place of the mask the plane
 `a · rgb + b` that best matches it (from the colors' 3 by 3 spread there), the planes averaged, worked out on
 the processor at the mask's size; on the card each full-size pixel takes its mask from that plane at its own
@@ -76,6 +91,17 @@ lightness, its mask given at a quarter size and softened once more as a model's 
 pixels (a share from 0.05 to 0.95) is 1.0 pixel wide in the cut against 11 in the mask enlarged (held to at
 most 1.5).
 
+With Best's mask at 512, a 4000 pixel picture's mask is an eighth of its size, not a quarter. The same two
+measures with the mask given at an eighth: kept at that size and laid on by the guided filter, the strands' mask
+error is 8.1 of 255 (6.0 at a quarter), the halo 8.4 of 255, and the band across the sharp edge 3 pixels wide
+(1.0 at a quarter, 22 in the eighth's mask enlarged). Read up to a quarter first, as the mask was before (kept at
+up to 1024 whatever the model gave), the same eighth came out at an error of 79 of 255, a halo of 32 and a band 33
+pixels wide: the edge step's reach and its tightening of sharp edges are counted in the mask's own pixels, and a
+mask read up spreads its soft edge over more of them. So a mask is now never kept larger than the model answered.
+On a 12 megapixel photograph Best's edge is therefore about three pixels soft across a sharp edge where the 1024
+model's was about one and a half; by eye on photographs from the photos page (the pictures with the report that
+made this change) the outline follows the subject, with hair and fur a little softer than the old Best's.
+
 **Full size out.** A 12 megapixel picture is cut and saved at 12 megapixels. Saved as a PNG through the
 browser's own encoder, with the picture's colour profile when it has one (a Display P3 photograph keeps its
 colors); the clipboard takes sRGB. Measured in headless Chromium (four cores, two WebAssembly threads, an RTX
@@ -85,8 +111,9 @@ size), warm:
 | Quality | WebAssembly | WebGPU |
 |---|---|---|
 | Quick (MODNet) | 0.6 s | runs on WebAssembly: 0.6 s |
-| Best (ormbg) | 19.5 s | runs on WebAssembly: 19.5 s |
-| BiRefNet lite, Best until 15 November 2026, taken out | does not run: out of memory | 0.86 s (2 MP), 0.90 s (12 MP); 2.5 s the first time, when the card had the memory |
+| Best (BiRefNet lite at 512) | 2.7 s (2 MP), 2.8 s (12 MP); 7.6 s the first time | never put there: an empty mask, one shader refused |
+| ormbg, Better until 15 November 2026, taken out | 19.5 s | runs on WebAssembly: 19.5 s |
+| BiRefNet lite at 1024, Best until 15 November 2026, taken out | does not run: out of memory | 0.86 s (2 MP), 0.90 s (12 MP); 2.5 s the first time, when the card had the memory |
 
 and the edges worked out and the cut-out laid at full size, 12 megapixels: 1.3 s (the color guide and the
 stretch at the mask's size on the processor, the full-size pass through WebGL2 on software drawing, in
@@ -136,14 +163,12 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
 
 ## Known weak spots
 
-- Best takes about 20 s, since ormbg runs on WebAssembly only; the choice is Quick (made for people) or a slow
-  Best. Nothing quicker for hair and fine edges is offered since BiRefNet was taken out.
-- The graphics card's errors are still watched for any run of a model on the card (error scopes, the device's
-  loss, errors no one caught), with the run made once more in a fresh worker and "the graphics card was too busy
-  to finish" said after a second failure; with both qualities on WebAssembly the cut-out no longer reaches that,
-  but Find's image encoders run on the card through the same worker, and a mask all kept or all gone is still
-  refused and run once more. Why it was built: BiRefNet beside another browser drawing hard on the same card gave
-  answers of nothing, run after run, without a word.
+- Best's mask is 512 on the picture's longer side, so on a large photograph its edges are softer than the 1024
+  model's were (about three pixels across a sharp edge on a 12 megapixel picture); the guided filter keeps hair
+  following the picture, but fine strands far apart lose some of themselves.
+- Best found nothing on one of seven photographs tried (a mineral on a wall); the brush cannot help there, since it
+  works on a cut-out, so Quick is the other way to try.
+- The files of the qualities taken out stay in a browser that fetched them until the site's data is cleared.
 - The brush's strokes are painted into the mask at its own size (at most 1024 a side), so on a large
   picture their edge is soft by a few pixels, then follows the picture by the guided filter.
 - A press keeps what the cut-out found inside the thing pressed (its outline by SlimSAM, widened a little);

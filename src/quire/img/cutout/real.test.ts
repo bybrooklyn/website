@@ -1,8 +1,8 @@
 // The cut-out's models, the real files, on the site's own ONNX Runtime build in Chromium, on a scene
-// drawn in the page (a figure with a head of fine strands against a green ground): each quality runs on
-// WebAssembly and, where Chromium gives a graphics card, on WebGPU (where it runs there), and gives a
-// mask holding the figure and not the ground (Best only on the card: on WebAssembly it runs out of
-// memory, which is printed); times for a 2 and a 12 megapixel picture are printed. The files are read
+// drawn in the page (a figure with a head of fine strands against a green ground): each quality (Quick,
+// MODNet; Best, BiRefNet lite at 512) runs on WebAssembly and never on the graphics card, even where
+// Chromium gives one, and gives a mask holding the figure and not the ground; times for a 2 and a 12
+// megapixel picture are printed. The files are read
 // from where they were fetched for trials (~/.cache/quire-model-trials/parts/); without them, or
 // without a Chromium, this is skipped with a notice, and nothing is fetched.
 
@@ -44,7 +44,6 @@ const workerScript = (only: string) => `
     import { serve } from "${quire}/img/parts/finder.ts";
     import { CUT_TIERS } from "${quire}/img/parts/models.ts";
     import { keptName } from "${quire}/img/read/models.ts";
-    import { graphicsCard } from "${quire}/core/onnx.ts";
     const files = new Map();
     const shelf = { write: async (name, bytes) => files.set(name, bytes), read: async (name) => files.get(name), size: async (name) => files.get(name)?.length ?? -1, mark: async (name, said) => files.set(name + ".whole", said), marked: async (name) => files.get(name + ".whole") };
     const ready = (async () => { for (const tier of CUT_TIERS.filter((each) => each.id === ${JSON.stringify(only)})) for (const each of tier.files) { const bytes = new Uint8Array(await (await fetch("/m/" + each.repo + "/" + each.path)).arrayBuffer()); files.set(keptName(each), bytes); files.set(keptName(each) + ".whole", each.sha256); } })();
@@ -64,7 +63,6 @@ const workerScript = (only: string) => `
     const warn = console.warn;
     console.warn = (...args) => { warns.push(args.map(String).join(" ").slice(0, 600)); warn(...args); };
     self.onmessage = async (event) => {
-        if (event.data === "card") return self.postMessage({ card: await graphicsCard() });
         await ready;
         const [tier, prefer, width, height] = event.data;
         let said;
@@ -107,65 +105,34 @@ const pageFor = async (only: string) => {
     );
 };
 
-test("each quality of cut-out runs on the site's ONNX Runtime where it can, and holds the figure and not the ground", async () => {
+test("each quality of cut-out runs on WebAssembly, never on the graphics card, and holds the figure and not the ground", async () => {
     if (!there) return console.warn("cut-out models skipped: they are not in ~/.cache/quire-model-trials/parts/");
-    {
-        const figure = { x: 470 / 1200, y: 270 / 800, width: 260 / 1200, height: 530 / 800 };
-        const ground = { x: 0, y: 0, width: 0.25, height: 1 };
-        const masks: Record<string, { width: number; height: number; runs: string }> = {};
-        let card = false;
-        for (const tier of TIERS) {
-          for (const prefer of ["wasm", "webgpu"]) {
-            let page = await pageFor(tier.id);
-            if (!page) return;
-            try {
-                await page.tab.run(`window.go("card")`);
-                while (!(await page.tab.run<boolean>("!!window.done"))) await page.tab.wait(100);
-                card = await page.tab.run<boolean>("window.done.card");
-                if (prefer === "webgpu" && !card) continue;
-                type Done = { type: string; found: { width: number; height: number; runs: string }; ms: number; warm: number; place: string; message?: string; warmError?: string; warns: string[] };
-                for (const [width, height] of [[1732, 1155], [4243, 2828]] as const) {
-                    const runOnce = async (): Promise<Done | undefined> => {
-                        await page!.tab.run(`window.go(["${tier.id}", "${prefer}", ${width}, ${height}])`);
-                        // a run that has not ended in three minutes is given up and said to be
-                        const began = Date.now();
-                        while (!(await page!.tab.run<boolean>("!!window.done")) && Date.now() - began < 180_000) await page!.tab.wait(250);
-                        return (await page!.tab.run<boolean>("!!window.done")) ? page!.tab.run<Done>("window.done") : undefined;
-                    };
-                    let done = await runOnce();
-                    // the graphics card failing (beside other drawing on it) names its cause, and the run is made again in a fresh worker, as the cut-out does
-                    const failed = (each: Done | undefined) => [each?.message, each?.warmError].find((said) => said && /graphics card/.test(said));
-                    // beside another browser drawing hard on the same card a fresh worker can fail too, so up to three are tried, each failure named
-                    for (let again = 0; again < 3 && failed(done); again++) {
-                        console.log(`${tier.name} on ${prefer}: the card failed (${failed(done)!.slice(0, 200)}); run again in a fresh worker`);
-                        await page.close();
-                        page = await pageFor(tier.id);
-                        if (!page) return;
-                        done = await runOnce();
-                    }
-                    expect(failed(done)).toBeUndefined();
-                    if (!done) {
-                        console.log(`${tier.name} on ${prefer}: did not finish within three minutes`);
-                        break;
-                    }
-                    const warns = done.warns;
-                    if (done.message) {
-                        console.log(`${tier.name} on ${prefer}: does not run: ${done.message.slice(0, 300)}`);
-                        continue;
-                    }
-                    const inFigure = shares(done.found, { x: 520 / 1200, y: 300 / 800, width: 160 / 1200, height: 450 / 800 });
-                    const onGround = shares(done.found, ground);
-                    console.log(`${tier.name} (${tier.credit}) asked for ${prefer}, ran as "${done.place}"${warns.length ? ` (${warns[0]!.slice(0, 160)})` : ""}: ${Math.round((width * height) / 1e6)} MP, ${done.ms} ms first, ${done.warm} ms warm; figure ${Math.round(inFigure.inside * 100)}% in, ground ${Math.round(onGround.inside * 100)}% in`);
-                    if (width < 2000) masks[`${tier.id} ${prefer}`] = done.found;
-                    expect(inFigure.inside).toBeGreaterThan(0.6);
-                    expect(onGround.inside).toBeLessThan(0.05);
-                }
-            } finally {
-                await page?.close();
+    const ground = { x: 0, y: 0, width: 0.25, height: 1 };
+    for (const tier of TIERS) {
+        // no quality asks for the card: on it BiRefNet lite at 512 gives an empty mask with no error
+        expect(tier.card).toEqual([]);
+        const page = await pageFor(tier.id);
+        if (!page) return;
+        try {
+            type Done = { type: string; found: { width: number; height: number; runs: string }; ms: number; warm: number; place: string; message?: string; warmError?: string; warns: string[] };
+            for (const [width, height] of [[1732, 1155], [4243, 2828]] as const) {
+                // asked with no preference, as the cut-out asks: the machine's card, if it has one, is not used
+                await page.tab.run(`window.go(["${tier.id}", undefined, ${width}, ${height}])`);
+                const began = Date.now();
+                while (!(await page.tab.run<boolean>("!!window.done")) && Date.now() - began < 180_000) await page.tab.wait(250);
+                const done = await page.tab.run<Done | undefined>("window.done");
+                expect(done).toBeDefined();
+                expect(done!.message).toBeUndefined();
+                expect(done!.warmError).toBeUndefined();
+                expect(done!.place).toContain("matte wasm");
+                const inFigure = shares(done!.found, { x: 520 / 1200, y: 300 / 800, width: 160 / 1200, height: 450 / 800 });
+                const onGround = shares(done!.found, ground);
+                console.log(`${tier.name} (${tier.credit}) ran as "${done!.place}": ${Math.round((width * height) / 1e6)} MP, ${done!.ms} ms first, ${done!.warm} ms warm; figure ${Math.round(inFigure.inside * 100)}% in, ground ${Math.round(onGround.inside * 100)}% in`);
+                expect(inFigure.inside).toBeGreaterThan(0.6);
+                expect(onGround.inside).toBeLessThan(0.05);
             }
-          }
+        } finally {
+            await page.close();
         }
-        expect(figure.width).toBeGreaterThan(0);
-        if (!card) console.log("there is no graphics card here, so WebGPU was not tried");
     }
 }, 1_200_000);

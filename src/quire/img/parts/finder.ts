@@ -13,7 +13,7 @@ import { graphicsCard, ortFor, settle, threadsHere } from "../../core/onnx";
 import { bytesOf, fetchTier, keptAll, privateShelf, type Shelf } from "../read/store";
 import type { Found } from "../masks";
 import { partFile, partTierOf, type PartRole, type PartTier } from "./models";
-import { bestOf, cropOf, fitOf, foundOf, planesOf, promptOf, type Fit, type Press, type Way } from "./segment";
+import { bestOf, cropOf, fitOf, foundOf, FOUND_SIDE, planesOf, promptOf, type Fit, type Press, type Way } from "./segment";
 
 /** What the page asks. */
 export type Ask =
@@ -105,23 +105,6 @@ async function madeFor(given: PartTier, shelf: Shelf, prefer?: "webgpu" | "wasm"
     return state.made;
 }
 
-/** What the graphics card said went wrong outside a run: the device lost, and its last error no one caught. */
-const card = { lost: "", uncaught: "", watched: new WeakSet<GPUDevice>() };
-/** Listens to the card's device for its loss and for errors no scope caught, so a failure names its cause. */
-function watch(device: GPUDevice) {
-    if (card.watched.has(device)) return;
-    card.watched.add(device);
-    void device.lost.then((info) => (card.lost = info.message || info.reason || "lost"));
-    device.addEventListener("uncapturederror", (event) => (card.uncaught = (event as GPUUncapturedErrorEvent).error.message));
-}
-
-/** True when a model's answer is the same number everywhere: no answer at all. */
-export function flat(values: ArrayLike<number>): boolean {
-    const first = values[0];
-    for (let at = 1; at < values.length; at++) if (values[at] !== first) return false;
-    return true;
-}
-
 /** A picture drawn at a model's input, the picture in the part it fills and black in the rest, as the model's numbers. */
 function inputOf(picture: ImageBitmap, way: Way): { planes: Float32Array; fit: Fit } {
     const fit = fitOf(way, picture.width, picture.height);
@@ -161,34 +144,16 @@ export async function serve(ask: Ask, tools: { shelf(): Promise<Shelf>; say(answ
             ask.picture.close();
             const matte = made.sessions.matte!;
             const input = new ort.Tensor("float32", planes, [1, 3, fit.input.height, fit.input.width]);
-            // on the card, its errors are watched for the length of the run: beside other heavy drawing it can run out of memory
-            // part way, and then gives back an answer that is partly nothing, which no look at the answer could always tell
-            const device = made.place.includes("matte webgpu") ? await Promise.resolve(ort.env.webgpu?.device).catch(() => undefined) : undefined;
-            if (device) watch(device);
-            if (card.lost) throw Object.assign(new Error(`the graphics card was lost: ${card.lost}`), { again: true });
             // a picture that came through as nothing is said, not run
             if (!planes.some((value) => value !== planes[0])) throw new Error("the picture reached the model blank");
-            for (const kind of ["out-of-memory", "validation", "internal"] as const) device?.pushErrorScope(kind);
             const out = await matte.run({ [matte.inputNames[0]!]: input });
             input.dispose();
             const alpha = Object.values(out)[0]!;
             const values = await alpha.getData();
-            const errors = device ? (await Promise.all([device.popErrorScope(), device.popErrorScope(), device.popErrorScope()])).filter(Boolean) : [];
-            if (card.lost) errors.push({ message: `it was lost: ${card.lost}` } as GPUError);
-            if (errors.length) {
-                for (const each of Object.values(out)) each.dispose();
-                state.made = undefined;
-                throw Object.assign(new Error(`the graphics card did not finish the model: ${errors[0]!.message.slice(0, 200)}`), { again: true });
-            }
             const [height, width] = alpha.dims.slice(-2) as [number, number];
             for (const each of Object.values(out)) each.dispose();
-            // a graphics card that let the model go (as happens beside other heavy drawing) gives every answer as nothing, the same
-            // number everywhere, from then on: the sessions are let go and the worker is to be made again
-            if (flat(values)) {
-                state.made = undefined;
-                throw Object.assign(new Error("the graphics card gave the model no answer"), { again: true });
-            }
-            return tools.say({ type: "found", id: ask.id, found: foundOf(values, width, height, cropOf(fit, width, height), fit.picture, false, ask.side), ms: Math.round(performance.now() - started), place: made.place });
+            // never kept larger than the model answered: a mask read up before the cut-out's edge step left its edges soft (docs/cutout.md)
+            return tools.say({ type: "found", id: ask.id, found: foundOf(values, width, height, cropOf(fit, width, height), fit.picture, tier.matte === "birefnet", Math.min(ask.side ?? FOUND_SIDE, Math.max(width, height))), ms: Math.round(performance.now() - started), place: made.place });
         }
         // a picture's encoding is made once and kept, so each press after the first is only the decoder
         if (!state.encoded || state.encoded.key !== ask.key || state.encoded.tier !== tier.id) {

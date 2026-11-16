@@ -42,7 +42,7 @@ import { createFinding } from "./finding";
 import { createFinder } from "./parts/finder";
 import { PART_TIERS } from "./parts/models";
 import { createAsking } from "./cutout/asking";
-import { cutOut, CUT_SIDE, findCut, type Cut, type Laid } from "./cutout/cut";
+import { cutOut, CUT_SIDE, findCut, FOUND_NOTHING, type Cut, type Laid } from "./cutout/cut";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
@@ -1710,7 +1710,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
             commit(setOnly(history.now(), { type: "cutout", found: answer.found, background: "clear" }));
             frame.status.say("Cut out", `Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s with ${cutAsking.tier().name}`);
         } catch (error) {
-            frame.status.say("Not cut out", `The picture was not cut out: ${error instanceof Error ? error.message : String(error)}`, "warn");
+            const said = error instanceof Error ? error.message : String(error);
+            // a model that found nothing leaves the picture as it was, and says so plainly
+            if (said === FOUND_NOTHING) frame.status.say("Nothing found", "Nothing was found to cut out, so the picture is left as it was", "warn");
+            else frame.status.say("Not cut out", `The picture was not cut out: ${said}`, "warn");
         } finally {
             cutBusy = false;
             refresh();

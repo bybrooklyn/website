@@ -22,8 +22,8 @@ export interface PartTier {
     who: string;
     /** How the press-to-select model takes a picture: SAM 2.1 squeezed to 1024 square; SlimSAM its longer side 1024 and padded. */
     select: "sam2" | "slim";
-    /** How the subject model takes a picture: ormbg at 1024 square from 0 to 1; MODNet its shorter side 512, from -1 to 1. */
-    matte: "ormbg" | "modnet";
+    /** How the subject model takes a picture: ormbg at 1024 square from 0 to 1; MODNet its shorter side 512, from -1 to 1; BiRefNet lite 512 square, ImageNet's numbers, logits out. */
+    matte: "ormbg" | "modnet" | "birefnet";
     files: PartFile[];
     credit: string;
     /** How long a picture usually takes on the machine it is offered on, in plain words, for a slow choice to say while it works. */
@@ -84,15 +84,21 @@ export const PART_TIERS: PartTier[] = [
 
 const cut = (id: string, name: string, who: string, matte: PartTier["matte"], credit: string, matteFile: PartFile, card: PartTier["card"], wait?: string): PartTier => ({ id, name, who, select: "slim", matte, credit, card, files: [matteFile], ...(wait ? { wait } : {}) });
 
+const BIREFNET_512 = ["studioludens/birefnet-lite-512", "962e67969ec6acec9c19fab76acee4f5e22e990c"] as const;
+
+/** BiRefNet lite at 512 by 512 in fp16, a converted copy of ZhengPeng7/BiRefNet_lite's weights (MIT; ZhengPeng 2024, Studio Ludens V.O.F. 2026), read on 15 November 2026. */
+export const BIREFNET_FILE = file("matte", ...BIREFNET_512, "onnx/model_fp16.onnx", 98484532, "eff9216bb2f9d3f023d9c2b7196845a7485739ab1f231593633e4d2344ffc516");
+
 /**
- * The cut-out's two qualities, the smaller first: Quick, MODNet (made for people), and Best, ormbg. Both run on
- * WebAssembly (see above). Best was BiRefNet lite's rebuild for WebGPU until 15 November 2026: it ran only on a
- * graphics card, and beside the owner's other programs the card mostly could not give it the memory it needed, so
- * it was taken out and what had been called Better (ormbg) became Best (docs/imgQuire-models.md).
+ * The cut-out's two qualities: Quick, MODNet (made for people), and Best, BiRefNet lite at 512 by 512. Both run
+ * on WebAssembly, on every machine: on the graphics card the 512 file gives an empty mask with no error (the card
+ * rejects one of its shaders), so Best is never put there. Before 15 November 2026 Best was BiRefNet lite at 1024
+ * on the card, which took more than 4.4 GB of the card's memory and ran it out beside the owner's programs, and
+ * Better was ormbg, whose masks on things other than people came out washed-out and patchy (docs/imgQuire-models.md).
  */
 export const CUT_TIERS: PartTier[] = [
     cut("cut-quick", "Quick", "Under a second a picture, people only", "modnet", "MODNet", PART_TIERS[0]!.files.find((each) => each.role === "matte")!, []),
-    cut("cut-best", "Best", "About 20 seconds a picture, most things", "ormbg", "ormbg", PART_TIERS[1]!.files.find((each) => each.role === "matte")!, [], "about 20 seconds"),
+    cut("cut-best", "Best", "A few seconds a picture, most things", "birefnet", "BiRefNet lite", BIREFNET_FILE, []),
 ];
 
 /** The choices a browser may have kept from before Best was ormbg: the old Better and the old Best both read as Best. */
