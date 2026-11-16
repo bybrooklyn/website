@@ -680,13 +680,13 @@ textarea.quire-img-writing {
     }
 
     .quire-img-bar .quire-img-word {
-        padding: 0 0.17rem;
+        padding: 0 0.13rem;
         font-size: 0.8rem;
     }
 
     .quire-img-bar .quire-img-word::after {
-        right: 0.17rem;
-        left: 0.17rem;
+        right: 0.13rem;
+        left: 0.13rem;
     }
 
     .quire-img-bar .quire-bar-group + .quire-bar-group {
@@ -696,6 +696,8 @@ textarea.quire-img-writing {
 
     .quire-img-bar .quire-bar-group.quire-bar-end {
         padding-left: 0.1rem;
+        /* a narrower fade before export and more, which would otherwise lie over the end of color */
+        box-shadow: -0.3rem 0 0.3rem var(--ground);
     }
 }
 
