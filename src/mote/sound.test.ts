@@ -33,6 +33,9 @@ window.before = window.made[0]?.state;
         await tab.click(200, 200);
         await tab.wait(300);
         await tab.run("knock()");
+        // the browser starts its sound a moment after the press that allows it, and on a busy machine that moment has been longer than a
+        // third of a second: it is given up to three seconds to be running, where sound is on
+        for (let waited = 0; kept && waited < 3000 && (await tab.run("made[0]?.state")) !== "running"; waited += 100) await tab.wait(100);
         expect(tab.errors).toEqual([]);
         return await tab.run("({ made: made.length, before: window.before, after: made[0]?.state })");
     } finally {
