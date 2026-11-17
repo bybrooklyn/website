@@ -1,4 +1,5 @@
-// The menu a right-click in the text opens, as Docs has one: cut and copy, then the link, a comment,
+// The menu a right-click in the text opens, as Docs has one: cut, copy, paste and paste without
+// formatting (whatever takes a paste offers it in its own menu), then the link, a comment,
 // bold, italic and underline, each the menus' own line so it does what that line does, with its
 // shortcut. On a misspelled word its spellings come first, drawn strong, then Add to dictionary and
 // Ignore in this document, with a rule under them, as Docs and the browsers put them (checking gives
@@ -13,8 +14,8 @@
 import type { Surface } from "./surface";
 import { everyLine, flowMenu, make, RULE, type MenuItem } from "../core/ui";
 
-/** The commands of the text's menu after cut and copy, by their names in the menus' table (menu-row.ts), in its order. */
-export const TEXT_COMMANDS = ["link", "comment", "bold", "italic", "underline"];
+/** The commands of the text's menu after cut and copy, by their names in the menus' table (menus.ts), in its order. */
+export const TEXT_COMMANDS = ["paste", "pastePlain", "link", "comment", "bold", "italic", "underline"];
 
 /** The menus' own lines for the text's menu, found by command among every menu's lines, in TEXT_COMMANDS' order; one the document does not have (a comment in a file that cannot keep one) is left out. */
 export function linesFor(menus: { items: () => MenuItem[] }[]): MenuItem[] {

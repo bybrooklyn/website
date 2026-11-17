@@ -437,15 +437,15 @@ test("a right-click on words opens the text's own menu, whose lines do what the 
     expect(await rightClick(true)).toBe(false);
     expect(await rightClick(false)).toBe(true);
     await tab.wait(400);
-    expect(await tab.run("[...document.querySelectorAll('.quire-text-menu.open .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Cut", "Copy", "Link", "Comment", "Bold", "Italic", "Underline"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-text-menu.open .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Cut", "Copy", "Paste", "Paste without formatting", "Link", "Comment", "Bold", "Italic", "Underline"]);
     await page!.press(".quire-text-menu.open .quire-menu-line", "Bold");
     await tab.wait(50);
     expect(await page!.md()).toBe("Some **words** here.\n");
-    // the menu key opens it at the caret with its first line ready; with nothing selected, cut and copy are dimmed and passed over
+    // the menu key opens it at the caret with its first line ready; with nothing selected, cut and copy are dimmed and passed over to Paste
     await tab.run("q.select([0], 2)");
     await tab.run("q.surface.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))");
     await tab.wait(400);
-    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Link");
+    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Paste");
     await tab.press("Escape");
     await tab.wait(300);
     expect(await keyboard()).toBe("writing");
