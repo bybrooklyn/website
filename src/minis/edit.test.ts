@@ -234,6 +234,8 @@ test("a slope is never joined by its low end so that the run climbs: where it wo
     const ended: Placed[] = [{ id: 1, kind: kind("s", [1]), place: { x: 0, z: 0, y: 4, turn: 0 } }, { id: 2, kind: kind("t"), place: { x: 1, z: 0, y: 4, turn: 0 } }];
     expect(open(ended).length).toBe(1);
     expect(pressed(["tray"], ended).refused).toEqual(["against"]);
+    // a second hopper with nothing to join would go where the first is: it would overlap another piece
+    expect(pressed(["hopper", "hopper"]).refused).toEqual([undefined, "room"]);
     // the first made run, which has no open end: a hopper pressed goes up high in the middle of the view, and the pieces after it go down from it
     const whole = read(RUNS[0]!.text);
     const after = pressed(["hopper", "straight", "gentle slope", "long straight", "steep slope", "wide curve right", "drop"], whole);

@@ -30,7 +30,7 @@ import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, isOut, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
+import { STILL as NO_MOVE, about, asOwn, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move, type Refused } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
@@ -47,6 +47,9 @@ import { chainAt, chainLength, makeTable, type Table } from "./table";
 import { fold, icon, keyHeard, keyPlace, stacking, swap, tool } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
+
+/** Why pieces could not go where they were put, in a few plain words, said under the bar and aloud. */
+const REFUSED: Record<Refused, string> = { ground: "it would go below the table", edge: "it would go off the table", room: "it would overlap another piece", against: "no marble could roll into it there" };
 
 /** How wide the view is, up and down, in degrees, with the usual lens. */
 const DEGREES = 38;
@@ -1139,11 +1142,13 @@ export default function marbles(m: Mote): Scene {
             each((_, index) => placeOf(placed[index]!));
             if (!one.snap && one.handle === undefined) sound?.knock(0.35, 1300);
         } else if (one.inRun) {
-            // back where they came from, as they were
+            // back where they came from, as they were, saying why
             each((_, index) => placeOf(one.original[index]!));
             refuse();
+            say(REFUSED[groupMisfit(run, placed) ?? "room"]);
         } else {
             each((piece) => ({ ...poseIn(one, piece), scale: 0.05 }));
+            say(REFUSED[groupMisfit(run, placed) ?? "room"]);
         }
         changed();
     };
@@ -1176,7 +1181,10 @@ export default function marbles(m: Mote): Scene {
      */
     const placeAtEnd = (group: Placed[], fromX?: number): boolean => {
         const found = placing(run, group, end, (height) => ground(lineAt(m.width / 2, m.height / 2), height));
-        if ("refused" in found) return false;
+        if ("refused" in found) {
+            say(REFUSED[found.refused]);
+            return false;
+        }
         const { move, snap } = found;
         const placed = group.map((piece) => moved(piece, move));
         run = [...run, ...placed];
