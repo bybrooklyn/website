@@ -495,7 +495,9 @@ export function shapeOf(kind: Kind): Shape {
     if (kept) return kept;
     if (!allowed(kind.family, kind.sizes) || !bendAllowed(kind)) throw new Error(`There is no piece ${key}.`);
     const made = design(kind.family, kind.sizes);
-    const shape: Shape = { kind, ...made, cells: [], room: [], low: made.low ?? -1 };
+    // a block under its lowest joint, at the least: a slope, a drop or a spiral goes down by its own drop
+    const lowest = Math.min(...made.joints.map((joint) => Math.round(joint.at[1] / LEVEL)));
+    const shape: Shape = { kind, ...made, cells: [], room: [], low: Math.min(made.low ?? -1, lowest - 1) };
     if (isBent(kind)) shape.lengths[0] = bentLength(shape.lengths[0]!, kind);
     if (kind.mirror) mirrored(shape);
     for (const length of shape.lengths) {

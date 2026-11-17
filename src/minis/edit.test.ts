@@ -3,11 +3,14 @@
 // joint for joint and box for box, bent ones point for point and along their track, and mirrored twice
 // is itself; a group fitted by any open joint meets the joint it is fitted to; a straight's end dragged
 // makes it longer by whole cells, a bent one staying bent where it can; a run read back keeps the
-// numbers of the pieces it shares with the run before, bend and all. Run with `bun run test`.
+// numbers of the pieces it shares with the run before, bend and all; and pieces pressed in the box one
+// after another make a run marbles go down to its tray, never joined so that it climbs, and refused,
+// saying why, where they cannot go on. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
 import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
-import { about, asOwn, groupFits, groupSnaps, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, rebent, resized, then } from "./edit";
+import { START, about, asOwn, groupFits, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, resized, then } from "./edit";
+import { makeTable } from "./table";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
 import type { V3 } from "../mote/solids";
@@ -178,4 +181,66 @@ test("a run read back keeps the numbers of the pieces it shares with the run bef
     expect(after.at(-2)!.id).toBe(100 + run.length - 1);
     expect(after.at(-1)!.id).toBe(500);
     expect(next).toBe(501);
+});
+
+/** The pieces of the box pressed one after another, as the box's buttons put them in, each where `placing` says; and the end to go on from, as marbles.ts keeps it. */
+function pressed(names: string[], start: Placed[] = []): { run: Placed[]; refused: (string | undefined)[] } {
+    let built = [...start];
+    let end: { id: number; joint: number } | undefined;
+    let id = 1000;
+    const refused: (string | undefined)[] = [];
+    for (const name of names) {
+        const kind = BOX.find((one) => one.name === name)!.kind;
+        const group: Placed[] = [{ id: id++, kind: { ...kind, sizes: [...kind.sizes] }, place: { x: 0, z: 0, y: -shapeOf(kind).low, turn: 0 } }];
+        const found = placing(built, group, end, (height) => [4, height, 4]);
+        if ("refused" in found) {
+            refused.push(found.refused);
+            continue;
+        }
+        refused.push(undefined);
+        const placed = group.map((piece) => moved(piece, found.move));
+        built = [...built, ...placed];
+        const ends = open(built).filter((joint) => joint.id === placed[0]!.id && placed[0]!.kind.family !== "t");
+        end = ends.find((joint) => isOut(placed[0]!.kind, joint.joint)) ?? ends[0] ?? end;
+    }
+    return { run: built, refused };
+}
+
+test("a run built only by pressing the box on an empty table flows down from a hopper put up high, and a marble reaches its tray", () => {
+    const { run: built, refused } = pressed(["hopper", "gentle slope", "steep slope", "tight curve left", "drop", "tray"]);
+    expect(refused).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
+    expect(built[0]!.place.y).toBe(START);
+    // every piece joined to the one before it, its way in to the way out before it, each lower or level
+    expect(links(built).length).toBe(5);
+    expect(open(built).length).toBe(0);
+    const heights = built.map((piece) => jointsOf(piece)[0]!.at[1]);
+    for (let i = 1; i < heights.length; i++) expect(heights[i]!).toBeLessThanOrEqual(heights[i - 1]!);
+    const table = makeTable();
+    table.set(built);
+    let gone = 0;
+    for (let step = 0; step < 15 * 120 && !(gone && table.marbles.every(table.arrived)); step++) {
+        if (!gone) gone = table.letGo().length;
+        table.step(1 / 120);
+    }
+    expect(table.marbles.length).toBe(1);
+    expect(table.marbles.every(table.arrived)).toBe(true);
+}, 60_000);
+
+test("a slope is never joined by its low end so that the run climbs: where it would go below the table, or join only against the way marbles roll, it is refused, saying why", () => {
+    // a hopper on the ground: a slope down from it would go below the table, and it is not put on the other way round, up from it
+    const low: Placed[] = [{ id: 1, kind: kind("h"), place: { x: 0, z: 0, y: 1, turn: 0 } }];
+    expect(pressed(["steep slope", "gentle slope", "drop"], low).refused).toEqual(["ground", "ground", "ground"]);
+    // a straight going into a tray, its way in open: a tray would meet that way in, where no marble comes out
+    const ended: Placed[] = [{ id: 1, kind: kind("s", [1]), place: { x: 0, z: 0, y: 4, turn: 0 } }, { id: 2, kind: kind("t"), place: { x: 1, z: 0, y: 4, turn: 0 } }];
+    expect(open(ended).length).toBe(1);
+    expect(pressed(["tray"], ended).refused).toEqual(["against"]);
+    // the first made run, which has no open end: a hopper pressed goes up high in the middle of the view, and the pieces after it go down from it
+    const whole = read(RUNS[0]!.text);
+    const after = pressed(["hopper", "straight", "gentle slope", "long straight", "steep slope", "wide curve right", "drop"], whole);
+    expect(after.refused).toEqual([undefined, undefined, undefined, undefined, undefined, undefined, undefined]);
+    for (const [a, b] of links(after.run.slice(whole.length))) {
+        const [from, to] = isOut(after.run.find((piece) => piece.id === a.id)!.kind, a.joint) ? [a, b] : [b, a];
+        expect(isOut(after.run.find((piece) => piece.id === to.id)!.kind, to.joint)).toBe(false);
+        expect(from.at[1]).toBe(to.at[1]);
+    }
 });

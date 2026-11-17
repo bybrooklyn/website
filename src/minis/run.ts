@@ -156,11 +156,19 @@ export function overlaps(run: Placed[], piece: Placed): number[] {
 /** How far from the middle a piece may go each way, in cells: the edge of the table. */
 export const TABLE = 20;
 
+/** Why a piece cannot go where it is: it would be below the ground, off the edge of the table, or in another piece. */
+export type Misfit = "ground" | "edge" | "room";
+
+/** Why a piece cannot go where it is, or nothing if it can: on or above the ground, on the table, and overlapping nothing. */
+export function misfit(run: Placed[], piece: Placed): Misfit | undefined {
+    if (!grounded(piece)) return "ground";
+    if (!cellsOf(piece).every((cell) => Math.abs(cell.x + 0.5) < TABLE && Math.abs(cell.z + 0.5) < TABLE)) return "edge";
+    return overlaps(run, piece).length === 0 ? undefined : "room";
+}
+
 /** Whether a piece can go where it is: on or above the ground, on the table, and overlapping nothing. */
 export function fits(run: Placed[], piece: Placed): boolean {
-    if (!grounded(piece)) return false;
-    if (!cellsOf(piece).every((cell) => Math.abs(cell.x + 0.5) < TABLE && Math.abs(cell.z + 0.5) < TABLE)) return false;
-    return overlaps(run, piece).length === 0;
+    return misfit(run, piece) === undefined;
 }
 
 // ---- as text ----

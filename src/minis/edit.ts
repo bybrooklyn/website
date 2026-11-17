@@ -15,7 +15,7 @@
 
 import { BENDABLE, CELL, LEVEL, SIZES, allowed, brokenBy, isBent, keyOf, pointsAt, pointsOf, shapeOf, toWorld, withBend, type Family, type Kind, type Place } from "./pieces";
 import { PARTS } from "./parts";
-import { fits, jointsOf, links, open, read, write, type Open, type Placed } from "./run";
+import { fits, jointsOf, links, misfit, open, read, write, type Misfit, type Open, type Placed } from "./run";
 import type { V3 } from "../mote/solids";
 
 /** A move of pieces as one: quarter turns about the corner at the origin, then whole cells across and along and whole levels up. */
@@ -134,6 +134,87 @@ export function groupSnaps(run: Placed[], group: Placed[]): GroupSnap[] {
         }
     }
     return found;
+}
+
+/** Whether a joint of a piece is a way out for marbles: every piece's first joint is its way in, but the hopper's, its only, which is its way out. */
+export const isOut = (kind: Kind, joint: number): boolean => joint > 0 || kind.family === "h";
+
+/**
+ * How high a hopper, or any group with a way out, is put when it has nothing to join, in levels: where
+ * the plan's own runs built by pressing were raised to (19 and 22 levels), room under it for the box's
+ * tallest pieces one after another, the funnel's 8 levels, a drop's 4 and the tray's 4, with slopes
+ * and curves between.
+ */
+export const START = 20;
+
+/**
+ * Why a group pressed in could not be put in: as a piece cannot go (run.ts), or that it would join only
+ * against the way marbles roll, as a tray would at a way in. A slope that would go below the table one
+ * way round is never put on the other way, climbing: the reason given is the table.
+ */
+export type Refused = Misfit | "against";
+
+/** Why a group cannot go where it is, or nothing if it can: the first of its pieces that cannot. */
+export function groupMisfit(run: Placed[], group: Placed[]): Misfit | undefined {
+    const mine = new Set(group.map((piece) => piece.id));
+    const others = run.filter((piece) => !mine.has(piece.id));
+    for (const piece of group) {
+        const why = misfit(others, piece);
+        if (why) return why;
+    }
+    return undefined;
+}
+
+/**
+ * Where a group pressed in the box (or pasted, or a piece of one's own) goes: at an open end of the run,
+ * the first way round that fits and that marbles can follow, a way out of the run into a way in of the
+ * group or the other way about, and at `end` if it can (the end chosen), going on from it before going
+ * back. Never joined so that marbles would have to climb, or meet another way in. A tray's way in is not
+ * built on. With nothing it can join (a hopper, a run whole in itself, an empty table) it is put on its
+ * own over the point `under` gives for a height in centimetres (the middle of the view): its highest way
+ * out at level `START`, so that a run can flow down from it, or on the ground if it has none. Where it
+ * goes nowhere, why not: of the joins marbles could follow, why the first could not be made.
+ */
+export function placing(run: Placed[], group: Placed[], end: { id: number; joint: number } | undefined, under: (height: number) => V3 | undefined): { move: Move; snap?: GroupSnap } | { refused: Refused } {
+    const mine = new Set(group.map((piece) => piece.id));
+    const others = run.filter((piece) => !mine.has(piece.id));
+    const kindOf = (pieces: Placed[], id: number) => pieces.find((piece) => piece.id === id)!.kind;
+    const ends = open(others).filter((to) => kindOf(others, to.id).family !== "t");
+    const ins = groupOpen(group).filter((joint) => !isOut(kindOf(group, joint.id), joint.joint));
+    const outs = groupOpen(group).filter((joint) => isOut(kindOf(group, joint.id), joint.joint));
+    type Tried = GroupSnap & { why?: Misfit; follows: boolean; forward: boolean; atEnd: boolean };
+    const tried: Tried[] = [];
+    for (const to of ends) {
+        for (const joint of [...ins, ...outs]) {
+            if (joint.kind !== to.kind) continue;
+            for (let turn = 0; turn < 4; turn++) {
+                const [wx, wz] = rotated(joint.way[0], joint.way[2], turn);
+                if (wx * to.way[0] + joint.way[1] * to.way[1] + wz * to.way[2] > -1 + 1e-9) continue;
+                const [ax, az] = rotated(joint.at[0], joint.at[2], turn);
+                const move: Move = { turn, x: Math.round((to.at[0] - ax) / CELL), z: Math.round((to.at[2] - az) / CELL), y: Math.round((to.at[1] - joint.at[1]) / LEVEL) };
+                const forward = !isOut(kindOf(group, joint.id), joint.joint);
+                const follows = forward === isOut(kindOf(others, to.id), to.joint);
+                const atEnd = Boolean(end && to.id === end.id && to.joint === end.joint);
+                tried.push({ move, joint, to, why: groupMisfit(others, group.map((piece) => moved(piece, move))), follows, forward, atEnd });
+                break;
+            }
+        }
+    }
+    // at the end chosen before anywhere else, and going on from a way out before going back from a way in
+    const rank = (one: Tried) => (one.atEnd ? 0 : 2) + (one.forward ? 0 : 1);
+    const followed = tried.filter((one) => one.follows).sort((a, b) => rank(a) - rank(b));
+    const found = followed.find((one) => !one.why);
+    if (found) return { move: found.move, snap: { move: found.move, joint: found.joint, to: found.to } };
+    // a group that marbles could go into, by a run that has an end to go on from, is not put on its own: it says why not
+    if (ins.length && ends.length) return { refused: followed[0]?.why ?? "against" };
+    const top = outs.length ? Math.max(...outs.map((joint) => joint.at[1])) : undefined;
+    const middle = (top === undefined ? undefined : under(START * LEVEL)) ?? under(0) ?? [0, 0, 0];
+    const pivot = middleOf(group);
+    const lowest = Math.min(...group.map((piece) => piece.place.y + shapeOf(piece.kind).low));
+    const y = top === undefined ? -lowest : START - Math.round(top / LEVEL);
+    const free: Move = { turn: 0, x: Math.round((middle[0] - pivot[0]) / CELL), z: Math.round((middle[2] - pivot[2]) / CELL), y };
+    const why = groupMisfit(others, group.map((piece) => moved(piece, free)));
+    return why ? { refused: why } : { move: free };
 }
 
 /** Families whose pieces are the same mirrored, kept unmirrored so that a run's text says no more than it must: among them every moving and sounding piece. */

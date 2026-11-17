@@ -30,7 +30,7 @@ import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
+import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, isOut, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
@@ -1165,30 +1165,22 @@ export default function marbles(m: Mote): Scene {
 
     /**
      * New pieces (from the box, a paste or a piece of one's own) put at the open end, the first way round
-     * that fits, or by any other open end; on an empty table, in the middle of the view. They fly there
-     * from under the box's strip.
+     * that fits and that marbles can follow, or by any other open end; with nothing to join, in the middle
+     * of the view, a hopper high enough for a run to flow down from it (`placing`, edit.ts). They fly
+     * there from under the box's strip.
      */
     const placeAtEnd = (group: Placed[], fromX?: number): boolean => {
-        const all = groupSnaps(run, group).filter((snap) => run.find((piece) => piece.id === snap.to.id)?.kind.family !== "t");
-        // the way marbles go first: into an entry of the new pieces from the way out of the run
-        const flows = (snap: GroupSnap) => snap.joint.joint === 0 && group.find((piece) => piece.id === snap.joint.id)?.kind.family !== "h";
-        all.sort((a, b) => Number(flows(b)) - Number(flows(a)));
-        const snap = all.find((one) => end && one.to.id === end.id && one.to.joint === end.joint) ?? all[0];
-        let move: Move | undefined = snap?.move;
-        if (!move) {
-            const middle = ground(lineAt(m.width / 2, m.height / 2), 0) ?? [0, 0, 0];
-            const pivot = middleOf(group);
-            const lowest = Math.min(...group.map((piece) => piece.place.y + shapeOf(piece.kind).low));
-            const free: Move = { turn: 0, x: Math.round((middle[0] - pivot[0]) / CELL), z: Math.round((middle[2] - pivot[2]) / CELL), y: -lowest };
-            if (groupFits(run, group.map((piece) => moved(piece, free)))) move = free;
-        }
-        if (!move) return false;
+        const found = placing(run, group, end, (height) => ground(lineAt(m.width / 2, m.height / 2), height));
+        if ("refused" in found) return false;
+        const { move, snap } = found;
         const placed = group.map((piece) => moved(piece, move));
         run = [...run, ...placed];
         chosen.clear();
         for (const piece of placed) chosen.add(piece.id);
         const ids = new Set(placed.map((piece) => piece.id));
-        end = open(run).find((joint) => ids.has(joint.id) && run.find((piece) => piece.id === joint.id)?.kind.family !== "t") ?? end;
+        // the end to go on from is the new pieces' way out, where marbles leave them
+        const ends = open(run).filter((joint) => ids.has(joint.id) && run.find((piece) => piece.id === joint.id)?.kind.family !== "t");
+        end = ends.find((joint) => isOut(run.find((piece) => piece.id === joint.id)!.kind, joint.joint)) ?? ends[0] ?? end;
         changed();
         if (view && !reduced) {
             // from under the box's strip, rising into place; each piece itself is hidden until what flies there arrives
