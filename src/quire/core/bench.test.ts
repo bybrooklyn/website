@@ -7,7 +7,7 @@
 // refused never shows as made; a row is a small label and what it names; a line to type on tells what
 // is typed; a slider says its value in the tool's words; a number steps by one and stops at its ends;
 // and a color picked is told, and ringed once the tool shows it; a fold is shut and out of reach while
-// away; and a box to tick tells on or off. Run with
+// away and glides over its own height; and a box to tick tells on or off. Run with
 // `bun test src/quire/core/bench.test.ts`.
 
 import { expect, test } from "bun:test";
@@ -194,6 +194,49 @@ test("in Chromium, a fold is out of reach and shut while away and open again whe
         const at = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-bench-tick').getBoundingClientRect(); return { x: b.x + b.width - 8, y: b.y + b.height / 2 }; })()");
         await tab.click(at.x, at.y);
         expect(await tab.run("window.told")).toEqual([false]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("in Chromium, a fold glides over its own height, opening and shutting, and once open lets what grows inside it be seen whole", async () => {
+    const css = await Bun.file(`${import.meta.dir}/../../styles/quire-bench.css`).text();
+    const page = await corePage(
+        `
+        import { bench, fold, group, word } from "${quire}/core/bench.ts";
+        const box = bench("Try");
+        document.querySelector("#host").append(box.root);
+        const only = fold(group("all", word("save all", () => {}), word("save one", () => {})), false);
+        box.side.append(only);
+        window.only = only;
+        window.fold = fold;
+        window.ready = true;
+    `,
+        { body: `<style>${css}</style><div id="host"></div>` },
+    );
+    if (!page) return;
+    const { tab } = page;
+    try {
+        for (let waited = 0; waited < 100 && !(await tab.run<boolean>("window.ready === true")); waited++) await tab.wait(100);
+        await tab.wait(500);
+        // its height each frame for a quarter of a second after it is told to open, and after it is told to shut
+        const frames = (open: boolean) => tab.run<number[]>(`new Promise((done) => { const out = []; const t0 = performance.now(); window.fold(window.only, ${open}); const each = () => { out.push(window.only.getBoundingClientRect().height); if (performance.now() - t0 < 250) requestAnimationFrame(each); else done(out); }; requestAnimationFrame(each); })`);
+        const opening = await frames(true);
+        await tab.wait(500);
+        const whole = await tab.run<number>("window.only.getBoundingClientRect().height");
+        expect(whole).toBeGreaterThan(30);
+        // no frame leaps more than half its height: it had leapt nearly all of it in the first frame or two, gliding to 40rem
+        const leaps = (heights: number[]) => Math.max(...heights.slice(1).map((height, at) => Math.abs(height - heights[at]!)));
+        expect(leaps(opening)).toBeLessThan(whole / 2);
+        // what is added inside it once open is seen whole
+        await tab.run("window.only.append(Object.assign(document.createElement('div'), { style: 'height: 900px' }))");
+        expect(await tab.run<number>("window.only.getBoundingClientRect().height")).toBeGreaterThan(whole + 890);
+        await tab.run("window.only.lastElementChild.remove()");
+        // shutting starts at once, where it had waited while its height glided down from 40rem
+        const shutting = await frames(false);
+        expect(shutting.at(4)!).toBeLessThan(whole * 0.9);
+        await tab.wait(500);
+        expect(await tab.run<number>("window.only.getBoundingClientRect().height")).toBeLessThanOrEqual(1);
     } finally {
         await page.close();
     }

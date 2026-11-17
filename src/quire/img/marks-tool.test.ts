@@ -5,7 +5,7 @@
 // and in the export sharply from the original's own pixels even when the picture is made smaller, on the screen
 // too; spotlights that shade all but their shapes, an overlap left bright, the shade changed for all at once; a
 // text with an outline; marks that stay where they were put through a turn and a straightening; and mark up's
-// word on the bar, its page's kinds, the Tools menu's marks, and the keys.
+// word on the bar, its page's kinds, the Tools menu's marks, and the keys; and a mark picked showing its own thickness.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import sharp from "sharp";
@@ -302,6 +302,32 @@ test("each mark has its key, and with any mark in hand the bar's mark up is mark
     await page.until("document.querySelector('.quire-menu:popover-open .quire-menu-line')");
     const lines = await page.tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-label')].map((each) => each.textContent)");
     expect(lines).toEqual(expect.arrayContaining(["Arrow", "Box", "Text", "Numbered step", "Highlighter", "Magnifier", "Spotlight", "Hide"]));
+    await page.tab.press("Escape");
+}, 60_000);
+
+test("a mark picked shows the thickness it was drawn at, not the pen's, and the thickness it goes back to when a change to it is undone", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await focus();
+    await page.tab.press("b");
+    const thickness = () => page!.tab.run<string>("[...document.querySelectorAll('.quire-img-page.open input:checked')].filter((each) => !each.closest('.away') && each.closest('.quire-bench-group')?.querySelector('.quire-bench-heading')?.textContent === 'thickness').map((each) => each.closest('label').textContent.trim()).join()");
+    await strip("thin");
+    await focus();
+    await page.tab.drag(await page.onScreen(200, 200), await page.onScreen(500, 400), 6);
+    expect(await thickness()).toBe("thin");
+    // nothing picked, the pen made thick; then the thin box picked again
+    await page.tab.press("Escape");
+    await strip("thick");
+    await noTool();
+    const edge = await page.onScreen(200, 300);
+    await page.tab.click(edge.x, edge.y);
+    expect(await page.tab.run("!!window.app.editing().stage.picked()")).toBe(true);
+    expect(await thickness()).toBe("thin");
+    // made medium from the page, then undone from the page: thin again
+    await strip("medium");
+    expect(await thickness()).toBe("medium");
+    await page.tab.press("z", { ctrl: true });
+    expect(await thickness()).toBe("thin");
     await page.tab.press("Escape");
 }, 60_000);
 

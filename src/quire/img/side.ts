@@ -10,6 +10,7 @@
 //   const crop = side.page("crop", "quire-img-crop-page");
 //   crop.body.append(...); crop.open();
 
+import { fold } from "../core/bench";
 import { make, still } from "../core/ui";
 
 /** A page of the column: its element, where its controls go, and whether it is the one shown. */
@@ -108,18 +109,38 @@ export function sideColumn(hooks: SideHooks) {
         }
     });
 
+    // the control of the column that last held the keyboard
+    let held: HTMLElement | undefined;
+    element.addEventListener("focusin", (event) => {
+        if (event.target instanceof HTMLElement) held = event.target;
+    });
+    /**
+     * Gives the keyboard back when the control holding it was just switched off or folded away (hide all once all is hidden, a
+     * number's in order once it is in order): the browser drops it to the page's body, outside the editor's keys, where Escape and
+     * Ctrl+Z did nothing. True when it was given back.
+     */
+    function keepKeyboard(): boolean {
+        const now = document.activeElement;
+        // the browser lets go of a control switched off only when it next draws: until then the control itself still holds the keyboard
+        const holder = now instanceof HTMLElement && now !== document.body ? (element.contains(now) ? now : undefined) : held;
+        if (!holder || holder.isConnected && !holder.matches(":disabled") && !holder.closest("[inert]")) return false;
+        held = undefined;
+        hooks.back();
+        return true;
+    }
+
     /** Says what is being done now over the page, with its few words to press, or folds the line away when nothing is. */
     function say(said: { words: string; controls?: HTMLElement[] } | undefined) {
-        doing.classList.toggle("away", !said);
-        doing.inert = !said;
-        if (!said) return;
+        // folded by the kit, whose glide spans the line's own height
+        if (!said) return void fold(doing, false);
         const line = make("p", "quire-img-doing-said", said.words);
         const before = new Set([...doing.querySelectorAll("button")].map((each) => each.textContent));
         doing.replaceChildren(line, ...(said.controls?.length ? [make("div", "quire-img-doing-controls")] : []));
         doing.querySelector(".quire-img-doing-controls")?.append(...(said.controls ?? []));
         // what is new in the line grows in, rather than appearing
         if (!still()) for (const control of said.controls ?? []) if (!before.has(control.textContent)) control.classList.add("grows");
+        fold(doing, true);
     }
 
-    return { element, doing, page, show, say, current: () => current };
+    return { element, doing, page, show, say, keepKeyboard, current: () => current };
 }

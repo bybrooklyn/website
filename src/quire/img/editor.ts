@@ -27,7 +27,7 @@ import { COLORS, cropPage, exportPanel, factsPanel, factsSaid, giveRow, kindOf, 
 import { sideColumn, type Page } from "./side";
 import { factsOf, profileOf, spaceOf, type Facts, type Keep } from "./metadata";
 import { gradingWith } from "./draw";
-import { createStage, PEN, setPerspective, setTurn, sizesFor, type Pen, type Tool } from "./stage";
+import { createStage, PEN, setPerspective, setTurn, sizesFor, weightOf, type Pen, type Tool } from "./stage";
 import { alignShare, textWidth } from "./marks";
 import { perspectiveMap, rectangleOf, type Corners, type Perspective } from "./perspective";
 import { apply, ratioOf } from "./homography";
@@ -1090,8 +1090,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
         markColors.show(markColor());
         fold(thickness.group, sized && kind !== "magnifier");
         fold(lensSize.group, kind === "magnifier");
-        thickness.show(String(pen.weight));
-        lensSize.show(String(pen.weight));
+        // a mark picked shows the weight it was made at, else none; the pen's had shown, so a thin box picked said thick
+        const weight = mark && picture ? weightOf(mark, pen, picture.original, WEIGHTS.map((each) => each.value)) : pen.weight;
+        thickness.show(weight === undefined ? undefined : String(weight));
+        lensSize.show(weight === undefined ? undefined : String(weight));
         fold(textGroup, kind === "text");
         aligns.show((mark?.type === "text" ? mark.align : pen.align) ?? "left");
         const outline = mark?.type === "text" ? mark.outline : pen.outline;
@@ -1823,7 +1825,12 @@ export function mountEditor(host: HTMLElement, context: Context) {
     }
     /** The model run on the picture, its mask the cut-out step, laid on nothing to start. */
     async function startCut() {
-        if (!picture || cutBusy || !(await cutAsking.ready(buttons.cutout))) return refresh();
+        if (!picture || cutBusy) return refresh();
+        const ready = await cutAsking.ready(buttons.cutout);
+        // the first time's dialog gives the keyboard back to the bar's word it grew from, outside the editor's keys, where Escape and
+        // Ctrl+Z did nothing; it goes to the picture, as every tool's word gives it
+        if (document.activeElement === buttons.cutout) stage.element.focus({ preventScroll: true });
+        if (!ready || !picture) return refresh();
         cutBusy = true;
         refresh();
         try {
@@ -2509,6 +2516,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (page === exporting && has && (shown?.panel !== exporting.panel || exportShown !== picture)) void showExport();
         else if (page === exporting) exporting.fill();
         if (page === cropping) cropping.fill();
+        if (page === resizing) resizing.refill();
         if (page === readingPage) readingPage.fill();
         if (page === marking) fillMarks();
         if (page === cutting) fillCut();
@@ -2533,6 +2541,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         buttons.redo.disabled = !history.canRedo();
         if (picture && !factsWhole) setFacts(factsLine(look(picture), picture.original.bytes, kindOf(picture.original)));
         if (!picture) setFacts("");
+        // a control of the panel switched off while it held the keyboard gives it back to the picture
+        if (has) side.keepKeyboard();
     }
 
     // ---- the menus, as one table, and the keys ----

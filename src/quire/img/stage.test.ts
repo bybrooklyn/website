@@ -2,13 +2,13 @@
 // from the picture is covered by its box and margin, a run by one cover a line, and a run's text keeps
 // its lines; and in
 // headless Chromium, by real keys and drags, the crop's frame is nudged by the arrows (ten pixels with
-// Shift), held to a square from its page of the side panel, and set with Enter; zooming by the keys goes to one to one
+// Shift), held to a square from its page of the side panel, and set with Enter, a click outside it leaving it as it was; zooming by the keys goes to one to one
 // and back to fitted; a mark picked is moved by the arrows and removed with Delete, and undo brings
 // it back; Escape leaves the tool. Skipped, with a notice, on a machine with no Chromium.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
-import { coveredBy, findingCovers, lensBeside, onWords, placeWords, runCovers, runText, sizesFor, thickness } from "./stage";
+import { coveredBy, findingCovers, lensBeside, onWords, placeWords, runCovers, runText, sizesFor, thickness, weightOf } from "./stage";
 
 test("a highlighter laid on words read runs along their line through its middle, a tenth of its height past the first and last word, as thick as the line and a tenth more, a slanted line too", () => {
     const line = { text: "", sure: 1, box: { at: { x: 100, y: 50 }, along: { x: 1, y: 0 }, length: 300, height: 20 }, words: [] };
@@ -68,6 +68,20 @@ test("a mark's thickness follows the pen and the picture's longer side, never th
     expect(thickness({ color: "#000000", weight: 0.003 }, { width: 300, height: 200 })).toBe(2);
 });
 
+test("a mark's weight is found from its size as each weight's pen makes it, and is none for a size no weight makes or a kind with none", () => {
+    const pen = { color: "#000000", weight: 0.009 };
+    const size = { width: 2000, height: 1500 };
+    const weights = [0.003, 0.005, 0.009];
+    const box = (thick: number) => ({ type: "box" as const, rect: { x: 0, y: 0, width: 10, height: 10 }, color: "#000000", thickness: thick });
+    // a thin box is thin whatever the pen now is, where the panel had shown the pen's weight
+    expect(weightOf(box(6), pen, size, weights)).toBe(0.003);
+    expect(weightOf(box(18), pen, size, weights)).toBe(0.009);
+    expect(weightOf(box(7), pen, size, weights)).toBeUndefined();
+    expect(weightOf({ type: "text", at: { x: 0, y: 0 }, text: "a", color: "#000000", size: 60 }, pen, size, weights)).toBe(0.005);
+    expect(weightOf({ type: "magnifier", at: { x: 0, y: 0 }, from: { x: 0, y: 0 }, radius: 96, zoom: 2, color: "#000000", thickness: 6 }, pen, size, weights)).toBe(0.003);
+    expect(weightOf({ type: "spotlight", rect: { x: 0, y: 0, width: 10, height: 10 }, dim: 0.5 }, pen, size, weights)).toBeUndefined();
+});
+
 let page: ImgPage | undefined;
 beforeAll(async () => {
     page = await imgPage("img-stage");
@@ -107,6 +121,28 @@ test("the crop's frame is nudged by the arrows, held to a square from its page o
     expect(steps.map((step) => step.type)).toEqual(["crop"]);
     expect(steps[0]!.rect!.width).toBe(held.width);
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("none");
+}, 30_000);
+
+test("a click outside the crop's frame leaves the frame as it was, while a drag from there draws a new one", async () => {
+    if (!page) return;
+    await pasteCropping();
+    const corner = await page.onScreen(1200, 700);
+    await page.tab.drag(corner, await page.onScreen(800, 500), 6);
+    const before = await frameOf();
+    expect(before.width).toBeLessThan(1200);
+    // a click on the picture outside the frame, and one on the dark margin beside the picture: the frame had become one pixel
+    const outside = await page.onScreen(1000, 600);
+    await page.tab.click(outside.x, outside.y);
+    expect(await frameOf()).toEqual(before);
+    const margin = await page.onScreen(0, 350);
+    await page.tab.click(margin.x - 15, margin.y);
+    expect(await frameOf()).toEqual(before);
+    // a drag from outside still draws a frame of its own
+    await page.tab.drag(outside, await page.onScreen(1150, 680), 6);
+    const drawn = await frameOf();
+    expect(drawn.x).toBeGreaterThan(990);
+    expect(drawn.width).toBeGreaterThan(50);
+    await page.tab.press("Escape");
 }, 30_000);
 
 test("turned by the crop's dial, a cover, an arrow and words read stay where they were on the picture: pressed where they now are they are picked or hidden, a new box is upright on the screen, and the export draws each in its place", async () => {
@@ -287,6 +323,19 @@ test("a picture made another size is fitted and centered again, as one opened is
         expect(await settledPlace()).toBe(await fittedPlace());
     }
 }, 60_000);
+
+test("resize's fields follow undo and redo while its page is open: they said the size undone", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await pressSize("50%");
+    const fields = () => page!.tab.run<string[]>("[...document.querySelectorAll('.quire-img-resize input[aria-label]')].map((each) => each.value)");
+    expect(await fields()).toEqual(["600", "350"]);
+    await page.tab.press("z", { ctrl: true });
+    expect(await fields()).toEqual(["1200", "700"]);
+    await page.tab.press("z", { ctrl: true, shift: true });
+    expect(await fields()).toEqual(["600", "350"]);
+    await page.tab.press("Escape");
+}, 30_000);
 
 test("Escape while typing a text keeps what was typed and leaves the typing, as a press elsewhere does; an empty text is still let go", async () => {
     if (!page) return;

@@ -193,3 +193,31 @@ test("version history draws a version's steps over the original in the side pane
     expect(await page.boxOf(".quire-img-stage")).toEqual(wide);
     expect(await page.tab.run("document.querySelector('.quire-img-side').dataset.page")).toBe("export");
 }, 30_000);
+
+test("on a phone, each page of the side panel scrolled to its end leaves its last line clear of the commands button in the window's corner", async () => {
+    const phone = await imgPage("img-editor-phone", { width: 390, height: 800 });
+    if (!phone) return;
+    try {
+        await phone.paste("photo");
+        const covered = () =>
+            phone.tab.run<string[]>(`(() => {
+                const side = document.querySelector(".quire-img-side");
+                side.scrollTop = 1e6;
+                const open = side.querySelector(".quire-img-page.open");
+                const corner = document.querySelector(".quire-palette-button").getBoundingClientRect();
+                return [...open.querySelectorAll("button, label, input")].filter((each) => each.getClientRects().length && !each.closest(".away")).filter((each) => {
+                    const box = each.getBoundingClientRect();
+                    return box.left < corner.right && box.right > corner.left && box.top < corner.bottom && box.bottom > corner.top;
+                }).map((each) => each.textContent.trim() || each.getAttribute("aria-label"));
+            })()`);
+        // the export's copy, crop's apply and more's facts had lain under it
+        expect(await covered()).toEqual([]);
+        for (const word of ["crop", "more", "mark up"]) {
+            await phone.tab.run(`[...document.querySelectorAll(".quire-img-bar .quire-img-word")].find((each) => each.textContent === ${JSON.stringify(word)}).click()`);
+            await phone.tab.wait(400);
+            expect(await covered()).toEqual([]);
+        }
+    } finally {
+        await phone.close();
+    }
+}, 60_000);

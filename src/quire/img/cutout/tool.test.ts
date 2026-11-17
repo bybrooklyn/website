@@ -62,6 +62,8 @@ test("in imgQuire, Cut out is asked first, makes a step that exports with transp
         await tab.run("document.querySelector('.quire-cut-dialog .quire-img-read-card[data-tier=\"cut-quick\"]').click()");
         await tab.run("document.querySelector('.quire-cut-download').click()");
         await until("window.app.editing().steps().some((step) => step.type === 'cutout')", 90_000);
+        // the dialog gone, the keyboard is on the picture, where it had been left on the bar's word outside the editor's keys
+        expect(await tab.run("document.activeElement === document.querySelector('.quire-img-stage')")).toBe(true);
         // the picture as it was fades out over the cut-out: a copy of it lies over the stage (the figure's head at its middle, no blank
         // canvas), and is gone when the fade is done
         await until("document.querySelector('.quire-img-leaving')", 5000);

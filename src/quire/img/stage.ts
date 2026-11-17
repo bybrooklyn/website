@@ -122,6 +122,17 @@ export function sizesFor(pen: Pen, size: { width: number; height: number }) {
     return { line, text, outline: Math.max(1, Math.round(text * (pen.outlineWeight ?? PEN.outlineWeight) * 2) / 2), number: line * 7, highlight: line * 4, lens: Math.max(12, Math.round(Math.max(size.width, size.height) * pen.weight * 16)) };
 }
 
+/** Which of `weights` a mark was made at, by its size as a pen of each weight makes it on a picture of `size`: for the thickness shown with a mark picked. None when it is no weight's size (a highlighter laid on words read takes their line's) or its kind has none. */
+export function weightOf(mark: Mark, pen: Pen, size: { width: number; height: number }, weights: number[]): number | undefined {
+    const own = mark.type === "arrow" || mark.type === "box" || mark.type === "highlight" ? mark.thickness : mark.type === "text" || mark.type === "number" ? mark.size : mark.type === "magnifier" ? mark.radius : undefined;
+    if (own === undefined) return undefined;
+    return weights.find((weight) => {
+        const sizes = sizesFor({ ...pen, weight }, size);
+        const made = mark.type === "arrow" || mark.type === "box" ? sizes.line : mark.type === "highlight" ? sizes.highlight : mark.type === "text" ? sizes.text : mark.type === "number" ? sizes.number : sizes.lens;
+        return Math.abs(made - own) < 0.5;
+    });
+}
+
 /** Where a magnifier's lens goes when it is put down with a press and no drag: beside the place it looks at, half a lens away, on the first side where it lies whole inside `room` (up and right, up and left, down and right, down and left), else up and right. */
 export function lensBeside(at: Point, radius: number, room: Rect): Point {
     const far = radius * 1.5;
@@ -1192,7 +1203,7 @@ export function createStage(hooks: StageHooks) {
     }
 
     // ---- dragging ----
-    type Drag = { kind: "cut"; stroke?: Stroke; from: Point } | { kind: "level" } | { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "reshape"; id: string; grip: Grip; from: Point; steps: Kept[] } | { kind: "words"; from: number } | { kind: "select"; from: number };
+    type Drag = { kind: "cut"; stroke?: Stroke; from: Point } | { kind: "level" } | { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect; before?: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "reshape"; id: string; grip: Grip; from: Point; steps: Kept[] } | { kind: "words"; from: number } | { kind: "select"; from: number };
     let drag: Drag | undefined;
     let spaceHeld = false;
     const fingers = new Map<number, Point>();
@@ -1301,9 +1312,10 @@ export function createStage(hooks: StageHooks) {
             const level = toLevelAt(at);
             const handle = (event.target as HTMLElement).dataset?.handle as Handle | undefined;
             const inside = cropFrame && level.x >= cropFrame.x && level.x <= cropFrame.x + cropFrame.width && level.y >= cropFrame.y && level.y <= cropFrame.y + cropFrame.height;
-            // pressed outside the frame, a new one is dragged out from there
+            // pressed outside the frame, a new one is dragged out from there; the frame before is kept, for a press let go with hardly a drag
+            const before = !handle && !inside ? cropFrame : undefined;
             if (!handle && !inside) cropFrame = { x: Math.round(level.x), y: Math.round(level.y), width: 1, height: 1 };
-            drag = { kind: "frame", handle: handle ?? (inside ? "move" : "se"), from: level, start: cropFrame! };
+            drag = { kind: "frame", handle: handle ?? (inside ? "move" : "se"), from: level, start: cropFrame!, ...(before ? { before } : {}) };
             return;
         }
         if (tool === "text") {
@@ -1481,6 +1493,12 @@ export function createStage(hooks: StageHooks) {
         const made = live;
         live = undefined;
         if (was.kind === "frame") {
+            // a press outside the frame with hardly a drag leaves the frame as it was, as a mark's press makes no mark: it had made the crop one pixel
+            const where = levelPlace();
+            if (was.before && cropFrame && Math.min(cropFrame.width * where.across, cropFrame.height * where.down) < 4) {
+                cropFrame = was.before;
+                paint();
+            }
             chosen = cropFrame;
             return hooks.moved();
         }
