@@ -2,7 +2,7 @@
 // from the picture is covered by its box and margin, a run by one cover a line, and a run's text keeps
 // its lines; and in
 // headless Chromium, by real keys and drags, the crop's frame is nudged by the arrows (ten pixels with
-// Shift), held to a square from its page of the side panel, and set with Enter; zooming by the keys goes to one to one
+// Shift), held to a square from its page of the side panel, and set with Enter, a click outside it leaving it as it was; zooming by the keys goes to one to one
 // and back to fitted; a mark picked is moved by the arrows and removed with Delete, and undo brings
 // it back; Escape leaves the tool. Skipped, with a notice, on a machine with no Chromium.
 
@@ -107,6 +107,28 @@ test("the crop's frame is nudged by the arrows, held to a square from its page o
     expect(steps.map((step) => step.type)).toEqual(["crop"]);
     expect(steps[0]!.rect!.width).toBe(held.width);
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("none");
+}, 30_000);
+
+test("a click outside the crop's frame leaves the frame as it was, while a drag from there draws a new one", async () => {
+    if (!page) return;
+    await pasteCropping();
+    const corner = await page.onScreen(1200, 700);
+    await page.tab.drag(corner, await page.onScreen(800, 500), 6);
+    const before = await frameOf();
+    expect(before.width).toBeLessThan(1200);
+    // a click on the picture outside the frame, and one on the dark margin beside the picture: the frame had become one pixel
+    const outside = await page.onScreen(1000, 600);
+    await page.tab.click(outside.x, outside.y);
+    expect(await frameOf()).toEqual(before);
+    const margin = await page.onScreen(0, 350);
+    await page.tab.click(margin.x - 15, margin.y);
+    expect(await frameOf()).toEqual(before);
+    // a drag from outside still draws a frame of its own
+    await page.tab.drag(outside, await page.onScreen(1150, 680), 6);
+    const drawn = await frameOf();
+    expect(drawn.x).toBeGreaterThan(990);
+    expect(drawn.width).toBeGreaterThan(50);
+    await page.tab.press("Escape");
 }, 30_000);
 
 test("turned by the crop's dial, a cover, an arrow and words read stay where they were on the picture: pressed where they now are they are picked or hidden, a new box is upright on the screen, and the export draws each in its place", async () => {

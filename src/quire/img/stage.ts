@@ -1192,7 +1192,7 @@ export function createStage(hooks: StageHooks) {
     }
 
     // ---- dragging ----
-    type Drag = { kind: "cut"; stroke?: Stroke; from: Point } | { kind: "level" } | { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "reshape"; id: string; grip: Grip; from: Point; steps: Kept[] } | { kind: "words"; from: number } | { kind: "select"; from: number };
+    type Drag = { kind: "cut"; stroke?: Stroke; from: Point } | { kind: "level" } | { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect; before?: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "reshape"; id: string; grip: Grip; from: Point; steps: Kept[] } | { kind: "words"; from: number } | { kind: "select"; from: number };
     let drag: Drag | undefined;
     let spaceHeld = false;
     const fingers = new Map<number, Point>();
@@ -1301,9 +1301,10 @@ export function createStage(hooks: StageHooks) {
             const level = toLevelAt(at);
             const handle = (event.target as HTMLElement).dataset?.handle as Handle | undefined;
             const inside = cropFrame && level.x >= cropFrame.x && level.x <= cropFrame.x + cropFrame.width && level.y >= cropFrame.y && level.y <= cropFrame.y + cropFrame.height;
-            // pressed outside the frame, a new one is dragged out from there
+            // pressed outside the frame, a new one is dragged out from there; the frame before is kept, for a press let go with hardly a drag
+            const before = !handle && !inside ? cropFrame : undefined;
             if (!handle && !inside) cropFrame = { x: Math.round(level.x), y: Math.round(level.y), width: 1, height: 1 };
-            drag = { kind: "frame", handle: handle ?? (inside ? "move" : "se"), from: level, start: cropFrame! };
+            drag = { kind: "frame", handle: handle ?? (inside ? "move" : "se"), from: level, start: cropFrame!, ...(before ? { before } : {}) };
             return;
         }
         if (tool === "text") {
@@ -1481,6 +1482,12 @@ export function createStage(hooks: StageHooks) {
         const made = live;
         live = undefined;
         if (was.kind === "frame") {
+            // a press outside the frame with hardly a drag leaves the frame as it was, as a mark's press makes no mark: it had made the crop one pixel
+            const where = levelPlace();
+            if (was.before && cropFrame && Math.min(cropFrame.width * where.across, cropFrame.height * where.down) < 4) {
+                cropFrame = was.before;
+                paint();
+            }
             chosen = cropFrame;
             return hooks.moved();
         }
