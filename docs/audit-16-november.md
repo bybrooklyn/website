@@ -123,21 +123,24 @@ kinds of thing to press (underlined words, plain words, filled round buttons, bo
   the on-page labels of both editors.
 - About, setup and license start at the page's left edge with every other page that has the navigation.
 - A background cut away fades out where it had vanished between two frames.
+- imgQuire keeps its menu bar; under it every tool has its word: crop, resize, mark up, cut out, color, then
+  export and more. A picture opens with no tool on and the export showing. One side panel is always there
+  (under the picture on a phone) and holds the controls of whatever is on, built from the small tools' kit,
+  so nothing floats over the picture and the picture does not move when a tool is chosen. The strip over the
+  picture, the resize popover, the marks menu and the sliding panels are gone. What is outside the four jobs
+  (reading text, repairing a JPEG, the way of enlarging, adding pictures, the facts) is under more. See
+  [imgQuire.md](imgQuire.md).
 - Sand has one look, chosen from pictures of three palettes, three kinds of light and four stages: softened
   colors leaning to the site's violet with every two materials tellable apart (a test holds how far), light
   from fire and lava on the grains near them and a glow in the air, water lighter at its surface and darker
   below, and the materials and controls in a column beside a stage with soft edges and a floor, so that the
   whole stage and every material are in the first screen at 1288 by 828.
 
-**Decided, being built on the day.**
-- imgQuire keeps its menu bar; under it every tool has its word: crop, resize, mark up, cut out, color, then
-  export and more. A picture opens with no tool on. One side panel is always there and holds the controls of
-  whatever is on, so nothing floats over the picture and the picture never glides aside.
-
 ## Left
 
 - The two tests named above as fragile and as needing a quiet machine.
-- The editors' panels and dialogs beyond imgQuire's new layout, and mdQuire's layout, are as they were.
+- imgQuire's dialogs, and the histogram, curve and wheels of its color page, are as they were; the curve's
+  four channel buttons are still boxes. mdQuire's layout is as it was.
 - Undo on the cut-out page is by the keyboard only.
 - The lists of the site (blog, projects, minis, photos, tools) are laid out four ways; not looked into
   further.
