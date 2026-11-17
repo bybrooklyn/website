@@ -20,6 +20,12 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - Right-to-left paragraphs are laid out left to right.
 - About fifteen panels are sized by the window's full width, so in a narrow desktop window with classic scrollbars they meet the left edge.
 
+### The tools and minis, from the audit of 17 November
+
+- Twenty-two places where the tools and minis do not match, each with the ways it could go, and the choices the testers left in imgQuire, Marbles and Blocks: [audit-17-november](docs/audit-17-november.md).
+- The words added that day to Sand's column and its controls line, to be read and approved or reworded.
+- Going live: the live site is as it was on 11 November.
+
 ### The minis and Mote
 
 - Generalist: the page text, and its changed controls line, to review; whether the page opens on practice (as now) or on evolution.
@@ -92,7 +98,7 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 
 ## Site
 
-- Tools stay as projects, each with a page about it and a way to open it; there is no separate tools section. A converter for any file and a QR code maker are wanted, built on the Quires' core, with ideas from p2r3's convert, ha.mr and envelope (ideas only where the licence is not permissive).
+- Tools stay as projects, each with a page about it and a way to open it. The converter, the QR code maker and the background remover are built and reached from an unlisted list at `/tools/`: decide when they are listed and where.
 
 - Spectrum: show the credit its license asks for somewhere a visitor sees it.
 - Three details on the resume.
@@ -114,8 +120,8 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 
 ## Minis
 
-- A marble run: the plan is in [marbles](docs/marbles.md); it is built in seven stages, the first of them in Mote.
-- A sand simulator ([sand](docs/sand.md)): stage 1, the engine and its tests, is built and the mini is a draft. To confirm: sand at 45 degrees and dirt at 63, steam as an upside-down liquid, water levelled through a body, cells of one CSS pixel. Then stage 2, heat and reactions.
+- The marble run ([marbles](docs/marbles.md)) and the sand simulator ([sand](docs/sand.md)) are built and are drafts: decide when each is listed.
+- Sand, asked for on 17 November and not yet built: wind, gravity that can be turned and a shake; a line, a box and a fill to draw with, and undo and redo of each stroke; sound.
 
 - A post about writing the physics, with a mini at each step.
 - The Blocks demo on the home page.
@@ -123,7 +129,7 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Small games: something with the 3D solids, two people on one keyboard, a daily puzzle.
 - Terminal recordings of full-screen menus.
 
-## mdQuire, chosen on 13 November and not yet built
+## mdQuire, chosen on 13 November and still open
 
 - Deploy after the menus and the bar are reworked. mdQuire and its project page are listed once the audit's findings are fixed.
 - The findings of the audit of how mdQuire looks and behaves ([mdQuire-ux-audit](docs/mdQuire-ux-audit.md)) after its ten changes.
@@ -132,5 +138,5 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 
 ## imgQuire and the background remover
 
-- Settle the questions in [imgQuire](docs/imgQuire.md#open) and [cutout](docs/cutout.md#open) before building; first, what imgQuire's file is.
-- Before imgQuire starts, what the core still leaves to Markdown ([quire-core](docs/quire-core.md#left-tangled)): the stores carry mdQuire's two parts and know its file endings, and the stylesheets are not yet split into the core's and mdQuire's.
+- Both are built. What is still a choice in each, found by using them on 17 November, is in [the audit of that day](docs/audit-17-november.md).
+- What the core still leaves to Markdown ([quire-core](docs/quire-core.md#left-tangled)): the stores carry mdQuire's two parts and know its file endings, and the stylesheets are not yet split into the core's and mdQuire's.
