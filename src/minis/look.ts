@@ -144,3 +144,19 @@ export function tableMesh(reach: number, thick: number, holes: Hole[]): Mesh {
     }
     return merged(boxes, false)!;
 }
+
+/**
+ * Whether frames come too slowly for the full look, from the gaps between the last frames (seconds,
+ * the last two seconds' worth or 120 of them at most): when the middle gap is longer than a fortieth
+ * of a second. It is decided on two seconds of frames for frames just too slow, and on less the slower
+ * they come, in proportion, but never on less than a second (a moment of slow frames as the scene starts
+ * is not enough) nor fewer than two: so the slowest machines, which most need the
+ * plain look, are the ones it decides for soonest, a machine at three frames a second within a second.
+ */
+export function tooSlow(gaps: number[]): boolean {
+    if (gaps.length < 2) return false;
+    const middle = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
+    if (middle <= 1 / 40) return false;
+    const watched = gaps.reduce((sum, gap) => sum + gap, 0);
+    return watched >= Math.max(1, Math.min(1.9, (2 * (1 / 40)) / middle)) || gaps.length >= 120;
+}

@@ -890,8 +890,10 @@ the hoist, a slot. Before the look, what stage 5 left.
 **Full and plain.** The full look has the soft shadows that widen with distance, the shadow where things
 touch, the bloom, and the ribbon bent by the glass. The plain look has a shadow softened a little at its
 edge, none where things touch, no bloom, and the ribbon seen straight. The look goes plain by itself where
-frames come slowly: when the middle of the last two seconds' frames (at least eight), while the scene
-moves, takes longer than a fortieth of a second. L switches it, and once switched by hand it stays.
+frames come slowly: when the middle of the last two seconds' frames, while the scene moves, takes longer
+than a fortieth of a second, decided on less time the slower they come but never on less than a second, so
+that a machine at three frames a second goes plain within a second (`tooSlow`, look.ts; it had needed eight
+frames in two seconds, which frames slower than 0.29 s never gave). L switches it, and once switched by hand it stays.
 
 **Backends.** Mote draws in 3D on WebGL 2 only; WebGPU is in imgQuire, not in Mote. Within WebGL 2 the
 patterns degrade quietly: where the graphics card cannot compile their program, parts with a pattern are

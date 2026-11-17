@@ -5,7 +5,7 @@
 
 import { expect, test } from "bun:test";
 import { FLAGS, rgb } from "./flags";
-import { RIBBONS, grained, grainedBox, hashed, marbleLook, merged, oklch, pane, tableMesh, woodSeed } from "./look";
+import { RIBBONS, grained, grainedBox, hashed, marbleLook, merged, oklch, pane, tableMesh, tooSlow, woodSeed } from "./look";
 
 test("a marble's look is decided by its number: the same number, the same marble, every time", () => {
     for (let n = 0; n < 200; n++) expect(marbleLook(n)).toEqual(marbleLook(n));
@@ -76,4 +76,33 @@ test("the table's top leaves out each hole, as a pit for a lift's skirt, and cov
     }
     expect(Math.max(...table.points.map((p) => p[1]))).toBe(0);
     expect(Math.min(...table.points.map((p) => p[1]))).toBe(-2);
+});
+
+/** How long frames coming every `gap` seconds take to turn the look plain, as marbles.ts keeps them (two seconds' worth, 120 at most); never, if not within 20 s. */
+function plainAfter(gap: number): number | undefined {
+    const gaps: number[] = [];
+    for (let time = gap; time <= 20; time += gap) {
+        gaps.push(gap);
+        let span = gaps.reduce((sum, one) => sum + one, 0);
+        while (gaps.length > 120 || span - gaps[0]! > 2) span -= gaps.shift()!;
+        if (tooSlow(gaps)) return time;
+    }
+    return undefined;
+}
+
+test("the look goes plain by itself where frames come slowly, within a few seconds, and soonest for the slowest", () => {
+    // three frames a second, as headless Chromium draws the scene, had never turned it plain
+    expect(plainAfter(1 / 3)).toBeLessThanOrEqual(1.01);
+    const gaps = [0.9, 0.5, 1 / 3, 0.29, 0.1, 1 / 20, 1 / 30];
+    const times = gaps.map((gap) => plainAfter(gap)!);
+    for (const time of times) expect(time).toBeLessThanOrEqual(2.05);
+    // the slower the frames, the sooner (to within a frame, which can only come when it comes)
+    for (let i = 1; i < times.length; i++) expect(times[i]! + gaps[i - 1]!).toBeGreaterThanOrEqual(times[i - 1]!);
+    // a moment of slow frames as the scene starts, less than a second of them, does not
+    expect(tooSlow([0.3, 0.3, 0.3])).toBe(false);
+    // frames fast enough never turn it plain
+    expect(plainAfter(1 / 60)).toBeUndefined();
+    expect(plainAfter(1 / 41)).toBeUndefined();
+    // a few slow frames among quick ones do not either: it is the middle that counts
+    expect(tooSlow([0.016, 0.3, 0.016, 0.016, 0.4, ...new Array<number>(100).fill(0.016)])).toBe(false);
 });

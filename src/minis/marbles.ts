@@ -25,7 +25,7 @@
 import { gl, type Color, type Look, type Part, type Pattern, type View } from "../mote/gl";
 import { turn as turnOf, type Hinge, type Solid } from "../mote/space";
 import { ball, block, type Mesh, type Turn, type V3 } from "../mote/solids";
-import { grained, grainedBox, marbleLook, merged, pane, tableMesh, woodSeed, type Hole } from "./look";
+import { grained, grainedBox, marbleLook, merged, pane, tableMesh, tooSlow, woodSeed, type Hole } from "./look";
 import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
@@ -2482,8 +2482,8 @@ export default function marbles(m: Mote): Scene {
     const building = () => Boolean(carried || bendDrag || bending);
     /**
      * The look, full or plain. It goes plain by itself where frames come slowly: when the middle of the
-     * last two seconds' frames (at least eight), while the scene moves, took longer than a fortieth of a
-     * second. Once set by the key (L), it stays as set.
+     * last two seconds' frames, while the scene moves, took longer than a fortieth of a second, decided on
+     * less time the slower they come (tooSlow, look.ts). Once set by the key (L), it stays as set.
      */
     let lookByHand = false;
     let lookByItself = false;
@@ -2502,11 +2502,8 @@ export default function marbles(m: Mote): Scene {
         gaps.push(dt);
         let span = gaps.reduce((sum, gap) => sum + gap, 0);
         while (gaps.length > 120 || span - gaps[0]! > 2) span -= gaps.shift()!;
-        // judged on two seconds of frames, or fewer where frames come very slowly
-        if (span < 1.9 && gaps.length < 120) return;
-        if (gaps.length < 8) return;
-        const middle = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
-        if (middle > 1 / 40) {
+        // judged on two seconds of frames, and on less the slower they come (tooSlow, look.ts)
+        if (tooSlow(gaps)) {
             view.quality = "plain";
             lookByItself = true;
         }
