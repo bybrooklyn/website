@@ -1,32 +1,28 @@
-// The handles on what is selected in the marble run, as arithmetic and shapes: an arrow along each of
-// the three axes to move it, a ring about the upright to turn it, and a knob at a piece's far end to make
-// it longer or shorter. They keep one size on the screen at any distance, a fingertip's reach; this file
-// says where they are on the screen, which one a pointer is on, and how far a drag along an arrow or round
-// the ring has gone, from the camera of orbit.ts. marbles.ts draws them from the shapes here. While a
-// piece is bent, its points are its only handles: where a drag of one moves it, and what it snaps to.
+// The points a piece is bent by in the marble run, as arithmetic: they keep one size on the screen at
+// any distance, a fingertip's reach; this file says where they are on the screen, which one a pointer is
+// on, how a drag of one moves it and what it snaps to, from the camera of orbit.ts. marbles.ts draws
+// them. (A chosen piece has no other handles: it is moved by carrying it, and turned, raised, lowered
+// and lengthened by the words of the column and their keys.)
 //
-//   const size = across(orbit, degrees, height, middle);        // centimetres a pixel there
-//   const shown = layout(orbit, degrees, width, height, middle, knob);
-//   which(shown, x, y, "touch");                                // "x", "y", "z", "ring", "knob" or nothing
-//   along(orbit, degrees, aspect, middle, [1, 0, 0], from, to); // centimetres a drag went along x
+//   const size = across(orbit, degrees, height, point);         // centimetres a pixel there
+//   const shown = pointsLayout(orbit, degrees, width, height, points);
+//   which(shown, x, y, "touch");                                // "point0", "point1" or nothing
 
 import { eyeOf, project, ray, type Orbit } from "./orbit";
-import type { Mesh, V3 } from "../mote/solids";
+import type { V3 } from "../mote/solids";
 
-/** How long an arrow is on the screen, in pixels, and how far from the middle it starts; the ring's radius. */
+/** How large a point is drawn on the screen, in pixels. */
 export const ARROW = 74;
-export const GAP = 20;
-export const RING = 54;
-/** How near a pointer must be to a handle to take it, in pixels: a fingertip's half width, and less for a mouse. */
+/** How near a pointer must be to a point to take it, in pixels: a fingertip's half width, and less for a mouse. */
 export const REACH = { touch: 24, mouse: 13 };
 
-/** A handle: one of the arrows, the ring, a piece's end knob, or one of the points it is bent by, by number. */
-export type Handle = "x" | "y" | "z" | "ring" | "knob" | `point${number}`;
+/** A point a piece is bent by, by number. */
+export type Handle = `point${number}`;
 
 /** Which point a handle is, if it is one. */
 export const pointOf = (handle: Handle | undefined): number | undefined => (handle?.startsWith("point") ? Number(handle.slice(5)) : undefined);
 
-/** The axes the arrows point along. */
+/** The axes, for the little axes in the corner of the scene. */
 export const AXES: Record<"x" | "y" | "z", V3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
 
 /** How many centimetres one pixel of the picture covers at a point of the scene, for a picture `height` pixels high. */
@@ -38,103 +34,35 @@ export function across(orbit: Orbit, degrees: number, height: number, p: V3): nu
     return (Math.max(1, depth) * 2 * Math.tan((degrees * Math.PI) / 360)) / Math.max(1, height);
 }
 
-/** Where the handles are on the screen, in pixels: each arrow from its start to its tip, the ring as points round it, the knob. */
+/** Where the points of a piece being bent are on the screen, in pixels. */
 export interface Shown {
-    middle?: { x: number; y: number };
-    arrows: Partial<Record<"x" | "y" | "z", { from: { x: number; y: number }; to: { x: number; y: number } }>>;
-    ring: { x: number; y: number }[];
-    knob?: { x: number; y: number };
-    /** The points a piece being bent is bent by: shown in place of the arrows, the ring and the knob. */
-    points?: { x: number; y: number }[];
+    points: { x: number; y: number }[];
 }
 
-/** Where the points of a piece being bent are on the screen: the only handles shown while it is bent. */
+/** Where the points of a piece being bent are on the screen. */
 export function pointsLayout(orbit: Orbit, degrees: number, width: number, height: number, points: V3[]): Shown {
     const aspect = width / Math.max(1, height);
     const screen = (p: V3) => {
         const seen = project(orbit, degrees, aspect, p);
         return seen && { x: ((seen.x + 1) / 2) * width, y: ((1 - seen.y) / 2) * height };
     };
-    return { arrows: {}, ring: [], points: points.map((p) => screen(p) ?? { x: -1e6, y: -1e6 }) };
+    return { points: points.map((p) => screen(p) ?? { x: -1e6, y: -1e6 }) };
 }
 
-/**
- * How far the handles stand off from the middle, in pixels more than they would, for a selection that
- * reaches `reach` pixels from its middle on a picture `width` by `height`: far enough that the arrows
- * start and the ring runs outside it, so that the handles and what is chosen do not cover each other
- * and a press on a piece is a press on the piece. A selection larger than a fifth of the picture is
- * stood off from no further, or its handles would leave the picture; on that one they cross it.
- */
-export function standOff(reach: number, width: number, height: number): number {
-    const most = Math.min(width, height) * 0.2;
-    return Math.max(0, Math.min(most, reach + 10 - GAP));
-}
-
-/**
- * Where every handle is on the screen for a selection whose middle is at `middle`, and a knob at `knob`
- * if one piece that can be resized is selected; the arrows and the ring stood off by `stand` pixels.
- */
-export function layout(orbit: Orbit, degrees: number, width: number, height: number, middle: V3, knob?: V3, stand = 0): Shown {
-    const aspect = width / Math.max(1, height);
-    const screen = (p: V3) => {
-        const seen = project(orbit, degrees, aspect, p);
-        return seen && { x: ((seen.x + 1) / 2) * width, y: ((1 - seen.y) / 2) * height };
-    };
-    const size = across(orbit, degrees, height, middle);
-    const shown: Shown = { middle: screen(middle), arrows: {}, ring: [] };
-    const [start, end, ring] = [(GAP + stand) * size, (ARROW + stand) * size, (RING + stand) * size];
-    for (const [name, axis] of Object.entries(AXES) as ["x" | "y" | "z", V3][]) {
-        const from = screen([middle[0] + axis[0] * start, middle[1] + axis[1] * start, middle[2] + axis[2] * start]);
-        const to = screen([middle[0] + axis[0] * end, middle[1] + axis[1] * end, middle[2] + axis[2] * end]);
-        // an arrow seen end on is too short to take; it is left out of reach until the view turns
-        if (from && to && Math.hypot(to.x - from.x, to.y - from.y) > ARROW * 0.3) shown.arrows[name] = { from, to };
-    }
-    for (let i = 0; i < 48; i++) {
-        const angle = (i / 48) * 2 * Math.PI;
-        const point = screen([middle[0] + Math.cos(angle) * ring, middle[1], middle[2] + Math.sin(angle) * ring]);
-        if (point) shown.ring.push(point);
-    }
-    if (knob) shown.knob = screen(knob);
-    return shown;
-}
-
-/** How far a point is from a stretch of line between two others, all on the screen. */
-export function toSegment(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): number {
-    const [dx, dy] = [b.x - a.x, b.y - a.y];
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
-    return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
-}
-
-/** Which handle a pointer at (x, y) takes, if any: the knob first, then the nearest arrow by its outer part, then the ring (a ring seen nearly edge on is not offered). */
+/** Which point a pointer at (x, y) takes, if any: the nearest, from a little further than a fingertip's half width, since points sit on the track. */
 export function which(shown: Shown, x: number, y: number, kind: "touch" | "mouse"): Handle | undefined {
-    const reach = REACH[kind];
-    const p = { x, y };
-    if (shown.points) {
-        // the nearest point, from a little further than a fingertip's half width: points sit on the track, and are the only handles while it is bent
-        let [nearest, least] = [-1, reach * 1.25];
-        for (let index = 0; index < shown.points.length; index++) {
-            const d = Math.hypot(shown.points[index]!.x - x, shown.points[index]!.y - y);
-            if (d < least) [nearest, least] = [index, d];
-        }
-        return nearest >= 0 ? `point${nearest}` : undefined;
+    let [nearest, least] = [-1, REACH[kind] * 1.25];
+    for (let index = 0; index < shown.points.length; index++) {
+        const d = Math.hypot(shown.points[index]!.x - x, shown.points[index]!.y - y);
+        if (d < least) [nearest, least] = [index, d];
     }
-    if (shown.knob && Math.hypot(shown.knob.x - x, shown.knob.y - y) < reach * 1.1) return "knob";
-    let best: { handle: Handle; d: number } | undefined;
-    for (const [name, arrow] of Object.entries(shown.arrows) as ["x" | "y" | "z", { from: { x: number; y: number }; to: { x: number; y: number } }][]) {
-        // by its outer part and head only: the part near the middle is over the pieces, which a finger
-        // pressing there means to carry
-        const [dx, dy] = [arrow.to.x - arrow.from.x, arrow.to.y - arrow.from.y];
-        const along = ((x - arrow.from.x) * dx + (y - arrow.from.y) * dy) / (dx * dx + dy * dy || 1);
-        if (along < 0.4) continue;
-        const d = toSegment(p, { x: arrow.from.x + dx * 0.4, y: arrow.from.y + dy * 0.4 }, { x: arrow.to.x + dx * 0.12, y: arrow.to.y + dy * 0.12 });
-        if (d < reach && (!best || d < best.d)) best = { handle: name, d };
-    }
-    if (best) return best.handle;
-    const ys = shown.ring.map((point) => point.y);
-    const xs = shown.ring.map((point) => point.x);
-    const flat = Math.max(...ys) - Math.min(...ys) < (Math.max(...xs) - Math.min(...xs)) * 0.175;
-    if (!flat) for (let i = 0; i < shown.ring.length; i++) if (toSegment(p, shown.ring[i]!, shown.ring[(i + 1) % shown.ring.length]!) < reach) return "ring";
-    return undefined;
+    return nearest >= 0 ? `point${nearest}` : undefined;
+}
+
+/** The pieces whose middles on the screen (by number; none for one behind the eye) lie inside the box drawn from one corner to the other, in pixels. */
+export function boxed(from: { x: number; y: number }, to: { x: number; y: number }, middles: Map<number, { x: number; y: number } | undefined>): number[] {
+    const [left, right, top, bottom] = [Math.min(from.x, to.x), Math.max(from.x, to.x), Math.min(from.y, to.y), Math.max(from.y, to.y)];
+    return [...middles].filter(([, at]) => at && at.x >= left && at.x <= right && at.y >= top && at.y <= bottom).map(([id]) => id);
 }
 
 /**
@@ -156,15 +84,6 @@ export function along(orbit: Orbit, degrees: number, aspect: number, origin: V3,
         return (b * e - d) / under;
     };
     return at(...to) - at(...from);
-}
-
-/** How many quarter turns a drag round the ring has gone, from the pointer at `from` to `to` about the ring's middle, all in pixels with y down: a quarter for every quarter of the way round, the nearest. */
-export function turnedBy(middle: { x: number; y: number }, from: { x: number; y: number }, to: { x: number; y: number }): number {
-    let angle = Math.atan2(to.y - middle.y, to.x - middle.x) - Math.atan2(from.y - middle.y, from.x - middle.x);
-    while (angle > Math.PI) angle -= 2 * Math.PI;
-    while (angle < -Math.PI) angle += 2 * Math.PI;
-    // seen from above, a turn of a piece (x toward z) goes the way the clock does on the screen
-    return Math.round(angle / (Math.PI / 2));
 }
 
 // ---- dragging a point a piece is bent by ----
@@ -254,91 +173,4 @@ export function pixelsOf(orbit: Orbit, degrees: number, width: number, height: n
     if (!seen) return { up: 0, aside: 0 };
     // the picture's units are half its height to a unit, and these are a centimetre's
     return { up: (seen.lu * height) / 2 / 10, aside: (seen.la * height) / 2 / 10 };
-}
-
-// ---- the shapes they are drawn with, each one unit long, scaled by `across` times `ARROW` ----
-
-/** A round shape swept along an axis: rings of points of these radii at these places along it, closed at both ends. */
-function lathe(rings: [along: number, radius: number][], axis: "x" | "y" | "z", around = 14): Mesh {
-    const points: V3[] = [];
-    const faces: number[][] = [];
-    const place = (t: number, u: number, v: number): V3 => (axis === "x" ? [t, u, v] : axis === "y" ? [v, t, u] : [u, v, t]);
-    for (const [t, r] of rings) for (let i = 0; i < around; i++) points.push(place(t, r * Math.cos((i / around) * 2 * Math.PI), r * Math.sin((i / around) * 2 * Math.PI)));
-    for (let ring = 0; ring + 1 < rings.length; ring++) {
-        for (let i = 0; i < around; i++) {
-            const [a, b] = [ring * around + i, ring * around + ((i + 1) % around)];
-            faces.push([a, b, b + around, a + around]);
-        }
-    }
-    const first = points.length;
-    points.push(place(rings[0]![0], 0, 0), place(rings[rings.length - 1]![0], 0, 0));
-    const last = (rings.length - 1) * around;
-    for (let i = 0; i < around; i++) {
-        faces.push([first, (i + 1) % around, i]);
-        faces.push([first + 1, last + i, last + ((i + 1) % around)]);
-    }
-    return { points, faces, smooth: true };
-}
-
-/** An arrow along an axis, from the gap to the tip: a shaft and a head. */
-export function arrowMesh(axis: "x" | "y" | "z"): Mesh {
-    const [start, neck] = [GAP / ARROW, 0.78];
-    return lathe([[start, 0.045], [neck, 0.045], [neck, 0.11], [1, 0.005]], axis);
-}
-
-/** The ring about the upright, a thin round band lying flat. */
-export function ringMesh(): Mesh {
-    const [radius, thick, around, tube] = [RING / ARROW, 0.035, 64, 8];
-    const points: V3[] = [];
-    const faces: number[][] = [];
-    for (let i = 0; i < around; i++) {
-        const angle = (i / around) * 2 * Math.PI;
-        for (let j = 0; j < tube; j++) {
-            const spin = (j / tube) * 2 * Math.PI;
-            const out = radius + thick * Math.cos(spin);
-            points.push([out * Math.cos(angle), thick * Math.sin(spin), out * Math.sin(angle)]);
-        }
-    }
-    for (let i = 0; i < around; i++) {
-        for (let j = 0; j < tube; j++) {
-            const [a, b, c, d] = [i * tube + j, i * tube + ((j + 1) % tube), ((i + 1) % around) * tube + ((j + 1) % tube), ((i + 1) % around) * tube + j];
-            faces.push([a, b, c, d]);
-        }
-    }
-    return { points, faces, smooth: true };
-}
-
-/** A box on the screen, in pixels: its left, right, top and bottom. */
-export interface Rect {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-}
-
-/**
- * Where the strip of tools for what is chosen goes on a screen `width` by `height`: above the chosen
- * pieces and their handles, or under them where there is no room above, or beside them where there is
- * room for neither, always wholly on the screen and never over the pieces (`chosen`) or the handles
- * (`kept`). Nowhere, while too little of what is chosen is on the screen to be seen (less than `seen`
- * pixels each way), or where there is no room for it beside the pieces: so it never floats over nothing
- * at an edge, and never hides what it acts on.
- */
-export function stripPlace(chosen: Rect, kept: Rect | undefined, strip: { w: number; h: number }, width: number, height: number, seen = 24, gap = 10, edge = 8): { x: number; y: number; below: boolean } | undefined {
-    const inside = Math.min(chosen.right, width) - Math.max(chosen.left, 0) >= Math.min(seen, chosen.right - chosen.left) && Math.min(chosen.bottom, height) - Math.max(chosen.top, 0) >= Math.min(seen, chosen.bottom - chosen.top);
-    const onScreen = chosen.right > 0 && chosen.left < width && chosen.bottom > 0 && chosen.top < height;
-    if (!inside || !onScreen) return undefined;
-    const all: Rect = kept ? { left: Math.min(chosen.left, kept.left), right: Math.max(chosen.right, kept.right), top: Math.min(chosen.top, kept.top), bottom: Math.max(chosen.bottom, kept.bottom) } : chosen;
-    // across, by the middle of what of it is on the screen
-    const middle = (Math.max(all.left, 0) + Math.min(all.right, width)) / 2;
-    const x = Math.max(edge, Math.min(width - strip.w - edge, middle - strip.w / 2));
-    const above = all.top - gap - strip.h;
-    if (above >= edge) return { x, y: above, below: false };
-    const under = all.bottom + gap;
-    if (under + strip.h <= height - edge) return { x, y: under, below: true };
-    // beside, level with the middle of what is on the screen
-    const y = Math.max(edge, Math.min(height - strip.h - edge, (Math.max(all.top, 0) + Math.min(all.bottom, height)) / 2 - strip.h / 2));
-    if (all.right + gap + strip.w <= width - edge) return { x: all.right + gap, y, below: false };
-    if (all.left - gap - strip.w >= edge) return { x: all.left - gap - strip.w, y, below: false };
-    return undefined;
 }

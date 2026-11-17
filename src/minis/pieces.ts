@@ -236,8 +236,6 @@ export interface Shape {
     clear?: Box[];
     /** Walls a marble meets that are drawn as glass, so that a moving part inside them is seen working. */
     panes?: Box[];
-    /** Where the knob that sets a piece's number is, if not past its far joint. */
-    knob?: V3;
 }
 
 const unit = (a: V3): V3 => scaled(a, 1 / (Math.sqrt(dot(a, a)) || 1));
@@ -495,7 +493,9 @@ export function shapeOf(kind: Kind): Shape {
     if (kept) return kept;
     if (!allowed(kind.family, kind.sizes) || !bendAllowed(kind)) throw new Error(`There is no piece ${key}.`);
     const made = design(kind.family, kind.sizes);
-    const shape: Shape = { kind, ...made, cells: [], room: [], low: made.low ?? -1 };
+    // a block under its lowest joint, at the least: a slope, a drop or a spiral goes down by its own drop
+    const lowest = Math.min(...made.joints.map((joint) => Math.round(joint.at[1] / LEVEL)));
+    const shape: Shape = { kind, ...made, cells: [], room: [], low: Math.min(made.low ?? -1, lowest - 1) };
     if (isBent(kind)) shape.lengths[0] = bentLength(shape.lengths[0]!, kind);
     if (kind.mirror) mirrored(shape);
     for (const length of shape.lengths) {

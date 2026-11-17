@@ -96,8 +96,6 @@ export interface PartDesign {
     struck?: Struck;
     /** Room the moving part needs kept clear as it moves, which nothing else may take. */
     clear: Box[];
-    /** Where the knob that sets its number is, for those that have one. */
-    knob?: V3;
 }
 
 const J0: Joint = { at: [0, 0, 4], way: [-1, 0, 0], kind: "groove" };
@@ -319,7 +317,6 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 holds: [[13, -8, 0.6], [13, -8, 7.4]],
                 moving: { kind: "hinge", sound: "wood", bodies: [...seesawTray(count), ...weights], at: SEESAW.pivot, axis: [0, 0, 1], low: SEESAW.tipped, high: SEESAW.rest, spring: 0, rest: 0, friction: 1.5, start: SEESAW.rest },
                 clear: [span([4.3, -7.2, 1.9], [21.7, 1.2, 6.1]), span([wx - 2.4, wy - 2.5, 0.7], [wx + 2.4, wy + 2.5, 7.3])],
-                knob: [wx, wy + high / 2 + 0.6, 1.3],
                 low: -4,
             };
         }
@@ -370,7 +367,6 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 holds: [],
                 moving: { kind: "hinge", sound: "metal", bodies, at: centre, axis: [0, 0, 1], low: -Infinity, high: Infinity, spring: 0, rest: 0, friction: 0.4, start: 0 },
                 clear: [span([2.8, -11.7, 2.7], [13.2, -1.3, 5.3])],
-                knob: [centre[0], centre[1], 5.5 + 0.6 * (arms - 3) + 0.6],
                 low: -8,
             };
         }
@@ -449,7 +445,6 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 holds: family === "m" ? stands.map((stand): V3 => [stand.at[0], stand.at[1] - stand.half[1], stand.at[2]]) : [[struck.at[0], struck.at[1] - (family === "q" ? 1.2 : 0), 4]],
                 struck,
                 clear: [],
-                knob: family === "m" ? [5, -4.6, 4 + barLength(sizes[0]!) / 2 + 0.6] : undefined,
                 low: family === "m" ? -5 : -6,
             };
         }

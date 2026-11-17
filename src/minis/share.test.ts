@@ -73,6 +73,13 @@ test("text that is not a shared run is refused quietly: another head, too many l
     expect(await openText(`${LINKED}`)).toBeUndefined();
 });
 
+test("a damaged link is known for one, so that the scene can say it could not be read: cut in half, a letter changed, garbage, far too long", async () => {
+    const good = await packShared({ run: read(RUNS[0]!.text), spots: [], owns: [] });
+    expect(await unpackShared(good)).toBeDefined();
+    const changed = good.slice(0, 10) + (good[10] === "A" ? "B" : "A") + good.slice(11);
+    for (const damaged of [good.slice(0, Math.floor(good.length / 2)), changed, "zzz!!notarun", "x".repeat(150_000)]) expect(await unpackShared(damaged)).toBeUndefined();
+});
+
 test("a link that would unsqueeze to far more than the bound is refused, and costs no more than the bound to find out", async () => {
     const huge = new Uint8Array(50_000_000).fill(32);
     const squeezed = new Uint8Array(await new Response(new Blob([huge]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());

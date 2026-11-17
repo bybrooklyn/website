@@ -65,13 +65,14 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 
 ### The editor
 
-- One finger or the left button orbits; two fingers or the right button pan; pinch or the wheel zooms.
-  A tap selects; a long press or a right click opens the piece's menu. Everything reachable by touch has a
+- (Changed 16 November 2026: the mouse works as a game's build mode does, see below.) One finger orbits;
+  two fingers pan; pinch zooms. A tap selects; a long press adds to the choice or draws a box. Everything reachable by touch has a
   target at least a fingertip wide, and nothing needs a hover.
 - A piece is placed by dragging it from the box into the scene, where it follows the finger on the ground
   or at the height of what is under it, and snaps to open joints as it passes them.
-- Handles on the selected piece: arrows to move, rings to turn, and its control points to bend. Snapping
-  to a grid and to angles is on by default and held off with a key or a second finger.
+- (Changed 16 November 2026: no handles but a bent piece's points, see below.) A chosen piece is carried by
+  dragging it, and turned, raised and resized by words and keys; its control points bend it. Snapping
+  is on by default and held off with a key or a second finger.
 - The box of pieces, the tools, and play, pause and reset sit round the edge and fold away. Keys for
   everything on a desk.
 - Undo covers every change. A run is saved in the browser as it is built.
@@ -101,6 +102,8 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 5. Moving parts and sound. **Built**, waiting to be looked at and listened to (see below).
 6. The look: wood, glass, shadows. **Built**, waiting to be looked at (see below).
 7. Cameras, races, sharing, and the runs to start from. **Built**, waiting to be looked at (see below).
+8. Controls as in a game's build mode, and the tools in a column beside the scene. **Built**, waiting to be
+   looked at (see below).
 
 ## Stage 1, built
 
@@ -890,8 +893,10 @@ the hoist, a slot. Before the look, what stage 5 left.
 **Full and plain.** The full look has the soft shadows that widen with distance, the shadow where things
 touch, the bloom, and the ribbon bent by the glass. The plain look has a shadow softened a little at its
 edge, none where things touch, no bloom, and the ribbon seen straight. The look goes plain by itself where
-frames come slowly: when the middle of the last two seconds' frames (at least eight), while the scene
-moves, takes longer than a fortieth of a second. L switches it, and once switched by hand it stays.
+frames come slowly: when the middle of the last two seconds' frames, while the scene moves, takes longer
+than a fortieth of a second, decided on less time the slower they come but never on less than a second, so
+that a machine at three frames a second goes plain within a second (`tooSlow`, look.ts; it had needed eight
+frames in two seconds, which frames slower than 0.29 s never gave). L switches it, and once switched by hand it stays.
 
 **Backends.** Mote draws in 3D on WebGL 2 only; WebGPU is in imgQuire, not in Mote. Within WebGL 2 the
 patterns degrade quietly: where the graphics card cannot compile their program, parts with a pattern are
@@ -1211,6 +1216,62 @@ again in the same line*.
 - The line drawn from a number shown, numbers 1 to 999, a new one on race them.
 - The gate as a steel plate that rises in a frame, half a second of standing before it first does.
 - The nearer opening view of every moving and sounding piece, framed from the hopper to the drum.
+
+## Build mode and the column, built
+
+Built on 16 November 2026, after the mini was found strange to use beside 3D software: the camera, choosing
+pieces and moving and turning one were the parts that felt wrong. The controls now follow a game's build
+mode (The Sims, Planet Coaster, Roblox Studio): the left button is only ever for pieces, the right only for
+the camera.
+
+**The mouse.** A click on a piece chooses it alone; Shift or Control with a click adds it or takes it away;
+a click on the empty table chooses nothing, always (`clicked` in `edit.ts`). A drag from a piece carries it
+and what is chosen with it, snapping to an open end near it (`snapNear`), and where it cannot be set down
+(another piece, below or off the table) it goes back and says why. A drag on the table draws a box and
+chooses every piece whose middle is in it (`boxed` in `handles.ts`), Shift adding to what is chosen; it no
+longer turns the view. A click on a piece in the box picks it up: it comes from its place in the box, just
+under the scene, to the pointer, follows it and snaps to an open end the first way round that marbles can
+follow (`follows`), a new hopper riding as high as one pressed in goes; a click in the scene sets it down,
+R turns it, and Escape, a right click or its place in the box pressed again put it back. A tap, or Enter on
+a box piece, still puts it at the end of the run, and a drag from the box still carries it. A click on a
+hopper's box (not its chute) lets its marble go; a click on its chute chooses it. The right button turns
+the view and a right click with no drag opens the run's menu; the middle button moves the view, the table
+staying exactly under the pointer; the wheel zooms toward what is under the pointer, that point of the
+table staying under it (`zoomedAt` in `orbit.ts`). A click on a rolling marble no longer rides it with the
+mouse (the menu's Ride this marble and V do); a tap on one still does.
+
+**The keys** (only while the keyboard is in the mini, never from a box of text): W, A, S, D and the arrows
+move the view over the table, forward, left, back and right as the camera sees it, smoothly for as long as
+they are held, at 0.9 of the eye's distance a second so that the view goes as fast on the screen near and
+far (`walked`). R turns what is in hand or chosen a quarter, Shift+R the other way; Page Up and Page Down
+raise and lower it a level; N and Shift+N make it longer and shorter (`stepped` in `edit.ts`); Delete or
+Backspace takes it away; Escape puts back what is in hand, else chooses nothing. What the arrows and W, A,
+S, D did before (lift a piece and move it a cell), and Q, E and Alt with the arrows (a level), are gone:
+the pointer carries pieces and Page Up and Page Down raise them. While a piece is bent, the arrows, Q and E
+still move its chosen point. Moving the view by the screen's edge is not built: the mini sits in a page,
+and the pointer leaves the scene to reach the tools.
+
+**Touch** stays as it was: one finger on the table turns the view, two move, pinch and twist it, a tap
+chooses, a drag on a piece carries it, and a long press then a drag draws a box.
+
+**Taken away.** The arrows, the ring and the knob on a chosen piece, with their shapes, their arithmetic
+(where they stand, which one a pointer takes, how far a drag along one went) and their tests; the strip of
+tools that floated over the scene, and the arithmetic of where it went; the bar of icons. Nothing but the
+piece's own highlight is drawn on what is chosen, and nothing that stays open lies over the scene. A bent
+piece's points stay, as the way it is bent.
+
+**The layout.** The scene is on the left with the row of pieces straight under it, and the tools in a
+column on the right, written as the Walker's column is (Sand and Blocks follow it too). At 1288 by 828 the
+whole scene, the row and the whole column are in the first screen with the page not scrolled; the scene is
+as short as that takes. At 46rem and narrower the column goes under the row. The row scrolls sideways a
+piece at a time, coming to rest with a whole piece at its left, and fades softly at an end where more lies
+beyond. The tools are words to press under five small headings: run (let a marble go, stream, pause, clear
+the marbles, race), build (select, undo, redo, paste, start from), view (fit the run, ride, spots, tour),
+share (copy link, sound, keys) and piece (turn, mirror, bend, straighten, join, copy, duplicate, make my
+own, delete, longer, shorter, raise, lower). A word that cannot act now is faint and out of reach, never
+hidden; one that is on or off says which. The race, the spots, the keys and the runs to start from open in
+folds under their group, one at a time; the race's line box is a thin underline, and its count and list are
+words. What the mini says is said at the foot of the column, and aloud.
 
 ## Open
 

@@ -1,7 +1,7 @@
 // The marble run, a draft: build a run from a box of pieces whose ends click together, and let marbles
 // go down it, editing it while they roll. Stages 2 to 4 of its plan (docs/marbles.md): the box, joints,
-// snapping, pillars and marbles; then the editor: a selection of one piece or many, handles to move,
-// turn and resize it, undo without limit, copy, paste and mirror, pieces of one's own, views straight
+// snapping, pillars and marbles; then the editor: a selection of one piece or many, carried, turned,
+// raised and resized by the words of the column and their keys, undo without limit, copy, paste and mirror, pieces of one's own, views straight
 // on, and a ghost marble showing where a marble would go; then bending a piece by points along it,
 // within its limits; then moving and sounding pieces (parts.ts), drawn where Mote's physics has them each
 // frame, and the run's own sound, each strike made by Mote's sound code from how fast it was and what
@@ -11,42 +11,48 @@
 // colors, and a run shared as a link or a file, with the scene's own small menu for pasting.
 //
 // What it stands on: pieces.ts (the box) and parts.ts (its moving and sounding pieces), run.ts (a run as data), edit.ts (groups moved, turned,
-// mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the handles),
+// mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the points a piece is bent by),
 // table.ts (Mote's physics for a run), supports.ts (pillars), checks.ts (open ends), orbit.ts (the
 // camera) and camera.ts (riding, gliding, touring), race.ts (races), share.ts (links and files),
-// runs.ts (made runs), toolbar.ts (the icons and the bar).
+// runs.ts (made runs), toolbar.ts (the column's words and the keys' rule).
 //
-// One finger or the main button on a piece carries it (the whole selection if it is in it); on the
-// table it turns the view; two fingers, the other button, or Shift with the main one, move the view; a
-// pinch or the wheel brings it nearer. A tap chooses a piece; Shift, a long press, or the select tool
-// adds to the choice; a long press on the table, Control with a drag, or the select tool draws a box
-// round many. Keys are listed in the keys panel and in the `keydown` handler below.
+// As in a game's build mode, the left button is only for pieces and the right only for the camera. A
+// click chooses a piece alone (Shift or Control adds or takes it away), a click on the table chooses
+// nothing, a drag from a piece carries it (the whole selection if it is in it), a drag on the table
+// draws a box round many; a click on a piece in the box picks it up to set down with a click; a click on
+// a hopper's box lets its marble go. The right button turns the view, and a right click opens the run's
+// menu; the middle button moves it; the wheel brings it nearer toward the pointer. A finger on a piece
+// carries it and on the table turns the view; two fingers move, pinch and twist it; a long press adds to
+// the choice or draws a box. Keys are listed in the keys fold and in the `keydown` handler below.
 
 import { gl, type Color, type Look, type Part, type Pattern, type View } from "../mote/gl";
 import { turn as turnOf, type Hinge, type Solid } from "../mote/space";
 import { ball, block, type Mesh, type Turn, type V3 } from "../mote/solids";
-import { grained, grainedBox, marbleLook, merged, pane, tableMesh, woodSeed, type Hole } from "./look";
+import { grained, grainedBox, marbleLook, merged, pane, tableMesh, tooSlow, woodSeed, type Hole } from "./look";
 import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
+import { START, STILL as NO_MOVE, about, asOwn, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
-import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
+import { AXES, ARROW, across, boxed, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
-import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, pannedBy, project, ray, straightOn, type Orbit } from "./orbit";
-import { BOX, CELL, FURTHEST, LEVEL, RADIUS, SIZES, allowed, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
-import { fits, jointsOf, links, open, read, upgraded, write, type Open, type Placed } from "./run";
+import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, walked, zoomedAt, type Grip, type Orbit } from "./orbit";
+import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
+import { fits, jointsOf, links, open, read, roomOf, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { NOTES, type Body, type Moving } from "./parts";
 import { chainAt, chainLength, makeTable, type Table } from "./table";
-import { fold, icon, stacking, swap, tool } from "./toolbar";
+import { can, fold, icon, keyHeard, keyPlace, word } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
+
+/** Why pieces could not go where they were put, in a few plain words, said at the foot of the column and aloud. */
+const REFUSED: Record<Refused, string> = { ground: "it would go below the table", edge: "it would go off the table", room: "it would overlap another piece", against: "no marble could roll into it there" };
 
 /** How wide the view is, up and down, in degrees, with the usual lens. */
 const DEGREES = 38;
@@ -242,7 +248,7 @@ interface Pose {
 }
 
 /**
- * Pieces being carried, one or many, as one: by a finger or the mouse, by the keys, by a handle, or
+ * Pieces being carried, one or many, as one: by a finger or the mouse, by the keys, or
  * following the pointer after a paste. `home` is where they were (in the run, or as made); `move` is
  * the move that takes them to where they would go, in whole cells, levels and quarter turns.
  */
@@ -269,14 +275,14 @@ interface Carried {
     grab: [number, number];
     /** Which pointer carries them: none for the keys, `hover` for a paste that follows the mouse. */
     hand?: number | "hover";
-    /** A handle being dragged, where its drag began on the screen, and the handles' middle then. */
-    handle?: Handle;
-    press?: { x: number; y: number };
-    origin?: V3;
     /** Turning one piece at the joint it hangs from: the ways it fits there, and which it is in. */
     cycle?: { snaps: GroupSnap[]; at: number };
     /** How many joints join them to the rest now, to click when one more meets. */
     joins: number;
+    /** Where they came from in the box, to go back to when put back. */
+    box?: Pose;
+    /** For a new hopper, or any group pressed in that marbles start from: how many levels it is raised when over nothing, as a pressed one would be (`START`). */
+    lift?: number;
     parts: Map<number, Drawn[]>;
 }
 
@@ -307,13 +313,15 @@ interface Held {
     last: { x: number; y: number };
     /** When it went down, in seconds of the scene's time: for a long press. */
     since: number;
-    mode: "press" | "turn" | "pan" | "carry" | "pinch" | "handle" | "box" | "done" | "gizmo" | "bend" | "loose";
+    mode: "press" | "turn" | "pan" | "carry" | "pinch" | "box" | "done" | "gizmo" | "bend" | "loose";
     /** The piece pressed, before the press is known to be a drag. */
     piece?: Placed;
     /** The way of the little axes in the corner that was pressed. */
     gizmo?: Way;
-    /** The handle under the press, taken if it moves. */
+    /** The point of a bent piece under the press, taken if it moves. */
     handle?: Handle;
+    /** What a pan holds under the pointer, taken where it was pressed. */
+    grip?: Grip;
 }
 
 /** The views straight on, by the way the eye looks from. */
@@ -511,21 +519,9 @@ export default function marbles(m: Mote): Scene {
     };
     makeTableTop([]);
 
-    /** The handles, made once and shown on what is chosen: drawn over everything, so that nothing hides them. */
-    const handleParts = view && !m.preview
-        ? {
-              x: view.add(arrowMesh("x"), { color: colors.x, over: true, gloss: 0.2 }),
-              y: view.add(arrowMesh("y"), { color: colors.y, over: true, gloss: 0.2 }),
-              z: view.add(arrowMesh("z"), { color: colors.z, over: true, gloss: 0.2 }),
-              ring: view.add(ringMesh(), { color: colors.accent, over: true, gloss: 0.2 }),
-              knob: view.add(ball(0.11, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-              // the points a piece is bent by, as many as any piece has
-              point0: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-              point1: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-              point2: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-          }
-        : undefined;
-    if (handleParts) for (const part of Object.values(handleParts)) part.hidden = true;
+    /** The points a piece is bent by, as many as any piece has, made once and shown while it is bent: drawn over everything, so that nothing hides them. */
+    const pointParts = view && !m.preview ? [0, 1, 2].map(() => view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 })) : [];
+    for (const part of pointParts) part.hidden = true;
 
     /** Whether a piece of the run is being carried now, and so is out of the table and drawn apart. */
     const isCarried = (id: number) => Boolean(carried?.inRun && carried.home.some((piece) => piece.id === id));
@@ -980,6 +976,15 @@ export default function marbles(m: Mote): Scene {
         }
         return undefined;
     };
+    /** Whether a press on a hopper is on its box, which lets a marble go, and not on its chute, which chooses it: the line from the eye meets the box first. */
+    const onHopperBox = (piece: Placed, x: number, y: number): boolean => {
+        if (piece.kind.family !== "h") return false;
+        const line = lineAt(x, y);
+        const shape = shapeOf(piece.kind);
+        const first = (boxes: Box[]) => Math.min(...boxes.map((box) => boxToWorld(piece.place, box)).map((box) => enters(line, box.at, box.half) ?? Infinity));
+        const box = first(shape.stands);
+        return box < Infinity && box <= first(shape.room.filter((room) => !shape.stands.includes(room)));
+    };
     /** How far round a finger's press a piece is still taken, in pixels: half a fingertip. */
     const FINGERTIP = 12;
     /** The marble going down the run under a press, if any: the nearest whose drawing is within a fingertip's slack of it. Marbles at rest are left to the piece they rest on. */
@@ -1031,7 +1036,12 @@ export default function marbles(m: Mote): Scene {
             if (point) grab = [pivot[0] - point[0], pivot[2] - point[2]];
         }
         const others = inRun ? run.filter((piece) => !home.some((one) => one.id === piece.id)) : run;
-        carried = { home: home.map((piece) => ({ ...piece })), original: home.map((piece) => ({ ...piece })), inRun, anchor, pivot, move: { ...NO_MOVE }, snaps: groupSnaps(others, home), fits: inRun, away: false, shown: { at: pivot, angle: 0, scale: inRun ? 1 : 0.4 }, grab, hand, joins: 0, parts };
+        // only the joins marbles can follow, never so that the run climbs (`follows`, edit.ts)
+        const snaps = groupSnaps(others, home).filter((snap) => follows(others, home, snap));
+        const outs = open(home).filter((joint) => isOut(home.find((piece) => piece.id === joint.id)!.kind, joint.joint));
+        const starts = !inRun && outs.length && outs.length === open(home).length;
+        const lift = starts ? START - Math.round(Math.max(...outs.map((joint) => joint.at[1])) / LEVEL) : undefined;
+        carried = { home: home.map((piece) => ({ ...piece })), original: home.map((piece) => ({ ...piece })), inRun, anchor, pivot, move: { ...NO_MOVE }, snaps, fits: inRun, away: false, shown: { at: pivot, angle: 0, scale: inRun ? 1 : 0.4 }, grab, hand, joins: 0, parts, lift };
         carried.joins = joinsOf(home);
         if (inRun) changed(false);
         if (at) follow(at.x, at.y, typeof hand === "number" && held.get(hand)?.hand.kind === "touch" ? "touch" : "mouse", !inRun);
@@ -1056,6 +1066,8 @@ export default function marbles(m: Mote): Scene {
             .filter((found) => found.seen)
             .sort((a, b) => Math.hypot(a.seen!.x - x, a.seen!.y - y) - Math.hypot(b.seen!.x - x, b.seen!.y - y))[0];
         if (!below && nearestEnd) level = Math.max(level, Math.round(nearestEnd.joint.at[1] / LEVEL));
+        // a new hopper over nothing rides as high as one pressed in would go
+        if (!below && one.lift !== undefined) level = anchor.place.y + one.lift;
         if (below) {
             const dot = (p: V3) => (p[0] - line.from[0]) * line.way[0] + (p[1] - line.from[1]) * line.way[1] + (p[2] - line.from[2]) * line.way[2];
             const hit = jointsOf(below).map((joint) => ({ joint, d: Math.hypot(...line.way.map((w, axis) => joint.at[axis]! - line.from[axis]! - w * dot(joint.at))) })).sort((a, b) => a.d - b.d)[0];
@@ -1073,16 +1085,13 @@ export default function marbles(m: Mote): Scene {
         // the screen; for a group, by how near the joint that would meet is to the joint it would meet
         const aim = onScreen(want) ?? { x, y };
         const freeMove = { ...one.move };
-        let best: { snap: GroupSnap; d: number } | undefined;
+        const found: { snap: GroupSnap; d: number }[] = [];
         for (const snap of one.snaps) {
             const [seen, goal] = one.home.length > 1 ? [onScreen(movedPoint(snap.joint.at, freeMove)), onScreen(snap.to.at)] : [onScreen(movedPoint(one.pivot, snap.move)), aim];
-            if (!seen || !goal) continue;
-            const d = Math.hypot(seen.x - goal.x, seen.y - goal.y);
-            if (!best || d < best.d) best = { snap, d };
+            if (seen && goal) found.push({ snap, d: Math.hypot(seen.x - goal.x, seen.y - goal.y) });
         }
-        const reach = SNAP[kind] * (one.snap ? 1.4 : 1);
         const was = one.snap;
-        one.snap = best && best.d < reach && !one.away ? best.snap : undefined;
+        one.snap = one.away ? undefined : snapNear(found, SNAP[kind], Boolean(was));
         if (one.snap) {
             one.move = { ...one.snap.move };
             one.fits = true;
@@ -1101,8 +1110,8 @@ export default function marbles(m: Mote): Scene {
         for (const parts of one.parts.values()) for (const { part, plain, glass } of parts) if (!glass) part.look = shared(plain, rim);
     };
 
-    /** Lets go of what is carried: put in the run where it fits, taken away over the box, or back where it was. */
-    const drop = () => {
+    /** Lets go of what is carried: put in the run where it fits, taken away over the box, or back where it was, saying why unless `quiet`. */
+    const drop = (quiet = false) => {
         const one = carried;
         if (!one) return;
         carried = undefined;
@@ -1127,18 +1136,27 @@ export default function marbles(m: Mote): Scene {
             sound?.knock(0.3, 500);
         } else if (one.fits) {
             if (one.inRun) run = run.map((piece) => placed.find((other) => other.id === piece.id) ?? piece);
-            else run = [...run, ...placed];
+            else {
+                run = [...run, ...placed];
+                speak(`${namedOf(placed)} placed`);
+            }
             chosen.clear();
             for (const piece of placed) chosen.add(piece.id);
             end = open(run).find((joint) => ids.has(joint.id)) ?? end;
             each((_, index) => placeOf(placed[index]!));
-            if (!one.snap && one.handle === undefined) sound?.knock(0.35, 1300);
+            if (!one.snap) sound?.knock(0.35, 1300);
         } else if (one.inRun) {
-            // back where they came from, as they were
+            // back where they came from, as they were, saying why
             each((_, index) => placeOf(one.original[index]!));
             refuse();
+            if (!quiet) say(REFUSED[groupMisfit(run, placed) ?? "room"]);
+        } else if (one.box) {
+            // back into its place in the box, where it came from
+            each(() => ({ ...one.box!, scale: 0.05 }));
+            if (!quiet) say(REFUSED[groupMisfit(run, placed) ?? "room"]);
         } else {
             each((piece) => ({ ...poseIn(one, piece), scale: 0.05 }));
+            if (!quiet) say(REFUSED[groupMisfit(run, placed) ?? "room"]);
         }
         changed();
     };
@@ -1147,7 +1165,7 @@ export default function marbles(m: Mote): Scene {
         if (!carried) return;
         carried.fits = false;
         carried.away = false;
-        drop();
+        drop(true);
     };
 
     const fly = (parts: { part: Part }[], from: Pose, to: Pose, done: () => void) => {
@@ -1165,30 +1183,25 @@ export default function marbles(m: Mote): Scene {
 
     /**
      * New pieces (from the box, a paste or a piece of one's own) put at the open end, the first way round
-     * that fits, or by any other open end; on an empty table, in the middle of the view. They fly there
-     * from under the box's strip.
+     * that fits and that marbles can follow, or by any other open end; with nothing to join, in the middle
+     * of the view, a hopper high enough for a run to flow down from it (`placing`, edit.ts). They fly
+     * there from under the box's strip.
      */
     const placeAtEnd = (group: Placed[], fromX?: number): boolean => {
-        const all = groupSnaps(run, group).filter((snap) => run.find((piece) => piece.id === snap.to.id)?.kind.family !== "t");
-        // the way marbles go first: into an entry of the new pieces from the way out of the run
-        const flows = (snap: GroupSnap) => snap.joint.joint === 0 && group.find((piece) => piece.id === snap.joint.id)?.kind.family !== "h";
-        all.sort((a, b) => Number(flows(b)) - Number(flows(a)));
-        const snap = all.find((one) => end && one.to.id === end.id && one.to.joint === end.joint) ?? all[0];
-        let move: Move | undefined = snap?.move;
-        if (!move) {
-            const middle = ground(lineAt(m.width / 2, m.height / 2), 0) ?? [0, 0, 0];
-            const pivot = middleOf(group);
-            const lowest = Math.min(...group.map((piece) => piece.place.y + shapeOf(piece.kind).low));
-            const free: Move = { turn: 0, x: Math.round((middle[0] - pivot[0]) / CELL), z: Math.round((middle[2] - pivot[2]) / CELL), y: -lowest };
-            if (groupFits(run, group.map((piece) => moved(piece, free)))) move = free;
+        const found = placing(run, group, end, (height) => ground(lineAt(m.width / 2, m.height / 2), height));
+        if ("refused" in found) {
+            say(REFUSED[found.refused]);
+            return false;
         }
-        if (!move) return false;
+        const { move, snap } = found;
         const placed = group.map((piece) => moved(piece, move));
         run = [...run, ...placed];
         chosen.clear();
         for (const piece of placed) chosen.add(piece.id);
         const ids = new Set(placed.map((piece) => piece.id));
-        end = open(run).find((joint) => ids.has(joint.id) && run.find((piece) => piece.id === joint.id)?.kind.family !== "t") ?? end;
+        // the end to go on from is the new pieces' way out, where marbles leave them
+        const ends = open(run).filter((joint) => ids.has(joint.id) && run.find((piece) => piece.id === joint.id)?.kind.family !== "t");
+        end = ends.find((joint) => isOut(run.find((piece) => piece.id === joint.id)!.kind, joint.joint)) ?? ends[0] ?? end;
         changed();
         if (view && !reduced) {
             // from under the box's strip, rising into place; each piece itself is hidden until what flies there arrives
@@ -1210,74 +1223,27 @@ export default function marbles(m: Mote): Scene {
     };
     /** Pieces given new numbers, to be added to the run. */
     const fresh = (pieces: Placed[]) => pieces.map((piece) => ({ ...piece, kind: { ...piece.kind, sizes: [...piece.kind.sizes] }, id: nextId++ }));
+    /** What pieces are called, to say so: one by its name in the box, more as so many pieces. */
+    const namedOf = (pieces: Placed[]): string => (pieces.length === 1 ? (BOX.find((entry) => keyOf(entry.kind) === keyOf(pieces[0]!.kind))?.name ?? "a piece") : `${pieces.length} pieces`);
     const fromBox = (kind: Kind): Placed[] => [{ id: nextId++, kind: { ...kind, sizes: [...kind.sizes] }, place: { x: 0, z: 0, y: -shapeOf(kind).low, turn: 0 } }];
 
-    // ---- the handles ----
-    /** The handles' middle: over the middle of what is chosen, at its lowest joint and a little above. */
+    // ---- the points of a bent piece ----
+    /** Over the middle of what is chosen, at its lowest joint and a little above: where the keyboard's menu opens. */
     const handleMiddle = (pieces: Placed[]): V3 => {
         const middle = middleOf(pieces);
         return [middle[0], middle[1] + 1, middle[2]];
     };
-    /** Where the knob is: past the far end of one chosen piece that can be resized. */
-    const knobOf = (pieces: Placed[]): V3 | undefined => {
-        if (pieces.length !== 1 || !resizable(pieces[0]!.kind)) return undefined;
-        const piece = pieces[0]!;
-        const shape = shapeOf(piece.kind);
-        // a moving or sounding piece says where its knob is: a seesaw's weights, a spinner's axle, a chime bar's end
-        if (shape.knob) return toWorld(piece.place, shape.knob);
-        const joint = shape.joints[1];
-        if (!joint) return undefined;
-        const at = toWorld(piece.place, joint.at);
-        const way = wayToWorld(piece.place, joint.way);
-        return [at[0] + way[0] * 1.5, at[1] + 1.5, at[2] + way[2] * 1.5];
-    };
-    /** How far pieces reach on the screen from a point, in pixels: their boxes of room, each with a block's half width round it. */
-    const reachOn = (pieces: Placed[], middle: V3): number => {
-        const centre = onScreen(middle);
-        if (!centre) return 0;
+    /** Where the points of the piece being bent are on the screen, if one is. */
+    const pointsNow = (): Shown | undefined => {
+        const bent = !m.preview && !carried ? bentPiece() : undefined;
+        if (!bent) return undefined;
         const { orbit: seen, degrees } = cam();
-        const half = 2.2 / across(seen, degrees, m.height, middle);
-        let most = 0;
-        for (const piece of pieces) {
-            for (const box of shapeOf(piece.kind).room) {
-                const at = onScreen(boxToWorld(piece.place, box).at);
-                if (at) most = Math.max(most, Math.hypot(at.x - centre.x, at.y - centre.y) + half);
-            }
-        }
-        return most;
+        return pointsLayout(seen, degrees, m.width, m.height, pointsIn(bent.kind, bent.place).map((point) => point.at));
     };
-    /** How far the handles stand off from what they are on, in pixels: worked out each frame from what is chosen, and kept while a handle is dragged, so that the handles do not breathe under the pointer. */
-    let stand = 0;
-    const standFor = (pieces: Placed[]) => {
-        stand = standOff(reachOn(pieces, handleMiddle(pieces)), m.width, m.height);
-    };
-    /** Where the handles are on the screen now, if any are shown. */
-    const handlesNow = (): Shown | undefined => {
-        if (m.preview || (carried && carried.handle === undefined)) return undefined;
-        const pieces = carried ? placedOf(carried) : chosenPieces();
-        if (!pieces.length) return undefined;
-        const { orbit: seen, degrees } = cam();
-        // while a piece is bent, its points are its only handles
-        const bent = bentPiece();
-        if (bent && !carried) return pointsLayout(seen, degrees, m.width, m.height, pointsIn(bent.kind, bent.place).map((point) => point.at));
-        const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-        if (!carried) standFor(pieces);
-        return layout(seen, degrees, m.width, m.height, middle, carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces), stand);
-    };
-    /**
-     * The handle a press at (x, y) would take once it moves, if any. Never one over the body of a chosen
-     * piece: a press there carries what is chosen, wherever the handles are, and the handles stand off
-     * from a small selection so that both have room. Shift and the select tool are for choosing, so no
-     * handle takes their press.
-     */
+    /** The point of a bent piece a press at (x, y) would take once it moves, if any: over the piece too, since a point sits on its track. */
     const handleUnder = (x: number, y: number, kind: "touch" | "mouse", shift = false): Handle | undefined => {
-        const shown = !carried && chosen.size && !shift && !selecting ? handlesNow() : undefined;
-        const handle = shown && which(shown, x, y, kind);
-        if (!handle) return undefined;
-        // a point sits on its piece's track, so it is taken over the piece too: while it is bent, that is what a press near a point means
-        if (pointOf(handle) !== undefined) return handle;
-        const body = pieceAt(x, y, 0.2);
-        return body && chosen.has(body.id) ? undefined : handle;
+        const shown = !shift && !selecting ? pointsNow() : undefined;
+        return shown && which(shown, x, y, kind);
     };
     /** Turning one piece at the joint it hangs from: the ways it fits there, if it hangs from exactly one. */
     const cycleOf = (piece: Placed): Carried["cycle"] => {
@@ -1291,79 +1257,6 @@ export default function marbles(m: Mote): Scene {
         const at = ways.findIndex((snap) => snap.move.turn === 0 && snap.move.x === 0 && snap.move.z === 0 && snap.move.y === 0);
         return { snaps: ways, at: Math.max(0, at) };
     };
-    const startHandle = (handle: Handle, hand: Hand) => {
-        const pieces = chosenPieces();
-        if (!pieces.length) return;
-        startCarry(pieces, true, pieces[0]!.id, hand.id);
-        const one = carried;
-        if (!one) return;
-        one.handle = handle;
-        one.press = { x: hand.x, y: hand.y };
-        one.origin = handleMiddle(pieces);
-        if (handle === "ring" && pieces.length === 1) one.cycle = cycleOf(pieces[0]!);
-        sound?.knock(0.2, 1600);
-    };
-    const dragHandle = (x: number, y: number) => {
-        const one = carried;
-        if (!one?.handle || !one.press || !one.origin) return;
-        const { orbit: seen, degrees } = cam();
-        if (one.handle === "x" || one.handle === "y" || one.handle === "z") {
-            const d = along(seen, degrees, aspect(), one.origin, AXES[one.handle], toPicture(one.press.x, one.press.y), toPicture(x, y));
-            const n = Math.round(d / (one.handle === "y" ? LEVEL : CELL));
-            one.move = { turn: 0, x: one.handle === "x" ? n : 0, y: one.handle === "y" ? n : 0, z: one.handle === "z" ? n : 0 };
-        } else if (one.handle === "ring") {
-            const middle = onScreen(one.origin);
-            if (!middle) return;
-            const quarters = turnedBy(middle, one.press, { x, y });
-            if (one.cycle) one.move = { ...one.cycle.snaps[(((one.cycle.at + quarters) % one.cycle.snaps.length) + one.cycle.snaps.length) % one.cycle.snaps.length]!.move };
-            else one.move = about(pivotOf(one.home), quarters);
-        } else if (one.handle === "knob") {
-            const piece = one.home[0]!;
-            const wanted = ownPoint(piece, lineAt(x, y));
-            if (wanted) {
-                const kind = resized(piece.kind, wanted);
-                if (keyOf(kind) !== keyOf(piece.kind)) {
-                    one.home = [{ ...piece, kind }];
-                    for (const { part } of one.parts.get(piece.id) ?? []) view?.remove(part);
-                    one.parts.set(piece.id, partsOf(kind, woodSeed(piece.id), colors.accent));
-                    // a chime bar sounds its new note, so that a tune can be set by ear
-                    if (kind.family === "m") sound?.strike("chime", 0.55, NOTES[kind.sizes[0]!]);
-                    else sound?.knock(0.3, 1700);
-                }
-            }
-        }
-        one.fits = groupFits(run, placedOf(one));
-        const joins = joinsOf(placedOf(one));
-        // joints part and rejoin as the pieces pass open ends: a click when one more meets
-        if (one.fits && joins > one.joins) sound?.knock(0.55, 2100);
-        one.joins = joins;
-        paintCarried();
-        m.wake();
-    };
-    /**
-     * Where the pointer's line meets the plane a piece is resized in, in the piece's own place: the
-     * level of its knob for those that grow along or aside (and a chime bar, a spinner), and the upright
-     * plane along it for those that grow down or up (a slope, a drop, a spiral, a lift, a hoist, a
-     * seesaw's weights).
-     */
-    const ownPoint = (piece: Placed, line: ReturnType<typeof lineAt>): V3 | undefined => {
-        const far = toWorld(piece.place, knobAt(piece.kind));
-        let hit: V3 | undefined;
-        // those that grow up or down are dragged in the upright plane along them: a lift's height, a hoist's length, a seesaw's weights
-        if ("dvxuye".includes(piece.kind.family)) {
-            const n = wayToWorld(piece.place, [0, 0, 1]);
-            const facing = line.way[0] * n[0] + line.way[2] * n[2];
-            if (Math.abs(facing) > 0.08) {
-                const t = ((far[0] - line.from[0]) * n[0] + (far[2] - line.from[2]) * n[2]) / facing;
-                if (t > 0) hit = [line.from[0] + line.way[0] * t, line.from[1] + line.way[1] * t, line.from[2] + line.way[2] * t];
-            }
-        }
-        hit ??= ground(line, far[1]);
-        if (!hit) return undefined;
-        const [x, z] = rotated(hit[0] - piece.place.x * CELL, hit[2] - piece.place.z * CELL, -piece.place.turn);
-        return [x, hit[1] - piece.place.y * LEVEL, z];
-    };
-
     // ---- bending ----
     // One piece chosen that bends can be bent: its points are then its only handles. A point is dragged
     // in the plane of up and aside where the view sees both, staying under the pointer, or along the one
@@ -1533,10 +1426,11 @@ export default function marbles(m: Mote): Scene {
     /** How far a key moves a point, in millimetres. */
     const KEY_BEND = 5;
 
-    // ---- what the bar, the strip and the keys do ----
-    const letGo = () => {
+    // ---- what the column's words and the keys do ----
+    /** A marble let go from every hopper, or from the one given. */
+    const letGo = (only?: number) => {
         stopRace();
-        const out = table.letGo();
+        const out = table.letGo(only === undefined ? undefined : new Set([only]));
         for (const one of out) show(one);
         m.wake();
     };
@@ -1556,6 +1450,8 @@ export default function marbles(m: Mote): Scene {
     /** What the result said last, so that it is written again only when it changes. */
     let raceSaid = "";
     let paintRace = (_why?: string) => {};
+    /** The line the race box last showed; none once a race has been run, so that the box shows the line it ran by, whether or not it is being typed in. */
+    let lineShown: number | undefined;
     /** A race with a new line drawn, or with the number given. */
     const startRace = (drawn?: number) => {
         if (!resting().some((piece) => piece.kind.family === "h") || !resting().some((piece) => piece.kind.family === "t")) {
@@ -1570,6 +1466,7 @@ export default function marbles(m: Mote): Scene {
         freshTable();
         lineNumber = drawnOf(drawn ?? 1 + Math.floor(Math.random() * DRAWN[1]));
         race = makeRace(table, raceCount, lineNumber);
+        lineShown = undefined;
         // the starting gates the race put across the hoppers, drawn as the moving parts are
         drawMovers();
         lastRace = { count: raceCount, drawn: lineNumber, text: write(resting()) };
@@ -1613,8 +1510,10 @@ export default function marbles(m: Mote): Scene {
         linked = false;
         history.replaceState(history.state, "", location.pathname + location.search);
     };
-    /** A short word said quietly under the bar, grown from the button pressed, gone after a moment. */
+    /** A short word said quietly at the foot of the column, grown from the word pressed, gone after a moment. */
     let say = (_words: string, _from?: HTMLElement) => {};
+    /** Words said aloud to a screen reader, and not shown: what is said in the column, and what is seen happen in the scene. */
+    let speak = (_words: string) => {};
     const sharedNow = () => ({ run: resting(), spots, owns: ownsUsed(resting(), owns), race: lastRace?.text === write(resting()) ? { count: lastRace.count, drawn: lastRace.drawn } : undefined });
     const saveFile = (text: string) => {
         const link = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "marble run.marbles" });
@@ -1901,47 +1800,46 @@ export default function marbles(m: Mote): Scene {
         chosen.add(next.id);
         chosenChanged();
     };
-    /** The keys' way of carrying: lift what is chosen and move it a cell or a level, the way the view looks; Enter puts it down. */
-    const nudge = (dx: number, dz: number, dy: number) => {
-        if (!carried) {
-            const pieces = chosenPieces();
-            if (!pieces.length) return;
-            startCarry(pieces, true, pieces[0]!.id, undefined);
+    /** What is chosen raised or lowered a level, where it fits; else a small no, saying why. */
+    const raiseChosen = (by: number) => {
+        const pieces = chosenPieces();
+        if (!pieces.length) return refuse();
+        const raised = pieces.map((piece) => moved(piece, { turn: 0, x: 0, z: 0, y: by }));
+        const why = groupMisfit(run, raised);
+        if (why) {
+            refuse();
+            return say(REFUSED[why]);
         }
-        const one = carried!;
-        // across and along as the view sees them: the arrows move pieces the way they look to go
-        const quarter = Math.round(orbit.turn / (Math.PI / 2));
-        let [x, z] = [dx, dz];
-        for (let i = 0; i < ((quarter % 4) + 4) % 4; i++) [x, z] = [z, 0 - x];
-        const lowest = Math.min(...placedOf(one).map((piece) => piece.place.y + shapeOf(piece.kind).low));
-        one.move = { ...one.move, x: one.move.x + x, z: one.move.z + z, y: one.move.y + Math.max(-lowest, dy) };
+        run = run.map((piece) => raised.find((one) => one.id === piece.id) ?? piece);
+        sound?.knock(0.3, by > 0 ? 1800 : 1400);
+        changed();
+    };
+    /** Page Up and Page Down: what is in hand raised or lowered a level, as it follows the pointer; else what is chosen. */
+    const raise = (by: number) => {
+        const one = carried;
+        if (!one) return raiseChosen(by);
+        one.move = { ...one.move, y: one.move.y + by };
+        one.lift = one.lift === undefined ? undefined : one.lift + by;
         one.snap = undefined;
         one.fits = groupFits(run, placedOf(one));
-        const joins = joinsOf(placedOf(one));
-        // joined by where it is: a click when it comes to meet an open end exactly
-        if (one.fits && joins > one.joins) sound?.knock(0.55, 2100);
-        one.joins = joins;
         paintCarried();
         m.wake();
     };
     /**
-     * The next or last setting of the one piece chosen, by its knob's number: a chime bar's note, a
-     * lift's height, a hoist's length, a spinner's arms, how many marbles tip a seesaw, and a straight's
-     * length or a drop's height as the knob would make them. A small no if it has none or would not fit.
+     * The one piece chosen made longer or shorter, its next or last setting (`stepped`, edit.ts): a
+     * straight's or a slope's length, a drop's height, a chime bar's note, a lift's height, a hoist's
+     * length, a spinner's arms, how many marbles tip a seesaw. A small no if it has none or would not fit.
      */
     const stepSetting = (by: number) => {
         const pieces = chosenPieces();
         const piece = pieces.length === 1 ? pieces[0]! : undefined;
-        const which = piece && RESIZABLE[piece.kind.family];
-        if (!piece || !which || which.length !== 1) return refuse();
-        const index = which[0]!;
-        const [least, most] = SIZES[piece.kind.family][index]!;
-        let size = piece.kind.sizes[index]!;
-        do size += by;
-        while (size >= least && size <= most && !allowed(piece.kind.family, piece.kind.sizes.map((one, i) => (i === index ? size : one))));
-        if (size < least || size > most) return refuse();
-        const kind = rebent(piece.kind, { family: piece.kind.family, sizes: piece.kind.sizes.map((one, i) => (i === index ? size : one)), mirror: piece.kind.mirror });
-        if (!groupFits(run, [{ ...piece, kind }])) return refuse();
+        const kind = piece && stepped(piece.kind, by);
+        if (!piece || !kind) return refuse();
+        const why = groupMisfit(run, [{ ...piece, kind }]);
+        if (why) {
+            refuse();
+            return say(REFUSED[why]);
+        }
         run = run.map((one) => (one.id === piece.id ? { ...one, kind } : one));
         if (kind.family === "m") sound?.strike("chime", 0.55, NOTES[kind.sizes[0]!]);
         else sound?.knock(0.3, 1700);
@@ -1970,32 +1868,41 @@ export default function marbles(m: Mote): Scene {
         tell();
     };
 
-    // ---- the panel: the box, the bar, the strip by the selection ----
+    // ---- the panel: the row of pieces under the scene, and the column of words beside it ----
     let tell = () => {};
     let toggleKeys = () => {};
     let keepOwn = () => {};
     let showRace = () => {};
     let openMenu = (_x: number, _y: number, _keyboard: boolean) => {};
     let closeMenu = (): boolean => false;
-    /** Whether the scene's menu is open; the strip by what is chosen keeps away while it is. */
+    /** Whether the scene's menu is open. */
     let menuShown = false;
     /** The next press on the scene shut the menu, and does nothing more. */
     let swallow = false;
     /** What to undo when the mini goes: listeners on the page, and things added to it. */
     const leaving: (() => void)[] = [];
     let ownBox = (_grown?: number) => {};
-    const strip = el("div", { class: "marbles-strip", role: "toolbar", ariaLabel: "what is chosen" });
     if (!m.preview) {
+        // the column beside the scene, as the Walker's is, and the row of pieces straight under the scene
         const panel = m.panel();
+        panel.classList.add("marbles-side");
         const box = el("div", { class: "marbles-box", role: "toolbar", ariaLabel: "the box of pieces" });
         const pictures = paintBox(view, colors, BOX.map((entry) => [{ id: 0, kind: entry.kind, place: { x: 0, z: 0, y: 0, turn: 0 } }]));
-        /** A button of the box: pressed, its pieces go at the open end; dragged up, they are carried into the scene. */
+        /**
+         * A button of the box. Clicked with the mouse, its pieces are picked up: they come from their place
+         * in the box to the pointer and follow it over the scene, snapping to an open end near it, until a
+         * click sets them down; a click on it again puts them back. Tapped, or pressed by the keyboard,
+         * they go at the open end. Dragged up, they are carried into the scene.
+         */
         const boxButton = (name: string, picture: HTMLCanvasElement | undefined, make: () => Placed[], className = "marbles-piece") => {
             const button = el("button", { type: "button", class: className, title: name, ariaLabel: `${name}: press to put it at the end of the run, or drag it up into the scene` }, picture ?? "", el("span", { textContent: name }));
             let pressed: { id: number; x: number; y: number; dragging: boolean } | undefined;
+            /** What pressed it last: a finger has no pointer for a piece to follow. */
+            let by = "mouse";
             /** A drag out of the box ends with the browser's click on the button, which is not a press. */
             let dragged = false;
             button.addEventListener("pointerdown", (event) => {
+                by = event.pointerType;
                 if ((event.target as Element).closest(".marbles-unkeep")) return;
                 pressed = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false };
                 button.setPointerCapture(event.pointerId);
@@ -2030,16 +1937,34 @@ export default function marbles(m: Mote): Scene {
                     dragged = false;
                     return;
                 }
-                if (carried) cancel();
                 const rect = m.canvas.getBoundingClientRect();
                 const own = button.getBoundingClientRect();
-                if (!placeAtEnd(make(), own.left + own.width / 2 - rect.left)) {
+                const x = own.left + own.width / 2 - rect.left;
+                // pressed again while its pieces are in hand: they go back
+                const again = carried?.hand === "hover" && holding === button;
+                if (carried) cancel();
+                if (again) return;
+                if (event.detail > 0 && by !== "touch") {
+                    // into the hand, from just under the scene where the box is
+                    const group = make();
+                    startCarry(group, false, group[0]!.id, "hover");
+                    if (!carried) return;
+                    holding = button;
+                    follow(x, m.height + 1, "mouse", true);
+                    carried.box = { ...carried.shown };
+                    if (m.pointer.inside) follow(m.pointer.x, m.pointer.y, "mouse");
+                    sound?.knock(0.2, 1900);
+                    return;
+                }
+                if (!placeAtEnd(make(), x)) {
                     button.animate?.([{ translate: "0" }, { translate: "-3px" }, { translate: "3px" }, { translate: "0" }], { duration: reduced ? 0 : 220 });
                     sound?.knock(0.2, 300);
-                }
+                } else speak(`${name} placed`);
             });
             return button;
         };
+        /** The box's button whose pieces are in hand, to put them back when it is pressed again. */
+        let holding: HTMLButtonElement | undefined;
         BOX.forEach((entry, index) => box.append(boxButton(entry.name, pictures[index], () => fromBox(entry.kind))));
         /** The pieces of one's own, after the made ones, each with a cross that takes it out of the box. */
         let ownButtons: HTMLButtonElement[] = [];
@@ -2059,8 +1984,9 @@ export default function marbles(m: Mote): Scene {
                     event.stopPropagation();
                     away();
                 });
+                // Enter presses it, as it does a button; Space lets a marble go from here too
                 unkeep.addEventListener("keydown", (event) => {
-                    if (event.key === "Enter" || event.key === " ") {
+                    if (event.key === "Enter") {
                         event.preventDefault();
                         away();
                     }
@@ -2072,42 +1998,45 @@ export default function marbles(m: Mote): Scene {
             });
         };
         ownBox();
+        // a soft fade at an end of the row where more of it lies beyond
+        const edges = () => {
+            box.classList.toggle("more-before", box.scrollLeft > 2);
+            box.classList.toggle("more-after", box.scrollLeft + box.clientWidth < box.scrollWidth - 2);
+        };
+        box.addEventListener("scroll", edges, { passive: true });
+        new ResizeObserver(edges).observe(box);
 
-        // the bar: choosing and undo, marbles, the view, and the rest
-        const selectTool = tool("select", "Select: a drag draws a box, a tap adds a piece", "B", toggleSelecting, true);
-        const undoTool = tool("undo", "Undo", "Ctrl+Z", undo);
-        const redoTool = tool("redo", "Redo", "Ctrl+Shift+Z", redo);
-        const pasteTool = tool("paste", "Paste at the open end", "Ctrl+V", () => clip && paste(clip, false));
-        const goTool = tool("go", "Let a marble go", "Space", letGo);
-        const streamTool = tool("stream", "Stream of marbles", "Shift+Space", toggleStream, true);
-        const pauseTool = tool("pause", "Pause", "P", togglePause);
-        const resetTool = tool("reset", "Clear the marbles", "C", clearMarbles);
-        const fitTool = tool("fit", "Fit the run", "Home", () => fitRun());
-        const soundTool = tool("quiet", "Sound", "M", () => {
-            sound?.button.click();
-            tell();
-        });
-        const keysTool = tool("keys", "Keys", "?", () => toggleKeys());
-        const runsTool = tool("runs", "Start from", "", () => only(runs, runsTool));
-        const raceTool = tool("race", "Race", "X", () => only(raceFold, raceTool));
-        const rideTool = tool("ride", "Ride along with a marble", "V", rideNext, true);
+        // the column's words, in groups under small headings: the marbles, building, the view, sharing, and what is chosen
+        const goTool = word("let a marble go", "Let a marble go", "Space", () => letGo());
+        const streamTool = word("stream: off", "Stream of marbles", "Shift+Space", toggleStream, true);
+        const pauseTool = word("pause", "Pause", "P", togglePause);
+        const resetTool = word("clear the marbles", "Clear the marbles", "C", clearMarbles);
+        const raceTool = word("race", "Race", "X", () => only(raceFold, raceTool));
+        const selectTool = word("select: off", "Select: a drag draws a box, a tap adds a piece", "B", toggleSelecting, true);
+        const undoTool = word("undo", "Undo", "Ctrl+Z", undo);
+        const redoTool = word("redo", "Redo", "Ctrl+Shift+Z", redo);
+        const pasteTool = word("paste", "Paste at the open end", "Ctrl+V", () => clip && paste(clip, false));
+        const runsTool = word("start from", "Start from a made run, an empty table or a file", "", () => only(runs, runsTool));
+        const fitTool = word("fit the run", "Fit the run", "Home", () => fitRun());
+        const rideTool = word("ride: off", "Ride along with a marble", "V", rideNext, true);
         rideTool.classList.add("marbles-ride");
-        const spotsTool = tool("spots", "Spots", "H, G", () => only(spotsFold, spotsTool));
-        const tourTool = tool("tour", "A tour of the run", "T", () => (camera.kind === "tour" ? toFree() : tourRun()), true);
-        const shareTool = tool("share", "Share: copy a link to this run", "", () => void shareRun(shareTool));
-        const group = (...tools: HTMLElement[]) => el("div", { class: "marbles-group" }, ...tools);
-        const bar = el("div", { class: "marbles-bar", role: "toolbar", ariaLabel: "tools" }, group(selectTool, undoTool, redoTool, pasteTool), group(goTool, streamTool, pauseTool, resetTool, raceTool), group(fitTool, rideTool, spotsTool, tourTool), group(shareTool, soundTool, keysTool, runsTool));
-        queueMicrotask(() => stacking(bar));
-        /** Each fold under the bar, one open at a time: opening one shuts the others back into their buttons. */
+        const spotsTool = word("spots", "Spots", "H, G", () => only(spotsFold, spotsTool));
+        const tourTool = word("tour: off", "A tour of the run", "T", () => (camera.kind === "tour" ? toFree() : tourRun()), true);
+        const shareTool = word("copy link", "Share: copy a link to this run", "", () => void shareRun(shareTool));
+        const keysTool = word("keys", "Keys", "?", () => toggleKeys());
+        sound?.button.addEventListener("click", () => tell());
+        const heading = (words: string) => el("h3", { class: "marbles-group", textContent: words });
+        const line = (...tools: HTMLElement[]) => el("div", { class: "marbles-words" }, ...tools);
+        /** Each fold in the column, one open at a time: opening one shuts the others back into their words. */
         const folds: { box: HTMLElement; open(from: HTMLElement, open?: boolean): boolean; shown(): boolean; from: () => HTMLElement }[] = [];
         const only = (which: (typeof folds)[number], from: HTMLElement) => {
             for (const other of folds) if (other !== which && other.shown()) other.open(other.from(), false);
             which.open(from);
         };
 
-        // the race: how many, go, ride the leader, and the result, small and quiet under the bar
-        const fewer = el("button", { type: "button", class: "marbles-step", textContent: "−", ariaLabel: "one marble fewer", onclick: () => raceBy(-1) });
-        const more = el("button", { type: "button", class: "marbles-step", textContent: "+", ariaLabel: "one marble more", onclick: () => raceBy(1) });
+        // the race: how many, go, ride the leader, and the result, small and quiet under its word
+        const fewer = el("button", { type: "button", textContent: "fewer", title: "One marble fewer", onclick: () => raceBy(-1) });
+        const more = el("button", { type: "button", textContent: "more", title: "One marble more", onclick: () => raceBy(1) });
         const counted = el("span", { class: "marbles-race-count" });
         const goRace = el("button", { type: "button", textContent: "race them", onclick: () => startRace() });
         // the number the line is drawn by: shown, and given again by same line, or by a number typed in
@@ -2124,10 +2053,12 @@ export default function marbles(m: Mote): Scene {
         const raceFold = { ...fold("marbles-race", el("div", { class: "marbles-race-row" }, fewer, counted, more, goRace, againRace, el("label", { class: "marbles-line-label" }, "line ", lineBox), leader), placings, raceNote), from: () => raceTool };
         paintRace = (why?: string) => {
             counted.textContent = `${raceCount} marbles`;
-            if (document.activeElement !== lineBox) lineBox.value = String(lineNumber);
-            fewer.disabled = raceCount <= RACE[0];
-            more.disabled = raceCount >= RACE[1];
-            leader.disabled = !race || race.done || raceStopped;
+            // while it is typed in the box keeps what is typed, but for the line a race has just been run by
+            if (document.activeElement !== lineBox || lineShown !== lineNumber) lineBox.value = String(lineNumber);
+            lineShown = lineNumber;
+            can(fewer, raceCount > RACE[0]);
+            can(more, raceCount < RACE[1]);
+            can(leader, Boolean(race && !race.done && !raceStopped));
             const placed = race ? standing(race) : [];
             placings.replaceChildren(...placed.map((one, place) => {
                 const look = RACERS[one.racer.index]!;
@@ -2141,7 +2072,17 @@ export default function marbles(m: Mote): Scene {
             const finished = placed.filter((one) => one.time !== undefined).length;
             const verdict = raceStopped ? "Stopped before the end." : !race?.done || finished < 2 ? "" : inLine(race) ? "No marble passed another: the line decided it." : placed.some((one) => one.close) ? "A photo finish: within a hundredth of a second." : "Places changed on the way.";
             raceNote.textContent = why ?? (race ? `Line ${race.drawn}. ${verdict}`.trim() : "");
+            // said aloud once a race is over, or stopped, with every placing as it is shown, and whatever is said instead of a race
+            const over = race && (race.done || raceStopped) ? `${race.drawn} ${raceStopped}` : "";
+            if (why) speak(why);
+            else if (over && over !== told) {
+                const placings = placed.map((one, place) => `${one.time !== undefined ? `${place + 1}, ` : ""}${one.racer.name}, ${one.time !== undefined ? timeOf(one.time) : one.racer.out ? OUT_WORDS[one.racer.out] : "stopped"}`);
+                speak(`${placings.join("; ")}. ${raceNote.textContent}`);
+            }
+            told = over;
         };
+        /** The race last said aloud, so that it is said once. */
+        let told = "";
         paintRace();
         folds.push(raceFold);
         showRace = () => {
@@ -2154,71 +2095,80 @@ export default function marbles(m: Mote): Scene {
         const spotsFold = { ...fold("marbles-spots", spotRow, el("p", { class: "marbles-race-row" }, keepView)), from: () => spotsTool };
         paintSpots = () => {
             spotRow.replaceChildren(...spots.map((_, index) => {
-                const button = el("button", { type: "button", class: "marbles-spot", textContent: String(index + 1), title: `Glide to spot ${index + 1} (G)`, ariaLabel: `glide to spot ${index + 1}`, onclick: () => glideTo(index) });
-                const away = el("span", { class: "marbles-unkeep", role: "button", tabIndex: 0, title: `Forget spot ${index + 1}`, ariaLabel: `forget spot ${index + 1}` }, icon("close"));
-                const forget = (event: Event) => {
-                    event.stopPropagation();
-                    setSpots(spots.filter((__, i) => i !== index));
-                };
-                away.addEventListener("click", forget);
-                away.addEventListener("keydown", (event) => (event.key === "Enter" || event.key === " ") && forget(event));
-                button.append(away);
-                return button;
+                const button = el("button", { type: "button", textContent: `spot ${index + 1}`, title: `Glide to spot ${index + 1} (G)`, onclick: () => glideTo(index) });
+                const away = el("button", { type: "button", class: "quiet", textContent: "forget", title: `Forget spot ${index + 1}`, ariaLabel: `forget spot ${index + 1}`, onclick: () => setSpots(spots.filter((__, i) => i !== index)) });
+                return el("span", { class: "marbles-spot" }, button, away);
             }));
-            keepView.disabled = spots.length >= MOST.spots;
+            can(keepView, spots.length < MOST.spots);
         };
         paintSpots();
         folds.push(spotsFold);
 
-        // a short word said under the bar, grown from the button pressed and gone after a moment
+        // a short word said at the foot of the column, grown from the word pressed and gone after a moment
         const words = el("span", {});
         const saying = { ...fold("marbles-said", words), from: () => shareTool };
         let hush: ReturnType<typeof setTimeout> | undefined;
+        // said aloud too: the fold is hidden from a screen reader whenever it is shut
+        const aloud = el("p", { class: "unseen" });
+        aloud.setAttribute("aria-live", "polite");
+        let hushAloud: ReturnType<typeof setTimeout> | undefined;
+        speak = (text: string) => {
+            // emptied first and filled a moment later, so that the same words said again are heard again
+            aloud.textContent = "";
+            clearTimeout(hushAloud);
+            hushAloud = setTimeout(() => (aloud.textContent = text), 60);
+        };
         say = (text: string, from?: HTMLElement) => {
+            speak(text);
             words.textContent = text;
             clearTimeout(hush);
             saying.open(from ?? shareTool, true);
             hush = setTimeout(() => saying.open(from ?? shareTool, false), 2600);
         };
 
-        // the keys, a plain list, and the runs to start from, each in a fold under the bar
+        // the keys and gestures, a plain list, and the runs to start from, each in a fold in the column
         const KEYS: [string, string][] = [
-            ["tap, click", "choose a piece"],
-            ["Shift, long press", "add a piece to the choice"],
-            ["Ctrl and drag, long press on the table", "choose many in a box"],
+            ["click a piece", "choose it alone; with Shift or Ctrl, add it or take it away"],
+            ["click the table", "choose nothing"],
+            ["drag a piece", "carry it, and what is chosen with it"],
+            ["drag on the table", "choose what is in a box; with Shift, add it"],
+            ["click a piece in the box", "pick it up; click in the scene to set it down"],
+            ["click a hopper's box", "let its marble go"],
+            ["right drag, right click", "turn the view, the run's menu"],
+            ["middle drag, wheel", "move the view, nearer and further"],
+            ["W, A, S, D or arrows", "move the view over the table"],
+            ["Shift+arrows, plus, minus", "turn the view, nearer, further"],
+            ["R, Shift+R, F", "turn a quarter, the other way, mirror"],
+            ["Page Up, Page Down", "raise, lower"],
+            ["N, Shift+N", "longer, shorter"],
+            ["Delete", "take away"],
+            ["Escape", "put back what is in hand, or choose nothing"],
+            ["Enter", "set down what is in hand; on a piece in the box, put it at the end"],
             ["B", "the select tool"],
             ["Ctrl+A, J", "choose all, choose what is joined"],
-            ["Escape", "free the camera, put back, or choose nothing"],
-            ["arrows or WASD", "lift and move a cell"],
-            ["Q, E, Alt+up and down", "a level down, up"],
-            ["Enter", "put down"],
-            ["R, F", "turn, mirror"],
-            ["K, the bend button", "bend what is chosen by its points, its ends staying put"],
+            ["K", "bend what is chosen by its points"],
             ["bending: arrows, Q, E", "move the point aside, up, down"],
             ["bending: comma, full stop, Delete", "the point before, after; straighten it"],
             ["Alt or a second finger, dragging a point", "no snapping"],
-            ["N, Shift+N, its knob", "the next or last setting: a chime bar's note, a lift's height, a spinner's arms, how many marbles tip a seesaw, a length"],
-            ["Delete", "take away"],
             ["Ctrl+C, X, V, D", "copy, cut, paste, duplicate"],
             ["Ctrl+V", "with a run's link or text copied, open that run"],
-            ["right click, menu key", "the run's menu: paste or copy the run, and what is chosen"],
+            ["menu key", "the run's menu"],
             ["Shift and right click", "the browser's own menu"],
             ["Ctrl+Z, Ctrl+Shift+Z", "undo, redo"],
             ["comma, full stop", "the piece before, after"],
             ["Space, Shift+Space", "let a marble go, a stream"],
             ["P, C", "pause, clear the marbles"],
-            ["X", "race the marbles, in a new line"],
-            ["Shift+X", "race them again in the same line"],
-            ["tap a marble, V", "ride along with it, with the next marble"],
-            ["Shift+V", "ride the leader of a race"],
+            ["X, Shift+X", "race the marbles in a new line, in the same line"],
+            ["V, Shift+V", "ride along with the next marble, the leader of a race"],
             ["T", "a tour of the run"],
             ["H, G, Shift+G", "keep this view as a spot, glide to the next spot, the last"],
             ["7, 1, 3", "from above, the front, the side"],
             ["5", "the narrow lens"],
             ["Home, Shift+Home", "fit the run, what is chosen"],
-            ["plus, minus, Shift+arrows", "nearer, further, turn the view"],
             ["M, ?", "sound, these keys"],
             ["L", "the look: full, or plain for a slower graphics card"],
+            ["a finger", "on the table turns the view; a tap chooses; a drag carries; a long press then a drag draws a box"],
+            ["two fingers", "move the view, pinch it nearer, twist it"],
         ];
         const list = el("dl", { class: "marbles-keys-list" });
         for (const [key, what] of KEYS) list.append(el("dt", { textContent: key }), el("dd", { textContent: what }));
@@ -2276,7 +2226,6 @@ export default function marbles(m: Mote): Scene {
         runList.append(el("li", { class: "marbles-rule" }, opener, chooser), el("li", {}, paster, pasted));
         const runs = { ...fold("marbles-menu", runList), from: () => runsTool };
         folds.push(keys, runs);
-        panel.append(box, bar, keys.box, runs.box, raceFold.box, spotsFold.box, saying.box);
         // a file dropped anywhere on the mini opens
         const host = m.canvas.parentElement!;
         host.addEventListener("dragover", (event) => event.preventDefault());
@@ -2285,14 +2234,20 @@ export default function marbles(m: Mote): Scene {
             void openFile(event.dataTransfer?.files[0]);
         });
 
-        // the strip by what is chosen
-        const turnTool = tool("turn", "Turn", "R", () => turnChosen(1));
-        const mirrorTool = tool("mirror", "Mirror", "F", mirrorChosen);
-        const joinedTool = tool("joined", "Choose what is joined", "J", selectJoined);
-        const copyTool = tool("copy", "Copy", "Ctrl+C", copyChosen);
-        const duplicateTool = tool("duplicate", "Duplicate", "Ctrl+D", () => duplicate(false));
-        const keepTool = tool("keep", "Keep as a piece of your own", "", () => naming(true));
-        const removeTool = tool("remove", "Take away", "Delete", removeChosen);
+        // what is chosen: the words the strip over the scene had, there all the time, faint while nothing is chosen
+        const turnTool = word("turn", "Turn", "R", () => turnChosen(1));
+        const mirrorTool = word("mirror", "Mirror", "F", mirrorChosen);
+        const bendTool = word("bend: off", "Bend: drag its points", "K", () => toggleBending(), true);
+        const straightenTool = word("straighten", "Straighten", "", straightenChosen);
+        const joinedTool = word("join", "Choose what is joined", "J", selectJoined);
+        const copyTool = word("copy", "Copy", "Ctrl+C", copyChosen);
+        const duplicateTool = word("duplicate", "Duplicate", "Ctrl+D", () => duplicate(false));
+        const keepTool = word("make my own", "Keep as a piece of your own", "", () => naming(true));
+        const removeTool = word("delete", "Take away", "Delete", removeChosen);
+        const longerTool = word("longer", "Longer", "N", () => stepSetting(1));
+        const shorterTool = word("shorter", "Shorter", "Shift+N", () => stepSetting(-1));
+        const raiseTool = word("raise", "Raise a level", "Page Up", () => raiseChosen(1));
+        const lowerTool = word("lower", "Lower a level", "Page Down", () => raiseChosen(-1));
         const name = el("input", { type: "text", class: "marbles-name", ariaLabel: "the piece's name", maxLength: 30 });
         const keepIt = () => {
             const pieces = chosenPieces();
@@ -2309,26 +2264,21 @@ export default function marbles(m: Mote): Scene {
             if (event.key === "Enter") keepIt();
             if (event.key === "Escape") naming(false);
         });
-        const bendTool = tool("bend", "Bend: drag its points", "K", () => toggleBending(), true);
-        const straightenTool = tool("straighten", "Straighten", "", straightenChosen);
-        const tools = el("div", { class: "marbles-strip-tools" }, turnTool, mirrorTool, bendTool, straightenTool, joinedTool, copyTool, duplicateTool, keepTool, removeTool);
-        const form = el("div", { class: "marbles-strip-name" }, name, tool("done", "Keep it", "Enter", keepIt), tool("close", "Not now", "Escape", () => naming(false)));
-        form.inert = true;
-        strip.append(tools, form);
+        const pieceTools = [turnTool, mirrorTool, bendTool, straightenTool, joinedTool, copyTool, duplicateTool, keepTool, removeTool, longerTool, shorterTool, raiseTool, lowerTool];
+        // the name of a piece of one's own, asked for in a fold under the piece's words
+        const form = fold("marbles-naming", el("div", { class: "marbles-words" }, name, word("keep it", "Keep it", "Enter", keepIt), word("not now", "Not now", "Escape", () => naming(false))));
         const naming = (on: boolean) => {
-            strip.classList.toggle("naming", on);
-            form.inert = !on;
-            tools.inert = on;
+            if (on && !chosen.size) return refuse();
+            form.open(keepTool, on);
             if (on) {
                 name.value = `piece ${owns.length + 1}`;
                 name.focus();
                 name.select();
             } else m.canvas.focus({ preventScroll: true });
         };
-        m.canvas.parentElement!.append(strip);
 
         // The scene's own small menu, from a right click that does not move or the keyboard's menu key: Paste
-        // run and Copy run, Ride this marble over a marble, and what the strip offers for what is chosen. It
+        // run and Copy run, Ride this marble over a marble, and what the piece group offers for what is chosen. It
         // grows from the press and shrinks back into it. Shift with the right click leaves the browser's own.
         const menu = el("div", { class: "marbles-menu-box", role: "menu", ariaLabel: "the run's menu" });
         menu.inert = true;
@@ -2421,27 +2371,55 @@ export default function marbles(m: Mote): Scene {
             if (event.shiftKey) event.stopPropagation();
         }, true);
 
+        const row = el("div", { class: "mote-panel marbles-row" }, box);
+        m.canvas.parentElement!.insertBefore(row, panel);
+        leaving.push(() => row.remove());
+        panel.append(
+            heading("run"),
+            line(goTool, streamTool, pauseTool, resetTool, raceTool),
+            raceFold.box,
+            heading("build"),
+            line(selectTool, undoTool, redoTool, pasteTool, runsTool),
+            runs.box,
+            heading("view"),
+            line(fitTool, rideTool, spotsTool, tourTool),
+            spotsFold.box,
+            heading("share"),
+            line(shareTool, ...(sound ? [sound.button] : []), keysTool),
+            keys.box,
+            heading("piece"),
+            line(...pieceTools),
+            form.box,
+            saying.box,
+            aloud,
+        );
+
         tell = () => {
-            selectTool.setAttribute("aria-pressed", String(selecting));
-            streamTool.setAttribute("aria-pressed", String(streaming));
-            undoTool.disabled = !canUndo(steps);
-            redoTool.disabled = !canRedo(steps);
-            pasteTool.disabled = !clip;
-            const one = chosen.size === 1 ? run.find((piece) => chosen.has(piece.id)) : undefined;
-            bendTool.setAttribute("aria-pressed", String(bending));
-            bendTool.disabled = !one || !pointsOf(one.kind);
-            straightenTool.disabled = !one || !isBent(one.kind);
-            if (playing) swap(pauseTool, "pause", "Pause", "P");
-            else swap(pauseTool, "play", "Play", "P");
-            const on = sound?.button.getAttribute("aria-pressed") === "true";
-            swap(soundTool, on ? "sound" : "quiet", on ? "Sound is on" : "Sound is off", "M");
-            soundTool.setAttribute("aria-pressed", String(on));
-            fitTool.replaceChildren(icon(chosen.size ? "fit-chosen" : "fit"));
+            const on = (button: HTMLElement, words: string, yes: boolean) => {
+                button.textContent = `${words}: ${yes ? "on" : "off"}`;
+                button.setAttribute("aria-pressed", String(yes));
+            };
+            on(selectTool, "select", selecting);
+            on(streamTool, "stream", streaming);
+            on(rideTool, "ride", camera.kind === "ride");
+            on(tourTool, "tour", camera.kind === "tour");
+            on(bendTool, "bend", bending);
+            can(undoTool, canUndo(steps));
+            can(redoTool, canRedo(steps));
+            can(pasteTool, Boolean(clip));
+            pauseTool.textContent = playing ? "pause" : "play";
+            pauseTool.title = playing ? "Pause (P)" : "Play (P)";
+            fitTool.textContent = chosen.size ? "fit what is chosen" : "fit the run";
             fitTool.title = chosen.size ? "Fit what is chosen (Shift+Home)" : "Fit the run (Home)";
             fitTool.onclick = () => (chosen.size ? fitChosen() : fitRun());
-            rideTool.setAttribute("aria-pressed", String(camera.kind === "ride"));
             rideTool.classList.toggle("offering", Boolean(offered));
-            tourTool.setAttribute("aria-pressed", String(camera.kind === "tour"));
+            // what is chosen: the piece's words alive while something is, each as far as it can act
+            const one = chosen.size === 1 ? run.find((piece) => chosen.has(piece.id)) : undefined;
+            for (const tool of pieceTools) can(tool, chosen.size > 0);
+            can(bendTool, Boolean(one && pointsOf(one.kind)));
+            can(straightenTool, Boolean(one && isBent(one.kind)));
+            can(longerTool, Boolean(one && stepped(one.kind, 1)));
+            can(shorterTool, Boolean(one && stepped(one.kind, -1)));
         };
         keepOwn = () => naming(true);
     }
@@ -2469,7 +2447,13 @@ export default function marbles(m: Mote): Scene {
     // link stays in the address until the first change. A link pasted into the address opens too.
     const followLink = async (packed: string) => {
         const opened = await unpackShared(packed);
-        if (!opened) return forgetLink();
+        if (!opened) {
+            // the run that was on the table stays; the address is let go of the link, so that coming back does not try it again
+            linked = true;
+            forgetLink();
+            refuse();
+            return say("this link could not be read");
+        }
         openShared(opened, undefined, true);
         history.replaceState(history.state, "", `${location.pathname}${location.search}${LINKED}${packed}`);
         linked = true;
@@ -2486,8 +2470,8 @@ export default function marbles(m: Mote): Scene {
     const building = () => Boolean(carried || bendDrag || bending);
     /**
      * The look, full or plain. It goes plain by itself where frames come slowly: when the middle of the
-     * last two seconds' frames (at least eight), while the scene moves, took longer than a fortieth of a
-     * second. Once set by the key (L), it stays as set.
+     * last two seconds' frames, while the scene moves, took longer than a fortieth of a second, decided on
+     * less time the slower they come (tooSlow, look.ts). Once set by the key (L), it stays as set.
      */
     let lookByHand = false;
     let lookByItself = false;
@@ -2506,23 +2490,30 @@ export default function marbles(m: Mote): Scene {
         gaps.push(dt);
         let span = gaps.reduce((sum, gap) => sum + gap, 0);
         while (gaps.length > 120 || span - gaps[0]! > 2) span -= gaps.shift()!;
-        // judged on two seconds of frames, or fewer where frames come very slowly
-        if (span < 1.9 && gaps.length < 120) return;
-        if (gaps.length < 8) return;
-        const middle = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]!;
-        if (middle > 1 / 40) {
+        // judged on two seconds of frames, and on less the slower they come (tooSlow, look.ts)
+        if (tooSlow(gaps)) {
             view.quality = "plain";
             lookByItself = true;
         }
     };
 
     // ---- the keyboard ----
+    /** The keys that move the view, by the way each goes: forward, back, left and right as the camera sees them. */
+    const WALKS: Record<string, "ahead" | "back" | "left" | "right"> = { ArrowUp: "ahead", w: "ahead", ArrowDown: "back", s: "back", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
+    /** The keys that move the view held now. */
+    const walking = new Set<"ahead" | "back" | "left" | "right">();
     /** A paste by Control and V: the system's clipboard if it holds a run, else what was copied here. */
     let pasting: ReturnType<typeof setTimeout> | undefined;
     if (!m.preview) {
-        m.canvas.addEventListener("keydown", (event) => {
+        // The keys are heard wherever the keyboard is in the mini, on the scene or on a button just pressed,
+        // so that pressing one does not leave them dead; a box of text keeps its own (keyHeard, toolbar.ts).
+        const host = m.canvas.parentElement!;
+        host.addEventListener("keydown", (event) => {
             const key = event.key;
             const lower = key.toLowerCase();
+            const on = keyPlace(event.target, m.canvas);
+            // a key a control has already taken is its own; on the scene, Mote has taken Space and Enter first, for nothing
+            if (!keyHeard(key, on) || (event.defaultPrevented && on !== "canvas")) return;
             if (key === "Escape" && closeMenu()) {
                 event.preventDefault();
                 return;
@@ -2593,11 +2584,8 @@ export default function marbles(m: Mote): Scene {
             if (key === "Escape" && bendDrag) {
                 endBend(true);
                 for (const one of held.values()) if (one.mode === "bend") one.mode = "done";
-            } else if (event.altKey) {
-                if (key === "ArrowUp") nudge(0, 0, 1);
-                else if (key === "ArrowDown") nudge(0, 0, -1);
-                else return;
-            } else if (lower === "k") toggleBending();
+            } else if (event.altKey) return;
+            else if (lower === "k") toggleBending();
             else if (event.shiftKey && key.startsWith("Arrow")) {
                 free();
                 toFree();
@@ -2605,12 +2593,12 @@ export default function marbles(m: Mote): Scene {
                 if (key === "ArrowRight") orbit = kept({ ...orbit, turn: orbit.turn + 0.15 }, orbit);
                 if (key === "ArrowUp") orbit = kept({ ...orbit, tip: orbit.tip + 0.08 }, orbit);
                 if (key === "ArrowDown") orbit = kept({ ...orbit, tip: orbit.tip - 0.08 }, orbit);
-            } else if (key === "ArrowLeft" || lower === "a") nudge(-1, 0, 0);
-            else if (key === "ArrowRight" || lower === "d") nudge(1, 0, 0);
-            else if (key === "ArrowUp" || lower === "w") nudge(0, -1, 0);
-            else if (key === "ArrowDown" || lower === "s") nudge(0, 1, 0);
-            else if (lower === "e" || key === "PageUp") nudge(0, 0, 1);
-            else if (lower === "q" || key === "PageDown") nudge(0, 0, -1);
+            } else if (WALKS[key] ?? WALKS[lower]) {
+                // the view goes over the table for as long as the key is held (step, below)
+                walking.add(WALKS[key] ?? WALKS[lower]!);
+                toFree();
+                easing = undefined;
+            } else if (key === "PageUp" || key === "PageDown") raise(key === "PageUp" ? 1 : -1);
             else if (lower === "r") turnChosen(event.shiftKey ? -1 : 1);
             else if (lower === "f") mirrorChosen();
             else if (key === "Enter") {
@@ -2658,17 +2646,27 @@ export default function marbles(m: Mote): Scene {
             event.preventDefault();
             m.wake();
         });
-        m.canvas.addEventListener("copy", (event) => {
-            if (!clip || !chosen.size) return;
+        host.addEventListener("keyup", (event) => {
+            const way = WALKS[event.key] ?? WALKS[event.key.toLowerCase()];
+            if (way) walking.delete(way);
+        });
+        // the keyboard leaving the mini lets go of every key that moves the view
+        host.addEventListener("focusout", (event) => {
+            if (!host.contains(event.relatedTarget as Node | null)) walking.clear();
+        });
+        // copying, cutting and pasting reach the mini from wherever the keyboard is in it, but not from a box of text
+        host.addEventListener("copy", (event) => {
+            if (keyPlace(event.target, m.canvas) === "text" || !clip || !chosen.size) return;
             event.clipboardData?.setData("text/plain", clip);
             event.preventDefault();
         });
-        m.canvas.addEventListener("cut", (event) => {
-            if (!clip) return;
+        host.addEventListener("cut", (event) => {
+            if (keyPlace(event.target, m.canvas) === "text" || !clip) return;
             event.clipboardData?.setData("text/plain", clip);
             event.preventDefault();
         });
-        m.canvas.addEventListener("paste", (event) => {
+        host.addEventListener("paste", (event) => {
+            if (keyPlace(event.target, m.canvas) === "text") return;
             const text = event.clipboardData?.getData("text/plain")?.trim() ?? "";
             // a whole run, as a link to it or a file's text, opens that run; a run's text alone is pieces to paste
             if (text.includes(LINKED) || text.startsWith("marbles 1")) {
@@ -2690,6 +2688,23 @@ export default function marbles(m: Mote): Scene {
 
     /** Two fingers: where between them, how far apart, and at what angle, to pan, pinch and twist by. */
     let pinch: { x: number; y: number; apart: number; angle: number } | undefined;
+    /** What two fingers' pan holds under the middle between them, taken when they start to move together. */
+    let pinchGrip: Grip | undefined;
+    /** A pan's hold taken at a point of the screen, in the view as drawn. */
+    const gripUnder = (x: number, y: number): Grip => {
+        const { orbit: seen, degrees } = cam();
+        // the nearest of what the pointer is on, for a view along the table to hold at its depth
+        const line = lineAt(x, y);
+        let nearest = Infinity;
+        for (const piece of resting()) for (const box of roomOf(piece)) nearest = Math.min(nearest, enters(line, box.at, box.half) ?? Infinity);
+        const through: V3 | undefined = nearest < Infinity ? [line.from[0] + line.way[0] * nearest, line.from[1] + line.way[1] * nearest, line.from[2] + line.way[2] * nearest] : undefined;
+        return gripAt(seen, degrees, aspect(), ...toPicture(x, y), 0, through);
+    };
+    /** The view slid so that what a pan holds is under a point of the screen. */
+    const panTo = (grip: Grip, x: number, y: number) => {
+        const { orbit: seen, degrees } = cam();
+        orbit = { ...orbit, at: pannedTo(seen, degrees, aspect(), grip, ...toPicture(x, y)).at };
+    };
     const pinchOf = () => {
         const [a, b] = [...held.values()].filter((one) => one.mode === "pinch").map((one) => one.last);
         if (!a || !b) return undefined;
@@ -2846,7 +2861,7 @@ export default function marbles(m: Mote): Scene {
                 if (!piece) return [];
                 return shapeOf(piece.kind).room.map((box) => onScreen(boxToWorld(piece.place, box).at)).filter((p): p is { x: number; y: number } => Boolean(p) && pieceAt(p!.x, p!.y)?.id === id);
             },
-            handles: () => handlesNow(),
+            handles: () => pointsNow(),
             pressed: () => pressed,
             /** The handle a press there would take, if any. */
             handleAt: (x: number, y: number, kind: "touch" | "mouse") => handleUnder(x, y, kind),
@@ -2861,7 +2876,7 @@ export default function marbles(m: Mote): Scene {
             texts: () => [...steps.texts],
             ghost: () => ({ done: ghost.done, paths: ghost.paths.map((path) => ({ ending: path.ending, last: path.last, length: path.places.length, end: onScreen(path.places.at(-1)!) })) }),
             owns: () => owns.map((one) => one.name),
-            carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, handle: carried.handle, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
+            carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
             marbles: () => ({ all: table.marbles.length, arrived: table.marbles.filter(table.arrived).length, asleep: table.marbles.filter((one) => one.rest).length, places: table.marbles.map((one) => ({ at: [...one.p], piece: table.pieceAt(one.p) ?? null, asleep: Boolean(one.rest) })) }),
             /** Every moving part: its piece, its family, a hinge's angle or a driven part's seconds, and where its first solid is on the screen. */
             parts: () => {
@@ -2974,10 +2989,12 @@ export default function marbles(m: Mote): Scene {
                 return;
             }
             // a paste that follows the mouse is put down where it is pressed
-            if (carried?.hand === "hover") {
+            // a piece in hand, from the box or a paste: a click sets it down, a right click puts it back, the middle button moves the view
+            if (carried?.hand === "hover" && hand.button !== 1) {
                 one.mode = "done";
                 held.set(hand.id, one);
-                drop();
+                if (hand.button === 2) cancel();
+                else drop();
                 return;
             }
             // pieces lifted by the keys are put down when the pointer is used
@@ -2996,6 +3013,7 @@ export default function marbles(m: Mote): Scene {
                 one.mode = "pinch";
                 held.set(hand.id, one);
                 pinch = pinchOf();
+                pinchGrip = undefined;
                 return;
             }
             if (hand.kind === "touch" && fingers.length >= 1) return;
@@ -3006,16 +3024,13 @@ export default function marbles(m: Mote): Scene {
                 held.set(hand.id, one);
                 return;
             }
-            if (hand.button === 2 || hand.button === 1 || (hand.button === 0 && hand.shift && !pieceAt(hand.x, hand.y))) one.mode = "pan";
-            else {
-                // Shift and the select tool are for choosing, so the handles of what is chosen do not take the press
+            // the middle button moves the view; the right turns it, or let go without moving opens the run's menu; the left is for pieces
+            if (hand.button === 1) one.mode = "pan";
+            else if (hand.button === 0) {
+                // Shift and the select tool are for choosing, so the points of a bent piece do not take the press
                 one.piece = pieceAt(hand.x, hand.y, 1.2, hand.kind === "touch" ? FINGERTIP : 0);
                 one.handle = handleUnder(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", hand.shift);
                 pressed = { x: hand.x, y: hand.y, handle: one.handle, kind: hand.kind };
-                if (!one.piece && !one.handle && hand.ctrl) {
-                    one.mode = "box";
-                    boxing = { from: one.start, to: one.start, adding: hand.shift };
-                }
             }
             held.set(hand.id, one);
         },
@@ -3040,10 +3055,12 @@ export default function marbles(m: Mote): Scene {
                 const now = pinchOf();
                 if (now && pinch) {
                     toFree();
-                    orbit = pannedBy(orbit, DEGREES, now.x - pinch.x, now.y - pinch.y, m.height);
+                    pinchGrip ??= gripUnder(pinch.x, pinch.y);
                     const twist = now.angle - pinch.angle;
                     if (Math.abs(twist) > 1e-4) free();
                     orbit = kept({ ...orbit, far: orbit.far * (pinch.apart / Math.max(1, now.apart)), turn: orbit.turn - twist }, orbit);
+                    // pinched and twisted first, then slid so that what was under the middle between the fingers is under it still
+                    panTo(pinchGrip, now.x, now.y);
                 }
                 pinch = now;
             } else if (one.mode === "press") {
@@ -3053,10 +3070,6 @@ export default function marbles(m: Mote): Scene {
                     one.mode = "bend";
                     startBend(point, { ...hand, x: one.start.x, y: one.start.y });
                     dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
-                } else if (one.handle) {
-                    one.mode = "handle";
-                    startHandle(one.handle, { ...hand, x: one.start.x, y: one.start.y });
-                    dragHandle(hand.x, hand.y);
                 } else if (one.piece) {
                     one.mode = "carry";
                     // a piece of the choice carries all of it; another piece, itself alone
@@ -3067,23 +3080,25 @@ export default function marbles(m: Mote): Scene {
                     const pieces = chosenPieces();
                     startCarry(pieces, true, one.piece.id, hand.id, one.start);
                     follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
-                } else if (selecting) {
-                    one.mode = "box";
-                    boxing = { from: one.start, to: { x: hand.x, y: hand.y }, adding: true };
-                } else {
+                } else if (one.hand.button === 2 || (one.hand.kind === "touch" && !selecting)) {
+                    // the right button, or one finger on the table, turns the view
                     one.mode = "turn";
                     free();
                     toFree();
+                } else {
+                    // the left button on the table, or a finger with the select tool, draws a box; Shift adds to what is chosen
+                    one.mode = "box";
+                    boxing = { from: one.start, to: { x: hand.x, y: hand.y }, adding: one.hand.shift || one.hand.ctrl || selecting };
                 }
             } else if (one.mode === "carry") follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
             else if (one.mode === "bend") dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
-            else if (one.mode === "handle") dragHandle(hand.x, hand.y);
             else if (one.mode === "box" && boxing) boxing.to = { x: hand.x, y: hand.y };
             else if (one.mode === "turn") orbit = kept({ ...orbit, turn: orbit.turn - dx * 0.008, tip: orbit.tip + dy * 0.006 }, orbit);
             else if (one.mode === "pan" && (dx || dy)) {
                 toFree();
-                // the ground goes with the pointer: it had gone the other way, the drag handed on with its sign turned
-                orbit = pannedBy(orbit, DEGREES, dx, dy, m.height);
+                // the table goes with the pointer: the point first under it is kept under it, wherever in the picture
+                one.grip ??= gripUnder(one.start.x, one.start.y);
+                panTo(one.grip, hand.x, hand.y);
             }
             m.wake();
         },
@@ -3095,7 +3110,8 @@ export default function marbles(m: Mote): Scene {
                 // the finger left behind carries on turning the view, from where it is
                 for (const other of held.values()) if (other.mode === "pinch") other.mode = "turn";
                 pinch = undefined;
-            } else if (one.mode === "carry" || one.mode === "handle") {
+                pinchGrip = undefined;
+            } else if (one.mode === "carry") {
                 if (cancelled) cancel();
                 else drop();
             } else if (one.mode === "bend") {
@@ -3106,13 +3122,8 @@ export default function marbles(m: Mote): Scene {
             } else if (one.mode === "gizmo") {
                 if (Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL * 2 && one.gizmo) look(one.gizmo);
             } else if (one.mode === "box" && boxing) {
-                const [left, right] = [Math.min(boxing.from.x, boxing.to.x), Math.max(boxing.from.x, boxing.to.x)];
-                const [top, bottom] = [Math.min(boxing.from.y, boxing.to.y), Math.max(boxing.from.y, boxing.to.y)];
                 if (!boxing.adding) chosen.clear();
-                for (const piece of run) {
-                    const seen = onScreen(toWorld(piece.place, handleOf(piece.kind)));
-                    if (seen && seen.x >= left && seen.x <= right && seen.y >= top && seen.y <= bottom) chosen.add(piece.id);
-                }
+                for (const id of boxed(boxing.from, boxing.to, new Map(run.map((piece) => [piece.id, onScreen(toWorld(piece.place, handleOf(piece.kind)))])))) chosen.add(id);
                 boxing = undefined;
                 sound?.knock(0.2, 1900);
                 chosenChanged();
@@ -3120,31 +3131,31 @@ export default function marbles(m: Mote): Scene {
                 // a tap on a point picks it for the keys, and leaves the choice as it is
                 bendPoint = pointOf(one.handle)!;
                 sound?.knock(0.15, 2000);
-            } else if (one.mode === "pan" && hand.button === 2 && !cancelled && Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL) {
-                // the other button pressed and let go without moving the view: the run's menu
-                openMenu(hand.x, hand.y, false);
-            } else if (one.mode === "press" && !hand.shift && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
-                // a press on a marble going down the run: the camera rides it
+            } else if (one.mode === "press" && one.hand.button === 2) {
+                // the right button pressed and let go without turning the view: the run's menu
+                if (!cancelled) openMenu(hand.x, hand.y, false);
+            } else if (one.mode === "press" && hand.kind === "touch" && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
+                // a tap on a marble going down the run: the camera rides it
                 rideOn(marbleAt(hand.x, hand.y, hand.kind)!);
+            } else if (one.mode === "press" && one.piece && !hand.shift && !hand.ctrl && !selecting && onHopperBox(one.piece, hand.x, hand.y)) {
+                // a click on a hopper's box, not its chute, lets its marble go
+                letGo(one.piece.id);
             } else if (one.mode === "press") {
-                // a press that did not move: on a piece it is chosen (added with Shift or the select
-                // tool); on the table, the choice is let go
-                if (one.piece) {
-                    if (hand.shift || selecting) {
-                        if (chosen.has(one.piece.id)) chosen.delete(one.piece.id);
-                        else chosen.add(one.piece.id);
-                    } else {
-                        chosen.clear();
-                        chosen.add(one.piece.id);
-                    }
-                } else if (!hand.shift && !selecting) chosen.clear();
+                // a click that did not move: a piece alone, or with Shift, Control or the select tool added
+                // or taken away; on the empty table, the choice let go, always
+                const next = clicked(chosen, one.piece?.id, hand.shift || hand.ctrl || selecting);
+                chosen.clear();
+                for (const id of next) chosen.add(id);
                 chosenChanged();
             }
             m.wake();
         },
-        wheel(_x, _y, by, isPinch) {
+        wheel(x, y, by, isPinch) {
             toFree();
-            orbit = kept({ ...orbit, far: orbit.far * Math.exp(by * (isPinch ? 0.01 : 0.0012)) }, orbit);
+            // toward what is under the pointer: that point of the table stays under it
+            const far = kept({ ...orbit, far: orbit.far * Math.exp(by * (isPinch ? 0.01 : 0.0012)) }, orbit).far;
+            const { orbit: seen, degrees } = cam();
+            orbit = { ...orbit, far, at: zoomedAt(seen, degrees, aspect(), ...toPicture(x, y), (seen.far * far) / orbit.far).at };
             easing = undefined;
             m.wake();
         },
@@ -3195,6 +3206,11 @@ export default function marbles(m: Mote): Scene {
                 }
             }
             stepCamera(dt);
+            if (walking.size) {
+                const ahead = (walking.has("ahead") ? 1 : 0) - (walking.has("back") ? 1 : 0);
+                const aside = (walking.has("right") ? 1 : 0) - (walking.has("left") ? 1 : 0);
+                if (ahead || aside) orbit = walked(orbit, ahead, aside, dt);
+            }
             // what is carried eases to where it would go: quick to start and slow to settle
             if (carried) {
                 const goal = target(carried);
@@ -3228,11 +3244,10 @@ export default function marbles(m: Mote): Scene {
             }
             shake = Math.max(0, shake - dt);
         },
-        resting: () => !m.preview && camera.kind === "free" && !blending && !(race && !race.done && !raceStopped) && gridShown === (building() ? GRID.building : GRID.rolling) && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || (table.marbles.every((one) => one.rest) && table.movers().every(({ solids }) => solids.every((solid) => solid.rest || (solid.driven && !table.running && !solid.v.some((x) => x !== 0)))))) && !held.size && ghost.done && ghostPlays >= 1,
+        resting: () => !m.preview && camera.kind === "free" && !blending && !(race && !race.done && !raceStopped) && gridShown === (building() ? GRID.building : GRID.rolling) && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || (table.marbles.every((one) => one.rest) && table.movers().every(({ solids }) => solids.every((solid) => solid.rest || (solid.driven && !table.running && !solid.v.some((x) => x !== 0)))))) && !held.size && !walking.size && ghost.done && ghostPlays >= 1,
         resize,
         debug: () => [`${run.length} pieces, ${table.marbles.length} marbles, ${table.marbles.filter((one) => one.rest).length} asleep`, `ghost ${took.ghost.toFixed(2)} ms, frame ${took.frame.toFixed(2)} ms`],
         destroy: () => {
-            strip.remove();
             for (const one of leaving) one();
             view?.dispose();
         },
@@ -3280,47 +3295,18 @@ export default function marbles(m: Mote): Scene {
                 one.drawn.part.hidden = drawn.get(one.id)?.parts[0]?.part.hidden ?? false;
             }
             drawGhost(dt);
-            // the handles, a fingertip's size at any distance, on what is chosen, or on what a handle carries
-            if (handleParts) {
-                const shown = handlesNow();
-                const pieces = carried ? placedOf(carried) : chosenPieces();
-                for (const part of Object.values(handleParts)) part.hidden = true;
-                const bent = !carried ? bentPiece() : undefined;
-                if (bent) {
-                    // the points, on the track, a fingertip's size; the one the keys move, or the one dragged, lit
-                    pointsIn(bent.kind, bent.place).forEach((point, i) => {
-                        const part = handleParts[`point${i}` as "point0"];
-                        if (!part) return;
-                        part.hidden = false;
-                        part.at = point.at;
-                        part.scale = across(seen, degrees, m.height, point.at) * ARROW;
-                        const lit = bendDrag ? bendDrag.point === i : hovered === `point${i}` || bendPoint === i;
-                        part.emit = lit ? 0.4 : 0;
-                    });
-                } else if (shown && pieces.length) {
-                    const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-                    const pixel = across(seen, degrees, m.height, middle);
-                    const size = pixel * ARROW;
-                    const lit = carried?.handle ?? hovered;
-                    for (const name of ["x", "y", "z", "ring"] as const) {
-                        const part = handleParts[name];
-                        // while one is dragged, only it is shown
-                        part.hidden = (name === "ring" ? false : !shown.arrows[name]) || (carried?.handle !== undefined && carried.handle !== name);
-                        // stood off from what is chosen: each arrow moved out along itself, the ring made wider
-                        const out = name === "ring" ? 0 : stand * pixel;
-                        const axis = name === "ring" ? AXES.x : AXES[name];
-                        part.at = [middle[0] + axis[0] * out, middle[1] + axis[1] * out, middle[2] + axis[2] * out];
-                        part.scale = name === "ring" ? size * ((RING + stand) / RING) : size;
-                        part.emit = lit === name ? 0.35 : 0;
-                    }
-                    const knob = carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces);
-                    if (knob) {
-                        handleParts.knob.hidden = false;
-                        handleParts.knob.at = knob;
-                        handleParts.knob.scale = size;
-                        handleParts.knob.emit = lit === "knob" ? 0.35 : 0;
-                    }
-                }
+            // the points of a bent piece, on its track, a fingertip's size at any distance; the one the keys move, or the one dragged, lit
+            for (const part of pointParts) part.hidden = true;
+            const bent = !carried ? bentPiece() : undefined;
+            if (bent) {
+                pointsIn(bent.kind, bent.place).forEach((point, i) => {
+                    const part = pointParts[i];
+                    if (!part) return;
+                    part.hidden = false;
+                    part.at = point.at;
+                    part.scale = across(seen, degrees, m.height, point.at) * ARROW;
+                    part.emit = (bendDrag ? bendDrag.point === i : hovered === `point${i}` || bendPoint === i) ? 0.4 : 0;
+                });
             }
             // the grid on the table comes up while a piece is carried or bent, and fades back, never at once
             const gridGoal = building() ? GRID.building : GRID.rolling;
@@ -3338,7 +3324,7 @@ export default function marbles(m: Mote): Scene {
         },
     };
 
-    /** What is drawn flat over the scene: the box being drawn to choose many, the little axes, and the strip's place by the selection. */
+    /** What is drawn flat over the scene: the ring round a marble offered, the box being drawn to choose many, and the little axes. */
     function overlay() {
         const ctx = m.ctx;
         // the marble offered once a ride lets go: a thin still ring round it, until it is ridden or goes
@@ -3421,37 +3407,6 @@ export default function marbles(m: Mote): Scene {
             }
         }
         ctx.globalAlpha = 1;
-        // the strip grows by what is chosen, above it, or under it where there is no room above
-        const pieces = chosenPieces();
-        const wanted = pieces.length > 0 && !menuShown && !carried && !bendDrag && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
-        // where it goes: by what is chosen, measured by the corners of the room its pieces take up, and
-        // clear of the handles; nowhere while what is chosen is off the screen (it shrinks away, and grows
-        // again by the pieces when they come back into view), so that it never floats over the empty table
-        let place: ReturnType<typeof stripPlace>;
-        if (wanted) {
-            const chosenRect: Rect = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
-            for (const piece of pieces) {
-                const room = shapeOf(piece.kind).room;
-                for (const box of room.filter((_, i) => i % Math.max(1, Math.floor(room.length / 12)) === 0 || i === room.length - 1)) {
-                    const placed = boxToWorld(piece.place, box);
-                    for (const corner of [0, 1, 2, 3, 4, 5, 6, 7]) {
-                        const seenAt = onScreen([0, 1, 2].map((axis) => placed.at[axis]! + placed.half[axis]! * ((corner >> axis) & 1 ? 1 : -1)) as V3);
-                        if (!seenAt) continue;
-                        [chosenRect.left, chosenRect.right, chosenRect.top, chosenRect.bottom] = [Math.min(chosenRect.left, seenAt.x), Math.max(chosenRect.right, seenAt.x), Math.min(chosenRect.top, seenAt.y), Math.max(chosenRect.bottom, seenAt.y)];
-                    }
-                }
-            }
-            const handles = handlesNow();
-            const points = [...(handles?.ring ?? []), ...Object.values(handles?.arrows ?? {}).map((arrow) => arrow.to), ...(handles?.knob ? [handles.knob] : [])];
-            const kept: Rect | undefined = points.length ? { left: Math.min(...points.map((p) => p.x - 12)), right: Math.max(...points.map((p) => p.x + 12)), top: Math.min(...points.map((p) => p.y - 12)), bottom: Math.max(...points.map((p) => p.y + 12)) } : undefined;
-            if (Number.isFinite(chosenRect.left)) place = stripPlace(chosenRect, kept, { w: strip.offsetWidth, h: strip.offsetHeight }, m.width, m.height);
-        }
-        strip.classList.toggle("shown", Boolean(place));
-        strip.inert = !place;
-        if (!place) return;
-        const at = `${Math.round(place.x)}px ${Math.round(place.y)}px`;
-        if (strip.style.translate !== at) strip.style.translate = at;
-        strip.classList.toggle("below", place.below);
     }
 }
 
