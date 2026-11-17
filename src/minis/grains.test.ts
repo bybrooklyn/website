@@ -5,7 +5,7 @@
 // the page. `bun run wasm` builds the modules; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { engineAddress, fillOf, flagSize, HELD, inRow, keyAction, KEYS, materials, MOST, start, swatchColor, worldFor, type Engine, type Material } from "./grains";
+import { engineAddress, fillOf, flagSize, HELD, inRow, keptView, keyAction, KEYS, materials, nextStop, start, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Engine, type Material } from "./grains";
 
 const simd = new URL("../../public/wasm/sand.wasm", import.meta.url);
 const scalar = new URL("../../public/wasm/sand-scalar.wasm", import.meta.url);
@@ -131,20 +131,51 @@ test("the cells are where the engine says, four bytes each, in a frame of border
     expect(palette[3]).toBe(0);
 });
 
-test("a world is one CSS pixel a cell in whole device pixels, and never more than the plan's 1024 by 576", () => {
-    expect(worldFor(717, 513, 1)).toEqual({ columns: 717, rows: 513 });
-    // a cell is two device pixels where there are two to a CSS pixel, so the world is the same
-    expect(worldFor(717, 513, 2)).toEqual({ columns: 717, rows: 513 });
-    // a fractional ratio rounds to whole device pixels a cell: 1.5 makes two
-    expect(worldFor(800, 500, 1.5)).toEqual({ columns: 600, rows: 375 });
-    // a phone at three device pixels to a CSS pixel: three to a cell
-    expect(worldFor(360, 400, 3)).toEqual({ columns: 360, rows: 400 });
-    // another size of cell can be asked for: the first page's two
-    expect(worldFor(896, 544, 1, 2)).toEqual({ columns: 448, rows: 272 });
-    // a very large canvas is held to the most
-    const big = worldFor(4000, 2400, 1);
-    expect(big.columns).toBeLessThanOrEqual(MOST.columns);
-    expect(big.rows).toBeLessThanOrEqual(MOST.rows);
+test("the world is far larger than the stage, and a phone's is smaller", () => {
+    expect(worldSize(748)).toEqual({ columns: 2400, rows: 1200 });
+    expect(worldSize(350)).toEqual({ columns: 1200, rows: 900 });
+});
+
+test("a view stops at whole sizes of a grain down to the one that shows the whole world, and is kept to the world", () => {
+    // the stage at her window, a pixel to a CSS pixel: the whole world is 0.3117 of a pixel a cell
+    const frame = { columns: 2400, rows: 1200, wide: 748, high: 423 };
+    const stops = zoomStops(1, frame);
+    expect(stops.slice(0, 7)).toEqual([8, 6, 4, 3, 2, 1, 0.5]);
+    expect(stops[stops.length - 1]).toBeCloseTo(748 / 2400, 6);
+    // a quarter is farther out than the whole world there, so it is no stop; on a larger canvas it is one
+    expect(stops.length).toBe(8);
+    expect(zoomStops(1, { ...frame, wide: 400, high: 200 })).toContain(0.25);
+    // two pixels to a CSS pixel: the same stops in CSS pixels, twice as many of the canvas's
+    expect(zoomStops(2, { ...frame, wide: 1496, high: 846 }).slice(0, 3)).toEqual([16, 12, 8]);
+    // a small world, as an old link opens: the farthest stop is a whole number of pixels a cell
+    expect(zoomStops(1, { columns: 358, rows: 256, wide: 748, high: 423 })).toEqual([8, 6, 4, 3, 2, 1]);
+    // nearer and farther by one stop, and no further than the ends
+    expect(nextStop(1, 1, stops)).toBe(2);
+    expect(nextStop(1, -1, stops)).toBe(0.5);
+    expect(nextStop(8, 1, stops)).toBe(8);
+    expect(nextStop(stops[7]!, -1, stops)).toBe(stops[7]!);
+    expect(nextStop(1.4, 1, stops)).toBe(2);
+    expect(nextStop(1.4, -1, stops)).toBe(1);
+
+    // kept to the world: the canvas never shows past an edge it need not
+    expect(keptView({ x: 0, y: 0, zoom: 1 }, 1, frame)).toEqual({ x: 374, y: 211.5, zoom: 1 });
+    expect(keptView({ x: 5000, y: 5000, zoom: 1 }, 1, frame)).toEqual({ x: 2400 - 374, y: 1200 - 211.5, zoom: 1 });
+    expect(keptView({ x: 900, y: 700, zoom: 2 }, 1, frame)).toEqual({ x: 900, y: 700, zoom: 2 });
+    // no nearer than the first stop or farther than the last; and at the last the world sits in the middle
+    expect(keptView({ x: 900, y: 700, zoom: 50 }, 1, frame).zoom).toBe(8);
+    const all = keptView({ x: 100, y: 100, zoom: 0.01 }, 1, frame);
+    expect(all.zoom).toBeCloseTo(748 / 2400, 6);
+    expect([all.x, all.y]).toEqual([1200, 600]);
+
+    // the point of the world under a point of the canvas, and the view that keeps it there at another zoom
+    const view = { x: 900, y: 700, zoom: 2 };
+    const under = worldAt(view, 100, 50, frame);
+    expect(under).toEqual([900 + (100 - 374) / 2, 700 + (50 - 211.5) / 2]);
+    const nearer = viewWith(4, under, 100, 50, frame);
+    expect(worldAt(nearer, 100, 50, frame)).toEqual(under);
+    // dragging: the same point of the world under the pointer wherever it goes
+    const dragged = viewWith(2, under, 300, 200, frame);
+    expect(worldAt(dragged, 300, 200, frame)).toEqual(under);
 });
 
 test("a key works wherever the keyboard is in the mini: on the canvas, a swatch just clicked, or the slider", () => {

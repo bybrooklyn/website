@@ -23,6 +23,8 @@ export interface Engine {
     awake(): number;
     changed_from(): number;
     changed_to(): number;
+    band_rows(): number;
+    band_changed(band: number): number;
     forget_changed(): void;
     set_sleeping(on: number): void;
     set_order(phases: number): void;
@@ -110,11 +112,12 @@ export const KEYS: Record<string, string> = {
 };
 
 /** What a key pressed inside the mini asks for. */
-export type KeyAction = { pick: string } | "larger" | "smaller" | "pause";
+export type KeyAction = { pick: string } | "larger" | "smaller" | "pause" | "nearer" | "farther" | "all";
 
 /**
  * What a key pressed anywhere inside the mini does: a material's letter picks it, the brackets size the
- * brush, Space pauses. `on` is where the keyboard is: the canvas, whose Space Mote already turns into
+ * brush, Space pauses, plus and minus bring the view nearer and farther, and Home shows the whole world.
+ * `on` is where the keyboard is: the canvas, whose Space Mote already turns into
  * pausing; a button, whose Space would otherwise press it again; a slider; or a box of text, where a
  * letter is typed and nothing else happens.
  */
@@ -124,6 +127,10 @@ export function keyAction(key: string, on: "canvas" | "button" | "slider" | "tex
     if (lower === "[") return "smaller";
     if (lower === "]") return "larger";
     if (key === " ") return on === "canvas" ? undefined : "pause";
+    if (key === "+" || key === "=") return "nearer";
+    if (key === "-") return "farther";
+    // on the slider Home is the slider's own: its least
+    if (key === "Home") return on === "slider" ? undefined : "all";
     if (Object.values(KEYS).includes(lower)) return { pick: lower };
     return undefined;
 }
@@ -172,20 +179,72 @@ export function fillOf(material: Pick<Material, "kind" | "striped" | "light">, s
     return 45;
 }
 
-/** The largest world the engine is asked for, as the plan sets for a desktop. */
-export const MOST = { columns: 1024, rows: 576 };
+/**
+ * The world the page makes: far larger than the stage, which is a view onto it that is moved and
+ * zoomed. Smaller where the stage is a phone's, which holds less and shows less of it at once.
+ */
+export const WORLD = { wide: { columns: 2400, rows: 1200 }, narrow: { columns: 1200, rows: 900 } };
+
+/** The world for a stage `wide` CSS pixels across. */
+export const worldSize = (wide: number): { columns: number; rows: number } => (wide >= 600 ? WORLD.wide : WORLD.narrow);
+
+/** A view onto a world: the cell at the middle of the canvas (a part of a cell counts), and how many of the canvas's own pixels a cell is drawn. */
+export interface View {
+    x: number;
+    y: number;
+    zoom: number;
+}
+
+/** The sizes of a world in cells and of the canvas it is seen through in its own pixels. */
+export interface Frame {
+    columns: number;
+    rows: number;
+    wide: number;
+    high: number;
+}
 
 /**
- * How many cells across and down a world has for a canvas `wide` by `high` CSS pixels at `ratio`
- * device pixels to a CSS pixel: `cell` CSS pixels a cell, rounded to whole device pixels so grains
- * are square and sharp, or larger where that would make more than `MOST`. One CSS pixel a cell was
- * chosen by measuring a busy world (a lake, a forest fire and a pour) on the page: twice as fine each
- * way as the first page's two, it held sixty steps a second; three times as fine did not.
+ * The zooms a view stops at, nearest first: 8, 6, 4, 3, 2, 1, a half and a quarter of `base` (the
+ * pixels of a cell at one CSS pixel a cell), down to the zoom that shows the whole world and no
+ * further. That last is a whole number of pixels where the world is smaller than the canvas, so its
+ * grains stay square and sharp.
  */
-export function worldFor(wide: number, high: number, ratio: number, cell = CELL): { columns: number; rows: number } {
-    const [across, down] = [Math.floor(wide * ratio), Math.floor(high * ratio)];
-    const scale = Math.max(1, Math.round(cell * ratio), Math.ceil(across / MOST.columns), Math.ceil(down / MOST.rows));
-    return { columns: Math.max(1, Math.floor(across / scale)), rows: Math.max(1, Math.floor(down / scale)) };
+export function zoomStops(base: number, { columns, rows, wide, high }: Frame): number[] {
+    const all = Math.min(wide / columns, high / rows);
+    const least = all >= 1 ? Math.floor(all) : all;
+    return [...[8, 6, 4, 3, 2, 1, 0.5, 0.25].map((times) => times * base).filter((zoom) => zoom > least * 1.001), least];
+}
+
+/**
+ * A view kept to its world: no nearer than the first stop and no farther than the last, and moved so
+ * that the canvas shows no more of what lies past the world's edges than it must; where the world is
+ * narrower or lower than the canvas at that zoom, it sits in the middle of it.
+ */
+export function keptView(view: View, base: number, frame: Frame): View {
+    const stops = zoomStops(base, frame);
+    const zoom = Math.max(stops[stops.length - 1]!, Math.min(stops[0]!, view.zoom));
+    const along = (at: number, cells: number, pixels: number) => {
+        const half = pixels / zoom / 2;
+        return cells <= 2 * half ? cells / 2 : Math.max(half, Math.min(cells - half, at));
+    };
+    return { x: along(view.x, frame.columns, frame.wide), y: along(view.y, frame.rows, frame.high), zoom };
+}
+
+/** The point of the world under a point of the canvas, in cells, given in the canvas's own pixels. */
+export function worldAt(view: View, px: number, py: number, { wide, high }: Pick<Frame, "wide" | "high">): [x: number, y: number] {
+    return [view.x + (px - wide / 2) / view.zoom, view.y + (py - high / 2) / view.zoom];
+}
+
+/** The view at `zoom` that keeps the point of the world `[x, y]` under the canvas's point (px, py): zooming toward the pointer, and dragging the world by it. */
+export function viewWith(zoom: number, [x, y]: [number, number], px: number, py: number, { wide, high }: Pick<Frame, "wide" | "high">): View {
+    return { x: x - (px - wide / 2) / zoom, y: y - (py - high / 2) / zoom, zoom };
+}
+
+/** The stop after `zoom` going nearer (`by` 1) or farther (-1), or `zoom` itself at the last. */
+export function nextStop(zoom: number, by: 1 | -1, stops: number[]): number {
+    const nearer = stops.filter((stop) => stop > zoom * 1.001);
+    const farther = stops.filter((stop) => stop < zoom * 0.999);
+    return by > 0 ? (nearer[nearer.length - 1] ?? zoom) : (farther[0] ?? zoom);
 }
 
 /**

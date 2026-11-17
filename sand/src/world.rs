@@ -216,6 +216,10 @@ pub struct World {
     edges: Edges,
     /// The first and last rows changed since the page last drew.
     changed: (i32, i32),
+    /// Which bands of `CHUNK` rows hold a row changed since the page last drew, so that the page
+    /// sends only those to the graphics card: in a large world, a pour at the top and a fire at the
+    /// bottom are two bands, not every row between them.
+    bands: Vec<bool>,
     pub(crate) levels: Levels,
     /// Two rows of cells as they were before the heat pass, kept while it works down the world.
     pub(crate) rows: Vec<u32>,
@@ -247,6 +251,7 @@ impl World {
             order: Order::Rows,
             edges: Edges::Walled,
             changed: (0, height - 1),
+            bands: vec![true; down as usize],
             levels: Levels::new(stride * rows),
             rows: vec![0; 2 * stride],
             fired: vec![0; REACTIONS.len()],
@@ -353,6 +358,13 @@ impl World {
     /// The page has drawn what changed.
     pub fn forget_changed(&mut self) {
         self.changed = (i32::MAX, i32::MIN);
+        self.bands.fill(false);
+    }
+
+    /// Whether band `band` of `CHUNK` rows, counted from the top, holds a row changed since
+    /// `forget_changed`.
+    pub fn band_changed(&self, band: usize) -> bool {
+        self.bands.get(band).copied().unwrap_or(false)
     }
 
     /// Something changed in the cells from (x0, y0) to (x1, y1): what they could set moving is
@@ -361,6 +373,11 @@ impl World {
     pub(crate) fn touch(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
         self.changed.0 = self.changed.0.min(y0.max(0));
         self.changed.1 = self.changed.1.max(y1.min(self.height - 1));
+        if y0 < self.height && y1 >= 0 {
+            for band in y0.max(0) / CHUNK..=y1.min(self.height - 1) / CHUNK {
+                self.bands[band as usize] = true;
+            }
+        }
         let ax = (x0 - MARGIN_X).max(0);
         let bx = (x1 + MARGIN_X).min(self.width - 1);
         let ay = (y0 - MARGIN_Y).max(0);
@@ -1157,6 +1174,7 @@ impl World {
         self.touch(0, 0, self.width - 1, self.height - 1);
         self.warmed(0, 0, self.width - 1, self.height - 1);
         self.changed = (0, self.height - 1);
+        self.bands.fill(true);
     }
 
     /// Empties the world.
@@ -1169,6 +1187,7 @@ impl World {
             *chunk = Chunk::ASLEEP;
         }
         self.changed = (0, self.height - 1);
+        self.bands.fill(true);
     }
 }
 
@@ -1295,6 +1314,28 @@ mod tests {
         assert_eq!(world.count(STONE), 0);
         world.paint(EMPTY, 0, 0, 39, 39, 60, 100, false);
         assert_eq!(world.count(EMPTY), 1600);
+    }
+
+    #[test]
+    fn only_the_bands_of_rows_that_changed_are_marked_for_the_page() {
+        let mut world = World::new(200, 400, 1);
+        assert!((0..7).all(|band| world.band_changed(band)), "a new world is all to be drawn");
+        world.forget_changed();
+        assert!((0..7).all(|band| !world.band_changed(band)));
+        // stone laid near the top and near the bottom: two bands, not the rows between
+        world.paint(STONE, 50, 10, 60, 10, 1, 100, false);
+        world.paint(STONE, 50, 390, 60, 390, 1, 100, false);
+        let marked: Vec<usize> = (0..7).filter(|&band| world.band_changed(band)).collect();
+        assert_eq!(marked, vec![0, 6]);
+        assert_eq!(world.changed(), (9, 391));
+        assert!(!world.band_changed(7), "past the last band nothing is");
+        // a grain falling marks the bands it passes through
+        world.forget_changed();
+        world.paint(SAND, 100, 60, 100, 60, 0, 100, false);
+        for _ in 0..6 {
+            world.step();
+        }
+        assert!(world.band_changed(0) && world.band_changed(1) && !world.band_changed(3));
     }
 
     #[test]

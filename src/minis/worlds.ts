@@ -22,10 +22,10 @@ export interface Opened {
     tokens: Uint8Array;
 }
 
-/** The most cells a world may have to be opened: the engine's largest world, 1024 by 576. */
-export const MOST_CELLS = 1024 * 576;
+/** The most cells a world may have to be opened: the largest the page makes, 2400 by 1200. */
+export const MOST_CELLS = 2400 * 1200;
 /** The longest text that is read at all, from an address or a file. */
-export const MOST_TEXT = 4_000_000;
+export const MOST_TEXT = 12_000_000;
 /** The longest a link may be before the world is saved as a file instead. */
 export const LINK_MOST = 16_000;
 /** Where the stripes begin among the tokens. */
@@ -100,8 +100,8 @@ export function decode(bytes: Uint8Array): Opened | undefined {
         if (token >= STRIPED * 2 || (token >= STRIPED && !striped)) return undefined;
         let run = 0;
         for (let shift = 0; ; shift += 7) {
-            // a run is at most three bytes long: no world has more cells than that counts
-            if (at >= bytes.length || shift > 14) return undefined;
+            // a run is at most four bytes long: no world has more cells than that counts
+            if (at >= bytes.length || shift > 21) return undefined;
             const byte = bytes[at++]!;
             run |= (byte & 127) << shift;
             if (byte < 128) break;

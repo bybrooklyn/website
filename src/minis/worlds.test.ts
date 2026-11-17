@@ -67,7 +67,7 @@ test("rubbish is refused quietly", async () => {
     const bad: Uint8Array[] = [
         Uint8Array.from([2, ...good.slice(1)]), // another version
         Uint8Array.from([1, 0, 0, 3, 0, 0, 0, 1]), // no width
-        Uint8Array.from([1, 0, 4, 0, 4, 0, 0, 2]), // 1024 by 1024, more than the engine makes
+        Uint8Array.from([1, 0, 16, 0, 16, 0, 0, 2]), // 4096 by 4096, more than the page makes
         Uint8Array.from([...good.slice(0, 6), 0, 11]), // runs short of the world
         Uint8Array.from([...good.slice(0, 6), 0, 13]), // runs past it
         Uint8Array.from([...good.slice(0, 6), 0, 0, 0, 12]), // a run of nothing
@@ -93,7 +93,7 @@ test("a few bytes that would unsqueeze to gigabytes, and text past the bound, ar
     const began = performance.now();
     expect(await unpack(`z${toText(squeezed)}`)).toBeUndefined();
     expect(performance.now() - began).toBeLessThan(2000);
-    expect(await unpack(`p${"A".repeat(4_000_004)}`)).toBeUndefined();
+    expect(await unpack(`p${"A".repeat(12_000_004)}`)).toBeUndefined();
     // the largest world there may be is still taken
-    expect(decode(encode(new Uint8Array(MOST_CELLS), 1024, 576, 0))?.width).toBe(1024);
+    expect(decode(encode(new Uint8Array(MOST_CELLS), 2400, 1200, 0))?.width).toBe(2400);
 });

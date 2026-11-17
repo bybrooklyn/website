@@ -963,10 +963,11 @@ The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a 
   pool costs a search of its cells every step until it has hardened.
 - A cell falling through the air passes heat at a quarter of its rate, whatever it is: falling water and
   sand warm and cool more slowly in flight too (at room temperature this changes nothing).
-- A world opened from a link made on a larger screen is cut at its edges where the canvas is smaller than
-  it at one pixel a cell.
-- The world is made once, for the size the mini has when it loads; a resize keeps it and fits it again in
-  whole pixels, cutting its edges if the canvas has grown smaller than it.
+- The light and haze are worked out over the part of the world the stage shows and 96 cells round it;
+  light from a fire farther off than that does not reach into the view.
+- With the view far out, a pixel draws at most four by four cells together; farther out than a quarter
+  of a pixel a cell (a stage under 600 CSS pixels wide showing the whole large world), some cells are
+  passed over, and a thread one cell wide may flicker.
 - With no WebGL 2 the page says so and draws nothing.
 
 ## Reworked after the owner's play
@@ -1167,6 +1168,53 @@ orange egg, and water was one flat blue. What was changed, in the engine and in 
 Measured natively on the full world of the speed example (1024 by 576, a forest lit all along): about
 13 ms a step on a busy machine against about 21 at the commit before, the forest now burning out
 sooner; falling sand 2.4 ms, water falling and levelling 4.7 ms.
+
+## A world larger than the stage
+
+Asked for on 17 November 2026: a bigger scene, for more sand; of the ways offered, both a large world
+with a view that is moved and zoomed, and a word that grows the stage to fill the window.
+
+- **The world is 2,400 by 1,200 cells** (2.88 million; `WORLD` in `grains.ts`), and 1,200 by 900 where
+  the stage is under 600 CSS pixels wide, as on a phone. It was the stage's own size, 748 by 423 at
+  1288 by 828. A mini shown small in a list still makes a world no larger than it is shown. Only what
+  moves costs time, as before: chunks at rest sleep.
+- **The stage is a view** (`View` in `grains.ts`: the cell at the middle of the canvas and how many of
+  the canvas's pixels a cell is drawn; `keptView`, `worldAt`, `viewWith`, `zoomStops`, `nextStop`, each
+  held by a test). A new world is seen from its floor, in the middle, a CSS pixel to a cell. The view
+  stops at 8, 6, 4, 3, 2, 1, a half and a quarter of a CSS pixel a cell, down to the zoom that shows the
+  whole world and no further, and is kept to the world: the stage never shows past an edge it need not,
+  and where it does (the whole world, lower than the stage) a thin rule runs along the world's edges.
+- **Moving and zooming.** The mouse's right or middle button takes hold of the world and drags it; two
+  fingers move it and, drawn apart or together, zoom it, coming to rest at the nearest stop; the arrow
+  keys move it for as long as they are held, 720 CSS pixels a second. Control with the wheel (as a
+  trackpad's pinch is told) goes a stop nearer or farther for each notch, toward the pointer; plus and
+  minus do the same from the middle, and Home shows the whole world. A change of zoom glides, 0.18 s,
+  the point under the pointer kept there; at once for someone who asked for reduced motion. The plain
+  wheel still sizes the brush, and only while the mini has the keyboard, so the page scrolls past it.
+  W, A, S and D are not used for moving, as they are in the marble run: here they pick water, acid,
+  sand and dirt.
+- **Pouring is as it was**: the main button, a pen or the first finger. A second finger stops the
+  pour. A brush held down stays under its pointer while the arrows move the world under it.
+- **The column** has a group "view": zoom in, zoom out, see it all (each faint and out of reach where
+  it cannot go further) and fill the window. So that the whole column is still in the first screen at
+  1288 by 828 (it ends at 807 of 828), the materials are two rows of seven, close set, beside the stage
+  (a phone keeps its fingertip targets), the brush's size is one line under them and no longer a group
+  of its own, and the column's lines are a little closer than the Walker's.
+- **Fill the window** grows the stage, from where it is, over the whole window, the column still beside
+  it (986 by 803 of view at 1288 by 828, 2.5 times the stage in the page), in 0.26 s; "back to the
+  page" or Escape brings it back to its place, which an empty box of its size keeps meanwhile so the
+  page under it does not move. The world is the same world: only the view grows.
+- **Drawing** (`cells.ts`): a grid may be placed anywhere and at any size of cell. Nearer than a pixel
+  a cell, each cell is whole pixels; farther, the cells a pixel covers (up to four by four) are drawn
+  together, their colors averaged, so a thin stream is a faint line. The light and haze are worked out
+  only over the part the canvas shows and 96 cells round it. The engine marks which bands of 64 rows
+  changed (`band_changed`), and the page sends only those to the graphics card, each run of them
+  together: in a world this size a pour at the top and a fire at the bottom are two bands, not every
+  row between.
+- **A world in a link or a file** may now be as large as this one (`MOST_CELLS`), a run of one material
+  up to four bytes long, and a file's text up to twelve million letters. A world opened from a link is
+  shown whole. The floor of stone drawn under the stage is gone: the stage is a view, and the world's
+  own floor is its lowest row.
 
 ## The look, as chosen
 

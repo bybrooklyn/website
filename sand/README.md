@@ -55,6 +55,7 @@ One world per module instance.
 | `cells()`, `stride()`, `border()`, `width()`, `height()` | Where the cells are (the border's top left), cells to a row, the border's width, and the world's size. |
 | `awake()` | How many chunks will be worked through next step, by the rules or the heat pass: 0 when nothing moves or warms. |
 | `changed_from()`, `changed_to()`, `forget_changed()` | The rows changed since the page last drew (-1 when none), and that it has drawn them. |
+| `band_rows()`, `band_changed(band)` | How many rows a band has (64), and whether a band, counted from the top, holds a row changed since the page last drew: in a large world the page sends only those bands to the graphics card. |
 | `set_sleeping(on)` | 0 reaches every cell every step: the same world, more slowly. For tests. |
 | `set_order(phases)` | 1 works through chunks in a checkerboard of four phases instead of row by row. |
 | `set_edges(open)` | 1 lets what moves past an edge be gone; 0, as it starts, walls it in. |

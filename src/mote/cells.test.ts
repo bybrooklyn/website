@@ -164,3 +164,64 @@ test.skipIf(!chromium())("a striped cell takes its stripe's color, and a hot cel
         await rm(folder, { recursive: true, force: true });
     }
 }, 30_000);
+
+// A grid of 64 by 64 seen through a canvas of 32 by 32: nearer, two pixels a cell from its cell (32, 0),
+// and farther, half a pixel a cell with the whole of it in view and room left under it.
+const viewed = `
+import { cells } from "${here}/cells.ts";
+const canvas = document.querySelector("canvas");
+canvas.width = 32; canvas.height = 32;
+const grid = cells(canvas);
+const colors = new Uint8Array(3072);
+colors.set([200, 0, 0, 255], 4);            // 1 is red
+colors.set([0, 0, 200, 255], 8);            // 2 is blue
+grid.palette(colors);
+const bytes = new Uint8Array(64 * 64 * 4);
+const set = (column, row, material) => bytes.set([material, 128, 0, 0], (row * 64 + column) * 4);
+set(40, 10, 1);
+set(0, 0, 2); set(1, 1, 2);
+const g = canvas.getContext("webgl2");
+const pixels = new Uint8Array(32 * 32 * 4);
+const at = (x, y) => [...pixels.slice(((31 - y) * 32 + x) * 4, ((31 - y) * 32 + x) * 4 + 4)];
+const seen = () => g.readPixels(0, 0, 32, 32, g.RGBA, g.UNSIGNED_BYTE, pixels);
+grid.place({ columns: 64, rows: 64, scale: 2, left: -64, top: 0 });
+grid.draw(bytes, 64, 0, 0, 63);
+seen();
+const near = { cell: at(16, 20), cellEnd: at(17, 21), beside: at(18, 20), above: at(16, 19) };
+grid.place({ columns: 64, rows: 64, scale: 0.5, left: 0, top: 0 });
+grid.draw(bytes, 64, 0, 0, -1);
+seen();
+window.result = { near, far: { two: at(0, 0), red: at(20, 5), empty: at(10, 10), past: at(5, 32 - 1) } };
+`;
+
+test.skipIf(!chromium())("a grid larger than its canvas is seen in part, each cell as many pixels as the view says, and far out the cells a pixel covers are drawn together", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "mote-cells-"));
+    const tab = await browser({ width: 300, height: 200 });
+    try {
+        await Bun.write(`${folder}/scene.ts`, viewed);
+        const built = await Bun.build({ entrypoints: [`${folder}/scene.ts`], target: "browser" });
+        await Bun.write(`${folder}/page.html`, `<!doctype html><canvas style="width:32px;height:32px"></canvas><script type="module">${await built.outputs[0]!.text()}</script>`);
+        await tab.open(`file://${folder}/page.html`);
+        expect(tab.errors).toEqual([]);
+        const { near, far } = await tab.run<Record<string, Record<string, number[]>>>("window.result");
+        // nearer: cell (40, 10) is the two by two pixels from (16, 20), and nothing beside or above it
+        expect(near!.cell).toEqual([200, 0, 0, 255]);
+        expect(near!.cellEnd).toEqual([200, 0, 0, 255]);
+        expect(near!.beside).toEqual([0, 0, 0, 0]);
+        expect(near!.above).toEqual([0, 0, 0, 0]);
+        // farther: a pixel is four cells; two of the first four are blue, so it is half blue, half clear
+        expect(far!.two![2]).toBeGreaterThan(90);
+        expect(far!.two![2]).toBeLessThan(110);
+        expect(far!.two![3]).toBeGreaterThan(120);
+        expect(far!.two![3]).toBeLessThan(135);
+        // one red cell of four: a quarter of it
+        expect(far!.red![0]).toBeGreaterThan(40);
+        expect(far!.red![0]).toBeLessThan(60);
+        expect(far!.empty).toEqual([0, 0, 0, 0]);
+        // and past the grid's last row, which ends halfway down the canvas, nothing is drawn
+        expect(far!.past).toEqual([0, 0, 0, 0]);
+    } finally {
+        await tab.close();
+        await rm(folder, { recursive: true, force: true });
+    }
+}, 30_000);

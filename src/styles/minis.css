@@ -40,18 +40,16 @@
     --panel-room: 24rem;
 }
 
-/* Sand's stage and its column: the world on the site's ground with rounded, softly shaded edges and a
-   floor under it, and beside it the materials and the controls in a column, as the Walker has them, so
-   that the whole stage and every material are in the first screen of a laptop. On a phone the column
-   goes under the stage. The world takes its size from the stage when it loads, so the grid is laid
-   out from the start, before the column has been made. */
+/* Sand's stage and its column: a view onto the world, on the site's ground with rounded, softly shaded
+   edges, and beside it the materials and the controls in a column, as the Walker has them, so that the
+   whole stage and every material are in the first screen of a laptop. On a phone the column goes under
+   the stage. The grid is laid out from the start, before the column has been made. */
 .mini-stage[data-mini="sand"] {
     --frame: 0.75rem;
-    --floor: 0.5rem;
     /* wider than the text, as the generalist is, and centred on it, so the world is a wide picture */
     --wide: max(100%, min(66rem, 100vw - var(--strip) - 2 * var(--panel-gutter, 1.25rem) - 1rem));
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 16rem;
+    grid-template-columns: minmax(0, 1fr) 17rem;
     grid-template-areas: "scene side";
     align-items: start;
     width: var(--wide);
@@ -69,7 +67,8 @@
    bring one in, each on a line of its own. */
 .mote-panel .sand-across {
     grid-column: 1 / -1;
-    gap: 0.35rem 1.4rem;
+    /* the words are a step apart already (a button after a button), so three of them fit a line */
+    gap: 0.35rem 0;
 }
 
 .mote-panel .sand-link {
@@ -84,13 +83,9 @@
     width: calc(100% - 2 * var(--frame));
     height: clamp(16rem, calc(100svh - 24.75rem), 40rem);
     margin: var(--frame);
-    border-radius: 0.9rem 0.9rem 0.6rem 0.6rem;
-    /* the floor the world rests on: a band of stone with a lighter edge where the world meets it */
-    border-bottom: var(--floor) solid color-mix(in oklch, var(--muted) 30%, var(--surface));
-    /* the edges shaded softly into the frame, over the world's own edge */
-    box-shadow:
-        inset 0 0 1.5rem 0.2rem color-mix(in oklch, var(--surface) 80%, transparent),
-        inset 0 -0.0625rem 0 color-mix(in oklch, var(--muted) 55%, transparent);
+    border-radius: 0.9rem;
+    /* the edges shaded softly into the frame, over the view's own edge */
+    box-shadow: inset 0 0 1.5rem 0.2rem color-mix(in oklch, var(--surface) 80%, transparent);
     cursor: crosshair;
 }
 
@@ -98,14 +93,42 @@
 .mini-stage[data-mini="sand"] > canvas.mote-gl {
     margin: 0;
     border: 0;
-    border-radius: 0.9rem 0.9rem 0 0;
+    border-radius: 0.9rem;
     box-shadow: none;
     background: var(--ground);
+}
+
+/* Grown to fill the window: over the page, the view as large as the window lets it be and the column
+   still beside it. What keeps its place in the page meanwhile is an empty box of its size. */
+.mini-stage[data-mini="sand"].filled {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    width: auto;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: auto;
+}
+
+.mini-stage[data-mini="sand"].filled > canvas {
+    height: calc(100svh - 2 * var(--frame));
+}
+
+/* The column's lines a little closer than the Walker's, so that all of it is in a laptop's first screen. */
+.mini-stage[data-mini="sand"] > .mote-panel.sand-side {
+    row-gap: 0.45rem;
+}
+
+.mini-stage[data-mini="sand"].sand-place {
+    visibility: hidden;
+    min-height: 0;
 }
 
 .mote-panel.sand-side {
     grid-area: side;
     align-self: stretch;
+    align-content: start;
     border-top: 0;
     border-left: 0.0625rem solid var(--rule);
     padding: 1rem 1rem 0.75rem;
@@ -124,18 +147,36 @@
         height: clamp(16rem, 58svh, 30rem);
     }
 
+    .mini-stage[data-mini="sand"].filled > canvas {
+        height: 68svh;
+    }
+
     .mote-panel.sand-side {
         border-left: 0;
         border-top: 0.0625rem solid var(--rule);
     }
 }
 
-/* Each material is a small square of itself, as the engine colors it, in a target a fingertip can
-   press: fourteen in a row on a wide screen, two rows of seven on a phone. */
+/* Each material is a small square of itself, as the engine colors it: two rows of seven, close set
+   beside the stage, where a mouse presses them, and in a target a fingertip can press on a phone. */
 .sand-swatches {
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(auto-fill, 2.75rem);
+}
+
+@media (min-width: 46.01rem) {
+    .sand-swatches {
+        grid-template-columns: repeat(7, 2.125rem);
+    }
+
+    .mote-panel .sand-swatches .sand-swatch {
+        height: 2.25rem;
+    }
+
+    .mote .mote-panel .sand-swatches canvas.sand-grains {
+        outline-offset: 0.125rem;
+    }
 }
 
 /* The six flags in one row, a phone's width. */
@@ -586,11 +627,11 @@
 
 /* a word whose words change (stream: off and on, pause and play) keeps the room of its widest, so that
    nothing beside or under it moves when it changes */
-.marbles-words button[data-widest] {
+.mote-panel button[data-widest] {
     text-align: start;
 }
 
-.marbles-words button[data-widest]::after {
+.mote-panel button[data-widest]::after {
     content: attr(data-widest);
     display: block;
     height: 0;

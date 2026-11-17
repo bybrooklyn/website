@@ -8,7 +8,7 @@
 
 use crate::Shared;
 use crate::materials::{MATERIALS, PALETTE};
-use crate::world::{BORDER, Edges, Order, World};
+use crate::world::{BORDER, CHUNK, Edges, Order, World};
 
 static WORLD: Shared<Option<World>> = Shared::new(None);
 
@@ -144,6 +144,19 @@ pub extern "C" fn changed_from() -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn changed_to() -> i32 {
     world().map_or(-1, |world| if world.changed().0 > world.changed().1 { -1 } else { world.changed().1 })
+}
+
+/// How many rows a band has: the page sends the cells to the graphics card a band at a time.
+#[unsafe(no_mangle)]
+pub extern "C" fn band_rows() -> u32 {
+    CHUNK as u32
+}
+
+/// 1 if band `band` of `band_rows` rows, counted from the top, holds a row changed since
+/// `forget_changed`.
+#[unsafe(no_mangle)]
+pub extern "C" fn band_changed(band: u32) -> u32 {
+    world().map_or(0, |world| world.band_changed(band as usize) as u32)
 }
 
 /// The page has drawn the rows that changed.

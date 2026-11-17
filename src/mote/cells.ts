@@ -18,7 +18,12 @@
 // of it near each other read as one body. A cell can be deep (water: lighter at its surface, darker
 // below), and can be spray: paler the faster it is falling, by the speed in its fourth byte's high half.
 
-/** Where a grid sits on its canvas, in the canvas's own pixels: how many pixels a side each cell is, and its top left corner. */
+/**
+ * Where a grid sits on its canvas, in the canvas's own pixels: how many pixels a side each cell is, and
+ * its top left corner. A grid larger than its canvas is a view onto part of it: its corner then lies
+ * up and left of the canvas's, and `scale` may be any size, less than one pixel a cell when the view
+ * is far out, where the cells a pixel covers are drawn together.
+ */
 export interface Place {
     columns: number;
     rows: number;
@@ -69,6 +74,9 @@ export const GLOW_AIR = 1.2;
 /** How strongly the wide halo is added, and how many times smaller than the near glow's picture its picture is each way. */
 export const HALO = { strength: 2.2, smaller: 4 };
 
+/** How many cells past what the canvas shows the light and haze are worked out, as far as the halo reaches. */
+const REACH = 96;
+
 /** How many times more a flame adds to the haze than smoke or steam does. */
 const FLAME_HAZE = 2.5;
 
@@ -114,6 +122,11 @@ export interface Cells {
      * nothing is sent and nothing else changed, the canvas is left as it is.
      */
     draw(bytes: Uint8Array, stride: number, border: number, from: number, to: number): void;
+    /**
+     * Sends rows `from` to `to` to the graphics card and shows nothing yet: for a grid whose changed
+     * rows lie in several runs, each sent by this, then all shown by one `draw` that sends none.
+     */
+    send(bytes: Uint8Array, stride: number, border: number, from: number, to: number): void;
     /** Lets go of what is held on the graphics card. */
     dispose(): void;
 }
@@ -208,6 +221,9 @@ void main() {
     softOut = s;
 }`;
 
+/** How many cells across and down are drawn together in one pixel at most, when the view is far out. */
+const TOGETHER = 4;
+
 /** Draws the cells sharp, a soft cell faint over the blurred haze, and the blurred light added over it all. */
 const FRAGMENT = `#version 300 es
 precision highp float;
@@ -218,14 +234,12 @@ uniform sampler2D soft;
 uniform sampler2D far;
 uniform vec2 origin;
 uniform float scale;
-uniform int rows;
+uniform ivec2 size;
 uniform vec2 grid;
 uniform float glow;
 out vec4 color;
-void main() {
-    vec2 inside = (gl_FragCoord.xy - origin) / scale;
-    ivec2 at = ivec2(inside);
-    at.y = rows - 1 - at.y;
+// A cell as it is drawn itself, its color times its opacity: \`depth\` is how many cells above a deep one are looked at.
+vec4 shade(ivec2 at, int depth) {
     uint mode;
     uvec4 raw = texelFetch(cells, at, 0);
     vec4 cell = colorOf(raw, mode);
@@ -233,7 +247,7 @@ void main() {
         // a deep cell: lighter at the surface, darker the more of it lies above
         int over = 0;
         for (int k = 1; k <= ${DEPTH.cells}; k++) {
-            if (at.y - k < 0 || texelFetch(cells, ivec2(at.x, at.y - k), 0).r != raw.r) break;
+            if (k > depth || at.y - k < 0 || texelFetch(cells, ivec2(at.x, at.y - k), 0).r != raw.r) break;
             over++;
         }
         cell.rgb = clamp(cell.rgb * (over == 0 ? ${DEPTH.top.toFixed(2)} : 1.06 - ${DEPTH.step.toFixed(3)} * float(over)), 0.0, 1.0);
@@ -247,6 +261,36 @@ void main() {
     // a soft cell is fainter itself, the rest of it in the haze around it; strong enough that a wisp of
     // steam reads as light and not as a grey grain
     if ((mode & 4u) != 0u) sharp *= ${SOFT_SHARP.toFixed(2)};
+    return sharp;
+}
+void main() {
+    vec2 inside = (gl_FragCoord.xy - origin) / scale;
+    // past the grid's edges nothing is drawn
+    if (inside.x < 0.0 || inside.y < 0.0 || inside.x >= float(size.x) || inside.y >= float(size.y)) {
+        color = vec4(0.0);
+        return;
+    }
+    vec4 sharp;
+    if (scale >= 1.0) {
+        sharp = shade(ivec2(int(inside.x), size.y - 1 - int(inside.y)), ${DEPTH.cells});
+    } else {
+        // cells smaller than a pixel: those a pixel covers are drawn together, so that a thread of water
+        // one cell wide is a faint line and not a row of dots that comes and goes
+        int n = min(int(ceil(1.0 / scale)), ${TOGETHER});
+        // from the cell at the pixel's own corner, not its middle
+        ivec2 first = ivec2(floor((gl_FragCoord.xy - 0.5 - origin) / scale + 0.001));
+        vec4 sum = vec4(0.0);
+        float count = 0.0;
+        for (int dy = 0; dy < ${TOGETHER}; dy++) {
+            for (int dx = 0; dx < ${TOGETHER}; dx++) {
+                ivec2 at = first + ivec2(dx, dy);
+                if (dx >= n || dy >= n || at.x < 0 || at.y < 0 || at.x >= size.x || at.y >= size.y) continue;
+                sum += shade(ivec2(at.x, size.y - 1 - at.y), 3);
+                count += 1.0;
+            }
+        }
+        sharp = sum / max(count, 1.0);
+    }
     vec2 uv = inside / grid;
     vec4 haze = texture(soft, uv);
     vec4 out4 = sharp + haze * (1.0 - sharp.a);
@@ -349,6 +393,23 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
         g.bindTexture(g.TEXTURE_2D, made);
     };
 
+    /** Sends rows `from` to `to` of the cells to the graphics card. */
+    const send: Cells["send"] = (bytes, stride, border, from, to) => {
+        if (!grid) return;
+        from = Math.max(0, from);
+        to = Math.min(at.rows - 1, to);
+        if (to < from) return;
+        stale = true;
+        // read straight out of `bytes`, a row at a time with its frame stepped over
+        g.activeTexture(g.TEXTURE0);
+        g.bindTexture(g.TEXTURE_2D, grid);
+        g.pixelStorei(g.UNPACK_ALIGNMENT, 4);
+        g.pixelStorei(g.UNPACK_ROW_LENGTH, stride);
+        g.pixelStorei(g.UNPACK_SKIP_PIXELS, border);
+        g.pixelStorei(g.UNPACK_SKIP_ROWS, border + from);
+        g.texSubImage2D(g.TEXTURE_2D, 0, 0, from, at.columns, to - from + 1, g.RGBA_INTEGER, g.UNSIGNED_BYTE, bytes);
+    };
+
     return {
         palette(bytes) {
             g.activeTexture(g.TEXTURE1);
@@ -372,29 +433,31 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
             }
             stale = true;
         },
+        send,
         draw(bytes, stride, border, from, to) {
             if (!grid || !pairs || !fars) return;
-            from = Math.max(0, from);
-            to = Math.min(at.rows - 1, to);
-            if (to < from && !stale) return;
+            send(bytes, stride, border, from, to);
+            if (!stale) return;
             stale = false;
-            if (to >= from) {
-                // read straight out of `bytes`, a row at a time with its frame stepped over
-                g.activeTexture(g.TEXTURE0);
-                g.bindTexture(g.TEXTURE_2D, grid);
-                g.pixelStorei(g.UNPACK_ALIGNMENT, 4);
-                g.pixelStorei(g.UNPACK_ROW_LENGTH, stride);
-                g.pixelStorei(g.UNPACK_SKIP_PIXELS, border);
-                g.pixelStorei(g.UNPACK_SKIP_ROWS, border + from);
-                g.texSubImage2D(g.TEXTURE_2D, 0, 0, from, at.columns, to - from + 1, g.RGBA_INTEGER, g.UNSIGNED_BYTE, bytes);
-            }
             g.bindVertexArray(empty);
             bind(0, grid);
             bind(1, colors);
             const [wide, high] = half();
             if (effects) {
-                // the light and the haze, gathered at half size, then blurred across and down
+                // The light and the haze, gathered at half size, then blurred across and down, and the
+                // blurred light across and down again at the halo's size: only over the part of the grid
+                // the canvas shows and as far round it as the halo reaches, which in a grid far larger
+                // than its canvas is a small part of it.
+                const cut = (smaller: number, width: number, height: number) => {
+                    const [x0, x1] = [Math.floor((-at.left / at.scale - REACH) / smaller), Math.ceil(((canvas.width - at.left) / at.scale + REACH) / smaller)];
+                    // rows are counted from the top in the grid and from the bottom in these pictures
+                    const [y0, y1] = [Math.floor((at.rows - (canvas.height - at.top) / at.scale - REACH) / smaller), Math.ceil((at.rows + at.top / at.scale + REACH) / smaller)];
+                    const [left, bottom] = [Math.max(0, x0), Math.max(0, y0)];
+                    g.scissor(left, bottom, Math.max(0, Math.min(width, x1) - left), Math.max(0, Math.min(height, y1) - bottom));
+                };
+                g.enable(g.SCISSOR_TEST);
                 g.viewport(0, 0, wide, high);
+                cut(2, wide, high);
                 g.bindFramebuffer(g.FRAMEBUFFER, pairs[0].frame);
                 g.useProgram(gather.made);
                 g.uniform1i(gather.at("cells"), 0);
@@ -407,9 +470,9 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
                 g.uniform1fv(blur.at("offsets"), offsets);
                 g.uniform1fv(blur.at("weights"), weights);
                 const [less, lower] = small();
-                // across and down at half size, then the blurred light across and down again at the halo's size
-                for (const [source, target, way, size] of [[pairs[0], pairs[1], [1, 0], [wide, high]], [pairs[1], pairs[0], [0, 1], [wide, high]], [pairs[0], fars[1], [1, 0], [less, lower]], [fars[1], fars[0], [0, 1], [less, lower]]] as const) {
+                for (const [source, target, way, size, smaller] of [[pairs[0], pairs[1], [1, 0], [wide, high], 2], [pairs[1], pairs[0], [0, 1], [wide, high], 2], [pairs[0], fars[1], [1, 0], [less, lower], 2 * HALO.smaller], [fars[1], fars[0], [0, 1], [less, lower], 2 * HALO.smaller]] as const) {
                     g.viewport(0, 0, size[0], size[1]);
+                    cut(smaller, size[0], size[1]);
                     g.bindFramebuffer(g.FRAMEBUFFER, target.frame);
                     bind(2, source.light);
                     bind(3, source.soft);
@@ -418,20 +481,19 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
                     g.drawArrays(g.TRIANGLES, 0, 3);
                 }
                 g.bindFramebuffer(g.FRAMEBUFFER, null);
+                g.disable(g.SCISSOR_TEST);
             }
             g.viewport(0, 0, canvas.width, canvas.height);
             g.clearColor(0, 0, 0, 0);
             g.clear(g.COLOR_BUFFER_BIT);
-            const bottom = canvas.height - at.top - at.rows * at.scale;
-            g.viewport(at.left, bottom, at.columns * at.scale, at.rows * at.scale);
             g.useProgram(drawn.made);
             g.uniform1i(drawn.at("cells"), 0);
             g.uniform1i(drawn.at("colors"), 1);
             g.uniform1i(drawn.at("light"), 2);
             g.uniform1i(drawn.at("soft"), 3);
-            g.uniform2f(drawn.at("origin"), at.left, bottom);
+            g.uniform2f(drawn.at("origin"), at.left, canvas.height - at.top - at.rows * at.scale);
             g.uniform1f(drawn.at("scale"), at.scale);
-            g.uniform1i(drawn.at("rows"), at.rows);
+            g.uniform2i(drawn.at("size"), at.columns, at.rows);
             // the half-sized pictures cover a whole number of texels, a cell more than the grid when it is odd
             g.uniform2f(drawn.at("grid"), wide * 2, high * 2);
             g.uniform1i(drawn.at("far"), 4);
