@@ -14,6 +14,7 @@
 // a pointer is pouring, and rests otherwise, as Mote does when out of sight.
 
 import { cells, cellUnder, keptCell, seenCell, type Place } from "../mote/cells";
+import { sounds } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { colorRow, FLAGS, place as stripesOf } from "./flags";
@@ -40,6 +41,13 @@ const FILL_MOST = 200_000;
 /** Which way things fall, for each quarter the world has been turned; and how many steps a shake lasts and how far it throws a grain. */
 const FALLS = ["down", "left", "up", "right"] as const;
 const SHAKE = { steps: 20, by: 3 };
+/**
+ * The world's sound, off until it is asked for. How many hisses a step (steam made where lava, a flame
+ * or lightning meets water) and how many flames made a step are as loud as it gets: what lava poured
+ * into a lake and a wooden house alight come to. `follows` is how quickly the loudness follows the
+ * count, a step; `thunder` the least time between two claps, in seconds; and the pitch of what pours.
+ */
+const SOUND = { hiss: 8, fire: 80, follows: 0.25, thunder: 0.25, powder: 3200, liquid: 1100, lava: 350 };
 /** Which way each arrow key moves the view. */
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
@@ -99,6 +107,35 @@ export default function sand(m: Mote): Scene {
     let shaking = 0;
     /** The brush paints wind, not a material. */
     let blowing = false;
+    /** The sound: its word, and a bed of noise each for water hissing, fire, what the brush pours, and wind being painted. */
+    const sound = m.preview ? undefined : sounds(m);
+    const beds = sound && { hiss: sound.bed(5200, 0.5), fire: sound.bed(420, 0.6), pour: sound.bed(SOUND.powder, 0.8), wind: sound.bed(700, 0.4) };
+    /** What the engine had counted as heard at the last frame, how many of each a step lately, and when it last thundered. */
+    let counted: [number, number] = [0, 0];
+    const lately: [number, number] = [0, 0];
+    let thundered = -1;
+    /**
+     * Makes the world's sound for a frame in which `taken` steps were stepped: a hiss as loud as steam is
+     * being made, a low roar and a crackle as flames are, and the brush's pour. Each is a bed that is fed
+     * here and dies away by itself, so a paused or sleeping world is silent.
+     */
+    const listen = (taken: number) => {
+        if (!engine || !sound || !beds) return;
+        const now: [number, number] = [engine.heard(0) >>> 0, engine.heard(1) >>> 0];
+        for (const k of [0, 1] as const) {
+            // a new world counts from nothing again; a world asleep makes none
+            if (taken) lately[k] += (Math.max(0, now[k] - counted[k]) / taken - lately[k]) * SOUND.follows;
+            if (engine.awake() === 0) lately[k] = 0;
+        }
+        counted = now;
+        beds.hiss.feed(Math.min(1, Math.sqrt(lately[0] / SOUND.hiss)) * 0.38);
+        const fire = Math.min(1, Math.sqrt(lately[1] / SOUND.fire));
+        beds.fire.feed(fire * 0.7);
+        if (Math.random() < fire * 0.5) sound.knock(0.05 + Math.random() * 0.3 * fire, 1200 + Math.random() * 4000);
+        // what the brush pours: grains high, a liquid lower, lava lowest
+        const of = held && !blowing && !(poured?.striped && m.time - moved < STOPPED) ? poured : undefined;
+        if (of?.kind === "powder" || of?.kind === "liquid") beds.pour.feed(0.22, of.name === "lava" ? SOUND.lava : of.kind === "liquid" ? SOUND.liquid : SOUND.powder);
+    };
     /** The stage fills the window, and what keeps its place in the page meanwhile. */
     let filled = false;
     let holder: HTMLElement | undefined;
@@ -226,10 +263,17 @@ export default function sand(m: Mote): Scene {
         if (blowing) {
             // wind the way the stroke goes; a brush held still stills the air under it
             engine.blow(from[0], from[1], to[0], to[1], brushCells(radius));
+            if (from[0] !== to[0] || from[1] !== to[1]) beds?.wind.feed(0.3);
             render();
             return;
         }
         forgetLink();
+        // lightning claps: a crack, and a low note falling away
+        if (poured?.kind === "bolt" && m.time - thundered > SOUND.thunder) {
+            thundered = m.time;
+            sound?.knock(1, 260);
+            sound?.glide(95, 38, 1.1, 0.22);
+        }
         const still = from[0] === to[0] && from[1] === to[1];
         const cells = brushCells(radius, poured);
         // the engine fills whole cells in 100: what a held brush's share leaves over is carried to its next step
@@ -400,6 +444,8 @@ export default function sand(m: Mote): Scene {
                 keep();
                 forgetLink();
                 shaking = SHAKE.steps;
+                sound?.knock(0.7, 170);
+                sound?.glide(80, 45, 0.4, 0.2);
                 // the stage trembles with it, unless less motion was asked for
                 if (!calm()) for (const canvas of [under, m.canvas]) canvas.animate([0, -2, 2, -1, 1, 0].map((by) => ({ translate: `${by}px ${-by}px` })), { duration: (SHAKE.steps / STEPS_PER_SECOND) * 1000 });
                 m.wake();
@@ -518,7 +564,7 @@ export default function sand(m: Mote): Scene {
         // the brush's size is a line of the materials it pours, so that the whole column is in a laptop's first screen
         // what is used most comes first: where the column is longer than the stage is high it scrolls, and
         // shows by a fade at its foot that more lies below
-        box.append(group("materials"), picks, flags, ...line("brush", size), shapes, group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), group("view"), el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow, group("forces"), el("div", { class: "sand-controls sand-across" }, falls, shake), el("div", { class: "sand-controls sand-across" }, wind, calmed), group("share"), share, opener, chooser);
+        box.append(group("materials"), picks, flags, ...line("brush", size), shapes, group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), el("div", { class: "sand-controls sand-across" }, sound!.button), group("view"), el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow, group("forces"), el("div", { class: "sand-controls sand-across" }, falls, shake), el("div", { class: "sand-controls sand-across" }, wind, calmed), group("share"), share, opener, chooser);
         const below = () => box.classList.toggle("more-below", box.scrollTop + box.clientHeight < box.scrollHeight - 2);
         box.addEventListener("scroll", below, { passive: true });
         new ResizeObserver(below).observe(box);
@@ -758,8 +804,10 @@ export default function sand(m: Mote): Scene {
             if (note && m.time >= note.until) note = undefined;
             if (!engine || paused) return;
             owed += dt;
+            let taken = 0;
             while (owed >= 1 / STEPS_PER_SECOND - 1e-6) {
                 owed -= 1 / STEPS_PER_SECOND;
+                taken++;
                 // a pointer held still keeps pouring; pride sand only once it has stopped, so that a
                 // stroke's stripes are not poured over as they fall
                 if (held && !(poured?.striped && m.time - moved < STOPPED)) stroke(held, held);
@@ -769,6 +817,7 @@ export default function sand(m: Mote): Scene {
                 }
                 engine.step(1);
             }
+            listen(taken);
         },
         draw() {
             if (engine && grid && bytes && at) {

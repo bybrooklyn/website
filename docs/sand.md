@@ -1311,7 +1311,33 @@ Asked for on 17 November 2026. Three words and a pair under "forces" in the colu
   wind painted upward holds up or lifts what is as light as snow or ash. Grains at rest are not moved.
   The winds turn with the world when gravity is turned, and are not kept in a link or undone.
 
-The engine's module is 121 KiB of the 128 it is held to (`scripts/wasm.ts`).
+## Sound
+
+Asked for on 17 November 2026. Off until it is asked for, by the word Mote gives every mini that has
+sound ("sound: off", under the world's words), and kept as it was left between visits. While it is off
+nothing is made at all, not so much as the browser's audio.
+
+- **What is heard is what is happening.** The engine counts, as it works its lines, how many times
+  steam was made by two things meeting (lava, a flame or lightning in water) and how many flames were
+  made (`heard`); the page reads the two counts each frame and follows how many of each there are a
+  step. Steam gives a hiss, as loud as it gets at eight a step, which is what lava poured into a lake
+  comes to; flames give a low roar and a crackle of short knocks at chance pitches, as loud as they get
+  at eighty a step, a wooden house well alight. Water boiling by itself, with nothing meeting it, makes
+  no hiss.
+- **The brush is heard as it pours**: grains high, a liquid lower, lava lowest. Painting wind is a
+  soft rush while the brush moves. Lightning is a crack and a low note falling away, not oftener than
+  four times a second; a shake is a knock and a short low note.
+- **Nothing sounds by itself.** The hiss, the roar, the pour and the rush are each a bed of noise
+  (`sound.bed` in Mote): noise going round through a filter, at a volume that is nothing until it is
+  fed, and that dies away a fifth of a second after it was last fed. The page feeds them each frame it
+  steps the world, so a world paused or come to rest, a tab put away or the sound switched off is
+  silent within a quarter of a second with nothing having to be told.
+- Measured in the browser, with the sound taken on its way out: no audio made while it is off; pouring
+  water 0.04 of full scale (as the root of the mean square), sand 0.06, lava into water 0.10 with its
+  loudest moment at 0.35, a block of wood alight 0.05; silent 0.7 seconds after the brush is let go and
+  0.9 after a pause.
+
+The engine's module is 121.5 KiB of the 128 it is held to (`scripts/wasm.ts`).
 
 ## The look, as chosen
 

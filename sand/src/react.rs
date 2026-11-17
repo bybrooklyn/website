@@ -10,7 +10,7 @@
 //! Every change is counted in `World::fired` by its line, so a test can hold the count of each
 //! material to what the lines that happened say it should be.
 
-use crate::materials::{AFLOAT, ALONE, ALWAYS, Heat, Kind, LATENT, LINES, OPEN, Props, REACTIONS, SAME, SOLID_GROUND, TABLE};
+use crate::materials::{AFLOAT, ALONE, ALWAYS, EMPTY, FIRE, Heat, Kind, LATENT, LINES, OPEN, Props, REACTIONS, SAME, SOLID_GROUND, STEAM, TABLE};
 use crate::world::{World, chance, material, temperature, with_state, with_temperature};
 
 /// A number of 0 to 1023 for line `line` from a cell's roll, so each line has a chance of its own.
@@ -20,6 +20,15 @@ fn roll_for(roll: u32, line: usize) -> u32 {
 }
 
 impl World {
+    /// What a listener would have heard since the world was made, for the page's sound to follow as
+    /// it grows: for `kind` 0 how many times steam was made by two things meeting (lava, a flame or
+    /// lightning in water: a hiss), and for any other how many flames were made (a crackle).
+    pub fn heard(&self, kind: u32) -> u64 {
+        let hiss = |k: usize| REACTIONS[k].b != ALONE && REACTIONS[k].b != EMPTY && (REACTIONS[k].a_becomes == STEAM || REACTIONS[k].b_becomes == STEAM);
+        let flame = |k: usize| REACTIONS[k].a_becomes == FIRE || REACTIONS[k].b_becomes == FIRE;
+        (0..REACTIONS.len()).filter(|&k| if kind == 0 { hiss(k) } else { flame(k) }).map(|k| self.fired[k]).sum()
+    }
+
     /// Works a cell's shade, if it follows its heat, and its lines. Gives true if the cell changed
     /// into something else, so it does not move this step.
     #[inline]
@@ -152,7 +161,7 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::materials::{EMPTY, ICE, LAVA, MATERIALS, ROCK, STEAM, STONE, WATER};
+    use crate::materials::{ICE, LAVA, MATERIALS, ROCK, STONE, WATER};
 
     #[test]
     fn each_line_has_a_chance_of_its_own() {
@@ -194,6 +203,29 @@ mod tests {
         assert!((ts - tv).abs() <= 1, "{ts} {tv}");
         assert!(tv > 56, "the steam does not turn straight back to water");
         assert_eq!(world.fired[k], 1);
+    }
+
+    #[test]
+    fn what_would_be_heard_grows_with_steam_made_by_meeting_and_with_flames_made() {
+        let mut world = World::new(60, 40, 4);
+        world.paint(STONE, 0, 39, 59, 39, 0, 100, false);
+        assert_eq!((world.heard(0), world.heard(1)), (0, 0));
+        // lava dropped into water hisses; water boiling by itself, with nothing meeting it, does not
+        for y in 30..39 {
+            world.paint(WATER, 10, y, 50, y, 0, 100, false);
+        }
+        world.paint(LAVA, 30, 20, 30, 20, 3, 100, false);
+        for _ in 0..120 {
+            world.step();
+        }
+        assert!(world.heard(0) > 5, "{}", world.heard(0));
+        assert_eq!(world.heard(1), 0);
+        // a flame spreading into the air crackles
+        world.paint(crate::materials::FIRE, 30, 5, 30, 5, 2, 100, false);
+        for _ in 0..20 {
+            world.step();
+        }
+        assert!(world.heard(1) > 0);
     }
 
     #[test]

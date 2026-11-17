@@ -134,8 +134,14 @@ Two were faults, not choices:
 ## Left
 
 - Every choice above, and the words a visitor reads that were added this day: Sand's column ("brush",
-  "view", "zoom in", "zoom out", "see it all", "fill the window", "back to the page"), its controls line,
-  and the names of its six new materials.
+  "view", "zoom in", "zoom out", "see it all", "fill the window", "back to the page"; "free", "line",
+  "box", "fill", "undo", "redo", and "not closed" and "nothing there" said beside a press; "forces",
+  "gravity: down" and its three other ways, "shake", "wind: off" and "wind: on", "still the wind";
+  "share"), its controls line, and the names of its six new materials.
+- Sand's column is now longer than the stage and scrolls inside its box, with what is used most first.
+  The other ways it could go: groups folded shut behind their headings, or the less used words shown
+  only when the stage fills the window.
+- Sand's controls line says nothing yet of the line, box and fill, undo, the forces or the sound.
 - Going live: the live site is as it was on 11 November. It waits on the owner's word.
 - The two typing-speed tests and the checker's timing test fail only on a busy machine, and one model run
   in imgQuire's tests can run out of its 30 seconds there; each passes alone.

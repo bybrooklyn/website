@@ -277,6 +277,14 @@ pub extern "C" fn fingerprint(part: u32) -> u32 {
     world().map_or(0, |world| (world.fingerprint() >> if part == 0 { 0 } else { 32 }) as u32)
 }
 
+/// What a listener would have heard since the world was made, as a number that grows: for `kind` 0
+/// how many times steam was made by two things meeting (a hiss), otherwise how many flames were made
+/// (a crackle). The low 32 bits.
+#[unsafe(no_mangle)]
+pub extern "C" fn heard(kind: u32) -> u32 {
+    world().map_or(0, |world| world.heard(kind) as u32)
+}
+
 /// Steps taken since the world was made.
 #[unsafe(no_mangle)]
 pub extern "C" fn steps() -> u32 {

@@ -22,6 +22,7 @@ export interface Engine {
     winds(): number;
     gusts(): number;
     gust(): number;
+    heard(kind: number): number;
     rewritten(fresh: number): void;
     clear(): void;
     cells(): number;

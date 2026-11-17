@@ -121,7 +121,6 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 ## Minis
 
 - The marble run ([marbles](docs/marbles.md)) and the sand simulator ([sand](docs/sand.md)) are built and are drafts: decide when each is listed.
-- Sand, asked for on 17 November and not yet built: sound.
 
 - A post about writing the physics, with a mini at each step.
 - The Blocks demo on the home page.

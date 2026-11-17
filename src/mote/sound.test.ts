@@ -20,7 +20,9 @@ import { sounds } from "${here}/sound.ts";
 const sound = sounds({ recall: () => ${kept}, keep() {} });
 document.body.append(sound.button);
 sound.knock(0.6);
-window.knock = () => sound.knock(0.6);
+const bed = sound.bed(500);
+bed.feed(0.5);
+window.knock = () => (sound.knock(0.6), bed.feed(0.5));
 window.before = window.made[0]?.state;
 `);
         const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
@@ -94,7 +96,7 @@ async function rendered<T>(body: string): Promise<T> {
     const tab = await browser({ width: 300, height: 200 });
     try {
         await Bun.write(`${folder}/page.ts`, `
-import { busOf, hissOf, shaped, voice, voices, VOICES } from "${here}/sound.ts";
+import { bedOf, busOf, hissOf, shaped, voice, voices, VOICES } from "${here}/sound.ts";
 (window as unknown as { go: () => Promise<unknown> }).go = async () => {
     ${body}
 };
@@ -185,4 +187,29 @@ return { peak: peak(samples), most, made: room.counts.made, dropped: room.counts
     expect(found.most).toBeLessThanOrEqual(14);
     expect(found.peak).toBeLessThan(1);
     expect(found.peak).toBeGreaterThan(0.05);
+}, 30_000);
+
+test.skipIf(!chromium())("a bed sounds while it is fed, louder for more and higher for a higher pitch, and dies away by itself when it is no longer fed", async () => {
+    const found = await rendered<Record<string, { fed: number; left: number; crossings: number }>>(`${measures}
+const loudness = (samples: Float32Array, from: number, to: number) => Math.sqrt(samples.subarray(from * rate, to * rate).reduce((sum, x) => sum + x * x, 0) / ((to - from) * rate));
+const out: Record<string, { fed: number; left: number; crossings: number }> = {};
+for (const [name, pitch, loud] of [["low", 500, 0.5], ["high", 6000, 0.5], ["soft", 500, 0.1]] as const) {
+    const audio = new OfflineAudioContext(1, rate * 2, rate);
+    const bed = bedOf(audio, audio.destination, hissOf(audio, 7, 2), pitch);
+    // fed every sixtieth of a second for half a second, as a scene feeds it, then left alone
+    for (let frame = 0; frame < 30; frame++) bed.feed(loud, frame / 60);
+    const samples = (await audio.startRendering()).getChannelData(0);
+    let crossings = 0;
+    for (let i = rate * 0.2 + 1; i < rate * 0.5; i++) if (samples[i - 1]! < 0 !== samples[i]! < 0) crossings++;
+    out[name] = { fed: loudness(samples, 0.2, 0.5), left: loudness(samples, 1.5, 2), crossings };
+}
+return out;`);
+    for (const one of Object.values(found)) {
+        expect(one.fed).toBeGreaterThan(0.003);
+        expect(one.fed).toBeLessThan(1);
+        expect(one.left).toBeLessThan(one.fed / 200);
+    }
+    expect(found.low!.fed).toBeGreaterThan(found.soft!.fed * 3);
+    // the filter is a wide one, so the low bed keeps some of the high: more than twice as many turns of the wave is plainly higher
+    expect(found.high!.crossings).toBeGreaterThan(found.low!.crossings * 2);
 }, 30_000);

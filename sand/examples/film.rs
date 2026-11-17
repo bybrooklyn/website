@@ -80,6 +80,7 @@ fn main() {
                 world.step();
                 if step % every == every - 1 {
                     frames.push(frame(&world));
+                    println!("step {step}: heard {} hisses and {} flames so far", world.heard(0), world.heard(1));
                 }
             }
         }
@@ -152,6 +153,7 @@ fn main() {
                 world.step();
                 if step % every == every - 1 {
                     frames.push(frame(&world));
+                    println!("step {step}: heard {} hisses and {} flames so far", world.heard(0), world.heard(1));
                 }
             }
         }

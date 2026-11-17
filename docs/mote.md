@@ -243,6 +243,15 @@ same). `pairs.test.ts` and `replay.test.ts` pass unchanged.
   fortieth of a millimetre into it or off it; no marble fired at a wheel of 3 mm arms turning 40 rad/s, from
   100 to 1,020 cm/s, nor at a 2 mm plate driven at it, from 200 to 1,300 cm/s, ends inside one or beyond it;
   a scene of a seesaw, a wheel and a lift gives the same numbers run twice and in Chromium as in Bun.
+- **Beds** (`sound.ts`): `sound.bed(pitch, q)` gives noise that lasts (water hissing, a fire, grains
+  pouring), and `bedOf(...)` builds one into any audio context. Two seconds of white noise go round
+  through a band about the pitch, at a volume that is nothing until `feed(loud, pitch)` is called;
+  each feeding brings the volume toward `loud` in a twenty-fifth of a second and sets it to die away a
+  fifth of a second later, which the next feeding puts off. A scene feeds its beds every frame, so
+  one that stops (paused, at rest, its tab hidden, the sound switched off) falls silent by itself.
+  Nothing is made for a bed that has not yet sounded. Held by a test rendered in the browser's offline
+  audio: a fed bed sounds, louder for more and higher for a higher pitch, and one left alone is less
+  than a two-hundredth as loud a second later.
 - **Strikes** (`sound.ts`): `sound.strike(kind, hard, pitch)`, and `voice(...)`, which builds one into any
   audio context, so the same code is heard live and rendered to a file. Each is plain sine waves, each
   with a volume that rises at once (in 0.4 to 3 ms) and falls away as e to the minus time over its own

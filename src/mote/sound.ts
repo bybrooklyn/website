@@ -7,6 +7,8 @@
 //   sound.tone(660, 0.25);      // a clear note, and how long it rings
 //   sound.glide(180, 40, 0.9);  // a note that slides from one pitch to another as it dies away
 //   sound.strike("chime", 0.7, 784);   // a marble striking something: what, how hard, and its note
+//   const hiss = sound.bed(6000);      // noise that lasts: water on lava, a fire, grains pouring
+//   hiss.feed(0.4);                    // how loud it is now; asked every frame, and it dies away when it is not
 //
 // A strike is made of plain waves, each with a volume that rises at once and dies away, and a little
 // filtered noise for the moment of the hit; `voice` builds one into any of the browser's audio
@@ -29,11 +31,22 @@ export interface Sounds {
     glide(from: number, to: number, seconds?: number, loud?: number): void;
     /** A marble striking something, `hard` from 0 to 1; `pitch` is a chime bar's note, or shifts the others' pitch by that share of their own (1 as made). */
     strike(kind: Strike, hard: number, pitch?: number): void;
+    /** Noise that lasts, about `pitch` hertz and as narrow as `q` is high: a hiss, a roar, a pour. Nothing is made until it is first fed. */
+    bed(pitch: number, q?: number): Bed;
     /** How many strikes are sounding now, and how many were left out or cut short for want of room: for measuring. */
     readonly sounding: { now: number; dropped: number; made: number };
     /** Turns the sound on and off. */
     readonly button: HTMLButtonElement;
 }
+
+/** Noise that sounds for as long as it is fed: nothing sounds by itself. */
+export interface Bed {
+    /** How loud it is now, from 0 to 1, and its pitch if that has changed. Fed every frame it holds; left alone for a fifth of a second it dies away. */
+    feed(loud: number, pitch?: number): void;
+}
+
+/** How long a bed holds after it was last fed, and how quickly it then dies, in seconds. */
+const HELD = { for: 0.2, dies: 0.08, comes: 0.04 };
 
 /** At most this many knocks start in any one stretch of 30 ms: a pile of things landing together is one noise, not forty. */
 const TOGETHER = 4;
@@ -133,9 +146,9 @@ export function voice(audio: BaseAudioContext, out: AudioNode, at: number, kind:
     return { gain, ends, loud, dies: longest };
 }
 
-/** A short buffer of white noise, the same each time for a given seed, that a strike's noise is a filtered piece of. */
-export function hissOf(audio: BaseAudioContext, seed = 7): AudioBuffer {
-    const buffer = audio.createBuffer(1, Math.floor(audio.sampleRate / 4), audio.sampleRate);
+/** A short buffer of white noise, the same each time for a given seed, that a strike's noise is a filtered piece of; two seconds of it go round and round in a bed. */
+export function hissOf(audio: BaseAudioContext, seed = 7, seconds = 0.25): AudioBuffer {
+    const buffer = audio.createBuffer(1, Math.floor(audio.sampleRate * seconds), audio.sampleRate);
     const samples = buffer.getChannelData(0);
     let state = seed >>> 0;
     for (let i = 0; i < samples.length; i++) {
@@ -143,6 +156,34 @@ export function hissOf(audio: BaseAudioContext, seed = 7): AudioBuffer {
         samples[i] = (state / 2 ** 32) * 2 - 1;
     }
     return buffer;
+}
+
+/**
+ * A bed built into any of the browser's audio contexts: `noise` going round, through a filter about
+ * `pitch`, at a volume that is nothing until it is fed. Each feeding at `time` brings the volume toward
+ * `loud` and sets it to die away a fifth of a second later, which the next feeding puts off: so a bed
+ * that is no longer fed (the scene paused, the tab hidden, the sound switched off) falls silent.
+ */
+export function bedOf(audio: BaseAudioContext, out: AudioNode, noise: AudioBuffer, pitch: number, q = 0.7): { feed(loud: number, time: number, pitch?: number): void } {
+    const source = audio.createBufferSource();
+    source.buffer = noise;
+    source.loop = true;
+    const band = audio.createBiquadFilter();
+    band.type = "bandpass";
+    band.frequency.value = pitch;
+    band.Q.value = q;
+    const volume = audio.createGain();
+    volume.gain.value = 0;
+    source.connect(band).connect(volume).connect(out);
+    source.start();
+    return {
+        feed(loud, time, at) {
+            volume.gain.cancelScheduledValues(time);
+            volume.gain.setTargetAtTime(Math.max(0, Math.min(1, loud)), time, HELD.comes);
+            volume.gain.setTargetAtTime(0, time + HELD.for, HELD.dies);
+            if (at !== undefined) band.frequency.setTargetAtTime(at, time, HELD.comes);
+        },
+    };
 }
 
 /** The bus every strike goes through: a volume, then a limiter that holds the loudest moments under full scale. */
@@ -200,6 +241,7 @@ export function sounds(m: Pick<Mote, "recall" | "keep">): Sounds {
     let hiss: AudioBuffer | undefined;
     let bus: AudioNode | undefined;
     let strikeNoise: AudioBuffer | undefined;
+    let bedNoise: AudioBuffer | undefined;
     let recent: number[] = [];
     let clicks: number[] = [];
     const room = voices();
@@ -303,6 +345,20 @@ export function sounds(m: Pick<Mote, "recall" | "keep">): Sounds {
             strikeNoise ??= hissOf(audio, Math.floor(Math.random() * 2 ** 31));
             const made = voice(audio, bus, time, kind, hard, strikeNoise, pitch);
             room.add(made, time);
+        },
+        bed(pitch, q) {
+            let made: ReturnType<typeof bedOf> | undefined;
+            return {
+                feed(loud, at) {
+                    const audio = ready();
+                    // nothing is made for a bed that has not yet sounded
+                    if (!audio || (!made && loud <= 0)) return;
+                    bus ??= busOf(audio);
+                    bedNoise ??= hissOf(audio, Math.floor(Math.random() * 2 ** 31), 2);
+                    made ??= bedOf(audio, bus, bedNoise, pitch, q);
+                    made.feed(loud, audio.currentTime, at);
+                },
+            };
         },
     };
 }
