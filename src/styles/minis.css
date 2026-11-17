@@ -478,7 +478,8 @@
         height: clamp(15rem, 52svh, 26rem);
     }
 
-    .mote-panel.marbles-side {
+    /* said more firmly than the column's own rule, which comes after this one and would win */
+    .mini-stage[data-mini="marbles"] > .mote-panel.marbles-side {
         border-left: 0;
         border-top: 0.0625rem solid var(--rule);
     }
