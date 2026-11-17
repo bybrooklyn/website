@@ -1,10 +1,12 @@
 // The marble run's camera is held to what it is for: the line through the middle of the picture goes
 // to the point looked at; a point of the scene projected into the picture and sent back as a line goes
 // through itself; a line meets the ground and enters a box where it should; a view framing a box sees
-// all of its corners; and the camera stays within its limits. Run with `bun run test`.
+// all of its corners; the camera stays within its limits; and a pan keeps the point of the table first
+// under the pointer exactly under it, and in the views along the table moves the run as far as the
+// pointer went, up and down too. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { enters, eyeOf, FAR, framing, ground, kept, lensed, nearest, panned, pannedBy, project, ray, straightOn, TIP, VIEWS, type Orbit } from "./orbit";
+import { enters, eyeOf, FAR, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, TIP, VIEWS, type Orbit } from "./orbit";
 import type { V3 } from "../mote/solids";
 
 const orbit: Orbit = { at: [10, 5, -20], turn: 0.7, tip: 0.6, far: 120 };
@@ -46,29 +48,66 @@ test("a view framing a box sees every corner of it, in the picture", () => {
     }
 });
 
-test("the camera stays within its limits, and panning keeps its height and how far it is", () => {
+test("the camera stays within its limits", () => {
     const wild = kept({ at: [0, 0, 0], turn: 3, tip: 3, far: 5000 });
     expect(wild.tip).toBe(TIP[1]);
     expect(wild.far).toBe(FAR[1]);
     expect(kept({ ...wild, tip: -1, far: 1 }).tip).toBe(TIP[0]);
-    const moved = panned(orbit, 40, 0.1, 0.2);
-    expect(moved.at[1]).toBe(orbit.at[1]);
-    expect(moved.far).toBe(orbit.far);
-    expect(moved.at[0] !== orbit.at[0] || moved.at[2] !== orbit.at[2]).toBe(true);
 });
 
-test("a drag to pan takes the ground with it: what was under the pointer goes right with a drag to the right and down with a drag down", () => {
-    const [degrees, aspect, height] = [40, 1.5, 800];
-    const under = orbit.at;
-    const before = project(orbit, degrees, aspect, under)!;
-    const right = project(pannedBy(orbit, degrees, 100, 0, height), degrees, aspect, under)!;
-    const down = project(pannedBy(orbit, degrees, 0, 100, height), degrees, aspect, under)!;
-    // across the picture it goes exactly as far as the pointer did: 100 of 800 pixels of height is a quarter of the picture's half height
-    expect(right.x - before.x).toBeCloseTo((2 * (100 / height)) / aspect, 5);
-    expect(right.y).toBeCloseTo(before.y, 5);
-    // the picture's own y grows upward, so down the screen is less
-    expect(down.y).toBeLessThan(before.y - 0.05);
-    expect(down.x).toBeCloseTo(before.x, 5);
+/** A picture 1288 by 828 pixels, as the tester's was; a point of it in the picture's own terms, and back. */
+const [WIDE, HIGH] = [1288, 828];
+const toPicture = (x: number, y: number): [number, number] => [(x / WIDE) * 2 - 1, 1 - (y / HIGH) * 2];
+const toPixels = (p: { x: number; y: number }) => ({ x: ((p.x + 1) / 2) * WIDE, y: ((1 - p.y) / 2) * HIGH });
+/** A drag from one pixel to another in `steps` moves, as the pointer goes, each slid from the view the last left. */
+function dragged(start: Orbit, degrees: number, from: [number, number], to: [number, number], steps = 12) {
+    const grip = gripAt(start, degrees, WIDE / HIGH, ...toPicture(...from));
+    let now = start;
+    for (let step = 1; step <= steps; step++) now = pannedTo(now, degrees, WIDE / HIGH, grip, ...toPicture(from[0] + ((to[0] - from[0]) * step) / steps, from[1] + ((to[1] - from[1]) * step) / steps));
+    return { grip, now };
+}
+
+test("a pan keeps the point of the table first under the pointer exactly under it, wherever in the picture the drag goes", () => {
+    const seen: Orbit = { at: [-28, 12.4, -12.3], turn: 0.75, tip: 0.62, far: 145 };
+    const [mx, my] = [WIDE / 2, HIGH / 2];
+    // the tester's five drags: 150 right and 120 down from the middle, 200 up, 300 right from low left, 250 down at the top right
+    const drags: [[number, number], [number, number]][] = [
+        [[mx, my], [mx + 150, my]],
+        [[mx, my], [mx, my + 120]],
+        [[mx, my + 100], [mx, my - 100]],
+        [[mx - 200, my + 150], [mx + 100, my + 150]],
+        [[mx + 200, my - 150], [mx + 200, my + 100]],
+    ];
+    for (const [from, to] of drags) {
+        const { grip, now } = dragged(seen, 38, from, to);
+        expect(grip.at[1]).toBeCloseTo(0, 9);
+        const there = toPixels(project(now, 38, WIDE / HIGH, grip.at)!);
+        expect(Math.hypot(there.x - to[0], there.y - to[1])).toBeLessThan(1);
+        // moved over the table, never up, down, nearer or turned
+        expect(now.at[1]).toBe(seen.at[1]);
+        expect([now.far, now.turn, now.tip]).toEqual([seen.far, seen.turn, seen.tip]);
+    }
+});
+
+test("from the front and the side, where the eye is level with the table, a drag down moves the run down as far as the pointer went", () => {
+    for (const view of [VIEWS.front, VIEWS.side]) {
+        // the narrow lens of the views straight on, as the scene draws them
+        const seen = lensed({ at: [-28, 12.4, -12.3], far: 145, ...view }, 38, 5);
+        for (const [dx, dy] of [[0, 100], [0, -100], [100, 0]]) {
+            const from: [number, number] = [WIDE / 2 - 50, HIGH / 2 + 30];
+            const { now } = dragged(seen, 5, from, [from[0] + dx, from[1] + dy]);
+            const [before, after] = [toPixels(project(seen, 5, WIDE / HIGH, seen.at)!), toPixels(project(now, 5, WIDE / HIGH, seen.at)!)];
+            expect(Math.abs(after.x - before.x - dx)).toBeLessThan(1);
+            expect(Math.abs(after.y - before.y - dy)).toBeLessThan(1);
+        }
+    }
+});
+
+test("a pan is left as it is where the pointer goes over the horizon, rather than carrying the view off", () => {
+    const low: Orbit = { at: [0, 0, 0], turn: 0, tip: 0.2, far: 100 };
+    const grip = gripAt(low, 38, WIDE / HIGH, ...toPicture(WIDE / 2, HIGH * 0.75));
+    expect(grip.facing).toEqual([0, 1, 0]);
+    expect(pannedTo(low, 38, WIDE / HIGH, grip, ...toPicture(WIDE / 2, 2))).toEqual(low);
 });
 
 test("a view straight on stays where it is put, and the first drag from it does not jump to the free camera's limit", () => {

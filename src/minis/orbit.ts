@@ -1,7 +1,8 @@
 // The marble run's camera, as arithmetic: an eye that circles a point it looks at, turned about the
 // upright and tipped over it, at a distance; the line through a point of the picture into the scene,
-// to find what a finger is on; where a point of the scene is in the picture; and the view that frames
-// a whole run. It matches what gl.ts draws from `view.look(eye, at, degrees)`.
+// to find what a finger is on; where a point of the scene is in the picture; a pan that keeps what was
+// under the pointer under it; and the view that frames a whole run. It matches what gl.ts draws from
+// `view.look(eye, at, degrees)`.
 //
 //   const eye = eyeOf(orbit);
 //   const line = ray(orbit, 40, width / height, x, y);    // x and y from -1 to 1 across the picture
@@ -143,24 +144,46 @@ export function lensed(orbit: Orbit, from: number, to: number): Orbit {
     return { ...orbit, far: (orbit.far * Math.tan((from * Math.PI) / 360)) / Math.tan((to * Math.PI) / 360) };
 }
 
-/** Moved across the picture by (dx, dy), each a share of its height: the point looked at slides over the ground so that what was under the finger stays under it. */
-export function panned(orbit: Orbit, degrees: number, dx: number, dy: number): Orbit {
-    const reach = Math.tan((degrees * Math.PI) / 360) * orbit.far * 2;
-    const [right] = axes(orbit);
-    // across the ground, and away from the eye along the ground, so a drag up moves the view on
-    const away = unit([-Math.sin(orbit.turn), 0, -Math.cos(orbit.turn)]);
-    const level = unit([right[0], 0, right[2]]);
-    // a drag up the picture covers more ground the lower the eye is tipped
-    const along = dy / Math.max(0.25, Math.sin(orbit.tip));
-    return { ...orbit, at: [orbit.at[0] - level[0] * dx * reach + away[0] * along * reach, orbit.at[1], orbit.at[2] - level[2] * dx * reach + away[2] * along * reach] };
+/** What a pan holds under the pointer: the point of the scene it took hold of, and the plane that point is moved in, by the way the plane faces. */
+export interface Grip {
+    at: V3;
+    facing: V3;
 }
 
 /**
- * The view after a finger, or the pointer with the other button, has gone (dx, dy) pixels across a picture `height` pixels tall: the
- * ground goes with it, so what was under the finger stays under it. To the right is positive `dx`, down the picture positive `dy`.
+ * Where a pan takes hold, pressed at (x, y) of the picture (from -1 to 1, y up): the point of the level
+ * plane at `height` (the table) under the pointer, so that the table is moved in its own plane. Where
+ * the eye looks along that plane, or all but along it (the views from the front and the side, the
+ * pointer over the horizon), it is the point under the pointer of the plane facing the eye through
+ * `through` (what is under the pointer, or else the point looked at), so that the picture is moved in
+ * its own plane, up and down as well as across, and what is under the pointer stays under it.
  */
-export function pannedBy(orbit: Orbit, degrees: number, dx: number, dy: number, height: number): Orbit {
-    return panned(orbit, degrees, dx / height, dy / height);
+export function gripAt(orbit: Orbit, degrees: number, aspect: number, x: number, y: number, height = 0, through: V3 = orbit.at): Grip {
+    const line = ray(orbit, degrees, aspect, x, y);
+    const met = Math.abs(line.way[1]) > 0.05 ? ground(line, height) : undefined;
+    // (a point met so far off that a small move of the pointer would carry the view away is not held either)
+    if (met && Math.hypot(met[0] - line.from[0], met[1] - line.from[1], met[2] - line.from[2]) < orbit.far * 8) return { at: met, facing: [0, 1, 0] };
+    const [, , back] = axes(orbit);
+    const t = dot(minus(through, line.from), back) / dot(line.way, back);
+    return { at: [line.from[0] + line.way[0] * t, line.from[1] + line.way[1] * t, line.from[2] + line.way[2] * t], facing: back };
+}
+
+/**
+ * The camera moved, never turned or brought nearer, so that the point a pan holds is exactly under the
+ * point (x, y) of the picture: the eye and the point looked at slide together in the grip's plane, by
+ * just what puts the held point on the line through (x, y), which keeps its way as the eye slides. Left
+ * as it is where that line never meets the plane (the pointer gone over the horizon).
+ */
+export function pannedTo(orbit: Orbit, degrees: number, aspect: number, grip: Grip, x: number, y: number): Orbit {
+    const line = ray(orbit, degrees, aspect, x, y);
+    const toward = dot(line.way, grip.facing);
+    if (Math.abs(toward) < 1e-9) return orbit;
+    const off = minus(grip.at, line.from);
+    const t = dot(off, grip.facing) / toward;
+    if (t <= 0) return orbit;
+    // held on the table, the eye keeps its height exactly, with nothing of rounding to creep up or down
+    const up = grip.facing[1] === 1 ? orbit.at[1] : orbit.at[1] + off[1] - line.way[1] * t;
+    return { ...orbit, at: [orbit.at[0] + off[0] - line.way[0] * t, up, orbit.at[2] + off[2] - line.way[2] * t] };
 }
 
 /** The camera that frames a box (by its least and greatest corners) from the way it now looks, with a little room round it. */

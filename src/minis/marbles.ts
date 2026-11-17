@@ -37,9 +37,9 @@ import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, st
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
 import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
-import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, pannedBy, project, ray, straightOn, type Orbit } from "./orbit";
+import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, type Grip, type Orbit } from "./orbit";
 import { BOX, CELL, FURTHEST, LEVEL, RADIUS, SIZES, allowed, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
-import { fits, jointsOf, links, open, read, upgraded, write, type Open, type Placed } from "./run";
+import { fits, jointsOf, links, open, read, roomOf, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { NOTES, type Body, type Moving } from "./parts";
@@ -314,6 +314,8 @@ interface Held {
     gizmo?: Way;
     /** The handle under the press, taken if it moves. */
     handle?: Handle;
+    /** What a pan holds under the pointer, taken where it was pressed. */
+    grip?: Grip;
 }
 
 /** The views straight on, by the way the eye looks from. */
@@ -2692,6 +2694,23 @@ export default function marbles(m: Mote): Scene {
 
     /** Two fingers: where between them, how far apart, and at what angle, to pan, pinch and twist by. */
     let pinch: { x: number; y: number; apart: number; angle: number } | undefined;
+    /** What two fingers' pan holds under the middle between them, taken when they start to move together. */
+    let pinchGrip: Grip | undefined;
+    /** A pan's hold taken at a point of the screen, in the view as drawn. */
+    const gripUnder = (x: number, y: number): Grip => {
+        const { orbit: seen, degrees } = cam();
+        // the nearest of what the pointer is on, for a view along the table to hold at its depth
+        const line = lineAt(x, y);
+        let nearest = Infinity;
+        for (const piece of resting()) for (const box of roomOf(piece)) nearest = Math.min(nearest, enters(line, box.at, box.half) ?? Infinity);
+        const through: V3 | undefined = nearest < Infinity ? [line.from[0] + line.way[0] * nearest, line.from[1] + line.way[1] * nearest, line.from[2] + line.way[2] * nearest] : undefined;
+        return gripAt(seen, degrees, aspect(), ...toPicture(x, y), 0, through);
+    };
+    /** The view slid so that what a pan holds is under a point of the screen. */
+    const panTo = (grip: Grip, x: number, y: number) => {
+        const { orbit: seen, degrees } = cam();
+        orbit = { ...orbit, at: pannedTo(seen, degrees, aspect(), grip, ...toPicture(x, y)).at };
+    };
     const pinchOf = () => {
         const [a, b] = [...held.values()].filter((one) => one.mode === "pinch").map((one) => one.last);
         if (!a || !b) return undefined;
@@ -2998,6 +3017,7 @@ export default function marbles(m: Mote): Scene {
                 one.mode = "pinch";
                 held.set(hand.id, one);
                 pinch = pinchOf();
+                pinchGrip = undefined;
                 return;
             }
             if (hand.kind === "touch" && fingers.length >= 1) return;
@@ -3042,10 +3062,12 @@ export default function marbles(m: Mote): Scene {
                 const now = pinchOf();
                 if (now && pinch) {
                     toFree();
-                    orbit = pannedBy(orbit, DEGREES, now.x - pinch.x, now.y - pinch.y, m.height);
+                    pinchGrip ??= gripUnder(pinch.x, pinch.y);
                     const twist = now.angle - pinch.angle;
                     if (Math.abs(twist) > 1e-4) free();
                     orbit = kept({ ...orbit, far: orbit.far * (pinch.apart / Math.max(1, now.apart)), turn: orbit.turn - twist }, orbit);
+                    // pinched and twisted first, then slid so that what was under the middle between the fingers is under it still
+                    panTo(pinchGrip, now.x, now.y);
                 }
                 pinch = now;
             } else if (one.mode === "press") {
@@ -3084,8 +3106,9 @@ export default function marbles(m: Mote): Scene {
             else if (one.mode === "turn") orbit = kept({ ...orbit, turn: orbit.turn - dx * 0.008, tip: orbit.tip + dy * 0.006 }, orbit);
             else if (one.mode === "pan" && (dx || dy)) {
                 toFree();
-                // the ground goes with the pointer: it had gone the other way, the drag handed on with its sign turned
-                orbit = pannedBy(orbit, DEGREES, dx, dy, m.height);
+                // the table goes with the pointer: the point first under it is kept under it, wherever in the picture
+                one.grip ??= gripUnder(one.start.x, one.start.y);
+                panTo(one.grip, hand.x, hand.y);
             }
             m.wake();
         },
@@ -3097,6 +3120,7 @@ export default function marbles(m: Mote): Scene {
                 // the finger left behind carries on turning the view, from where it is
                 for (const other of held.values()) if (other.mode === "pinch") other.mode = "turn";
                 pinch = undefined;
+                pinchGrip = undefined;
             } else if (one.mode === "carry" || one.mode === "handle") {
                 if (cancelled) cancel();
                 else drop();
