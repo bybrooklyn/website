@@ -32,6 +32,12 @@ const PUSH = 160;
 const HERTZ = 120;
 const DAMPED = 10;
 /**
+ * Between two moving bodies that both have edges, a little softer. A stack of them rocks as one, and
+ * at the full stiffness, which is as much as a part of a step can carry, a tall stack's rocking was
+ * not damped: a tower of seven swayed for as long as it was watched. Balls never meet with this.
+ */
+const EDGED = 100;
+/**
  * Slower than this, in pixels a second, for this long, and a body sleeps; and so does one that has
  * stayed within `DRIFT` pixels of one place for as long, whatever its speed. A pile at rest can
  * tremble by less than can be seen, and a tremble's speed passes `SLOW` for a step now and then: by
@@ -736,6 +742,7 @@ export class Flat {
 
         // As stiff as a part of a step this long can carry: a quarter of how often it is solved.
         const contact = soft(Math.min(HERTZ, 0.25 / h), DAMPED, h);
+        const edged = soft(Math.min(EDGED, 0.25 / h), DAMPED, h);
         const firm = soft(Math.min(HERTZ * 2, 0.25 / h), DAMPED, h);
         const jointed = soft(0.25 / h, 2, h);
 
@@ -747,7 +754,7 @@ export class Flat {
             for (let at = 0; at < manifolds.length; at++) {
                 const m = manifolds[backward ? manifolds.length - 1 - at : at]!;
                 const { a, b, nx, ny } = m;
-                const spring = m.stiff ? firm : contact;
+                const spring = m.stiff ? firm : a.points.length > 1 && b.points.length > 1 ? edged : contact;
                 if (backward !== (m.spots[0]!.id > (m.spots[1]?.id ?? -1))) m.spots.reverse();
                 // For each point: how far apart the two are now, and so how fast they may close or must part.
                 const paired = m.spots.length === 2 && m.sides !== 0;
@@ -764,12 +771,16 @@ export class Flat {
                     // the block turns a hair, and friction makes that a step sideways: a pile that walks.
                     const [one, two] = m.spots as [Spot, Spot];
                     const closing = (s: Spot) => (b.vx - b.w * s.by - (a.vx - a.w * s.ay)) * nx + (b.vy + b.w * s.bx - (a.vy + a.w * s.ax)) * ny + s.speed;
-                    // a springy point gives a little, in proportion to how hard it is pushed
+                    // A springy point gives a little, in proportion to how hard it is pushed. When both are
+                    // springy, how much a push at one is felt at the other gives as well: the spring is then
+                    // as soft for the edge rocking as for it sinking, as it was tuned to be. Without that a
+                    // square block's rocking was a fifth stiffer than a part of a step can carry, and a
+                    // free-standing tower of six rocked for ever.
                     const give = spring.impulse / spring.mass;
                     const [g1, g2] = [one.springy ? one.sides * give : 0, two.springy ? two.sides * give : 0];
-                    const [a11, a22, a12] = [one.sides + g1, two.sides + g2, m.sides];
-                    const q1 = a11 * one.push + a12 * two.push - closing(one) - g1 * one.push;
-                    const q2 = a12 * one.push + a22 * two.push - closing(two) - g2 * two.push;
+                    const [a11, a22, a12] = [one.sides + g1, two.sides + g2, one.springy && two.springy ? m.sides * (1 + give) : m.sides];
+                    const q1 = a11 * one.push + m.sides * two.push - closing(one) - g1 * one.push;
+                    const q2 = m.sides * one.push + a22 * two.push - closing(two) - g2 * two.push;
                     const det = a11 * a22 - a12 * a12;
                     // what each would be if neither had to be a push
                     let [x1, x2] = [(a22 * q1 - a12 * q2) / det, (a11 * q2 - a12 * q1) / det];

@@ -170,11 +170,13 @@ function print(values: number[]): string {
 // 2026), with the grid. Those were added beside what was there, so the old scenes end where they did.
 // The two flat scenes that come to rest were taken again on 17 Nov 2026, when a pile that stays in one
 // place began to sleep whatever its speed: their pieces fall asleep sooner, so they end a hair elsewhere.
+// They were taken again later on 17 Nov 2026, when contacts between blocks were made softer for rocking
+// and a little softer overall, so that a tower stops swaying; Plinko has only balls and ends as it did.
 const BEFORE = {
-    blocks: "108:b4c2e5b315adda5d",
+    blocks: "108:d0d507ce1e4c5f5a",
     plinko: "3518:c44eeaad3da60d25",
     dice: "64:cc59416212cd59c0",
-    crowdFlat: "912:22880b1bc71c13c3",
+    crowdFlat: "912:5990d40baac065c7",
     crowdSpace: "875:f886ceecaf361992",
     heap: "403:d23560e1d84fc28f",
 };

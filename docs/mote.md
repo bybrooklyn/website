@@ -39,6 +39,36 @@ pixel and a half in the half second, so nothing that was awake to be seen moving
 test of a block knocked to and fro in one place at 20 pixels a second, which sleeps, and one kept going
 one way at that speed, which does not; and by six piles of Blocks, four of which never slept before.
 
+### Towers that rocked
+
+Until 17 Nov 2026 a free-standing tower of blocks in `flat.ts` could rock for ever. A tower of six
+40-pixel blocks on a fixed floor, its top pushed at 40 pixels a second, swayed 1.9 pixels at the top in
+the first second and still 1.75 pixels twenty seconds on. Towers of seven to nine never stopped, and
+from eight up the sway grew. In Blocks it showed in 2 of 300 piles squeezed from 800 pixels wide to
+300, where a tower swayed four pixels at up to 60 pixels a second, so the pile never slept.
+
+The cause was two things in the soft contacts, each at the edge of what a part of a step can carry.
+
+- An edge resting on an edge has two points, solved together. Each point was given its own give, but
+  how much a push at one is felt at the other was given none. The spring was then stiffer for the edge
+  rocking than for it sinking: for a square block a fifth stiffer, past the limit of a quarter of the
+  rate the parts are solved at. Now that cross term gives as well, so both ways are as stiff as tuned.
+- Contacts between two moving blocks were at that limit already, 120 cycles a second with four parts.
+  A stack rocks as one, and at the limit its rocking was not damped. Contacts between two bodies with
+  edges are now at 100 (`EDGED`). Contacts with a ball, and with anything fixed, are as before.
+
+What showed it, on the tower of six. Solving the two points one after the other in the first pass,
+lowering the stiffness between blocks to 110, or lowering the damping ratio from 10 to 1 each let it
+stop within two seconds. A higher damping ratio, more friction, or two parts a step instead of four
+made it worse. How fast an overlap is undone made no difference. With no warm start the tower fell, and
+with no second pass it flew apart, so neither of those feeds it.
+
+After the change the tower of six stops within a second, towers of seven to nine within one to four
+seconds, and 0 of 600 squeezed piles of Blocks fail to come to rest in thirty seconds. Either change
+alone left 1 or 3 of the 600. Plinko has only balls, so its drops replay exactly as before; Blocks and
+the crowded heap in `pairs.test.ts` end elsewhere. Held by a test of a nudged tower of six, which must
+be still within two seconds and standing where it stood.
+
 ### The broad phase
 
 Until 13 Nov 2026 both physics tested every pair of bodies in a nested loop: 1,000 bodies are 499,500
@@ -410,11 +440,8 @@ prints step times for 100 to 5,000 bodies and takes about forty seconds; run it 
 
 ## Known weak spots
 
-- In 2D, a free-standing tower of six blocks can sway about four pixels at its top and never lose the
-  sway, so it never sleeps and the stage goes on stepping. It was seen in 2 of 300 piles of Blocks
-  squeezed from 800 pixels wide to 300, which stacks pieces against a wall, and in none of 600 piles
-  dropped in ordinary play. The sway is the solver's: the soft contacts give back what the rocking
-  should lose.
+- In 2D, a tower of nine blocks that is nudged takes up to four seconds to stop swaying, where a real
+  one would stop sooner or fall. Taller ones were not measured. See "Towers that rocked" above.
 - In 3D, now and then a die comes to lean on another and the two keep trembling, so the roll is only
   called at the nine second limit: about one roll in two hundred over 900 rolls, as often before the
   inertia tensor as after. `tower.test.ts` lets one roll in forty run that long.

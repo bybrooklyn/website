@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 import { TICK } from "./stage";
-import { Flat, SLOP, inside, speed, wake, type Body } from "./flat";
+import { Flat, SLOP, inside, send, speed, wake, type Body } from "./flat";
 
 const run = (flat: Flat, seconds: number, each?: (time: number) => void) => {
     for (let time = 0; time < seconds - 1e-9; time += TICK) {
@@ -115,6 +115,29 @@ test("a tower of ten stands for twenty seconds", () => {
     });
     expect(fastest).toBeLessThan(1);
     expect(flat.still).toBe(true);
+});
+
+test("a tower of six that is nudged at the top stops swaying within two seconds, and stands", () => {
+    // A real tower of wooden blocks that is nudged rocks on its edges, and each time an edge comes down
+    // the knock takes some of the rocking away: in a second or two it is still, or it falls. Until
+    // 17 Nov 2026 this one swayed by about two pixels at the top for as long as it was watched.
+    const flat = new Flat(2600);
+    flat.wall([[0, 0], [400, 0], [400, 500], [0, 500]], true);
+    const blocks = Array.from({ length: 6 }, (_, index) => flat.box(200, 480 - index * 40, 40, 40));
+    run(flat, 2);
+    expect(flat.still).toBe(true);
+    const top = blocks.at(-1)!;
+    send(top, 40, 0, 0);
+    let stopped = Infinity;
+    run(flat, 6, (time) => {
+        if (flat.still && stopped === Infinity) stopped = time;
+    });
+    expect(stopped).toBeLessThan(2);
+    blocks.forEach((block, index) => {
+        expect(Math.abs(block.x - 200)).toBeLessThan(3);
+        expect(Math.abs(block.y - (480 - index * 40))).toBeLessThan(1);
+        expect(Math.abs(block.a)).toBeLessThan(0.01);
+    });
 });
 
 test("blocks at rest overlap by no more than the slop", () => {
