@@ -8,7 +8,7 @@
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
-import { coveredBy, findingCovers, lensBeside, onWords, placeWords, runCovers, runText, sizesFor, thickness } from "./stage";
+import { coveredBy, findingCovers, lensBeside, onWords, placeWords, runCovers, runText, sizesFor, thickness, weightOf } from "./stage";
 
 test("a highlighter laid on words read runs along their line through its middle, a tenth of its height past the first and last word, as thick as the line and a tenth more, a slanted line too", () => {
     const line = { text: "", sure: 1, box: { at: { x: 100, y: 50 }, along: { x: 1, y: 0 }, length: 300, height: 20 }, words: [] };
@@ -66,6 +66,20 @@ test("a word's cover is its box grown by a tenth of its line's height, a run's c
 test("a mark's thickness follows the pen and the picture's longer side, never thinner than two pixels", () => {
     expect(thickness({ color: "#000000", weight: 0.005 }, { width: 4000, height: 3000 })).toBe(20);
     expect(thickness({ color: "#000000", weight: 0.003 }, { width: 300, height: 200 })).toBe(2);
+});
+
+test("a mark's weight is found from its size as each weight's pen makes it, and is none for a size no weight makes or a kind with none", () => {
+    const pen = { color: "#000000", weight: 0.009 };
+    const size = { width: 2000, height: 1500 };
+    const weights = [0.003, 0.005, 0.009];
+    const box = (thick: number) => ({ type: "box" as const, rect: { x: 0, y: 0, width: 10, height: 10 }, color: "#000000", thickness: thick });
+    // a thin box is thin whatever the pen now is, where the panel had shown the pen's weight
+    expect(weightOf(box(6), pen, size, weights)).toBe(0.003);
+    expect(weightOf(box(18), pen, size, weights)).toBe(0.009);
+    expect(weightOf(box(7), pen, size, weights)).toBeUndefined();
+    expect(weightOf({ type: "text", at: { x: 0, y: 0 }, text: "a", color: "#000000", size: 60 }, pen, size, weights)).toBe(0.005);
+    expect(weightOf({ type: "magnifier", at: { x: 0, y: 0 }, from: { x: 0, y: 0 }, radius: 96, zoom: 2, color: "#000000", thickness: 6 }, pen, size, weights)).toBe(0.003);
+    expect(weightOf({ type: "spotlight", rect: { x: 0, y: 0, width: 10, height: 10 }, dim: 0.5 }, pen, size, weights)).toBeUndefined();
 });
 
 let page: ImgPage | undefined;

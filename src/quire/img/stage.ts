@@ -122,6 +122,17 @@ export function sizesFor(pen: Pen, size: { width: number; height: number }) {
     return { line, text, outline: Math.max(1, Math.round(text * (pen.outlineWeight ?? PEN.outlineWeight) * 2) / 2), number: line * 7, highlight: line * 4, lens: Math.max(12, Math.round(Math.max(size.width, size.height) * pen.weight * 16)) };
 }
 
+/** Which of `weights` a mark was made at, by its size as a pen of each weight makes it on a picture of `size`: for the thickness shown with a mark picked. None when it is no weight's size (a highlighter laid on words read takes their line's) or its kind has none. */
+export function weightOf(mark: Mark, pen: Pen, size: { width: number; height: number }, weights: number[]): number | undefined {
+    const own = mark.type === "arrow" || mark.type === "box" || mark.type === "highlight" ? mark.thickness : mark.type === "text" || mark.type === "number" ? mark.size : mark.type === "magnifier" ? mark.radius : undefined;
+    if (own === undefined) return undefined;
+    return weights.find((weight) => {
+        const sizes = sizesFor({ ...pen, weight }, size);
+        const made = mark.type === "arrow" || mark.type === "box" ? sizes.line : mark.type === "highlight" ? sizes.highlight : mark.type === "text" ? sizes.text : mark.type === "number" ? sizes.number : sizes.lens;
+        return Math.abs(made - own) < 0.5;
+    });
+}
+
 /** Where a magnifier's lens goes when it is put down with a press and no drag: beside the place it looks at, half a lens away, on the first side where it lies whole inside `room` (up and right, up and left, down and right, down and left), else up and right. */
 export function lensBeside(at: Point, radius: number, room: Rect): Point {
     const far = radius * 1.5;
