@@ -50,7 +50,7 @@ fn across(t: i32, n: i32, k: i32, roll: u32) -> i32 {
 #[inline(always)]
 fn conducts(cell: u32) -> i32 {
     let c = WARMTH[material(cell) as usize].conduct;
-    if cell >> 30 != 0 { c >> 2 } else { c }
+    if crate::world::moving(cell) { c >> 2 } else { c }
 }
 
 impl World {

@@ -41,7 +41,7 @@ test("both builds are small and need nothing from the page to load", async () =>
 
 test("the busy world comes out to the byte as it does natively, with SIMD and without", async () => {
     // the number sand/tests/unchanged.rs holds the native build to
-    const native: [number, number] = [0xad86d776, 0xaad4769a];
+    const native: [number, number] = [0xc5e22f44, 0x6faa3aa6];
     expect(busy(await load(simd))).toEqual(native);
     expect(busy(await load(scalar))).toEqual(native);
 });
@@ -74,18 +74,17 @@ test("the brush is offered every material of the table it should be, and each is
     expect(fillOf(of("fire"))).toBeLessThan(100);
     expect(fillOf(of("solid"))).toBe(100);
     expect(fillOf(of("powder"))).toBeLessThan(100);
-    // a powder held still pours ten grains a step of the first page's size, and lava nine cells, whatever the brush's size once it is large enough; pride sand along a line is laid whole
-    expect(HELD).toEqual({ powder: 40, lava: 36 });
-    for (const radius of [16, 24, 32, 48]) {
-        const grains = (fillOf(of("powder"), true, radius) / 100) * 4 * (2 * radius + 1);
-        expect(grains).toBeGreaterThan(HELD.powder * 0.8);
-        expect(grains).toBeLessThan(HELD.powder * 1.2);
-        const lava = (fillOf(of("liquid", false, true), true, radius) / 100) * 4 * (2 * radius + 1);
-        expect(lava).toBeGreaterThan(HELD.lava * 0.8);
-        expect(lava).toBeLessThan(HELD.lava * 1.2);
+    // a powder held still pours ten grains a step of the first page's size, and lava nine cells, whatever the brush's size once it is large enough, and water two cells for each of its width; pride sand along a line is laid whole
+    expect(HELD).toEqual({ powder: 40, lava: 36, liquid: 2 });
+    for (const radius of [8, 16, 24, 32, 48]) {
+        const disc = Math.PI * (radius + 0.5) ** 2;
+        expect((fillOf(of("powder"), true, radius) / 100) * disc).toBeCloseTo(HELD.powder, 6);
+        expect((fillOf(of("liquid", false, true), true, radius) / 100) * disc).toBeCloseTo(HELD.lava, 6);
+        expect((fillOf(of("liquid"), true, radius) / 100) * disc).toBeCloseTo(2 * (2 * radius + 1), 6);
     }
+    // a small brush fills no more than 45 in 100
     expect(fillOf(of("powder"), true, 0)).toBe(45);
-    expect(fillOf(of("liquid"), true, 8)).toBe(45);
+    expect(fillOf(of("liquid"), true, 1)).toBe(45);
     expect(fillOf(of("solid"), true)).toBe(100);
     // lava drawn along a line is poured thick, fire is not
     expect(fillOf(of("liquid", false, true))).toBe(100);

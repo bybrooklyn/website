@@ -49,6 +49,8 @@ export default function sand(m: Mote): Scene {
     let laid = false;
     /** When the pointer last moved to another cell while held, in the mini's seconds. */
     let moved = -1;
+    /** What a held brush's share of cells in 100 left over at its last step, less than one. */
+    let carried = 0;
     let owed = 0;
     /** Every row is sent on the next draw: the grid was placed anew. */
     let fresh = true;
@@ -109,9 +111,14 @@ export default function sand(m: Mote): Scene {
         forgetLink();
         const still = from[0] === to[0] && from[1] === to[1];
         const cells = brushCells(radius);
+        // the engine fills whole cells in 100: what a held brush's share leaves over is carried to its next step
+        const share = poured ? fillOf(poured, still, cells) + (still ? carried : 0) : 100;
+        const fill = Math.floor(share);
+        carried = still ? share - fill : 0;
         if (!poured) engine.paint(0, from[0], from[1], to[0], to[1], cells, 100, 0);
-        else if (!poured.striped) engine.paint(poured.number, from[0], from[1], to[0], to[1], cells, fillOf(poured, still, cells), 0);
-        else if (!whole) engine.paint_striped(poured.number, from[0], from[1], to[0], to[1], cells, fillOf(poured, still, cells), stripesOf(flag).first, stripesOf(flag).count);
+        else if (fill === 0) return;
+        else if (!poured.striped) engine.paint(poured.number, from[0], from[1], to[0], to[1], cells, fill, 0);
+        else if (!whole) engine.paint_striped(poured.number, from[0], from[1], to[0], to[1], cells, fill, stripesOf(flag).first, stripesOf(flag).count);
         else if (!laid) {
             // a whole flag, once a press, with its middle under the pointer
             laid = true;

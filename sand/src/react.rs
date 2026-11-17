@@ -92,7 +92,7 @@ impl World {
         let under = TABLE[material(self.cells[at + self.stride]) as usize];
         let solid = under.kind == Kind::Solid;
         let afloat = under.kind == Kind::Powder || (under.kind == Kind::Liquid && under.density >= p.density);
-        cell >> 30 == 0 && if ground == SOLID_GROUND { solid } else if ground == AFLOAT { afloat } else { solid || afloat }
+        !crate::world::moving(cell) && if ground == SOLID_GROUND { solid } else if ground == AFLOAT { afloat } else { solid || afloat }
     }
 
     /// Does line `k` to the cell at `at` and, for a line with a neighbor, the neighbor at `there`:

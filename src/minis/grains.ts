@@ -142,29 +142,33 @@ export const FINER = 2 / CELL;
 export const brushCells = (size: number): number => Math.round(size * FINER);
 
 /**
- * How many grains of powder, and cells of lava, a brush held still pours in a step, whatever its size:
- * ten grains and nine cells of the first page's size, so as many times more as a cell is now smaller in
- * area. A small brush pours less, as a brush never pours more than 45 cells in 100.
+ * How many cells a brush held still pours in a step: so many grains of powder and cells of lava whatever
+ * its size (ten grains and nine cells of the first page's size, so as many times more as a cell is now
+ * smaller in area), and for any other liquid so many for each cell of the brush's width, so a wider
+ * brush gives a wider stream as thick.
  */
-export const HELD = { powder: Math.round(10 * FINER * FINER), lava: Math.round(9 * FINER * FINER) };
+export const HELD = { powder: Math.round(10 * FINER * FINER), lava: Math.round(9 * FINER * FINER), liquid: 2 };
 
 /**
  * How many cells in 100 a stroke fills: what falls is poured, so it trickles; stone is laid solid.
  * Lava drawn along a line is poured thick, so that it lands as a molten blob and not as drops. Pride
  * sand drawn along a line is laid solid too (the engine lays each part of its ribbon once), so its
- * stripes fall whole. A brush of `radius` held still pours again every step into the cells that have
- * fallen out of it, about four rows of it a step, so a powder held still is poured at about `HELD`
- * grains a step whatever the brush's size, as many as the sides of a heap carry away (poured faster
- * it stands as a column under the brush), and lava at about `HELD` cells a step, as it now drains away
- * from under the brush into its pool and would otherwise pour as fast as the brush could refill.
+ * stripes fall whole. What a brush of `radius` held still pours has left it by the next step, since a
+ * grain leaves the brush already falling, so it fills the share of its whole disc that is `HELD` cells:
+ * a powder as many grains a step as the sides of a heap carry away (poured faster it stands as a
+ * column under the brush), lava as it drains away into its pool, and water as a stream of drops that
+ * does not back up to the brush. A small brush pours less, as a brush never fills more than 45 in 100.
+ * For a large brush that share is less than one in 100, and it is given as it is, not rounded: the scene
+ * carries what is left over to the next step (`sand.ts`), since the engine fills by whole cells in 100.
  */
 export function fillOf(material: Pick<Material, "kind" | "striped" | "light">, still = false, radius = 0): number {
-    const held = (count: number, most: number) => Math.max(1, Math.min(most, Math.round((100 * count) / (4 * (2 * radius + 1)))));
+    const held = (count: number, most: number) => Math.min(most, (100 * count) / (Math.PI * (radius + 0.5) ** 2));
     const lava = material.kind === "liquid" && material.light;
     if (lava) return still ? held(HELD.lava, 100) : 100;
     if (material.kind === "solid") return 100;
     if (material.striped && !still) return 100;
     if (still && material.kind === "powder") return held(HELD.powder, 45);
+    if (still && material.kind === "liquid") return held(HELD.liquid * (2 * radius + 1), 45);
     return 45;
 }
 

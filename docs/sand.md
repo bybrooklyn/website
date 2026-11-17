@@ -927,6 +927,7 @@ bun test src/mote/cells.test.ts       # the grid drawn in headless Chromium, str
 bun test src/minis/worlds.test.ts src/minis/flags.test.ts   # links and flags
 cd sand && cargo run --release --example speed               # the speed natively
 cd sand && cargo run --release --example speed --features scalar   # without the hand-written SIMD
+cd sand && cargo run --release --example film -- water out.ppm    # frames of a scene side by side, as a picture
 bun scripts/sand-speed.ts             # the speed in headless Chromium, both builds
 bun scripts/sand-spread.ts            # what workers and the graphics card would cost (--serve for a real browser)
 ```
@@ -1072,6 +1073,60 @@ same strokes, a world of 358 by 278, and checked on the page). What changed, a c
   `(pointer: coarse)` rules apply then and there (the site's name gains its finger padding, 9.6 pixels),
   and the browser keeps the view where it was by scrolling. A second drag moves the page by 0. On a phone
   those rules apply from the start; nothing in the mini was changed for it.
+
+## Reworked toward a livelier world: how things fall and flow
+
+Asked for on 17 November 2026: the mini is to feel alive and dramatic, as Noita does, and what was weird
+about how water and the rest fell is to be put right. Filmed on the page before anything was changed (a
+brush held over a stone shelf, a frame every quarter second), water came down as a slow woven lattice the
+brush's width, stood on the shelf as a mound sixty cells high, and left it in threads one cell wide with
+clouds of drops hanging beside them; sand stood as a spire under the brush. Three causes, and what was
+done about each:
+
+- **Speeds were those of grains twice the size.** When a cell became one CSS pixel, a cell still fell
+  four cells a step at most and a liquid looked five cells to a side, so everything moved half as fast
+  on the screen. A cell's last byte now gives four bits to its clock and four to its speed (it was six
+  and two; the clock runs to 15): a falling cell gathers a cell a step up to its material's `fall`, ten
+  for sand, dirt and water, twelve for rock, nine for oil, six for lava, two for ash. A grain sliding
+  down a heap goes at most four cells a step however fast it came (`SLIDE_MOST`), which is what keeps
+  the heaps' angles: sand at 34.7 degrees and dirt at 56 to 57 in the tests, as before.
+- **A poured grain began at rest.** The brush made cells with no speed, and a cell at rest whose
+  support has just gone steps aside before it follows it down (the rule that lets the face of a heap
+  flow out), so a pour stepped sideways as it left the brush and kept that weave all the way down. What
+  falls now leaves the brush already falling, each grain at a speed of its own from one to three, so a
+  pour is a ragged stream. A stripe's grains all leave at one speed, so a ribbon of pride sand still
+  falls whole. A liquid that steps off an edge, or slides down to a side, is falling too.
+- **A liquid went one cell down a slope in a step.** It slid one cell diagonally where it could, and
+  only on the level did it look farther, so under a pour water heaped at 45 degrees as sand does. A
+  liquid that cannot fall straight now runs (`runs` in `world.rs`): through the open cell beside it
+  and into the one under that where the ground falls away, else along the level, up to its `spread`
+  cells along in one step (twelve for water, ten for oil and acid, three for lava), stopping where it
+  could fall straight down. A cell at the surface runs only where that takes it lower, so a level
+  surface is still; one with something on it runs as far as it can. And a liquid in a crowded falling
+  column (what was under it has only just gone, by one cell) is left to run to a side rather than
+  follow it down, as a grain of powder in a pillar already was.
+
+A brush held still now pours a set number of cells a step (`HELD` and `fillOf` in `grains.ts`): what it
+pours has left the brush by the next step, so it fills the share of its whole disc that is that many
+cells, 40 grains of powder, 36 cells of lava, and for another liquid two cells for each cell of the
+brush's width. The engine fills by whole cells in 100, so the scene carries what a large brush's share
+leaves over to its next step. Filling 45 in 100 of whatever had fallen out of the brush, as before,
+would now pour several times as much, since the brush empties at once.
+
+The same film afterward: water falls as a stream of drops, spreads flat over the shelf as it lands,
+pours off both edges, runs out level along the floor, and the shelf is dry about a second after the
+pour stops. Sand falls as a stream and makes a heap with no spire. Lava runs off the shelf as a thick
+liquid and leaves a low mound on it.
+
+`sand/examples/film.rs` is that film without the page: `cargo run --release --example film -- water
+out.ppm` steps a scene and writes twelve frames of it side by side (`water`, `sand`, `lava`, `oil`, and
+`lake`: two hills, a lake, a wooden house alight and lava poured in).
+
+What changed for the tests: the fingerprint was taken again; a grain's fall is held to its new speeds;
+the oil test lights its fire at the oil's surface, the slick now being thicker; and the lava pool's
+test allows a core of lava sealed deep inside the rock it made, under one part in twenty of what was
+poured, since heat that differs by no more than two between neighbors does not move (a weak spot
+already listed) and the pool, spreading wider and lying deeper, now keeps one.
 
 ## The look, as chosen
 
