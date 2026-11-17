@@ -2509,6 +2509,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (page === exporting && has && (shown?.panel !== exporting.panel || exportShown !== picture)) void showExport();
         else if (page === exporting) exporting.fill();
         if (page === cropping) cropping.fill();
+        if (page === resizing) resizing.refill();
         if (page === readingPage) readingPage.fill();
         if (page === marking) fillMarks();
         if (page === cutting) fillCut();

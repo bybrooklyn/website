@@ -391,16 +391,25 @@ export function resizePage(side: Side, hooks: { size(): { width: number; height:
         event.preventDefault();
         applyTyped();
     });
+    /** The size the fields were last filled with. */
+    let filled = { width: 0, height: 0 };
     /** Fills the fields with the picture's size as it now is. */
     function fill() {
         const size = hooks.size();
+        filled = { width: size.width, height: size.height };
         percent = false;
         unit.set(false);
         width.set(String(size.width));
         height.set(String(size.height));
         giving?.fill();
     }
-    return { ...page, fill, width: width.input as HTMLInputElement };
+    /** Fills the fields again when the picture's size changed from elsewhere (undo, redo, a menu's line), but not under a number being typed. */
+    function refill() {
+        const size = hooks.size();
+        const typing = document.activeElement === width.input || document.activeElement === height.input;
+        if (!typing && (size.width !== filled.width || size.height !== filled.height)) fill();
+    }
+    return { ...page, fill, refill, width: width.input as HTMLInputElement };
 }
 
 /** What the crop's page is given: the shape chosen and a shape chosen, the apply, the horizon's dial, and perspective's dials and corners. */

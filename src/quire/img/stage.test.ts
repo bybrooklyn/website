@@ -310,6 +310,19 @@ test("a picture made another size is fitted and centered again, as one opened is
     }
 }, 60_000);
 
+test("resize's fields follow undo and redo while its page is open: they said the size undone", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await pressSize("50%");
+    const fields = () => page!.tab.run<string[]>("[...document.querySelectorAll('.quire-img-resize input[aria-label]')].map((each) => each.value)");
+    expect(await fields()).toEqual(["600", "350"]);
+    await page.tab.press("z", { ctrl: true });
+    expect(await fields()).toEqual(["1200", "700"]);
+    await page.tab.press("z", { ctrl: true, shift: true });
+    expect(await fields()).toEqual(["600", "350"]);
+    await page.tab.press("Escape");
+}, 30_000);
+
 test("Escape while typing a text keeps what was typed and leaves the typing, as a press elsewhere does; an empty text is still let go", async () => {
     if (!page) return;
     await page.paste("screenshot");
