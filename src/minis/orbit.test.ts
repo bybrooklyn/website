@@ -6,7 +6,7 @@
 // pointer went, up and down too. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { enters, eyeOf, FAR, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, TIP, VIEWS, type Orbit } from "./orbit";
+import { enters, eyeOf, FAR, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, TIP, VIEWS, zoomedAt, type Orbit } from "./orbit";
 import type { V3 } from "../mote/solids";
 
 const orbit: Orbit = { at: [10, 5, -20], turn: 0.7, tip: 0.6, far: 120 };
@@ -155,4 +155,17 @@ test("turning to a view goes the short way round, and the narrow lens keeps what
     // the same to within a twentieth: what is off the point looked at is nearer or further, and only perspective tells
     expect(Math.abs(far.x / near.x - 1)).toBeLessThan(0.05);
     expect(lensed(narrow, 5, 38).far).toBeCloseTo(orbit.far, 9);
+});
+
+test("the wheel brings the view nearer toward the point of the table under the pointer, which stays under it", () => {
+    const seen: Orbit = { at: [-28, 12.4, -12.3], turn: 0.75, tip: 0.62, far: 145 };
+    for (const [x, y] of [[40, 40], [WIDE / 2, HIGH / 2], [WIDE - 60, HIGH - 50]] as [number, number][]) {
+        const grip = gripAt(seen, 38, WIDE / HIGH, ...toPicture(x, y));
+        let now = seen;
+        // five notches in, then three out
+        for (const by of [0.8, 0.8, 0.8, 0.8, 0.8, 1.25, 1.25, 1.25]) now = zoomedAt(now, 38, WIDE / HIGH, ...toPicture(x, y), now.far * by);
+        const there = toPixels(project(now, 38, WIDE / HIGH, grip.at)!);
+        expect(Math.hypot(there.x - x, there.y - y)).toBeLessThan(0.5);
+        expect(now.far).toBeCloseTo(seen.far * 0.8 ** 5 * 1.25 ** 3, 9);
+    }
 });

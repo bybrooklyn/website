@@ -30,14 +30,14 @@ import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { STILL as NO_MOVE, about, asOwn, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
+import { STILL as NO_MOVE, about, asOwn, clicked, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
-import { AXES, ARROW, across, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
+import { AXES, ARROW, across, boxed, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
-import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, type Grip, type Orbit } from "./orbit";
+import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, zoomedAt, type Grip, type Orbit } from "./orbit";
 import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
 import { fits, jointsOf, links, open, read, roomOf, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -969,6 +969,15 @@ export default function marbles(m: Mote): Scene {
         }
         return undefined;
     };
+    /** Whether a press on a hopper is on its box, which lets a marble go, and not on its chute, which chooses it: the line from the eye meets the box first. */
+    const onHopperBox = (piece: Placed, x: number, y: number): boolean => {
+        if (piece.kind.family !== "h") return false;
+        const line = lineAt(x, y);
+        const shape = shapeOf(piece.kind);
+        const first = (boxes: Box[]) => Math.min(...boxes.map((box) => boxToWorld(piece.place, box)).map((box) => enters(line, box.at, box.half) ?? Infinity));
+        const box = first(shape.stands);
+        return box < Infinity && box <= first(shape.room.filter((room) => !shape.stands.includes(room)));
+    };
     /** How far round a finger's press a piece is still taken, in pixels: half a fingertip. */
     const FINGERTIP = 12;
     /** The marble going down the run under a press, if any: the nearest whose drawing is within a fingertip's slack of it. Marbles at rest are left to the piece they rest on. */
@@ -1062,16 +1071,13 @@ export default function marbles(m: Mote): Scene {
         // the screen; for a group, by how near the joint that would meet is to the joint it would meet
         const aim = onScreen(want) ?? { x, y };
         const freeMove = { ...one.move };
-        let best: { snap: GroupSnap; d: number } | undefined;
+        const found: { snap: GroupSnap; d: number }[] = [];
         for (const snap of one.snaps) {
             const [seen, goal] = one.home.length > 1 ? [onScreen(movedPoint(snap.joint.at, freeMove)), onScreen(snap.to.at)] : [onScreen(movedPoint(one.pivot, snap.move)), aim];
-            if (!seen || !goal) continue;
-            const d = Math.hypot(seen.x - goal.x, seen.y - goal.y);
-            if (!best || d < best.d) best = { snap, d };
+            if (seen && goal) found.push({ snap, d: Math.hypot(seen.x - goal.x, seen.y - goal.y) });
         }
-        const reach = SNAP[kind] * (one.snap ? 1.4 : 1);
         const was = one.snap;
-        one.snap = best && best.d < reach && !one.away ? best.snap : undefined;
+        one.snap = one.away ? undefined : snapNear(found, SNAP[kind], Boolean(was));
         if (one.snap) {
             one.move = { ...one.snap.move };
             one.fits = true;
@@ -1403,9 +1409,10 @@ export default function marbles(m: Mote): Scene {
     const KEY_BEND = 5;
 
     // ---- what the bar, the strip and the keys do ----
-    const letGo = () => {
+    /** A marble let go from every hopper, or from the one given. */
+    const letGo = (only?: number) => {
         stopRace();
-        const out = table.letGo();
+        const out = table.letGo(only === undefined ? undefined : new Set([only]));
         for (const one of out) show(one);
         m.wake();
     };
@@ -1968,7 +1975,7 @@ export default function marbles(m: Mote): Scene {
         new ResizeObserver(edges).observe(box);
 
         // the column's words, in groups under small headings: the marbles, building, the view, sharing, and what is chosen
-        const goTool = word("let a marble go", "Let a marble go", "Space", letGo);
+        const goTool = word("let a marble go", "Let a marble go", "Space", () => letGo());
         const streamTool = word("stream: off", "Stream of marbles", "Shift+Space", toggleStream, true);
         const pauseTool = word("pause", "Pause", "P", togglePause);
         const resetTool = word("clear the marbles", "Clear the marbles", "C", clearMarbles);
@@ -2969,16 +2976,13 @@ export default function marbles(m: Mote): Scene {
                 held.set(hand.id, one);
                 return;
             }
-            if (hand.button === 2 || hand.button === 1 || (hand.button === 0 && hand.shift && !pieceAt(hand.x, hand.y))) one.mode = "pan";
-            else {
-                // Shift and the select tool are for choosing, so the handles of what is chosen do not take the press
+            // the middle button moves the view; the right turns it, or let go without moving opens the run's menu; the left is for pieces
+            if (hand.button === 1) one.mode = "pan";
+            else if (hand.button === 0) {
+                // Shift and the select tool are for choosing, so the points of a bent piece do not take the press
                 one.piece = pieceAt(hand.x, hand.y, 1.2, hand.kind === "touch" ? FINGERTIP : 0);
                 one.handle = handleUnder(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", hand.shift);
                 pressed = { x: hand.x, y: hand.y, handle: one.handle, kind: hand.kind };
-                if (!one.piece && !one.handle && hand.ctrl) {
-                    one.mode = "box";
-                    boxing = { from: one.start, to: one.start, adding: hand.shift };
-                }
             }
             held.set(hand.id, one);
         },
@@ -3028,13 +3032,15 @@ export default function marbles(m: Mote): Scene {
                     const pieces = chosenPieces();
                     startCarry(pieces, true, one.piece.id, hand.id, one.start);
                     follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
-                } else if (selecting) {
-                    one.mode = "box";
-                    boxing = { from: one.start, to: { x: hand.x, y: hand.y }, adding: true };
-                } else {
+                } else if (one.hand.button === 2 || (one.hand.kind === "touch" && !selecting)) {
+                    // the right button, or one finger on the table, turns the view
                     one.mode = "turn";
                     free();
                     toFree();
+                } else {
+                    // the left button on the table, or a finger with the select tool, draws a box; Shift adds to what is chosen
+                    one.mode = "box";
+                    boxing = { from: one.start, to: { x: hand.x, y: hand.y }, adding: one.hand.shift || one.hand.ctrl || selecting };
                 }
             } else if (one.mode === "carry") follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
             else if (one.mode === "bend") dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
@@ -3068,13 +3074,8 @@ export default function marbles(m: Mote): Scene {
             } else if (one.mode === "gizmo") {
                 if (Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL * 2 && one.gizmo) look(one.gizmo);
             } else if (one.mode === "box" && boxing) {
-                const [left, right] = [Math.min(boxing.from.x, boxing.to.x), Math.max(boxing.from.x, boxing.to.x)];
-                const [top, bottom] = [Math.min(boxing.from.y, boxing.to.y), Math.max(boxing.from.y, boxing.to.y)];
                 if (!boxing.adding) chosen.clear();
-                for (const piece of run) {
-                    const seen = onScreen(toWorld(piece.place, handleOf(piece.kind)));
-                    if (seen && seen.x >= left && seen.x <= right && seen.y >= top && seen.y <= bottom) chosen.add(piece.id);
-                }
+                for (const id of boxed(boxing.from, boxing.to, new Map(run.map((piece) => [piece.id, onScreen(toWorld(piece.place, handleOf(piece.kind)))])))) chosen.add(id);
                 boxing = undefined;
                 sound?.knock(0.2, 1900);
                 chosenChanged();
@@ -3082,31 +3083,31 @@ export default function marbles(m: Mote): Scene {
                 // a tap on a point picks it for the keys, and leaves the choice as it is
                 bendPoint = pointOf(one.handle)!;
                 sound?.knock(0.15, 2000);
-            } else if (one.mode === "pan" && hand.button === 2 && !cancelled && Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL) {
-                // the other button pressed and let go without moving the view: the run's menu
-                openMenu(hand.x, hand.y, false);
-            } else if (one.mode === "press" && !hand.shift && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
-                // a press on a marble going down the run: the camera rides it
+            } else if (one.mode === "press" && one.hand.button === 2) {
+                // the right button pressed and let go without turning the view: the run's menu
+                if (!cancelled) openMenu(hand.x, hand.y, false);
+            } else if (one.mode === "press" && hand.kind === "touch" && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
+                // a tap on a marble going down the run: the camera rides it
                 rideOn(marbleAt(hand.x, hand.y, hand.kind)!);
+            } else if (one.mode === "press" && one.piece && !hand.shift && !hand.ctrl && !selecting && onHopperBox(one.piece, hand.x, hand.y)) {
+                // a click on a hopper's box, not its chute, lets its marble go
+                letGo(one.piece.id);
             } else if (one.mode === "press") {
-                // a press that did not move: on a piece it is chosen (added with Shift or the select
-                // tool); on the table, the choice is let go
-                if (one.piece) {
-                    if (hand.shift || selecting) {
-                        if (chosen.has(one.piece.id)) chosen.delete(one.piece.id);
-                        else chosen.add(one.piece.id);
-                    } else {
-                        chosen.clear();
-                        chosen.add(one.piece.id);
-                    }
-                } else if (!hand.shift && !selecting) chosen.clear();
+                // a click that did not move: a piece alone, or with Shift, Control or the select tool added
+                // or taken away; on the empty table, the choice let go, always
+                const next = clicked(chosen, one.piece?.id, hand.shift || hand.ctrl || selecting);
+                chosen.clear();
+                for (const id of next) chosen.add(id);
                 chosenChanged();
             }
             m.wake();
         },
-        wheel(_x, _y, by, isPinch) {
+        wheel(x, y, by, isPinch) {
             toFree();
-            orbit = kept({ ...orbit, far: orbit.far * Math.exp(by * (isPinch ? 0.01 : 0.0012)) }, orbit);
+            // toward what is under the pointer: that point of the table stays under it
+            const far = kept({ ...orbit, far: orbit.far * Math.exp(by * (isPinch ? 0.01 : 0.0012)) }, orbit).far;
+            const { orbit: seen, degrees } = cam();
+            orbit = { ...orbit, far, at: zoomedAt(seen, degrees, aspect(), ...toPicture(x, y), (seen.far * far) / orbit.far).at };
             easing = undefined;
             m.wake();
         },

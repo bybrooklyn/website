@@ -9,7 +9,7 @@
 
 import { expect, test } from "bun:test";
 import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
-import { START, about, asOwn, groupFits, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, stepped, then } from "./edit";
+import { START, about, asOwn, clicked, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
 import { makeTable } from "./table";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -246,4 +246,30 @@ test("a slope is never joined by its low end so that the run climbs: where it wo
         expect(isOut(after.run.find((piece) => piece.id === to.id)!.kind, to.joint)).toBe(false);
         expect(from.at[1]).toBe(to.at[1]);
     }
+});
+
+test("a click chooses a piece alone, Shift or Control adds it or takes it away, and a click on the empty table lets go of everything, always", () => {
+    const chosen = new Set([1, 2]);
+    expect([...clicked(chosen, 3, false)]).toEqual([3]);
+    expect([...clicked(chosen, 3, true)]).toEqual([1, 2, 3]);
+    expect([...clicked(chosen, 2, true)]).toEqual([1]);
+    expect([...clicked(chosen, undefined, false)]).toEqual([]);
+    expect([...clicked(chosen, undefined, true)]).toEqual([]);
+    // what was chosen is left as it was
+    expect([...chosen]).toEqual([1, 2]);
+});
+
+test("a carried piece snaps to the nearest open end within reach and holds it a little further, and where it would overlap it goes back, saying so", () => {
+    const found = [{ snap: "far", d: 70 }, { snap: "near", d: 30 }];
+    expect(snapNear(found, 40, false)).toBe("near");
+    expect(snapNear([{ snap: "a", d: 50 }], 40, false)).toBeUndefined();
+    // once snapped, held until half as far again
+    expect(snapNear([{ snap: "a", d: 50 }], 40, true)).toBe("a");
+    expect(snapNear([{ snap: "a", d: 57 }], 40, true)).toBeUndefined();
+    expect(snapNear([], 40, false)).toBeUndefined();
+    // a straight let go on top of another does not fit there, and why: it goes back where it was
+    const two: Placed[] = [{ id: 1, kind: kind("s", [2]), place: { x: 0, z: 0, y: 1, turn: 0 } }, { id: 2, kind: kind("s", [1]), place: { x: 5, z: 5, y: 1, turn: 0 } }];
+    expect(groupMisfit(two, [{ ...two[1]!, place: { x: 1, z: 0, y: 1, turn: 0 } }])).toBe("room");
+    expect(groupMisfit(two, [{ ...two[1]!, place: { x: 5, z: 5, y: 0, turn: 0 } }])).toBe("ground");
+    expect(groupMisfit(two, [{ ...two[1]!, place: { x: 5, z: 7, y: 1, turn: 0 } }])).toBeUndefined();
 });

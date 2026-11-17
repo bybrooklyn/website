@@ -4,7 +4,7 @@
 // Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { ARROW, across, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which } from "./handles";
+import { ARROW, across, boxed, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which } from "./handles";
 import { project, type Orbit } from "./orbit";
 import type { V3 } from "../mote/solids";
 
@@ -70,4 +70,12 @@ test("while a piece is bent, its points are its only handles: the nearest point 
     expect(which(shown, b!.x, b!.y - 4, "mouse")).toBe("point1");
     expect(which(shown, a!.x + 200, a!.y, "touch")).toBeUndefined();
     expect(pointOf("point1")).toBe(1);
+});
+
+test("a box drawn on the screen takes the pieces whose middles are inside it, drawn either way", () => {
+    const middles = new Map<number, { x: number; y: number } | undefined>([[1, { x: 10, y: 10 }], [2, { x: 50, y: 40 }], [3, { x: 200, y: 10 }], [4, undefined]]);
+    expect(boxed({ x: 0, y: 0 }, { x: 60, y: 50 }, middles)).toEqual([1, 2]);
+    expect(boxed({ x: 60, y: 50 }, { x: 0, y: 0 }, middles)).toEqual([1, 2]);
+    expect(boxed({ x: 100, y: 0 }, { x: 300, y: 20 }, middles)).toEqual([3]);
+    expect(boxed({ x: 0, y: 0 }, { x: 1, y: 1 }, middles)).toEqual([]);
 });

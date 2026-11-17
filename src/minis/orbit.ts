@@ -186,6 +186,15 @@ export function pannedTo(orbit: Orbit, degrees: number, aspect: number, grip: Gr
     return { ...orbit, at: [orbit.at[0] + off[0] - line.way[0] * t, up, orbit.at[2] + off[2] - line.way[2] * t] };
 }
 
+/**
+ * The camera brought nearer or further, to `far`, toward the point of the table under the point (x, y)
+ * of the picture: that point stays under the pointer, as a pan would keep it (`gripAt`, `pannedTo`).
+ */
+export function zoomedAt(orbit: Orbit, degrees: number, aspect: number, x: number, y: number, far: number): Orbit {
+    const grip = gripAt(orbit, degrees, aspect, x, y);
+    return pannedTo({ ...orbit, far }, degrees, aspect, grip, x, y);
+}
+
 /** The camera that frames a box (by its least and greatest corners) from the way it now looks, with a little room round it. */
 export function framing(orbit: Orbit, degrees: number, aspect: number, low: V3, high: V3): Orbit {
     const at: V3 = [(low[0] + high[0]) / 2, (low[1] + high[1]) / 2, (low[2] + high[2]) / 2];

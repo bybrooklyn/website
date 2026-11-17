@@ -59,6 +59,12 @@ export function which(shown: Shown, x: number, y: number, kind: "touch" | "mouse
     return nearest >= 0 ? `point${nearest}` : undefined;
 }
 
+/** The pieces whose middles on the screen (by number; none for one behind the eye) lie inside the box drawn from one corner to the other, in pixels. */
+export function boxed(from: { x: number; y: number }, to: { x: number; y: number }, middles: Map<number, { x: number; y: number } | undefined>): number[] {
+    const [left, right, top, bottom] = [Math.min(from.x, to.x), Math.max(from.x, to.x), Math.min(from.y, to.y), Math.max(from.y, to.y)];
+    return [...middles].filter(([, at]) => at && at.x >= left && at.x <= right && at.y >= top && at.y <= bottom).map(([id]) => id);
+}
+
 /**
  * How far along an axis through `origin` a drag has gone, in centimetres, from the pointer at `from` to
  * `to` (each from -1 to 1 across the picture, y up): the nearest point of the axis to the line through

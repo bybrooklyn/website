@@ -217,6 +217,30 @@ export function placing(run: Placed[], group: Placed[], end: { id: number; joint
     return why ? { refused: why } : { move: free };
 }
 
+/**
+ * What is chosen after a click that did not move: on a piece, that piece alone, or with `adding` (Shift,
+ * Control, the select tool) that piece added, or taken away if it was chosen; on the empty table,
+ * nothing, always.
+ */
+export function clicked(chosen: Set<number>, id: number | undefined, adding: boolean): Set<number> {
+    if (id === undefined) return new Set();
+    if (!adding) return new Set([id]);
+    const next = new Set(chosen);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+}
+
+/**
+ * The nearest of the places carried pieces could snap to, by how far each is from where they are on the
+ * screen, if within `reach` pixels; once snapped, `held` keeps it until half as far again, so that it
+ * does not flicker between snapping and not.
+ */
+export function snapNear<T>(found: { snap: T; d: number }[], reach: number, held: boolean): T | undefined {
+    const best = found.reduce<{ snap: T; d: number } | undefined>((most, one) => (!most || one.d < most.d ? one : most), undefined);
+    return best && best.d < reach * (held ? 1.4 : 1) ? best.snap : undefined;
+}
+
 /** Families whose pieces are the same mirrored, kept unmirrored so that a run's text says no more than it must: among them every moving and sounding piece. */
 const PLAIN = new Set<Family>(["s", "d", "v", "h", "t", ...(Object.keys(PARTS) as Family[])]);
 
