@@ -2493,7 +2493,13 @@ export default function marbles(m: Mote): Scene {
     // link stays in the address until the first change. A link pasted into the address opens too.
     const followLink = async (packed: string) => {
         const opened = await unpackShared(packed);
-        if (!opened) return forgetLink();
+        if (!opened) {
+            // the run that was on the table stays; the address is let go of the link, so that coming back does not try it again
+            linked = true;
+            forgetLink();
+            refuse();
+            return say("this link could not be read");
+        }
         openShared(opened, undefined, true);
         history.replaceState(history.state, "", `${location.pathname}${location.search}${LINKED}${packed}`);
         linked = true;
