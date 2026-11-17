@@ -53,6 +53,18 @@ Ctrl+Z and Escape do nothing.
 5. Switching sound on moved the word after it by two pixels.
 6. Blocks: after a resize the pile hung in the air, overlapping, until the pointer came over it.
 
+Found afterwards, by a test that failed one run in three: a pile of Blocks squeezed together could go
+on trembling by a seventh of a pixel for ever. Nothing was seen to move, but the tremble's speed passed
+the speed a body may sleep at for a step now and then, and since things that touch sleep together or
+not at all, the whole pile stayed awake and the stage went on stepping and drawing it. In 200 piles
+narrowed from 800 pixels to 300, 18 never came to rest, and 2 of 200 dropped in ordinary play into a
+box 300 wide. A body in Mote's 2D physics now also sleeps when it has stayed within a pixel of one
+place for half a second, whatever its speed (the speed rule already let it travel a pixel and a half
+in that time): none of 600 piles in ordinary play stays awake, and 2 of 300 narrowed ones, which are a
+tower swaying by four pixels, written down as a weak spot in [mote.md](mote.md). The test now runs six
+piles that are the same every run, four of them piles that never rested before. Plinko uses the same
+physics; its board ends exactly where it did.
+
 Left for the owner, Marbles: a carry let go over the column sets the piece down out of sight; undo and
 redo let go of what was chosen; a right click on the empty table keeps the choice, so its menu offers
 turn and take away for nothing under the pointer; the first seven pixels of a right drag neither open the

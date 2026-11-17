@@ -168,11 +168,13 @@ function print(values: number[]): string {
 
 // What each scene ended at before Mote's 3D side gained balls, track and islands that sleep (13 Nov
 // 2026), with the grid. Those were added beside what was there, so the old scenes end where they did.
+// The two flat scenes that come to rest were taken again on 17 Nov 2026, when a pile that stays in one
+// place began to sleep whatever its speed: their pieces fall asleep sooner, so they end a hair elsewhere.
 const BEFORE = {
-    blocks: "108:7bc988431ae2ddd3",
+    blocks: "108:b4c2e5b315adda5d",
     plinko: "3518:c44eeaad3da60d25",
     dice: "64:cc59416212cd59c0",
-    crowdFlat: "912:dda840c1e8b8608",
+    crowdFlat: "912:22880b1bc71c13c3",
     crowdSpace: "875:f886ceecaf361992",
     heap: "403:d23560e1d84fc28f",
 };

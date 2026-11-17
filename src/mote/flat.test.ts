@@ -404,3 +404,30 @@ test("a point is inside a bar only within its thickness of the line between its 
     expect(inside(bar, -56, 0)).toBe(false);
     expect(flat.at(54, 4)).toBeUndefined();
 });
+
+test("a block that trembles in one place goes to sleep though its speed never falls, and one that travels as fast stays awake", () => {
+    // a block lying on the ground, knocked a sixth of a pixel one way and then the other at every step: 20 pixels a second, far
+    // above the speed a body may sleep at, going nowhere. By speed alone it never slept, nor did anything touching it.
+    const made = () => {
+        const flat = new Flat(1800);
+        flat.box(0, 40, 4000, 40, { fixed: true, friction: 0 });
+        return { flat, block: flat.box(0, 0, 40, 40, { friction: 0 }) };
+    };
+    const trembling = made();
+    run(trembling.flat, 1);
+    wake(trembling.block);
+    let turn = 1;
+    run(trembling.flat, 1, () => {
+        if (trembling.block.asleep) return;
+        trembling.block.vx = 20 * (turn = -turn);
+    });
+    expect(trembling.block.asleep).toBe(true);
+    expect(Math.abs(trembling.block.x)).toBeLessThan(1);
+    // the same speed kept one way carries it off, and it does not sleep
+    const going = made();
+    run(going.flat, 1);
+    wake(going.block);
+    run(going.flat, 2, () => (going.block.vx = 20));
+    expect(going.block.asleep).toBe(false);
+    expect(going.block.x).toBeGreaterThan(30);
+});

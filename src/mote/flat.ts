@@ -31,9 +31,15 @@ const PUSH = 160;
 /** How stiff a contact is, in cycles a second, and how damped. */
 const HERTZ = 120;
 const DAMPED = 10;
-/** Slower than this, in pixels a second, for this long, and a body sleeps. */
+/**
+ * Slower than this, in pixels a second, for this long, and a body sleeps; and so does one that has
+ * stayed within `DRIFT` pixels of one place for as long, whatever its speed. A pile at rest can
+ * tremble by less than can be seen, and a tremble's speed passes `SLOW` for a step now and then: by
+ * speed alone such a pile never slept, since things that touch sleep together or not at all.
+ */
 const SLOW = 3;
 const REST = 0.5;
+const DRIFT = 1;
 
 export interface Stuff {
     /** Does not move. */
@@ -79,6 +85,8 @@ export interface Body {
     family: number;
     // The rest is the solver's own.
     quiet: number;
+    /** Where it was, and how turned, when it last went more than `DRIFT` from where it had been. */
+    from: [x: number, y: number, a: number];
     gone: boolean;
     wp: P[];
     wn: P[];
@@ -241,7 +249,7 @@ function make(x: number, y: number, corners: P[], round: number, stuff: Stuff): 
         friction: stuff.friction ?? 0.6,
         bounce: stuff.bounce ?? 0,
         damping: 0, spinDamping: 0,
-        asleep: false, family: stuff.family ?? 0, quiet: 0, gone: false,
+        asleep: false, family: stuff.family ?? 0, quiet: 0, from: [x, y, stuff.angle ?? 0], gone: false,
         wp: [], wn: [], sm: 0, si: 0, dx: 0, dy: 0, da: 0, cq: 1, sq: 0, touching: false,
         root: undefined as unknown as Body,
     };
@@ -949,7 +957,10 @@ export class Flat {
                 const least = ((0.03 * this.gravity) / b.round) * dt;
                 b.w = Math.abs(b.w) <= least ? 0 : (b.w - Math.sign(b.w) * least) * (1 - 0.7 * dt);
             }
-            const still = Math.hypot(b.vx, b.vy) + Math.abs(b.w) * b.far < SLOW && b !== held;
+            // how far it has gone, its farthest corner counted as it turns, from where it was last measured from
+            const went = Math.hypot(b.x - b.from[0], b.y - b.from[1]) + Math.abs(b.a - b.from[2]) * b.far;
+            if (went > DRIFT) b.from = [b.x, b.y, b.a];
+            const still = (went <= DRIFT || Math.hypot(b.vx, b.vy) + Math.abs(b.w) * b.far < SLOW) && b !== held;
             b.quiet = still ? b.quiet + dt : 0;
             const island = islands.get(root(b));
             if (island) island.push(b);

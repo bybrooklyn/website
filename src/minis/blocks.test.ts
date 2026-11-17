@@ -16,32 +16,54 @@ function stage(width: number, height: number) {
     return { m, points, woken };
 }
 
-test("narrowing the box brings every block inside the new walls, starts the stage, and the pile comes to rest", () => {
-    const { m, points, woken } = stage(800, 400);
-    const scene = blocks(m);
-    for (let i = 0; i < 12; i++) scene.double!(40 + i * 64, 60);
-    for (let i = 0; i < 900; i++) scene.step!(1 / 120);
-    // a phone turned from landscape to portrait: the box is far narrower, and the stage is started for the pile to fall into place with no pointer over it
-    m.width = 300;
-    const before = woken.count;
-    scene.resize!();
-    expect(woken.count).toBeGreaterThan(before);
-    let rested = false;
-    for (let i = 0; i < 120 * 30 && !rested; i++) {
-        scene.step!(1 / 120);
-        rested = scene.resting!();
+/** Runs something with chance that is the same every time: which pieces fall, and how they spin, are by chance, and a pile held to a test must be the same pile each run. */
+function withChance<T>(seed: number, run: () => T): T {
+    const real = Math.random;
+    Math.random = () => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+    };
+    try {
+        return run();
+    } finally {
+        Math.random = real;
     }
-    expect(rested).toBe(true);
-    points.length = 0;
-    scene.draw();
-    expect(points.length).toBeGreaterThan(0);
-    for (const [x, y] of points) {
-        expect(x).toBeGreaterThan(-2);
-        expect(x).toBeLessThan(302);
-        expect(y).toBeGreaterThan(-2);
-        expect(y).toBeLessThan(402);
-    }
-});
+}
+
+// Six piles. The last four are ones that never came to rest while a body slept by its speed alone: squeezed together, they
+// trembled by less than a pixel for ever, and the stage went on stepping and drawing a pile that looked still.
+for (const seed of [1, 2, 3, 5, 7, 10]) {
+    test(`narrowing the box brings every block inside the new walls, starts the stage, and the pile comes to rest (pile ${seed})`, () => {
+        withChance(seed, () => {
+            const { m, points, woken } = stage(800, 400);
+            const scene = blocks(m);
+            for (let i = 0; i < 12; i++) scene.double!(40 + i * 64, 60);
+            for (let i = 0; i < 900; i++) scene.step!(1 / 120);
+            // a phone turned from landscape to portrait: the box is far narrower, and the stage is started for the pile to fall into place with no pointer over it
+            m.width = 300;
+            const before = woken.count;
+            scene.resize!();
+            expect(woken.count).toBeGreaterThan(before);
+            let rested = false;
+            for (let i = 0; i < 120 * 30 && !rested; i++) {
+                scene.step!(1 / 120);
+                rested = scene.resting!();
+            }
+            expect(rested).toBe(true);
+            points.length = 0;
+            scene.draw();
+            expect(points.length).toBeGreaterThan(0);
+            for (const [x, y] of points) {
+                expect(x).toBeGreaterThan(-2);
+                expect(x).toBeLessThan(302);
+                expect(y).toBeGreaterThan(-2);
+                expect(y).toBeLessThan(402);
+            }
+        });
+    });
+}
 
 test("a remove takes the newest piece when none is held or pointed at, the one under the pointer when one is, and nothing from an empty pile", () => {
     const { m } = stage(800, 400);
