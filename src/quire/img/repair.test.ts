@@ -58,7 +58,7 @@ afterAll(async () => {
 async function pasteBytes(bytes: Uint8Array, type: string) {
     const was = await page!.tab.run<string>("window.app.editing().current().id ?? ''");
     await page!.tab.run(`(async () => { const bytes = Uint8Array.from(atob(${JSON.stringify(Buffer.from(bytes).toString("base64"))}), (c) => c.charCodeAt(0)); const data = new DataTransfer(); data.items.add(new File([bytes], "image", { type: ${JSON.stringify(type)} })); document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); })()`);
-    await page!.until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded() && document.querySelector(".quire-img-frame.shown")`);
+    await page!.until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded()`);
 }
 const rightClick = (x: number, y: number) => page!.tab.run(`(() => { const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: ${x}, clientY: ${y} }); document.elementFromPoint(${x}, ${y}).dispatchEvent(event); })()`);
 const lines = () => page!.tab.run<string[]>("[...document.querySelectorAll('.quire-img-press-menu:popover-open .quire-menu-label')].map((each) => each.textContent)");

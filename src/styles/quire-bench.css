@@ -439,3 +439,48 @@ textarea.quire-bench-typed {
         transition: none;
     }
 }
+
+/* ---- what is there only some of the time (fold in bench.ts): it folds shut and grows open again, and
+   while shut it is not drawn faint, since it is not there to be seen ---- */
+.quire-bench-fold {
+    max-height: 40rem;
+    overflow: clip;
+    /* a ring round a color chosen, or a focus ring, reaches a little past the edge */
+    overflow-clip-margin: 0.4rem;
+    transition:
+        max-height 0.35s var(--ease),
+        margin-top 0.35s var(--ease),
+        padding-top 0.35s var(--ease),
+        border-color 0.35s ease,
+        opacity 0.2s ease;
+}
+
+.quire-bench-fold.away,
+.quire-bench-side .quire-bench-fold.away[inert] {
+    max-height: 0;
+    margin-top: 0;
+    padding-top: 0;
+    border-top-color: transparent;
+    opacity: 0;
+}
+
+/* a thing on or off (tick in bench.ts): a box to tick in the accent, then its words, as a dot is */
+.quire-bench-tick {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.quire-bench-tick input {
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-bench-fold {
+        transition: none;
+    }
+}

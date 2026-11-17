@@ -2,7 +2,7 @@
 // from the picture is covered by its box and margin, a run by one cover a line, and a run's text keeps
 // its lines; and in
 // headless Chromium, by real keys and drags, the crop's frame is nudged by the arrows (ten pixels with
-// Shift), held to a square from the strip, and set with Enter; zooming by the keys goes to one to one
+// Shift), held to a square from its page of the side panel, and set with Enter; zooming by the keys goes to one to one
 // and back to fitted; a mark picked is moved by the arrows and removed with Delete, and undo brings
 // it back; Escape leaves the tool. Skipped, with a notice, on a machine with no Chromium.
 
@@ -76,12 +76,18 @@ beforeAll(async () => {
 afterAll(async () => {
     await page?.close();
 });
+/** Pastes a screenshot and puts the crop's frame on it with C, as a picture opens with no tool on. */
+async function pasteCropping() {
+    await page!.paste("screenshot");
+    await page!.tab.press("c");
+    await page!.until("document.querySelector('.quire-img-frame.shown')");
+}
 const frameOf = () => page!.tab.run<{ x: number; y: number; width: number; height: number }>("window.app.editing().stage.frame()");
 const stepsOf = () => page!.tab.run<{ type: string; id: string; from?: { x: number }; rect?: { x: number; y: number; width: number; height: number } }[]>("window.app.editing().steps()");
 
-test("the crop's frame is nudged by the arrows, held to a square from the strip, and set with Enter", async () => {
+test("the crop's frame is nudged by the arrows, held to a square from its page of the side panel, and set with Enter", async () => {
     if (!page) return;
-    await page.paste("screenshot");
+    await pasteCropping();
     expect(await frameOf()).toEqual({ x: 0, y: 0, width: 1200, height: 700 });
     // a corner dragged in first, so that the frame has room to move
     const corner = await page.onScreen(1200, 700);
@@ -91,7 +97,7 @@ test("the crop's frame is nudged by the arrows, held to a square from the strip,
     await page.tab.press("ArrowDown", { shift: true });
     const nudged = await frameOf();
     expect([nudged.x, nudged.y]).toEqual([1, 10]);
-    const square = await page.tab.run<{ x: number; y: number }>("(() => { const box = document.querySelector('.quire-img-strip [aria-label=\"Square shape\"]').getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()");
+    const square = await page.tab.run<{ x: number; y: number }>("(() => { const box = document.querySelector('.quire-img-crop-page label[title=\"Square shape\"]').getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()");
     await page.tab.click(square.x, square.y);
     const held = await frameOf();
     expect(held.width).toBe(held.height);
@@ -239,11 +245,16 @@ async function fittedPlace() {
     await page!.tab.run("window.app.editing().stage.fit()");
     return settledPlace();
 }
-/** Opens Resize from the bar and presses one of its common sizes. */
-async function pressSize(label: string) {
+/** Opens resize's page from the bar, when it is not open already (pressed again, its word would leave it). */
+async function openResize() {
+    if (await page!.tab.run<boolean>("!!document.querySelector('.quire-img-resize.open')")) return;
     const resize = await page!.middle(".quire-img-bar [aria-label='Resize']");
     await page!.tab.click(resize.x, resize.y);
     await page!.until("document.querySelector('.quire-img-resize.open')");
+}
+/** Opens Resize from the bar and presses one of its common sizes. */
+async function pressSize(label: string) {
+    await openResize();
     await page!.tab.wait(300);
     const button = await page!.tab.run<{ x: number; y: number }>(`(() => { const b = [...document.querySelectorAll('.quire-img-sizes button')].find((each) => each.textContent === ${JSON.stringify(label)}).getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
     await page!.tab.click(button.x, button.y);
@@ -258,9 +269,7 @@ test("a picture made another size is fitted and centered again, as one opened is
         expect(await settledPlace()).toBe(await fittedPlace());
     }
     // a width typed, and Enter
-    const resize = await page.middle(".quire-img-bar [aria-label='Resize']");
-    await page.tab.click(resize.x, resize.y);
-    await page.until("document.querySelector('.quire-img-resize.open')");
+    await openResize();
     await page.tab.wait(300);
     const width = await page.middle(".quire-img-resize [aria-label='Width']");
     await page.tab.click(width.x, width.y);
@@ -325,12 +334,12 @@ test("a mouse's notch with Ctrl held zooms as gently as a notch of the plain whe
 test("a crop's shape holds while the dial levels the picture, during the drag and after it, and turning back to none keeps the frame, which Enter then applies", async () => {
     if (!page) return;
     // a picture cropped first, so that the next one opens after a crop that is not its own
-    await page.paste("screenshot");
+    await pasteCropping();
     await page.tab.drag(await page.onScreen(1200, 700), await page.onScreen(900, 500), 6);
     await page.tab.press("Enter");
-    await page.paste("screenshot");
+    await pasteCropping();
     const pressShape = async (name: string) => {
-        const button = await page!.middle(`.quire-img-strip [aria-label='${name} shape']`);
+        const button = await page!.middle(`.quire-img-crop-page label[title='${name} shape']`);
         await page!.tab.click(button.x, button.y);
     };
     const shapeOf = async () => {
@@ -339,7 +348,7 @@ test("a crop's shape holds while the dial levels the picture, during the drag an
     };
     await pressShape("Square");
     expect(await shapeOf()).toBeCloseTo(1, 2);
-    const dial = await page.middle(".quire-img-strip .quire-img-dial");
+    const dial = await page.middle(".quire-img-crop-page .quire-img-dial");
     // held part way, the frame is square while the picture turns
     await page.tab.down(dial.x, dial.y);
     for (let at = 1; at <= 6; at++) {
@@ -354,7 +363,7 @@ test("a crop's shape holds while the dial levels the picture, during the drag an
     expect(Math.abs((await shapeOf()) - 16 / 9)).toBeLessThan(0.02);
     const wide = await frameOf();
     // dragged back to none: the turn is gone, and the frame is the one held to 16:9, not the whole picture
-    const again = await page.middle(".quire-img-strip .quire-img-dial");
+    const again = await page.middle(".quire-img-crop-page .quire-img-dial");
     await page.tab.drag(again, { x: again.x - 30, y: again.y }, 6);
     expect((await page.tab.run<{ type: string }[]>("window.app.editing().steps()")).some((step) => step.type === "turn")).toBe(false);
     const back = await frameOf();
@@ -368,7 +377,7 @@ test("a crop's shape holds while the dial levels the picture, during the drag an
 
 test("while a crop's frame is set, the line under the picture says the size the picture will be once it is applied, through a drag, a shape and the dial, and the whole line comes back after", async () => {
     if (!page) return;
-    await page.paste("screenshot");
+    await pasteCropping();
     const line = () => page!.tab.run<string>("document.querySelector('.quire-img-facts').textContent");
     await page.until("/1200 × 700 px · /.test(document.querySelector('.quire-img-facts').textContent)");
     // held part way through a drag of the corner, and let go
@@ -383,7 +392,7 @@ test("while a crop's frame is set, the line under the picture says the size the 
     const held = await frameOf();
     expect(await line()).toBe(`${held.width} × ${held.height} px`);
     await page.tab.up(to.x, to.y);
-    const square = await page.middle(".quire-img-strip [aria-label='Square shape']");
+    const square = await page.middle(".quire-img-crop-page label[title='Square shape']");
     await page.tab.click(square.x, square.y);
     await page.tab.wait(50);
     const shaped = await frameOf();
@@ -453,10 +462,10 @@ test("a picked box shows handles at its corners and sides and a drag on one resi
     await page.until("document.querySelectorAll('.quire-img-handle.shown').length === 0");
 }, 60_000);
 
-test("Escape leaves the crop from the tool's own controls, the dial once dragged or a shape pressed, and gives the keyboard back to the picture", async () => {
+test("Escape leaves the crop from its page's own controls, the dial once dragged or a shape pressed, and gives the keyboard back to the picture", async () => {
     if (!page) return;
-    await page.paste("screenshot");
-    const dial = await page.middle(".quire-img-strip .quire-img-dial");
+    await pasteCropping();
+    const dial = await page.middle(".quire-img-crop-page .quire-img-dial");
     await page.tab.drag(dial, { x: dial.x + 30, y: dial.y }, 6);
     expect(await page.tab.run("document.activeElement.classList.contains('quire-img-dial')")).toBe(true);
     await page.tab.press("Enter");
@@ -465,11 +474,11 @@ test("Escape leaves the crop from the tool's own controls, the dial once dragged
     expect(await page.tab.run("document.activeElement === document.querySelector('.quire-img-stage')")).toBe(true);
     // a shape pressed, and Escape while the shape's button has the keyboard
     await page.tab.press("c");
-    await page.until("document.querySelector('.quire-img-strip [aria-label=\"Square shape\"]')");
+    await page.until("document.querySelector('.quire-img-crop-page label[title=\"Square shape\"]')");
     await page.tab.wait(300);
-    const square = await page.middle(".quire-img-strip [aria-label='Square shape']");
+    const square = await page.middle(".quire-img-crop-page label[title='Square shape']");
     await page.tab.click(square.x, square.y);
-    await page.tab.run("document.querySelector('.quire-img-strip [aria-label=\"Square shape\"]').focus()");
+    await page.tab.run("document.querySelector('.quire-img-crop-page label[title=\"Square shape\"] input').focus()");
     await page.tab.press("Escape");
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("none");
 }, 30_000);

@@ -149,7 +149,7 @@ export interface StageHooks {
     /** A change to the steps, as one undo. */
     change(steps: Kept[]): void;
     pen(): Pen;
-    /** The tool changed, or the frame, or what is picked: the bar and the strip follow. */
+    /** The tool changed, or the frame, or what is picked: the bar and the side panel follow. */
     moved(): void;
     /** The crop's frame as it is being set, each time it changes (dragged, nudged, held to a shape, or turned with the picture), or none once no frame is being set. */
     framed?(frame: Rect | undefined): void;
@@ -1097,15 +1097,11 @@ export function createStage(hooks: StageHooks) {
         gliding = undefined;
         paint();
     }
-    /** The view that fits what is shown into the room under the strip. */
+    /** The view that fits what is shown into the stage's room, in its middle: nothing lies over the picture, so no part of the room is kept for anything. */
     function fittedView(): View | undefined {
         const now = shown();
         if (!now || !loaded) return undefined;
-        // the room under the tool's strip, which is taller on a phone when it wraps to two rows
-        const strip = element.parentElement?.querySelector<HTMLElement>(".quire-img-strip.open");
-        const below = Math.max(52, strip ? strip.offsetTop + strip.offsetHeight + 8 : 0);
-        const found = fit(cropping() ? levelBox(turnNow()) : now, { width: element.clientWidth, height: element.clientHeight - below });
-        return { ...found, y: found.y + below };
+        return fit(cropping() ? levelBox(turnNow()) : now, { width: element.clientWidth, height: element.clientHeight });
     }
     // a view glided to, a share of the way each frame, so that the picture flows to where it fits rather than jumping
     let gliding: View | undefined;

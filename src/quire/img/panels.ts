@@ -1,24 +1,28 @@
-// What opens round the picture, each the kind of surface the Quires give a job of its kind
-// (core/dialog.ts says the rule): the export, a side panel that starts below the bar, since it is
-// looked at while choosing, the picture making room beside it rather than lying under it;
-// resizing, a small box of fields grown from its button; and a strip for the tool in hand, its few choices as icons.
-// Each grows from what opened it and gives the keyboard back there when it closes.
+// The pages of imgQuire's side panel (side.ts) that are not a tool's own logic: the export, which shows
+// with no tool on; the facts; resize; the crop with its level dial and perspective; and reading text.
+// Each is built of the small tools' kit (core/bench.ts): a choice of one is dots, an action is a word, a
+// number is a slider or a line to type on, a color a swatch. Besides them, the words and tables the
+// pages and the menus share: the marks, their colors and sizes, the crop's shapes, and the line under
+// the picture.
 
-import { lowered } from "../core/bench";
-import { control, icon, make, still, tipAway } from "../core/ui";
-import { switchButton } from "../core/dialog";
+import { dots, fold, group, lowered, row, slide, stack, tick, typed, word } from "../core/bench";
+import { make } from "../core/ui";
 import { FORMATS, readWeight, weightSaid, type Settings } from "./export";
 import type { MarkKind, Original, Rect } from "./steps";
 import type { Edits, Facts, Keep } from "./metadata";
+import type { Page, sideColumn } from "./side";
 
-/** What of the metadata an export keeps, as its three buttons say it, each with its tooltip. */
+/** The side column the pages are made in. */
+type Side = ReturnType<typeof sideColumn>;
+
+/** What of the metadata an export keeps, as its three dots say it, each with its tooltip. */
 export const KEEPS: { key: Keep; label: string; tip: string }[] = [
     { key: "none", label: "none", tip: "Nothing about the picture goes with it" },
     { key: "noplace", label: "no place", tip: "Camera, date and the rest, but not where it was taken" },
     { key: "all", label: "all", tip: "Everything the picture says about itself, where it was taken too" },
 ];
 
-/** How a Display P3 picture's colors go out, as its two buttons say it: kept with its profile, or made sRGB. */
+/** How a Display P3 picture's colors go out, as its two dots say it: kept with its profile, or made sRGB. */
 export const COLOR_CHOICES: { srgb: boolean; label: string; tip: string }[] = [
     { srgb: false, label: "Display P3", tip: "Its own colors, with its color profile" },
     { srgb: true, label: "sRGB", tip: "Converted to sRGB, for places that ignore color profiles" },
@@ -34,44 +38,46 @@ export const FIELDS: { key: keyof Edits; label: string }[] = [
 ];
 
 /**
- * The facts: a side panel, as the export is, the picture making room beside it. Quiet rows of a label
- * and a value, the five fields she may change, and everything else the picture says under
- * "Everything", folded until she opens it.
+ * The facts, a page of the side panel: quiet rows of a label and a value, the five fields she may change,
+ * and everything else the picture says under "everything", folded until she opens it.
  */
-export function factsPanel(hooks: { closed?(): void; facts(): Facts & { size: string }; edits(): Edits; setEdit(key: keyof Edits, value: string): void }) {
-    const side = sidePanel("facts", "quire-img-export quire-img-facts-panel", () => hooks.closed?.());
+export function factsPanel(side: Side, hooks: { facts(): Facts & { size: string }; edits(): Edits; setEdit(key: keyof Edits, value: string): void }) {
+    const page = side.page("facts", "quire-img-facts-panel");
     const rows = make("dl", "quire-img-fact-rows");
-    const fields = make("div", "quire-img-fields");
+    const fields = group(undefined);
+    fields.classList.add("quire-img-fields");
     const more = make("details", "quire-img-everything");
     const summary = make("summary", "", "everything");
     const all = make("dl", "quire-img-fact-rows");
     more.append(summary, all);
-    side.body.append(rows, fields, more);
+    const everything = group(undefined, more);
+    page.body.append(group(undefined, rows), fields, everything);
     function fill() {
         const facts = hooks.facts();
         const pairs = [["size", facts.size], ...facts.rows] as [string, string][];
         rows.replaceChildren(...pairs.flatMap(([label, value]) => [make("dt", "", lowered(label)), make("dd", "", value)]));
         const edits = hooks.edits();
-        fields.replaceChildren(
+        fields.querySelectorAll(".quire-bench-row").forEach((each) => each.remove());
+        fields.append(
             ...FIELDS.map((field) => {
-                const row = make("label", "quire-img-row");
-                const input = make("input", "quire-field");
-                input.value = edits[field.key] ?? facts.found[field.key] ?? "";
+                // kept when it is left or Enter is pressed, as a field of the facts always was
+                const line = typed(field.label, () => {});
+                const input = line.input as HTMLInputElement;
+                line.set(edits[field.key] ?? facts.found[field.key] ?? "");
                 input.addEventListener("change", () => hooks.setEdit(field.key, input.value));
                 input.addEventListener("keydown", (event) => {
                     if (event.key !== "Enter") return;
                     event.preventDefault();
                     hooks.setEdit(field.key, input.value);
                 });
-                row.append(make("span", "", field.label), input);
-                return row;
+                return line.row;
             }),
         );
         // an XMP name (dc:creator, aux:Lens) is written as the file has it; the other names are labels like the rows above
         all.replaceChildren(...facts.everything.flatMap(([label, value]) => [make("dt", "", label.includes(":") ? label : lowered(label)), make("dd", "", value)]));
-        more.classList.toggle("away", !facts.everything.length);
+        fold(everything, !!facts.everything.length);
     }
-    return { ...side, fill };
+    return { ...page, fill };
 }
 
 /** The colors a mark can be drawn in, named in their tooltips. */
@@ -91,7 +97,7 @@ export const WEIGHTS = [
     { name: "Thick", value: 0.009 },
 ];
 
-/** The marks as the bar, the menus and the keys offer them: each one's name, icon and key. */
+/** The marks as the panel, the menus and the keys offer them: each one's name, icon and key. */
 export const MARK_TOOLS: Record<MarkKind, { label: string; icon: string; key: string }> = {
     arrow: { label: "Arrow", icon: "arrow", key: "A" },
     box: { label: "Box", icon: "box", key: "B" },
@@ -140,73 +146,31 @@ export function nameFor(file: string | undefined, now: Date): string {
 /** The picture's size in pixels and the weight it will be given out at, as the line under it says them. */
 export const factsSaid = (size: { width: number; height: number }, bytes: number, format: string) => `${size.width} × ${size.height} px · ${weightSaid(bytes)} ${format}`;
 
-/** A panel at the side that starts below the bar, with its title and a way to close it; it slides in, and closing gives the keyboard back to what opened it. */
-export function sidePanel(title: string, className: string, closed?: () => void) {
-    const panel = make("aside", `quire-img-panel ${className}`);
-    panel.setAttribute("aria-label", title);
-    panel.inert = true;
-    const head = make("div", "quire-img-panel-head");
-    const body = make("div", "quire-img-panel-body");
-    let back: HTMLElement | undefined;
-    const close = () => {
-        if (!panel.classList.contains("open")) return;
-        // the keyboard goes back to what opened it before the panel stops taking it
-        const had = panel.contains(document.activeElement);
-        panel.classList.remove("open");
-        panel.inert = true;
-        if (had) back?.focus({ preventScroll: true });
-        closed?.();
-    };
-    head.append(make("span", "quire-outline-title", title), control("Close", icon("close"), close));
-    panel.append(head, body);
-    panel.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        close();
-    });
-    return {
-        panel,
-        body,
-        isOpen: () => panel.classList.contains("open"),
-        open(from: HTMLElement) {
-            back = from;
-            tipAway();
-            panel.inert = false;
-            panel.classList.add("open");
-        },
-        close,
-    };
-}
-
-/** What a Give to all control is given: what it will do in plain words (nothing outside a batch; empty when this picture has nothing of the kind to give), its button's word, and what a press does. */
+/** What a Give to all control is given: what it will do in plain words (nothing outside a batch; empty when this picture has nothing of the kind to give), its word, and what a press does. */
 export interface GiveHooks {
     said(): string | undefined;
     label(): string;
     press(): void;
 }
 
-/** A Give to all button with a plain line beside it saying what it will do before it is pressed; the two grow in only in a batch, and fold away outside one. */
+/** A Give to all word with a plain line under it saying what it will do before it is pressed; the two grow in only in a batch, and fold away outside one. */
 export function giveRow(hooks: GiveHooks) {
-    const row = make("div", "quire-img-give away");
-    row.inert = true;
-    const button = make("button", "quire-dialog-dismiss quire-img-give-button");
-    button.type = "button";
-    button.addEventListener("click", () => hooks.press());
+    const button = word("", () => hooks.press());
+    button.classList.add("quire-img-give-button");
     const said = make("p", "quire-img-give-said");
-    row.append(button, said);
+    const made = fold(group("batch", button, said), false);
+    made.classList.add("quire-img-give");
     function fill() {
         const words = hooks.said();
-        row.classList.toggle("away", words === undefined);
-        row.inert = words === undefined;
+        fold(made, words !== undefined);
         button.textContent = hooks.label();
         button.disabled = !words;
         said.textContent = words || "This picture has none of this to give";
     }
-    return { row, fill };
+    return { row: made, fill };
 }
 
-/** What the export panel shows in a batch: how many pictures, whether a folder can be chosen, what giving the settings to all will do, and how far saving all has come. */
+/** What the export page shows in a batch: how many pictures, whether a folder can be chosen, what giving the settings to all will do, and how far saving all has come. */
 export interface BatchOut {
     count: number;
     folder: boolean;
@@ -214,27 +178,78 @@ export interface BatchOut {
     running?: string;
 }
 
-/** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save; in a batch, the settings given to all and every picture saved together. */
-export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean; note?(): { text: string; actions: { label: string; press(): void }[] } | undefined; batch?(): BatchOut | undefined; giveAll?(): void; saveAll?(how: "zip" | "folder"): void; stopAll?(): void }) {
-    const side = sidePanel("export", "quire-img-export", () => hooks.closed?.());
-    const formats = make("div", "quire-img-formats");
-    formats.setAttribute("role", "radiogroup");
-    formats.setAttribute("aria-label", "Format");
-    const quality = make("input", "quire-img-quality");
-    quality.type = "range";
-    quality.min = "5";
-    quality.max = "100";
-    quality.setAttribute("aria-label", "Quality");
-    const qualityShown = make("span", "quire-img-quality-number");
-    const under = make("input", "quire-field quire-img-under");
-    under.placeholder = "No limit";
-    under.setAttribute("aria-label", "Under");
-    const lossy = make("div", "quire-img-lossy");
-    const qualityRow = make("label", "quire-img-row");
-    qualityRow.append(make("span", "", "quality"), quality, qualityShown);
-    const underRow = make("label", "quire-img-row");
-    underRow.append(make("span", "", "under"), under);
-    lossy.append(qualityRow, underRow);
+/**
+ * The export, the page the side panel shows with no tool on: the format, its quality or a weight to come in under, what of the metadata
+ * goes with it, the result's size, the original and the result side by side at their own pixels, and copy and save; in a batch, the
+ * settings given to all and every picture saved together.
+ */
+export function exportPanel(side: Side, hooks: { settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean; note?(): { text: string; actions: { label: string; press(): void }[] } | undefined; batch?(): BatchOut | undefined; giveAll?(): void; saveAll?(how: "zip" | "folder"): void; stopAll?(): void }) {
+    const page = side.page("export", "quire-img-export");
+    const changed = (to: Partial<Settings>) => {
+        const next = { ...hooks.settings(), ...to };
+        if (!next.target) delete next.target;
+        hooks.set(next);
+        fill();
+    };
+    // two rows of one choice: the lossy formats, then those that keep every pixel, each row after its word
+    const formatDots = (lossy: boolean) =>
+        dots(
+            lossy ? "lossy" : "lossless",
+            FORMATS.filter((format) => format.lossy === lossy).map((format) => ({ value: format.key, text: format.short, tip: `${format.label}: ${format.tip}` })),
+            (key) => changed({ format: key }),
+        );
+    const lossyFormats = formatDots(true);
+    const losslessFormats = formatDots(false);
+    const formats = group("format", row("lossy", lossyFormats.set), row("lossless", losslessFormats.set));
+    formats.classList.add("quire-img-formats");
+    const quality = slide("quality", { min: 5, max: 100 }, (value) => changed({ quality: value / 100 }));
+    quality.input.classList.add("quire-img-quality");
+    const under = typed("under", () => {}, { hint: "No limit" }) as { row: HTMLElement; input: HTMLInputElement; set(value: string): void };
+    under.input.classList.add("quire-img-under");
+    under.input.addEventListener("change", () => changed({ target: readWeight(under.input.value) }));
+    under.input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        changed({ target: readWeight(under.input.value) });
+    });
+    const lossy = group(undefined, quality.row, under.row);
+    lossy.classList.add("quire-img-lossy");
+    // what of the picture's metadata goes with it: none unless she chooses, for this export
+    const keeping = dots<Keep>(
+        "metadata",
+        KEEPS.map((each) => ({ value: each.key, text: each.label, tip: each.tip })),
+        (key) => (hooks.setKeep(key), fill()),
+    );
+    keeping.group.classList.add("quire-img-keep");
+    // a Display P3 picture's colors: kept with its profile, or made sRGB for places that read no profile
+    const colors = dots<"p3" | "srgb">(
+        "colors",
+        COLOR_CHOICES.map((each) => ({ value: each.srgb ? "srgb" : "p3", text: each.label, tip: each.tip })),
+        (value) => changed({ srgb: value === "srgb" }),
+    );
+    colors.group.classList.add("quire-img-colors");
+    // a plain word when the format chosen cannot keep what the picture has (a cut-out's transparency in a JPEG), with what can be done
+    const note = group(undefined);
+    note.classList.add("quire-img-note");
+    note.setAttribute("role", "status");
+    // in a batch: whose settings these are, giving them to all, and every picture saved together, with how far it has come and stop
+    const own = make("p", "quire-img-all-said");
+    const give = word("give to all", () => hooks.giveAll?.());
+    give.classList.add("quire-img-give-button");
+    const giveSaid = make("p", "quire-img-give-said");
+    const zip = word("save all as a zip", () => hooks.saveAll?.("zip"));
+    const folder = word("save all into a folder", () => hooks.saveAll?.("folder"));
+    const ways = stack(undefined, zip, folder);
+    ways.classList.add("quire-img-all-ways");
+    const goingSaid = make("span", "quire-img-all-said");
+    const stop = word("stop", () => hooks.stopAll?.(), true);
+    const going = group(undefined, goingSaid, stop);
+    going.classList.add("quire-img-all-going");
+    going.setAttribute("role", "status");
+    const all = group("all pictures", own, give, giveSaid, ways, going);
+    all.classList.add("quire-img-all");
+    all.setAttribute("aria-label", "All pictures");
+    const result = make("p", "quire-img-result");
     const pair = make("div", "quire-img-pair");
     const before = make("figure", "quire-img-sample");
     const after = make("figure", "quire-img-sample");
@@ -245,126 +260,40 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     before.append(beforeCanvas, beforeSaid);
     after.append(afterCanvas, afterSaid);
     pair.append(before, after);
-    const result = make("p", "quire-img-result");
-    const actions = make("div", "quire-img-actions");
-    const save = make("button", "quire-dialog-dismiss", "save");
-    save.type = "button";
-    save.addEventListener("click", () => hooks.save());
-    const copy = make("button", "quire-dialog-action", "copy");
-    copy.type = "button";
-    copy.addEventListener("click", () => hooks.copy());
-    actions.append(save, copy);
-    // what of the picture's metadata goes with it: none unless she chooses, for this export
-    const keeping = make("div", "quire-img-keep");
-    keeping.setAttribute("role", "radiogroup");
-    keeping.setAttribute("aria-label", "Metadata");
-    // a Display P3 picture's colors: kept with its profile, or made sRGB for places that read no profile
-    const colors = make("div", "quire-img-keep quire-img-colors");
-    colors.setAttribute("role", "radiogroup");
-    colors.setAttribute("aria-label", "Colors");
-    // a plain word when the format chosen cannot keep what the picture has (a cut-out's transparency in a JPEG), with what can be done
-    const note = make("div", "quire-img-note");
-    note.setAttribute("role", "status");
-    // in a batch: whose settings these are, giving them to all, and every picture saved together, with how far it has come and Stop
-    const all = make("section", "quire-img-all away");
-    all.setAttribute("aria-label", "All pictures");
-    all.inert = true;
-    const own = make("p", "quire-img-all-said");
-    const give = make("button", "quire-dialog-dismiss quire-img-give-button", "give to all");
-    give.type = "button";
-    give.addEventListener("click", () => hooks.giveAll?.());
-    const giveSaid = make("p", "quire-img-give-said");
-    const zip = make("button", "quire-dialog-dismiss", "save all as a zip");
-    zip.type = "button";
-    zip.addEventListener("click", () => hooks.saveAll?.("zip"));
-    const folder = make("button", "quire-dialog-dismiss", "save all into a folder");
-    folder.type = "button";
-    folder.addEventListener("click", () => hooks.saveAll?.("folder"));
-    const ways = make("div", "quire-img-all-ways");
-    ways.append(zip, folder);
-    const going = make("div", "quire-img-all-going away");
-    going.setAttribute("role", "status");
-    const goingSaid = make("span", "quire-img-all-said");
-    const stop = make("button", "quire-dialog-dismiss", "stop");
-    stop.type = "button";
-    stop.addEventListener("click", () => hooks.stopAll?.());
-    going.append(goingSaid, stop);
-    const giving = make("div", "quire-img-give");
-    giving.append(give, giveSaid);
-    all.append(own, giving, ways, going);
-    side.body.append(formats, lossy, keeping, colors, note, all, result, pair, actions);
-
-    const changed = (to: Partial<Settings>) => {
-        const next = { ...hooks.settings(), ...to };
-        if (!next.target) delete next.target;
-        hooks.set(next);
-        fill();
-    };
-    quality.addEventListener("input", () => ((qualityShown.textContent = quality.value), changed({ quality: Number(quality.value) / 100 })));
-    under.addEventListener("change", () => changed({ target: readWeight(under.value) }));
-    under.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter") return;
-        event.preventDefault();
-        changed({ target: readWeight(under.value) });
-    });
+    const copy = word("copy", () => hooks.copy());
+    copy.classList.add("quire-img-copy");
+    const save = word("save", () => hooks.save(), true);
+    save.classList.add("quire-img-save");
+    const actions = group(undefined, copy, save);
+    actions.classList.add("quire-img-actions");
+    page.body.append(formats, lossy, keeping.group, colors.group, note, all, group("it will be", result, pair), actions);
+    // each word of a choice of the export is a label of its dot, the way tests and assistive tools find a format by its name
+    for (const set of [lossyFormats.set, losslessFormats.set, keeping.set, colors.set]) set.querySelectorAll("label").forEach((label) => label.classList.add("quire-img-format"));
 
     function fill() {
         const settings = hooks.settings();
-        keeping.replaceChildren(
-            make("span", "quire-img-format-row", "metadata"),
-            ...KEEPS.map((each) => {
-                const button = control(each.tip, each.label, () => (hooks.setKeep(each.key), fill()), "quire-button quire-img-format");
-                button.setAttribute("role", "radio");
-                button.setAttribute("aria-checked", String(hooks.keep() === each.key));
-                button.classList.toggle("pressed", hooks.keep() === each.key);
-                return button;
-            }),
-        );
+        keeping.show(hooks.keep());
         const said = hooks.note?.();
-        note.classList.toggle("away", !said);
-        note.replaceChildren(...(said ? [make("p", "", said.text), ...said.actions.map((each) => control(each.label, lowered(each.label), () => (each.press(), fill()), "quire-button quire-img-format"))] : []));
-        colors.classList.toggle("away", !hooks.wide?.());
-        colors.replaceChildren(
-            make("span", "quire-img-format-row", "colors"),
-            ...COLOR_CHOICES.map((each) => {
-                const on = (settings.srgb === true) === each.srgb;
-                const button = control(each.tip, each.label, () => changed({ srgb: each.srgb }), "quire-button quire-img-format");
-                button.setAttribute("role", "radio");
-                button.setAttribute("aria-checked", String(on));
-                button.classList.toggle("pressed", on);
-                return button;
-            }),
-        );
-        // two rows of one set: the lossy formats, then those that keep every pixel, each row under its word
-        formats.replaceChildren(
-            ...[true, false].flatMap((lossy) => [
-                make("span", "quire-img-format-row", lossy ? "lossy" : "lossless"),
-                ...FORMATS.filter((format) => format.lossy === lossy).map((format) => {
-                    const button = control(`${format.label}: ${format.tip}`, format.short, () => changed({ format: format.key }), "quire-button quire-img-format");
-                    button.setAttribute("role", "radio");
-                    button.setAttribute("aria-checked", String(format.key === settings.format));
-                    button.classList.toggle("pressed", format.key === settings.format);
-                    return button;
-                }),
-            ]),
-        );
+        fold(note, !!said);
+        note.replaceChildren(...(said ? [make("p", "", said.text), ...said.actions.map((each) => word(lowered(each.label), () => (each.press(), fill())))] : []));
+        fold(colors.group, !!hooks.wide?.());
+        colors.show(settings.srgb === true ? "srgb" : "p3");
+        lossyFormats.show(settings.format);
+        losslessFormats.show(settings.format);
         const format = FORMATS.find((each) => each.key === settings.format)!;
-        lossy.classList.toggle("away", !format.lossy);
-        quality.value = String(Math.round(settings.quality * 100));
-        qualityShown.textContent = quality.value;
-        quality.disabled = !!settings.target;
-        if (document.activeElement !== under) under.value = settings.target ? weightSaid(settings.target) : "";
+        fold(lossy, format.lossy);
+        quality.set(Math.round(settings.quality * 100));
+        quality.input.disabled = !!settings.target;
+        if (document.activeElement !== under.input) under.set(settings.target ? weightSaid(settings.target) : "");
         const batch = hooks.batch?.();
-        all.classList.toggle("away", !batch);
-        all.inert = !batch;
+        fold(all, !!batch);
         if (batch) {
             own.textContent = `These settings are this picture's own. Each of the ${batch.count} pictures is saved with its own.`;
             give.textContent = `give to the other ${batch.count - 1}`;
             giveSaid.textContent = batch.give;
             zip.textContent = `save all ${batch.count} as a zip`;
-            folder.classList.toggle("away", !batch.folder);
-            folder.inert = !batch.folder;
-            going.classList.toggle("away", !batch.running);
+            fold(folder, batch.folder);
+            fold(going, !!batch.running);
             goingSaid.textContent = batch.running ?? "";
             for (const button of [give, zip, folder]) button.disabled = !!batch.running;
         }
@@ -394,129 +323,137 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
         beforeSaid.textContent = `original · ${weightSaid(found.originalBytes)}`;
         afterSaid.textContent = `export · ${weightSaid(found.bytes)}${found.exported ? "" : " · this browser cannot show it"}`;
     }
-    return { ...side, fill, shows, copyButton: copy };
+    return { ...page, fill, shows, copyButton: copy };
 }
 
+/** The sizes resize offers with one press: a share of the picture's width (twice and four times as large among them), or a width in pixels. */
+export const SIZES: [string, number][] = [["50%", 0.5], ["200%", 2], ["400%", 4], ["1920", 1920], ["1280", 1280], ["1080", 1080], ["800", 800]];
+
 /**
- * The resize box: width and height, linked, in pixels or as a percentage, and the common sizes, among them twice and
- * four times as large; and how a picture made larger is enlarged (the filter, or a model), which opens the choice
- * in a dialog. Enter applies and Escape closes it.
+ * Resize, a page of the side panel: width and height, linked, in pixels or as a percentage, applied with Enter or apply; and the
+ * common sizes, among them twice and four times as large, each applied with one press. In a batch, the size given to the others.
  */
-export function resizeBox(hooks: { size(): { width: number; height: number }; apply(width: number, height?: number): void; back(): void; done(): void; enlarge?: { said(): string; choose(from: HTMLElement): void }; give?: GiveHooks }) {
-    const box = make("div", "quire-img-resize");
-    box.setAttribute("role", "dialog");
-    box.setAttribute("aria-label", "Resize");
-    const width = make("input", "quire-field");
-    const height = make("input", "quire-field");
-    width.inputMode = height.inputMode = "numeric";
-    width.setAttribute("aria-label", "Width");
-    height.setAttribute("aria-label", "Height");
+export function resizePage(side: Side, hooks: { size(): { width: number; height: number }; apply(width: number, height?: number): void; done(): void; give?: GiveHooks }) {
+    const page = side.page("resize", "quire-img-resize");
     let linked = true;
     let percent = false;
-    const link = control("Keep the shape", icon("link"), () => ((linked = !linked), link.classList.toggle("pressed", linked), follow(width)));
-    link.classList.add("pressed");
-    const unit = switchButton("percent", false, (on) => {
+    const width = typed("width", () => follow(width.input as HTMLInputElement));
+    const height = typed("height", () => follow(height.input as HTMLInputElement));
+    for (const each of [width, height]) {
+        (each.input as HTMLInputElement).inputMode = "numeric";
+        each.input.setAttribute("aria-label", each === width ? "Width" : "Height");
+    }
+    const link = tick("keep the shape", (on) => ((linked = on), follow(width.input as HTMLInputElement)), "Keep the shape");
+    link.set(true);
+    const unit = tick("percent", (on) => {
         const size = hooks.size();
         percent = on;
-        width.value = String(on ? 100 : size.width);
-        height.value = String(on ? 100 : size.height);
+        width.set(String(on ? 100 : size.width));
+        height.set(String(on ? 100 : size.height));
     });
-    const sizes = make("div", "quire-img-sizes");
-    for (const [label, wide] of [["50%", 0.5], ["200%", 2], ["400%", 4], ["1920", 1920], ["1280", 1280], ["1080", 1080], ["800", 800]] as const) {
-        const button = make("button", "quire-dialog-dismiss", label);
-        button.type = "button";
-        button.addEventListener("click", () => {
-            const size = hooks.size();
-            hooks.apply(wide <= 4 ? Math.round(size.width * wide) : wide);
-            close(true);
-        });
-        sizes.append(button);
-    }
-    const fields = make("div", "quire-img-row");
-    fields.append(width, make("span", "quire-img-by", "×"), height, link);
-    box.append(fields, unit, sizes);
-    // how a picture made larger is enlarged: the button says the way in use and opens the choice
-    const enlarging = hooks.enlarge && make("button", "quire-dialog-dismiss quire-img-enlarge-way", hooks.enlarge.said());
-    if (enlarging) {
-        enlarging.type = "button";
-        enlarging.addEventListener("click", () => hooks.enlarge?.choose(enlarging));
-        box.append(enlarging);
-    }
+    const apply = word("apply", () => applyTyped());
+    const fields = group("size", width.row, height.row, row("", link.row), row("", unit.row), row("", apply));
+    const sizes = group(
+        "sizes",
+        ...SIZES.map(([label, wide]) =>
+            word(label, () => {
+                const size = hooks.size();
+                hooks.apply(wide <= 4 ? Math.round(size.width * wide) : wide);
+                hooks.done();
+            }),
+        ),
+    );
+    sizes.classList.add("quire-img-sizes");
     // in a batch, this picture's size given to the others, said in plain words before it is pressed
-    const giving = hooks.give && giveRow({ ...hooks.give, press: () => (hooks.give!.press(), close(true)) });
-    if (giving) box.append(giving.row);
+    const giving = hooks.give && giveRow({ ...hooks.give, press: () => (hooks.give!.press(), hooks.done()) });
+    page.body.append(fields, sizes, ...(giving ? [giving.row] : []));
     const shape = () => hooks.size().height / hooks.size().width;
     function follow(changed: HTMLInputElement) {
         if (!linked) return;
         const value = Number(changed.value);
         if (!Number.isFinite(value) || value <= 0) return;
-        if (percent) (changed === width ? height : width).value = changed.value;
-        else if (changed === width) height.value = String(Math.max(1, Math.round(value * shape())));
-        else width.value = String(Math.max(1, Math.round(value / shape())));
+        const other = (changed === width.input ? height : width).input as HTMLInputElement;
+        if (percent) other.value = changed.value;
+        else if (changed === width.input) other.value = String(Math.max(1, Math.round(value * shape())));
+        else other.value = String(Math.max(1, Math.round(value / shape())));
     }
-    width.addEventListener("input", () => follow(width));
-    height.addEventListener("input", () => follow(height));
-    box.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            close();
-        } else if (event.key === "Enter" && (event.target === width || event.target === height)) {
-            event.preventDefault();
-            const size = hooks.size();
-            const asked = { width: Number(width.value), height: Number(height.value) };
-            if (!(asked.width > 0 && asked.height > 0)) return;
-            const wide = Math.round(percent ? (size.width * asked.width) / 100 : asked.width);
-            const high = Math.round(percent ? (size.height * asked.height) / 100 : asked.height);
-            hooks.apply(wide, linked ? undefined : high);
-            close(true);
-        }
+    function applyTyped() {
+        const size = hooks.size();
+        const asked = { width: Number(width.input.value), height: Number(height.input.value) };
+        if (!(asked.width > 0 && asked.height > 0)) return;
+        const wide = Math.round(percent ? (size.width * asked.width) / 100 : asked.width);
+        const high = Math.round(percent ? (size.height * asked.height) / 100 : asked.height);
+        hooks.apply(wide, linked ? undefined : high);
+        hooks.done();
+    }
+    page.body.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || (event.target !== width.input && event.target !== height.input)) return;
+        event.preventDefault();
+        applyTyped();
     });
-    /** Closes the box: back to its button, or to the picture once a size was applied. */
-    let opener: HTMLElement | undefined;
-    function close(applied = false) {
-        if (!box.classList.contains("open")) return;
-        box.classList.remove("open");
-        box.inert = true;
-        opener?.classList.remove("open");
-        if (applied) hooks.done();
-        else hooks.back();
+    /** Fills the fields with the picture's size as it now is. */
+    function fill() {
+        const size = hooks.size();
+        percent = false;
+        unit.set(false);
+        width.set(String(size.width));
+        height.set(String(size.height));
+        giving?.fill();
     }
-    box.inert = true;
-    return {
-        box,
-        isOpen: () => box.classList.contains("open"),
-        open(from: HTMLElement) {
-            // its button is lit while the box is open, and so shows no tooltip under it, as the bar's buttons do in mdQuire
-            opener = from;
-            from.classList.add("open");
-            tipAway();
-            const size = hooks.size();
-            percent = false;
-            unit.set(false);
-            width.value = String(size.width);
-            height.value = String(size.height);
-            if (enlarging) enlarging.textContent = hooks.enlarge!.said();
-            giving?.fill();
-            const button = from.getBoundingClientRect();
-            // held inside the window by its own width (its sizes run to two rows), with a gutter of 8 pixels, inside the app (whose right edge leaves the scroll bar's room out)
-            const room = box.parentElement?.getBoundingClientRect().right || innerWidth;
-            const left = Math.max(8, Math.min(room - (box.offsetWidth || 300) - 8, button.left));
-            box.style.left = `${left}px`;
-            box.style.top = `${button.bottom + 6}px`;
-            box.style.transformOrigin = `${Math.max(0, button.left + button.width / 2 - left)}px 0`;
-            box.inert = false;
-            box.classList.add("open");
-            width.focus();
-            width.select();
-        },
-        close,
-        /** Says the way of enlarging again, after it was chosen. */
-        sayWay: () => enlarging && (enlarging.textContent = hooks.enlarge!.said()),
-    };
+    return { ...page, fill, width: width.input as HTMLInputElement };
 }
 
-/** What the strip shows while reading text: where the reading is, how far, what was found, and the size of model. */
+/** What the crop's page is given: the shape chosen and a shape chosen, the apply, the horizon's dial, and perspective's dials and corners. */
+export interface CropHooks {
+    shape(): string;
+    setShape(name: string): void;
+    apply(): void;
+    turn: TurnHooks;
+    perspective: PerspectiveHooks;
+    /** Whether perspective's part is open. */
+    straightening(): boolean;
+}
+
+/**
+ * The crop, a page of the side panel: the shape its frame is held to, the horizon's dial with drawing along the horizon to level it,
+ * perspective (its part grows open under its box: two dials, corners to drag, and auto), and apply.
+ */
+export function cropPage(side: Side, hooks: CropHooks) {
+    const page = side.page("crop", "quire-img-crop-page");
+    const shapes = dots(
+        "shape",
+        SHAPES.map((shape) => ({ value: shape.name, text: lowered(shape.name), tip: shape.name === "Free" ? "Free shape" : `${shape.name} shape` })),
+        (name) => (hooks.setShape(name), fill()),
+    );
+    const dial = turnDial(hooks.turn);
+    const level = tick("draw along the horizon", (on) => hooks.turn.setLevelling(on), "Draw along the horizon to level it");
+    const keystone = hooks.perspective;
+    const upright = keystoneDial(keystone, "vertical");
+    const across = keystoneDial(keystone, "horizontal");
+    const straighten = tick("perspective", (on) => keystone.setOpen(on), "Perspective (P)");
+    const corners = tick("corners", (on) => keystone.setCornering(on), "Corners: drag them to the corners of something that should be a rectangle");
+    const auto = word("auto", () => keystone.auto());
+    auto.title = "Straighten the upright lines, and the level ones where they are clear";
+    const dials = fold(group(undefined, row("vertical", upright.element), row("horizontal", across.element), row("", corners.row), row("", auto)), false);
+    dials.classList.add("quire-img-keystones");
+    const apply = word("apply", () => hooks.apply());
+    apply.title = "Apply (Enter)";
+    page.body.append(shapes.group, group("level", dial.element, level.row), group(undefined, straighten.row, dials), group(undefined, apply));
+    function fill() {
+        shapes.show(hooks.shape());
+        dial.show();
+        upright.show();
+        across.show();
+        level.set(hooks.turn.levelling());
+        const open = hooks.straightening();
+        straighten.set(open);
+        fold(dials, open);
+        corners.set(keystone.cornering());
+    }
+    return { ...page, fill, dial: dial.element, vertical: upright.element };
+}
+
+/** What the reading of a picture's text says: where the reading is, how far, what was found, and the size of model. */
 export interface ReadSaid {
     state: "idle" | "asking" | "fetching" | "reading" | "read" | "failed";
     progress: number;
@@ -525,7 +462,7 @@ export interface ReadSaid {
     model: string;
 }
 
-/** What the strip says of the reading, in a few quiet words. */
+/** What the reading's page says of it, in a few quiet words. */
 export function readSaid(read: ReadSaid): string {
     if (read.state === "reading") return `Reading text ${Math.round(read.progress * 100)}%`;
     if (read.state === "fetching") return "Downloading the model";
@@ -537,134 +474,33 @@ export function readSaid(read: ReadSaid): string {
     return read.private ? `${count}, ${read.private} ${read.private === 1 ? "looks" : "look"} private` : count;
 }
 
-/** What the strip shows for a mark: whether its colors, the names of its three sizes (none when it has no size), and groups of controls of its own, each after a rule. */
-export interface MarkControls {
-    colors: boolean;
-    weights?: string[];
-    extra: HTMLElement[][];
+/** Reading text, a page of the side panel: where the reading is, trying again when it failed, hiding all that looks private, and the size of model. */
+export function readPage(side: Side, hooks: { read(): ReadSaid; hideAll(): void; chooseModel(from: HTMLElement): void; readAgain(): void }) {
+    const page = side.page("read text", "quire-img-read-page");
+    const said = make("p", "quire-img-read-said");
+    said.setAttribute("role", "status");
+    const again = word("try again", () => hooks.readAgain());
+    again.title = "Read the text again";
+    const hide = word("hide all", () => hooks.hideAll());
+    hide.title = "Cover everything that looks private, as one step";
+    const model = word("", (button) => hooks.chooseModel(button));
+    model.title = "Model";
+    page.body.append(group(undefined, said, fold(again, false), fold(hide, false)), group(undefined, row("model", model)));
+    function fill() {
+        const read = hooks.read();
+        said.textContent = readSaid(read);
+        fold(again, read.state === "failed");
+        fold(hide, read.state === "read" && !!read.private);
+        model.textContent = lowered(read.model);
+    }
+    return { ...page, fill };
 }
 
-/** The strip for the tool in hand: the crop's shapes and Apply, perspective's dials and corners, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; mark?(): MarkControls; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; perspective?: PerspectiveHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; busy?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
-    const strip = make("div", "quire-img-strip");
-    strip.setAttribute("role", "toolbar");
-    strip.setAttribute("aria-label", "Tool");
-    const swatch = (color: { name: string; value: string }) => {
-        const mark = make("span", "quire-img-swatch");
-        mark.style.background = color.value;
-        return control(color.name, mark, () => hooks.setColor(color.value));
-    };
-    const weight = (each: { name: string; value: number }, at: number, label = `${each.name} line`) => {
-        const line = icon("line");
-        line.style.strokeWidth = String(1.2 + at * 1.4);
-        return control(label, line, () => hooks.setWeight(each.value));
-    };
-    const words = (label: string, press: (button: HTMLButtonElement) => void, tip: string, filled = false) => {
-        const button = make("button", filled ? "quire-img-strip-words filled" : "quire-img-strip-words", label);
-        button.type = "button";
-        button.title = tip;
-        button.addEventListener("click", () => press(button));
-        return button;
-    };
-    // the horizon's dial and the button that draws a line along it, made once so that a drag on the dial is never cut short by the strip filling again
-    const dial = hooks.turn ? turnDial(hooks.turn) : undefined;
-    const level = hooks.turn ? control("Draw along the horizon to level it", icon("line"), () => hooks.turn?.setLevelling(!hooks.turn.levelling())) : undefined;
-    // the dial and its line button as one group, which a narrow screen puts on a row of its own under the shapes and Apply
-    const horizon = make("div", "quire-img-strip-horizon");
-    // perspective, from the crop's strip: a button that fills the strip with its two dials, its corners and its one press
-    const straighten = hooks.perspective ? control("Perspective (P)", icon("perspective"), () => hooks.perspective?.setOpen(true)) : undefined;
-    if (dial && level) horizon.append(make("span", "quire-img-strip-rule"), dial.element, level, ...(straighten ? [straighten] : []));
-    const keystone = hooks.perspective;
-    const upright = keystone ? keystoneDial(keystone, "vertical") : undefined;
-    const across = keystone ? keystoneDial(keystone, "horizontal") : undefined;
-    const corners = keystone ? control("Corners: drag them to the corners of something that should be a rectangle", icon("corners"), () => keystone.setCornering(!keystone.cornering())) : undefined;
-    const keystones = make("div", "quire-img-strip-horizon");
-    if (upright && across) keystones.append(upright.element, across.element);
-    function fill(kind: "crop" | "perspective" | "mark" | "read" | "grade" | "cut" | "busy" | "none") {
-        const grading = kind === "grade" ? hooks.grade?.() : kind === "cut" ? hooks.cut?.() : kind === "busy" ? hooks.busy?.() : undefined;
-        if ((kind === "grade" || kind === "cut" || kind === "busy") && !grading) kind = "none";
-        strip.classList.toggle("open", kind !== "none");
-        strip.dataset.kind = kind;
-        strip.inert = kind === "none";
-        if (kind === "crop") {
-            // the dial keeps the keyboard when the strip is filled again after each turn it makes
-            const had = !!dial && document.activeElement === dial.element;
-            queueMicrotask(() => had && dial?.element.focus({ preventScroll: true }));
-            strip.replaceChildren(
-                ...SHAPES.map((shape) => {
-                    const button = control(shape.name === "Free" ? "Free shape" : `${shape.name} shape`, icon(shape.icon), () => hooks.setShape(shape.name));
-                    button.classList.toggle("pressed", hooks.shape() === shape.name);
-                    return button;
-                }),
-                ...(dial && level ? [horizon] : []),
-                make("span", "quire-img-strip-rule"),
-                control("Apply (Enter)", icon("tick"), () => hooks.apply()),
-            );
-            dial?.show();
-            level?.classList.toggle("pressed", !!hooks.turn?.levelling());
-            straighten?.classList.toggle("pressed", !!keystone && (keystone.vertical() !== 0 || keystone.horizontal() !== 0 || keystone.hasCorners()));
-        } else if (kind === "perspective" && keystone && upright && across && corners) {
-            const had = [upright.element, across.element].find((each) => document.activeElement === each);
-            queueMicrotask(() => had?.focus({ preventScroll: true }));
-            strip.replaceChildren(keystones, make("span", "quire-img-strip-rule"), corners, words("auto", () => keystone.auto(), "Straighten the upright lines, and the level ones where they are clear"), make("span", "quire-img-strip-rule"), control("Done (Escape)", icon("tick"), () => keystone.setOpen(false)));
-            upright.show();
-            across.show();
-            corners.classList.toggle("pressed", keystone.cornering());
-        } else if (kind === "mark") {
-            // the colors and the sizes where the mark has them, then what is its own (a spotlight has neither: it only shades)
-            const own = hooks.mark?.() ?? { colors: true, weights: WEIGHTS.map((each) => `${each.name} line`), extra: [] };
-            const had = [...strip.querySelectorAll<HTMLElement>("input")].some((each) => document.activeElement === each);
-            const parts: HTMLElement[] = [];
-            if (own.colors)
-                parts.push(
-                    ...COLORS.map((color) => {
-                        const button = swatch(color);
-                        button.classList.toggle("pressed", hooks.color() === color.value);
-                        return button;
-                    }),
-                );
-            if (own.weights) {
-                if (parts.length) parts.push(make("span", "quire-img-strip-rule"));
-                parts.push(
-                    ...WEIGHTS.map((each, at) => {
-                        const button = weight(each, at, own.weights![at]);
-                        button.classList.toggle("pressed", hooks.weight() === each.value);
-                        return button;
-                    }),
-                );
-            }
-            for (const group of own.extra) {
-                if (parts.length) parts.push(make("span", "quire-img-strip-rule"));
-                parts.push(...group);
-            }
-            // a field being typed in keeps the keyboard when the strip is filled again
-            if (!had) strip.replaceChildren(...parts);
-        } else if (grading) {
-            // what a press on the picture will do now, in a few words, and a way not to
-            const said = make("span", "quire-img-strip-said", grading.said);
-            said.setAttribute("role", "status");
-            const parts: HTMLElement[] = [said, ...(grading.controls ?? [])];
-            if (grading.cancel) parts.push(make("span", "quire-img-strip-rule"), words("cancel", () => grading.cancel?.(), "Do not, after all (Escape)"));
-            const before = new Set([...strip.children].map((each) => each.textContent));
-            strip.replaceChildren(...parts);
-            if (!still()) for (const part of parts) if (part.textContent && !before.has(part.textContent) && part !== said) part.classList.add("grows");
-        } else if (kind === "read" && hooks.read) {
-            const read = hooks.read();
-            const said = make("span", "quire-img-strip-said", readSaid(read));
-            said.setAttribute("role", "status");
-            const parts: HTMLElement[] = [said];
-            if (read.state === "failed" && hooks.readAgain) parts.push(words("try again", () => hooks.readAgain?.(), "Read the text again"));
-            if (read.state === "read" && read.private && hooks.hideAll) parts.push(words("hide all", () => hooks.hideAll?.(), "Cover everything that looks private, as one step", true));
-            parts.push(make("span", "quire-img-strip-rule"), words(lowered(read.model), (button) => hooks.chooseModel?.(button), "Model"));
-            // what is new in the strip grows in, rather than appearing
-            const before = new Set([...strip.children].map((each) => each.textContent));
-            strip.replaceChildren(...parts);
-            if (!still()) for (const part of parts) if (part.textContent && !before.has(part.textContent) && part !== said) part.classList.add("grows");
-        }
-        if (still()) strip.style.transition = "none";
-    }
-    return { strip, fill };
-}
+/** Says an original's kind as a writer reads it: "PNG", "JPEG". */
+export const kindOf = (original: Pick<Original, "type">) => FORMATS.find((format) => format.type === original.type)?.label ?? (original.type.replace(/^image\//, "").toUpperCase() || "picture");
+
+/** A page of the side panel, as the editor holds the ones it makes itself. */
+export type { Page };
 
 /** What the horizon's dial is given: the picture's turn, the turn drawn while dragging (none to stop), the turn made a step, and whether a drag on the picture draws a line along the horizon. */
 export interface TurnHooks {
@@ -813,6 +649,3 @@ function dial(hooks: DialHooks) {
     });
     return { element, show: () => show() };
 }
-
-/** Says an original's kind as a writer reads it: "PNG", "JPEG". */
-export const kindOf = (original: Pick<Original, "type">) => FORMATS.find((format) => format.type === original.type)?.label ?? (original.type.replace(/^image\//, "").toUpperCase() || "picture");

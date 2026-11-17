@@ -1,4 +1,4 @@
-// Perspective as the editor offers it, in headless Chromium: P opens its dials in the crop's strip; Auto
+// Perspective as the editor offers it, in headless Chromium: P opens its dials in the crop's page; Auto
 // stands a building photographed with the camera tilted up straight, as one change, undone by one undo; a
 // dial's arrow keys make a step; the corners, dragged by the pointer and nudged by the keys, square the
 // shape they mark and crop to it; Escape stops the corners, then closes the dials; the export has no
@@ -52,12 +52,12 @@ afterAll(async () => {
 async function pastePng(png: Buffer) {
     const was = await page!.tab.run<string>("window.app.editing().current().id ?? ''");
     await page!.tab.run(`(async () => { const bytes = Uint8Array.from(atob(${JSON.stringify(png.toString("base64"))}), (c) => c.charCodeAt(0)); const data = new DataTransfer(); data.items.add(new File([bytes], "image.png", { type: "image/png" })); document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); })()`);
-    await page!.until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded() && document.querySelector(".quire-img-frame.shown") && document.activeElement === document.querySelector(".quire-img-stage")`);
+    await page!.until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded() && document.activeElement === document.querySelector(".quire-img-stage")`);
 }
 const perspective = () => page!.tab.run<{ vertical?: number; horizontal?: number; corners?: { x: number; y: number }[]; ratio?: number } | null>("window.app.editing().steps().find((step) => step.type === 'perspective') ?? null");
 const turn = () => page!.tab.run<number>("window.app.editing().steps().find((step) => step.type === 'turn')?.angle ?? 0");
 const status = () => page!.tab.run<string>("document.querySelector('.quire-status-home')?.textContent ?? ''");
-const pressButton = (label: string) => page!.tab.run(`[...document.querySelectorAll('.quire-img-strip button')].find((each) => each.textContent.trim() === ${JSON.stringify(label)} || each.title.startsWith(${JSON.stringify(label)})).click()`);
+const pressButton = (label: string) => page!.tab.run(`[...document.querySelectorAll('.quire-img-crop-page.open button, .quire-img-crop-page.open label')].find((each) => each.textContent.trim() === ${JSON.stringify(label)} || each.title.startsWith(${JSON.stringify(label)})).click()`);
 
 test("Auto stands a tilted building straight as one change; a dial's keys make a step; the corners square what they mark and crop to it", async () => {
     if (!page) return;
@@ -65,7 +65,7 @@ test("Auto stands a tilted building straight as one change; a dial's keys make a
     const png = await sharp(Buffer.from(building(size, 10, 1)), { raw: { ...size, channels: 3 } }).png().toBuffer();
     await pastePng(png);
     await page.tab.press("p");
-    await page.until("document.querySelector('.quire-img-strip[data-kind=perspective]')");
+    await page.until("document.querySelector('.quire-img-crop-page.open .quire-img-keystones:not(.away)')");
     const started = performance.now();
     await pressButton("auto");
     await page.until("window.app.editing().steps().some((step) => step.type === 'perspective')");
@@ -79,7 +79,7 @@ test("Auto stands a tilted building straight as one change; a dial's keys make a
     await page.tab.press("z", { ctrl: true });
     await page.until("!window.app.editing().steps().some((step) => step.type === 'perspective' || step.type === 'turn')");
     // the vertical dial's arrow keys: five tenths, each a step
-    await page.tab.run("document.querySelector('.quire-img-strip .quire-img-dial[aria-label=Vertical]').focus()");
+    await page.tab.run("document.querySelector('.quire-img-crop-page .quire-img-dial[aria-label=Vertical]').focus()");
     for (let at = 0; at < 5; at++) await page.tab.press("ArrowRight");
     await page.until("window.app.editing().steps().find((step) => step.type === 'perspective')?.vertical === 0.5");
     // the corners: on, the original shown as it came with four handles; the top left dragged in
@@ -109,7 +109,7 @@ test("Auto stands a tilted building straight as one change; a dial's keys make a
     await page.until("!window.app.editing().stage.cornering()");
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
     await page.tab.press("Escape");
-    await page.until("document.querySelector('.quire-img-strip[data-kind=crop]')");
+    await page.until("document.querySelector('.quire-img-crop-page.open .quire-img-keystones.away')");
     const flat = await page.tab.run<{ width: number; height: number; clear: number }>("(async () => { const flat = await window.app.editing().flatten(); let clear = 0; for (let at = 3; at < flat.data.length; at += 4) if (flat.data[at] < 255) clear++; return { width: flat.width, height: flat.height, clear }; })()");
     expect(flat.clear).toBe(0);
     expect(flat.width).toBe(crop.width);
@@ -126,7 +126,7 @@ test("a picture with no clear lines is left as it was, and the status says so", 
     if (!page) return;
     await page.paste("photo");
     await page.tab.press("p");
-    await page.until("document.querySelector('.quire-img-strip[data-kind=perspective]')");
+    await page.until("document.querySelector('.quire-img-crop-page.open .quire-img-keystones:not(.away)')");
     await pressButton("auto");
     await page.until("document.querySelector('.quire-status-home')?.textContent.includes('No clear lines')");
     expect(await perspective()).toBeNull();

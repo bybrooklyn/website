@@ -157,7 +157,7 @@ test("on the built /imgquire/ page, a phone's photograph shows upright with its 
         expect(rows).toContain("PhoneMaker Pocket 9");
         expect(rows).toContain("turned a quarter right, shown upright (Exif 6)");
         expect(rows).toContain("51.50343, -0.12777");
-        expect(await tab.run("document.querySelector('.quire-img-room').classList.contains('beside')")).toBe(true);
+        expect(await tab.run("document.querySelector('.quire-img-side').dataset.page")).toBe("facts");
         await tab.run("const caption = document.querySelector('.quire-img-fields input'); caption.value = 'A cat on a wall'; caption.dispatchEvent(new Event('change'))");
         const saved: Record<string, Uint8Array> = {};
         for (const [label, keep] of [["JPEG", "none"], ["JPEG", "no place"], ["WebP", "no place"], ["PNG", "no place"], ["AVIF", "all"], ["JXL", "all"]] as const) {
@@ -168,7 +168,7 @@ test("on the built /imgquire/ page, a phone's photograph shows upright with its 
             await tab.run(`[...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === ${JSON.stringify(label)}).click()`);
             await tab.wait(300);
             const before = await tab.run<number>("Object.keys(window.saved).length");
-            await tab.run("[...document.querySelectorAll('.quire-img-export .quire-dialog-dismiss')].find((each) => each.textContent === 'save').click()");
+            await tab.run("document.querySelector('.quire-img-export .quire-img-save').click()");
             await until(`Object.keys(window.saved).length > ${before}`);
             const [name, base64] = await tab.run<[string, string]>("Object.entries(window.saved).at(-1)");
             saved[`${label} ${keep}`] = Uint8Array.from(Buffer.from(base64, "base64"));

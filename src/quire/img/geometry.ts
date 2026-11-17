@@ -23,8 +23,8 @@ export function zoomAt(view: View, by: number, at: Point): View {
     return { scale, x: at.x - (at.x - view.x) * kept, y: at.y - (at.y - view.y) * kept };
 }
 
-/** The view at one screen pixel to a picture pixel, about a point. */
-export const oneToOne = (view: View, at: Point): View => zoomAt(view, 1 / view.scale, at);
+/** The view at one screen pixel to a picture pixel, about a point: its scale exactly 1, never a hair off it from a division. */
+export const oneToOne = (view: View, at: Point): View => ({ ...zoomAt(view, 1 / view.scale, at), scale: 1 });
 
 /** A point on the screen as a point of the picture. */
 export const toPicture = (view: View, at: Point): Point => ({ x: (at.x - view.x) / view.scale, y: (at.y - view.y) / view.scale });

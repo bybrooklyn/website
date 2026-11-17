@@ -291,3 +291,25 @@ export function pictured<T extends string>(heading: string, options: Pictured<T>
     });
     return made;
 }
+
+/**
+ * Something of the column that is there only some of the time (a group only a batch has, a line only one format needs): it folds
+ * shut and grows open again, and while shut it is out of reach, never drawn faint. `shown` says which it is to be now.
+ */
+export function fold<E extends HTMLElement>(thing: E, shown: boolean): E {
+    thing.classList.add("quire-bench-fold");
+    thing.classList.toggle("away", !shown);
+    thing.inert = !shown;
+    return thing;
+}
+
+/** A thing that is on or off, as a box to tick before its words: its row, the box itself, and `set`, which shows it on or off without telling the tool. */
+export function tick(label: string, change: (on: boolean) => void, tip?: string): Held<boolean, HTMLInputElement> {
+    const input = make("input");
+    input.type = "checkbox";
+    input.addEventListener("change", () => change(input.checked));
+    const made = make("label", "quire-bench-tick");
+    if (tip) made.title = tip;
+    made.append(input, label);
+    return { row: made, input, set: (on) => void (input.checked = on) };
+}

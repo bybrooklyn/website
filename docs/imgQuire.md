@@ -61,10 +61,13 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
   numbers; `fix.ts`, Auto, Balance, a picture graded on the processor, the histogram and waveform;
   `measure.ts`, the histogram's worker; `cube.ts`, `.cube` files read and written; `masks.ts`, the parts'
   masks drawn into layers; `looks.ts`, looks kept in this browser and the surface's Looks section.
-- `grade-panel.ts`, `grade-more.ts`, `grade-parts.ts`: the Grade surface, its deeper controls under More, and
+- `grade-panel.ts`, `grade-more.ts`, `grade-parts.ts`: the grade's page of the side panel (color, on the bar), its deeper controls under More, and
   its parts. `finding.ts`, Find as the surface offers it; `parts/`, the part models pinned (`models.ts`), their
   arithmetic before and after a run (`segment.ts`) and their worker (`finder.ts`).
-- `panels.ts`: the export panel, the resize box and the tool's strip.
+- `side.ts`: the one side panel, always there at the right of the picture (under it on a phone), its pages
+  shown one at a time and the line over them for what is being done now.
+- `panels.ts`: the side panel's pages that are not a tool's own logic: the export, the facts, resize, the crop
+  with its dials, and reading text; and the marks', colors' and shapes' tables.
 - `batch.ts`: a batch: one steps.json listing every picture with its own steps, name, small copy and export
   settings (a document of one picture written as it always was), the names a batch's files go out under, and
   what Give to all hands on. `batch-strip.ts`, the strip of small pictures under the picture; `batch-out.ts`, a
@@ -75,6 +78,38 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 - `kind.ts`: `img()`.
 - `src/pages/imgquire.astro`, `src/scripts/imgquire.ts` and `src/scripts/quire-page.ts` (shared with
   `/mdquire/`), `src/styles/quire-img.css`; `scripts/img-page.ts`, the page its browser tests share.
+
+## The layout (16 November 2026)
+
+Chosen by her after a tester found the editor confusing: a picture opened straight into crop with a frame
+over it, the ten tools were icons with no words, and controls lived in four places (the menu bar, a row of
+icons, a floating strip that changed with every tool, and side panels that slid in and pushed the picture
+aside). Now:
+
+- **The bar.** The menu bar stays as it was. Under it, after undo and redo, each tool is its word in
+  lowercase: crop, resize, mark up, cut out, color, then export and more at the right end. The one that is on
+  is in the accent with a short rule under it. Pressed again, a word leaves its tool (crop applies its frame
+  as it goes) and the export shows again.
+- **No tool when a picture opens.** Nothing lies on the picture; the side panel shows the export. A tool is
+  chosen by its word, its key or its menu line; Escape leaves it, from the picture or from any control of its
+  page, and gives the keyboard back to the picture.
+- **One side panel, always there** (`side.ts`), at the right, 19.5 rem wide; on a narrow window (44 rem and
+  less) under the picture, as the small tools' column is. It shows one page: the export with no tool; crop's
+  shape, level dial, perspective (its two dials, corners and auto, under a box to tick) and apply; resize's
+  size and sizes; mark up's kinds (arrow, box, text, numbered step, highlighter, magnifier, spotlight, hide),
+  color and thickness, and what a kind has of its own (a text's align and outline, a number's field, a lens's
+  size and zoom, a spotlight's shape and shade, hide what looks private); cut out's background, touch up,
+  quality and take away; color, which is the grade's whole page; more's words (read text, repair JPEG, repair
+  JPEG with…, enlarge, add pictures, in a batch give to all, facts); reading text's page; the facts; and
+  version history, the core's panel shown as a page. A page that goes fades out where it was as the next
+  fades in, quickly; nothing slides, and the picture never moves when a tool is chosen.
+- **What is being done now** (a model running with stop, a press asked for on the picture with cancel,
+  finding's subject and background) is one line over the page, growing in and folding away.
+- **Built of the small tools' kit** (`core/bench.ts`): a choice of one is dots, an action a word, a number a
+  slider or a line to type on, a color a swatch, a thing on or off a box to tick (`tick`, added to the kit for
+  this), and what is there only sometimes folds (`fold`, added too). The grade's histogram, curve and wheels
+  are its own.
+- **One line under the picture** says its size and weight, as before.
 
 ## Built
 
@@ -95,24 +130,24 @@ named from its file, or for a pasted screenshot (which comes named `image.png`) 
 it as named files ([quire-core](quire-core.md)), the browser and Drive saying `main: "steps.json"` in
 their lists so the shelf knows the kind without opening it. Nothing in the original ever changes.
 
-**The first second.** The picture fitted under the bar with the crop's frame on it and the strip for the
-crop (five shapes and Apply), the bar above (undo, redo; crop, resize, hide; arrow, box, text; steps and
-export at the right end), and under the picture its size and weight, then the weight it will export at,
+**The first second.** The picture fitted in its room with no tool on and nothing over it, the side panel
+beside it showing the export, the bar above (undo, redo; crop, resize, mark up, cut out, color; export and
+more at the right end), and under the picture its size and weight, then the weight it will export at,
 worked out a moment after the steps stop changing. While a crop's frame is being set, the line says instead the size the picture
 will be once the frame is applied (a resize after it counted), following every drag, nudge, shape and turn;
 a frame that gives the size there already is leaves the whole line. A new size is said at once, its weight
 when it is worked out.
 
-**Crop.** Handles, the frame dragged, a new frame dragged out from outside it, arrow keys (Shift for ten
-pixels), Shift on a corner or a shape from the strip to hold its shape, Enter to apply; outside dimmed. A
+**Crop.** C, the bar's crop or Image, Crop puts the frame on. Handles, the frame dragged, a new frame dragged out from outside it, arrow keys (Shift for ten
+pixels), Shift on a corner or a shape from the crop's page to hold its shape, Enter or apply to apply; outside dimmed. A
 frame back on the whole picture takes the crop step away. A frame set by hand (dragged, nudged or held to a shape) is kept while the
 horizon's dial or the keystone dials turn the picture: where it no longer lies on the picture it is made
 smaller about its middle, its shape kept, and with the turn back to none it is as it was. A crop changed by
 undo or a version is followed by the frame instead.
 
-**Resize.** A box grown from its button: width and height linked (a link button unlinks them), Percent as
-a switch, and 50%, 1920, 1280, 1080 and 800; Enter applies and gives the keyboard to the picture, Escape
-gives it back to the button. The filter (Lanczos, bilinear, nearest) is in Image, Resize filter. A
+**Resize.** A page of the side panel: width and height linked (keep the shape unlinks them), percent as
+a box to tick, apply, and the sizes 50%, 200%, 400%, 1920, 1280, 1080 and 800; Enter or apply applies and gives the
+keyboard to the picture, the page staying to show the size it now is; Escape goes back to the export. The filter (Lanczos, bilinear, nearest) is in Image, Resize filter. A
 picture made another size, by the box or by undo and redo of a resize, is fitted and centered again as one
 opened is: it is drawn first where the old one lay, at the same size on the screen, and glides to its place.
 
@@ -121,7 +156,7 @@ again for the next. The covers are painted into each piece of the original befor
 so nothing they hide reaches the result through any resize; tests check the bytes.
 
 **Mark.** A (arrow), B (box), T (text, typed where pressed, Enter to keep, and Escape or a press elsewhere keeps it too): six colors and three
-thicknesses in the strip, which also change a picked mark. Every mark, and every cover, is picked by a
+thicknesses in mark up's page, which also change a picked mark. Every mark, and every cover, is picked by a
 press and moved by a drag or the arrows, and removed with Delete. A picked box, cover, highlighter,
 magnifier or spotlight shows small handles at its corners and sides, which grow in as it is picked: a drag on
 one resizes it from the corner or side opposite, which stays where it was, along the mark's own turn (a
@@ -144,19 +179,17 @@ Switching a step off is gone with the list; the file keeps the field and reads i
 
 **Getting it out.** Ctrl+C copies: the first time a dialog asks whether as it looks or as the export is
 set and remembers (`quire-img-copy`; Edit, Copy as changes it). The clipboard is handed a promise of the
-picture at once, so the press counts. The export panel, at the right side (on a phone, a sheet at the
-foot), never lies over the picture: the picture's room gives the panel its width (or height) and the
-picture glides into what is left as it opens and back as it closes: the format (below), a quality,
-or a weight to come in under ("200", "1.5 MB") found by halving the quality seven times, the result's size
-and weight, the same middle part of the original and the export side by side at their own pixels, Copy
-(filled) and Save. Saved files are named from the document (`screenshot-14-nov-2026-01-30.webp`). No
+picture at once, so the press counts. The export is the side panel's page with no tool on, beside the
+picture and never over it: the format (below), a quality,
+or a weight to come in under ("200", "1.5 MB") found by halving the quality seven times, the metadata, the result's size
+and weight under "it will be", the same middle part of the original and the export side by side at their own pixels, copy
+(the main word) and save. Saved files are named from the document (`screenshot-14-nov-2026-01-30.webp`). No
 encoder writes metadata; a picture with no steps given in its own format is its original with
 where, when and with what it was taken cut out (`core/picture-bytes.ts`). The settings are kept in this
 browser (`quire-img-export`), WebP at 0.85 to start; the pen too (`quire-img-pen`).
 
-**Facts and metadata.** The facts open as the export does, in its place at the side (a sheet at the
-foot on a phone), with I, the bar's Facts button or View, Facts; the picture refits beside them, and only
-one of the two panels is open at a time. Quiet rows of a label and a value: size, camera, lens, exposure,
+**Facts and metadata.** The facts open in the side panel in the export's place, with I, more's facts or
+View, Facts; Escape gives the export back. Quiet rows of a label and a value: size, camera, lens, exposure,
 date taken, color profile, orientation and place, the place as numbers only, with no map and nothing
 asked of any other service. A photograph with an Exif orientation is shown and exported upright, and the
 facts say how it was turned. Five fields can be changed, as the notes decide: caption, alt text, author,
@@ -214,12 +247,12 @@ needs (a model, downloaded once from Hugging Face and kept in this browser, run 
 picture never leaving it), then Choose, then the three sizes as cards (Tiny 6 MB, Small 38 MB, Large
 152 MB, each with who it suits and "On this device" once kept), the source and licence under them, and
 Download and read, whose progress takes the buttons' place with Cancel. The size is remembered
-(`quire-img-read`) and changed from the strip's model button or Tools, Text model; one kept is read
+(`quire-img-read`) and changed from reading's page's model word or Tools, Text model; one kept is read
 with at once. The next picture is read with no dialog.
 
 The reading runs in a worker of its own (`read/engine.ts`) on the ONNX Runtime build the site already
 ships, the graphics card where a real one gives a device and WebAssembly otherwise; while it reads,
-the tool's strip says "Reading text 40%" and the picture stays in use. The picture goes to the worker
+reading's page says "Reading text 40%" and the picture stays in use. The picture goes to the worker
 as a bitmap and nowhere else: the only requests are for ONNX Runtime's files and the model's, each a
 GET with no body, and the browser test holds that. Each file is fetched from Hugging Face at its pinned
 commit, with no referrer and no cookies, checked against its SHA-256 before it is kept in the
@@ -238,7 +271,7 @@ by their makers' shapes (GitHub, GitLab, npm, Hugging Face, OpenAI and Anthropic
 Google, Slack, a JSON web token, a private key's first line) and by long random runs, numbers shaped
 like a card that pass Luhn, street addresses and a town with a ZIP code, machine addresses (v4 and
 v6), and what follows a label such as password, token, PIN or API key (or the next line, under a
-label alone). Each thing is outlined on the picture in a warm line, one rectangle a line of it, exactly where its cover would go, and the strip says "42
+label alone). Each thing is outlined on the picture in a warm line, one rectangle a line of it, exactly where its cover would go, and reading's page says "42
 words, 4 look private" with Hide all, which covers what is still uncovered as one step; each can also
 be hidden by pressing it. Nothing is hidden by itself.
 
@@ -276,11 +309,8 @@ order, where Small reads its lines right but not in order; the photograph's sign
 three. What looks private was found on
 the screenshot (6 things) and nothing else was (`read/real.test.ts`, `reading.test.ts`).
 
-**Grading.** G, the bar's Grade (at its right end, before Facts and Export) or Image, Grade. The Grade
-surface opens where Export and Facts do, one of the three at a time, the picture gliding into the room left
-beside it (on a phone a sheet at the foot, opening at 22rem or 46 percent of the height if less, which its head
-drags as short as 150 pixels or as tall as 80 percent of the window, the picture above refitting as it goes; its
-foot fades over its last 2.25rem, so a row it cuts never shows as a half row). From the top: what is being graded ("whole picture", or a
+**Grading.** G, the bar's color or Image, Color. The grade's page opens in the side panel in the export's
+place (under the picture on a phone, as every page is), the picture keeping its place. From the top: what is being graded ("whole picture", or a
 part's name), a small histogram (red, green and blue as fine lines over the luminance, quiet) that follows the
 grade as it moves, pressed for a waveform and back; Auto, Balance and Reset; the six sliders Light, Contrast,
 Shadows, Highlights, Warmth and Color; More, folded (Tint, the curve, the wheels, colors on their own); Looks,
@@ -363,7 +393,7 @@ Find, the third maker in Parts, finds a part with a model. The first time a dial
 reading dialog's family: a model is downloaded once from Hugging Face, kept in this browser, run on this
 machine, the picture never leaving it; Choose; two cards, Small (27 MB, quick, on any machine: SlimSAM 77 and
 MODNet) and Better (96 MB, cleaner edges, on a fast machine: SAM 2.1 tiny and ormbg); Download and find, its
-progress in the buttons' place with Cancel. The choice is remembered (`quire-img-parts`). Then the strip says
+progress in the buttons' place with Cancel. The choice is remembered (`quire-img-parts`). Then the line over the side panel's page says
 "Press a thing to outline it; Alt and press to take away", with Subject and Background beside it. The first
 press makes a found part, picked; each later press (Alt to take away) changes that part, one change each, all
 the presses sent together to the decoder; Subject makes a part of the picture's subject, Background the same
@@ -430,7 +460,7 @@ handed P3's numbers in Display P3 and, made sRGB, the converted ones within one.
 long in their header, unsigned, for CMYK, a tag table or tag past the end, 100,000 tags, over 4 MB, a PNG whose
 profile inflates past 4 MB or is not deflated) are refused in under 50 ms all told.
 
-**The horizon.** The crop's strip has a dial: a ruler of degrees under a fixed middle line, dragged from wherever
+**The horizon.** The crop's page has a dial: a ruler of degrees under a fixed middle line, dragged from wherever
 it is pressed (the whole width 30 degrees, a tenth as far with Shift), the turn said above it in tenths
 ("2.4°"), snapping to level within a quarter of a degree, at most 15 either way; the arrow keys turn it by a tenth
 (Shift, a degree), 0 or a double press levels it. While it is dragged the picture turns live with a faint grid of
@@ -472,7 +502,7 @@ places (`stage.test.ts`).
 **Cut out.** K, the bar's scissors or Tools, Cut out: the background taken out of the picture, the same piece
 as the page `/cutout/`, its result a step. Asked once in the reading dialog's family, the model runs in the
 worker Find uses; the stage then shows the cut-out's pixels in place of the original's, on a checkerboard
-where clear, everything else drawn over them; the strip lays it on nothing, one of the mark colors or the old
+where clear, everything else drawn over them; cut out's page lays it on nothing, one of the mark colors or the old
 picture blurred, paints Keep and Remove, changes the quality and takes it away, and a press keeps the thing
 pressed. A JPEG export says it has no transparency and offers a color or PNG. Its two qualities are Quick
 (MODNet) and Best (BiRefNet lite at 512, on WebAssembly, since 15 November 2026; the 1024 BiRefNet before it ran out
@@ -480,7 +510,7 @@ the owner's graphics card beside her other programs, and ormbg, then Better, gav
 are not people). When Best finds nothing the picture is left as it was and the status says "Nothing found". What it is
 and what was measured are in [cutout](cutout.md).
 
-**Since the horizon.** Round a turned picture the room shows through: the crop's dimming only darkens what
+**Since the horizon** (the strip it names is now the crop's page of the side panel). Round a turned picture the room shows through: the crop's dimming only darkens what
 is drawn and adds nothing where there is no picture (the corners used to be a black box), and when the turn
 changes the view glides until the turned picture and its frame are whole. On a narrow screen the crop's
 strip puts the dial and its line button on a row of their own under the shapes, so Apply is always in sight,
@@ -491,11 +521,11 @@ red mark is the red picked (`profile.test.ts`).
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
 single keys C, R, A, T, B, N, H, M, S, E, I, W, G, K and P only while the picture has the keyboard, Enter and Escape;
-Escape also from the tool's own controls in its strip (the dial, a shape, a color), which then gives the keyboard
+Escape also from the tool's own controls in its page of the side panel (the dial, a shape, a color), which then gives the keyboard
 back to the picture; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
-Like the editor's own panels it never lies over the picture: the room gives it its width while it is open, and
-the picture glides into what is left and back when it closes (on a phone it fills the screen, as everywhere).
+It opens as a page of the side panel, so it never lies over the picture and the picture does not move;
+Escape steps back from a version to the list and from the list to the export.
 
 **A right-click's menu** (`press-menu.ts`, opened in `editor.ts`), as mdQuire's text has one. On the
 picture: Copy, Copy text when words were read, Paste, and Export under a rule. On a mark or a cover, that
@@ -503,7 +533,7 @@ one is picked first (`stage.pickAt`) and Remove, Bring forward and Send back com
 picture yet: Paste and Choose a picture. Each line is the menus' own, found by its name, so it does what
 the menu's line does. Paste reads the clipboard through the browser (which asks once in Chromium); where
 the browser refuses, the status says to press Ctrl+V. The menu key or Shift+F10 opens it from the
-keyboard, Shift with the right-click leaves the browser's own, and a field, a button, the strip and a
+keyboard, Shift with the right-click leaves the browser's own, and a field, a button and the side
 panel keep theirs. Opened by the pointer it still takes the keyboard, so Escape closes it and gives the
 keyboard back to the picture.
 
@@ -520,9 +550,9 @@ and 2.9 s through WebGPU. The four jobs from paste to clipboard in the browser t
 hide 0.6 s, mark up 0.5 s. Done by hand-paced drags with pauses to photograph each stage: 2.1 s, 5.6 s,
 1.7 s and 1.8 s.
 
-**Perspective.** P, the crop strip's perspective button (after the horizon's line button) or Image,
-Perspective fills the crop's strip with perspective's controls: two dials, Vertical and Horizontal, then
-Corners and Auto, and Done. Escape goes back to the crop's strip; a new picture starts with the crop's own.
+**Perspective.** P, the crop page's perspective box or Image, Perspective opens perspective's part of the
+crop's page: two dials, vertical and horizontal, then corners and auto. Escape shuts it; a new picture starts
+with it shut.
 
 The dials are the horizon's dial (its ruler twice as long, 30 degrees either way): dragged from wherever they
 are pressed, a tenth as far with Shift, snapping to zero within a quarter of a degree, the arrows a tenth (Shift
@@ -632,7 +662,7 @@ not offered. In the editor a 768 by 576 sign at quality 15 went from 35.99 to 36
 
 **More marks.** Four more marks join the arrow, the box and the text, and the text gains lines, an outline and an
 alignment. Each is a step like the arrow: made on the picture, picked by a press on it (pressed again in the same
-place, the one beneath), moved by a drag or the arrows (Shift ten pixels), restyled from the strip while picked,
+place, the one beneath), moved by a drag or the arrows (Shift ten pixels), restyled from mark up's page while picked,
 removed with Delete, brought forward and sent back from Edit and the right-click menu, undone and redone, kept in
 `steps.json` and read back bounded; a file from before reads and draws as it did. Every mark is drawn by
 `marks.ts` alone, on the screen over the picture and into the export in every format, so the two are the same; and
@@ -643,7 +673,7 @@ picture keep a turn of their own, `angle`, and are upright on the screen).
   circle with the next number, in the pen's color, its figure black or white, whichever reads on that color; a drag
   places it where it is let go. The numbers are counted in the order the steps were made (their ids), not the
   order they are drawn in, so bringing one forward never renumbers them; one taken away renumbers the rest. Picked,
-  its number shows in a field in the strip: a number typed there and kept with Enter is set by hand (`value`, 0 to
+  its number shows in a field in mark up's page: a number typed there and kept with Enter is set by hand (`value`, 0 to
   9999), kept when others are taken away, and the count goes on from it. In order, beside the field, and Edit or the
   right-click menu's Number in order, let it be counted again. Its size is the pen's thickness seven times over.
 - **Highlighter** (H, `{"type": "highlight", "from", "to", "color", "thickness"}`): a straight stroke, square at
@@ -659,7 +689,7 @@ picture keep a turn of their own, `angle`, and are upright on the screen).
   what is to be enlarged to where the lens goes; a press alone puts the lens half a lens up and to the right of
   the place pressed, or the first other side where it lies whole on the picture. A fine ring marks the place it
   looks at, a line runs from there to the lens, and the lens shows the square round that place, as wide as the
-  lens over its enlargement (2, 3 or 4 times, from the strip; read back from 1.25 to 8). The weights become Small,
+  lens over its enlargement (2, 3 or 4 times, from mark up's page; read back from 1.25 to 8). The weights become Small,
   Medium and Large lens (a radius of 0.048, 0.08 and 0.144 of the picture's longer side). Pressing the lens moves
   the lens; pressing the ring round the place it looks at moves that alone; the arrows move the part last pressed,
   the lens to start. What the lens shows is a look of its own (`lensLook` in `draw.ts`): the picture's grades,
@@ -669,26 +699,23 @@ picture keep a turn of their own, `angle`, and are upright on the screen).
   the picture is made smaller; and on the screen the stage flattens it the same way at the screen's size, keeping
   the last one drawn while a new one is made, so it never blinks while dragged.
 - **Spotlight** (S, `{"type": "spotlight", "rect", "round"?, "dim"}`): a drag leaves a rectangle, or an ellipse
-  (the strip's Rectangle and Ellipse), bright while all the rest of the picture is shaded. Every spotlight is one
+  (mark up's rectangle and ellipse), bright while all the rest of the picture is shaded. Every spotlight is one
   shade with all their shapes cut out, so two shapes that overlap leave their overlap bright, and it lies on the
   picture under every other mark whenever each was made (at first it lay at the place of the first spotlight,
-  which dimmed a number or a lens made before it and left one made after it bright); the strip's Light, Medium and Dark shade (0.35, 0.55, 0.75 of black) change every spotlight at
+  which dimmed a number or a lens made before it and left one made after it bright); mark up's light, medium and dark shade (0.35, 0.55, 0.75 of black) change every spotlight at
   once, and a new one takes the shade there is. A spotlight is picked by its edge, as a box is, so what is inside it
   can still be pressed.
 - **Text** (T): Enter keeps it and Shift and Enter starts another line; the field grows with what is typed and
-  shows the outline and the alignment as they will be drawn. The strip's Align left, Align center and Align right
+  shows the outline and the alignment as they will be drawn. Mark up's align left, center and right
   lay the lines on the place pressed (`align`); changing it on a text picked moves its place by as much as keeps
   the block where it is. Outline opens a small menu grown from its button: No outline or one of the six colors, and
   Thin, Medium or Thick outline (0.05, 0.08, 0.13 of the text's size; `outline`, `outlineWidth`), drawn under the
   letters. The pen remembers all of these, and the mark last used, in `quire-img-pen`.
 
-**Where the marks are.** The bar had room on a wide window for all seven, but not at 390 pixels, where it already
-left Facts and Cut out out. So the bar has one button for the mark last used, one press away, its icon and tooltip
-the mark's, and beside it a narrow Marks button (an arrow down) that opens a menu of all seven, grown from where it
-was pressed, each line its icon, its name and its key, the mark in hand ticked; Tools lists them too. The menu takes
-the keyboard when opened, so Escape closes it and leaves the tool in hand as it was (the outline's menu likewise).
-That is one button fewer than the arrow, the box and the text had, which gives Cut out back to the narrowest
-screens. Measured with a pasted screenshot, the room between the middle groups and the end group, and the buttons
+**Where the marks are.** Since 16 November the bar has one word, mark up, which puts the mark last used in
+hand (hide among them); mark up's page chooses any of the eight by its dots, with the color and the thickness
+under them. Tools lists them too, each with its key. Before, the bar had a button for the mark last used and a
+narrow Marks button with a menu of all seven. Measured with a pasted screenshot, the room between the middle groups and the end group, and the buttons
 shown: at 1300 wide 683 pixels before and 735 after (13 buttons, then 12); at 1024, 441 and 492; at 390, 11 buttons
 in 336 pixels of 350 before (Facts and Cut out left out) and 11 in 328 after (Facts alone left out), one row each.
 
@@ -751,7 +778,7 @@ private storage, in a folder of its own, and again before it is used), and run i
   file, and it is only wanted on export, so opening a document runs nothing. Past 16,384 a side or 64 megapixels it
   is refused in plain words and the filter used. Sharp runs on WebAssembly even where there is a graphics card,
   since it gives a wrong picture there.
-- **While a model runs** the strip says "Repairing 40%" or "Enlarging 40%" (with "twice as large first" and "then
+- **While a model runs** the line over the side panel's page says "Repairing 40%" or "Enlarging 40%" (with "twice as large first" and "then
   twice again" for four times) with Stop; Escape stops it too. Stopped or failed, the picture is left as it was and
   the status says why in plain words; a run the graphics card could not finish (its errors watched for the length
   of each run, as the cut-out's are) is made once more in a fresh worker first. One run at a time.
@@ -797,8 +824,8 @@ KB WebP". A small picture's right-click menu (Shift leaves the browser's): Save 
 changes to the other 23, with what they are said under it ("the grade, 1920 wide, WebP at 85"); Add pictures,
 Paste; Take out of the batch. Pressed between small pictures it holds Add pictures and Paste.
 
-*Give to all.* On the Grade surface under its fixes, in the resize box under the sizes, in the export panel, in the
-cut-out's strip, in Image, Give to all (the grade, the size, the repair, the cut-out, the export settings, or all of
+*Give to all.* On the grade's page under its fixes, in resize's page under the sizes, in the export, in cut
+out's page, under more, in Image, Give to all (the grade, the size, the repair, the cut-out, the export settings, or all of
 its changes) and in a small picture's menu. Each says in a few words what it will do before it is pressed ("Give this
 grade to the other 23 pictures; their crops, marks and hidden areas stay their own"; "Make the other 23 pictures 1920
 wide too"). The grade (the whole picture's, never a part's) and the size are put in place of each picture's own, a
@@ -806,7 +833,7 @@ size exactly as set; the export settings are given; the repair by hand is put in
 worth repairing; crops, covers, marks, parts, turns and perspectives are never touched. It is one undo step: every
 picture's own undo holds the same group, so undo on any picture that still has it at the top takes it back from all
 (and puts their export settings back), redo gives it again; a picture changed since keeps its own change on top. A
-repair by a model or a cut-out is made for each picture in turn, each one joining the group as it is done, the strip
+repair by a model or a cut-out is made for each picture in turn, each one joining the group as it is done, the line over the side panel's page
 saying "Cutting out 3 of 23" (a repair also how far through that picture) with Stop, after which every picture is
 done or as it was.
 
@@ -908,7 +935,8 @@ so, with the reason, and the rest went on.
   undo, redo and version history do the rest of what a list would; whatever only a list could do is
   reachable from the menus or the keys (removing, bringing forward and sending back what is picked).
 - **A panel never covers the picture.** A surface that stays open makes room: the picture is fitted into
-  what is left and glides there. A popover (the resize box, a menu) may lie over it while it is open.
+  what is left and glides there. A popover (a menu) may lie over it while it is open. Since 16 November there
+  is one side panel, always there, so nothing glides: the picture keeps its place whatever is chosen.
 - **Batches, as chosen on 15 November 2026** (built: Batches, above, says how, and which keys step through them). Many pictures dropped at once sit in a strip of
   small pictures under the one being worked on, which makes room for it; a press on one works on it and the
   arrow keys step through, the line under it saying which of how many. A change belongs to its own picture
@@ -1123,7 +1151,7 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
   browser). The text field grows with what is typed by CSS `field-sizing`, which Firefox does not have (there it is a
   field of fixed width). The highlighter's copy of the picture under it, on the screen, goes through the marks'
   canvas, which is sRGB, so under a highlighter a Display P3 picture is shown in sRGB's colors; the export is right.
-  A number set by hand and a spotlight's shade are changed from the strip only; a text already made cannot have its
+  A number set by hand and a spotlight's shade are changed from mark up's page only; a text already made cannot have its
   words changed, only be made again. Not tried on a real touch screen: a finger's tap was tried in the headless
   browser.
 - Repairing and enlarging with a model: the repair models run only on a graphics card, so a machine without one has

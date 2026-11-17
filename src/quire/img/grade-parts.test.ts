@@ -40,16 +40,14 @@ test("a gradient dragged out is a part of its own: its grade darkens the top, it
     const before = await pixelAt(2000, 200, 4000);
     await page.tab.press("g");
     await page.until("document.querySelector('.quire-img-grade-panel.open')");
-    // the picture glides into the room the surface leaves it; its places are read once it has settled
     await page.tab.wait(800);
     await page.tab.run("document.querySelector('.quire-img-make-gradient').click()");
-    // the strip that says what to do is over the picture, in the middle of the room the surface leaves, and never under the surface
+    // what to do is said in the line over the side panel's page, never over the picture
     await page.tab.wait(600);
-    const strip = await page.boxOf(".quire-img-strip.open");
-    const surface = await page.boxOf(".quire-img-grade-panel");
+    expect(await page.tab.run<string>("document.querySelector('.quire-img-doing:not(.away) .quire-img-doing-said')?.textContent ?? ''")).toContain("Drag across the picture");
+    const said = await page.boxOf(".quire-img-doing");
     const stage = await page.boxOf(".quire-img-stage");
-    expect(strip.x + strip.width).toBeLessThanOrEqual(surface.x);
-    expect(Math.abs(strip.x + strip.width / 2 - (stage.x + stage.width / 2))).toBeLessThan(2);
+    expect(said.x).toBeGreaterThanOrEqual(stage.x + stage.width - 1);
     await page.tab.drag(await page.onScreen(2000, 600), await page.onScreen(2000, 1800), 8);
     const made = (await steps()).find((step) => step.type === "part")!;
     expect(made.kind).toBe("gradient");
@@ -71,7 +69,7 @@ test("a gradient dragged out is a part of its own: its grade darkens the top, it
     // its feather and turned inside out
     await typeInto("feather", "50");
     expect((await steps()).find((step) => step.type === "part")!.feather).toBe(100);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-switch')].find((each) => each.textContent === 'inside out').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-bench-tick')].find((each) => each.textContent === 'inside out').click()");
     expect((await steps()).find((step) => step.type === "part")!.invert).toBe(true);
     // Escape: the whole picture again, whose grade is its own
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
@@ -94,7 +92,7 @@ test("Paint makes a part a stroke paints and Erase takes from, each one undo; De
     let painted = (await steps()).find((step) => step.kind === "paint")!;
     expect(painted.strokes).toHaveLength(1);
     expect(painted.strokes![0]!.points.length).toBeGreaterThan(4);
-    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-switch')].find((each) => each.textContent === 'erase').click()");
+    await page.tab.run("[...document.querySelectorAll('.quire-img-part .quire-bench-tick')].find((each) => each.textContent === 'erase').click()");
     await page.tab.drag(await page.onScreen(1200, 1500), await page.onScreen(1250, 1500), 4);
     painted = (await steps()).find((step) => step.kind === "paint")!;
     expect(painted.strokes).toHaveLength(2);
@@ -114,7 +112,7 @@ test("Paint makes a part a stroke paints and Erase takes from, each one undo; De
     const reopened = await page.tab.run<number>("(async () => { const flat = await window.app.editing().flatten(); let sum = 0; for (let at = 0; at < flat.data.length; at += 997) sum += flat.data[at]; return sum; })()");
     expect(reopened).toBe(flat);
     const painted2 = (await steps()).find((step) => step.kind === "paint")!;
-    await page.tab.run(`window.app.editing().grading.isOpen() || document.querySelector('.quire-img-bar [aria-label="Grade (G)"]').click()`);
+    await page.tab.run(`window.app.editing().grading.isOpen() || document.querySelector('.quire-img-bar [aria-label="Color (G)"]').click()`);
     const anchor = await page.onScreen(painted2.strokes![0]!.points[0]!, painted2.strokes![0]!.points[1]!);
     await page.tab.click(anchor.x, anchor.y);
     expect(await page.tab.run("document.querySelector('.quire-img-grade-target').textContent")).toBe("painted area 1");

@@ -84,12 +84,12 @@ test("Give to all from the grade's surface hands the grade to every picture as o
     if (!page) return;
     const { tab, until } = page;
     await tab.press("g");
-    await until("document.querySelector('.quire-img-grade.open, .quire-img-panel.open .quire-img-sliders')");
+    await until("document.querySelector('.quire-img-grade-panel.open .quire-img-sliders')");
     for (let step = 0; step < 3; step++) await tab.press("ArrowRight", { shift: true });
     await until("window.app.editing().steps().some((step) => step.type === 'grade' && step.grade.light === 30)");
-    const said = await tab.run<string>("document.querySelector('.quire-img-panel.open .quire-img-give-said').textContent");
+    const said = await tab.run<string>("document.querySelector('.quire-img-page.open .quire-img-give-said').textContent");
     expect(said).toBe("Give this grade to the other 2 pictures; their crops, marks and hidden areas stay their own");
-    await tab.run("document.querySelector('.quire-img-panel.open .quire-img-give-button').click()");
+    await tab.run("document.querySelector('.quire-img-page.open .quire-img-give-button').click()");
     const grades = () => tab.run<(number | null)[]>("(async () => { const out = []; const editor = window.app.editing(); for (let at = 0; at < 3; at++) { await editor.stepTo(at); out.push(editor.steps().find((step) => step.type === 'grade')?.grade.light ?? null); } await editor.stepTo(0); return out; })()");
     expect(await grades()).toEqual([30, 30, 30]);
     const covers = await tab.run<number[]>("(async () => { const out = []; const editor = window.app.editing(); for (let at = 0; at < 3; at++) { await editor.stepTo(at); out.push(editor.steps().filter((step) => step.type === 'cover').length); } await editor.stepTo(0); return out; })()");
@@ -109,7 +109,7 @@ test("Export all writes one zip, each file its own name with the new ending, eac
     await tab.run("document.querySelector('.quire-img-stage').focus()");
     await tab.press("e");
     await until("document.querySelector('.quire-img-export.open .quire-img-all:not(.away)')");
-    await tab.run("[...document.querySelectorAll('.quire-img-export.open .quire-img-format')].find((button) => button.getAttribute('aria-label').startsWith('PNG:')).click()");
+    await tab.run("document.querySelector('.quire-img-export.open .quire-img-formats label[title^=\"PNG:\"]').click()");
     await tab.run("document.querySelector('.quire-img-export.open .quire-img-all .quire-img-give-button').click()");
     await until("window.app.editing().batch().count === 3");
     // no save picker: the zip is handed over when done

@@ -105,7 +105,7 @@ export async function imgPage(database: string, size = { width: 1300, height: 82
             const before = await tab.run<number>("window.copied.length");
             const was = await tab.run<string>("window.app.editing().current().id ?? ''");
             await tab.run(`window.paste(${JSON.stringify(kind)})`);
-            await until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded() && document.querySelector(".quire-img-frame.shown") && document.activeElement === document.querySelector(".quire-img-stage")`);
+            await until(`window.app.editing().current().id !== ${JSON.stringify(was)} && window.app.editing().stage?.loaded() && document.activeElement === document.querySelector(".quire-img-stage")`);
             return before;
         },
         /** How long since the paste, once the clipboard has one more picture than `before`. */
