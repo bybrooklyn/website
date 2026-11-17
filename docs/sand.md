@@ -1339,6 +1339,87 @@ nothing is made at all, not so much as the browser's audio.
 
 The engine's module is 121.5 KiB of the 128 it is held to (`scripts/wasm.ts`).
 
+## Reworked after the owner's play of 17 November: falling, levelling and caving in
+
+The owner played the page the day it went live and sent pictures. What was reported: water drawn with
+a large brush hung in the air as a pale cloud and slid about in flat sheets, stood on a pool as shelves
+and tall spikes, and took seconds to settle; a hole dug in the middle of a big pile of sand did not
+cave in as sand does; a pour began oddly; fire could not be put to things; clouds rained themselves
+away at once; and the page lagged badly. The scenes were made again in `examples/film.rs` (`flood`,
+`dig`, `start-<material>-<radius>`) and looked at frame by frame before any rule was changed, and
+after each change.
+
+**What was wrong, each a rule added on 17 November for speed or for a pillar's sake:**
+
+- A cell whose support had only just moved stepped to a side and did not fall. In a cloud of drops
+  nearly every cell is in that state, so drawn water shuffled sideways and barely fell.
+- A liquid ran along the level into a place left that same step, so a whole row followed its end out,
+  cell after cell, one way on one step and back on the next: the sheets.
+- A cell that came down onto a slower one took it for ground and stopped in the air, and then had to
+  start again from rest. A pour backed up into a slow column: the spire under a held brush.
+- A grain sliding off a face kept sliding through open air, as far as it could, and landed far off;
+  and only the foot of a column gave anything up, one grain a step, while all the rest of it dropped
+  a cell into the gap.
+- A held brush trickled forty grains or a width or two of water a step whatever its size, as specks
+  over its whole disc, while a brush moved by a hair laid 45 cells in 100 of everything it passed.
+
+**The rules now** (`fall`, `drop`, `runs`, `levels`, `slides`, `slide_down` in `world.rs`):
+
+- **What can fall, falls.** Nothing goes to a side while the way down is open.
+- **Held up by something still falling, a cell waits** behind it and keeps its speed. Water that comes
+  down onto something at rest is at rest there and then; one in four that land fast keep their speed a
+  step and splash a cell or two (half of them, as high as they were fast, had stood up from a pool as a
+  fringe of spikes).
+- **A liquid at the surface** runs only where that takes it lower, and along the level only into
+  places not left that step.
+- **A liquid under its own kind finds its level** (`levels`): it does not move itself. It looks along
+  its row, through its own kind, for an open place within 64 cells (air, a gas, a flame, a lighter
+  liquid, ash), and the cell at the top of what lies on it goes there. So every cell of a column
+  passes on a cell in the same step, a heap sinks from its top and widens at every height at once, and
+  what it can carry away goes as the square of that reach. The look costs seven cells deep in a body:
+  it first looks 1, 2, 4 cells away and so on, and only where one of those is not its own kind does it
+  go through every cell between, so nothing is reached through a wall. A block of water 60 wide and
+  100 deep let go at one end of a floor 300 long is level to a cell in 18 steps and asleep in 19; a
+  column one cell wide and 60 high stood on a pool is gone in under 15. Brine spreads out under water
+  by the same rule, and lava slumps at its own pace.
+- **Sand squeezes past sand.** A grain may slide down past another grain or a drop, by chance one
+  step in two, where before the cell beside it had to be open; between two corners of what stands
+  nothing squeezes. A grain at rest whose support has just gone holds for a step as often as not, so
+  the grain beside it can take the gap first. A hollow therefore does not rise through sand whole,
+  under a plug of sand with upright sides, but spreads as it rises, as loosened sand; the ground over
+  a hole of radius 36 dug 150 cells down dips over 147 columns and comes to rest with no step over a
+  cell. Where there is open air beside it, a grain whose support has gone steps out into that, so a
+  pillar's face comes away along its whole height: a pillar 18 wide and 60 high is a heap in 33 steps
+  (49 before).
+- **A grain landing on a heap runs on down its side** in that step, up to 48 cells while there is
+  slope under it (sand; dirt as before), and stops sliding where the ground falls away. A heap takes a
+  pour as fast as it comes and stands as a cone. Sand still rests at 35 degrees and dirt at 62.
+- **Pouring** (`fillOf` in `grains.ts`, the engine's `pour`): a press, and a brush drawn along, lay
+  the brush's own shape, a liquid whole and a powder 45 cells in 100. Held still, a liquid goes on
+  being laid whole, which pours a stream as wide as the brush since what was laid has fallen out of it
+  by the next step, and a powder comes at two grains a step for each cell of the brush's width. What
+  is poured leaves the brush at three to five cells a step.
+- **Fire lights what it is laid on**: under the fire brush, half of what could burn becomes what a
+  flame beside it would make of it, at each stroke (`light` in `react.rs`). Before, the brush filled
+  only empty cells, so fire laid on a block of wood did nothing.
+- **A cloud rains a sixth as fast.**
+- **Spray** is drawn only where falling water is loose: a drop with air round it is pale, the edge of a
+  falling body is flecked, and the inside of one is the color of water (`cells.ts`).
+
+**A sleeping world and a waking one are no longer the same to the byte** where a liquid finds its
+level, since that reaches farther than a change wakes. The two tests that hold them equal turn it off
+(`levelling`, `set_levelling`); what levelling does in a world that sleeps is held by tests of its own.
+
+**Tests**: three new in `tests/accuracy.rs` (water let go finds its level and sleeps; a column one cell
+wide does not stand on a pool; a hole dug deep in sand caves in as a funnel), and the fingerprint taken
+again, natively and in the page's built modules. Changed on purpose: a poured grain's first speed; the
+core of lava that may stay molten sealed in rock (a tenth, was a twentieth: the pool lies lower and
+wider now).
+
+**Not yet done from that day's list**: the page's speed (the engine still steps on the page's own
+thread, the old pass that joins vessels still walks a whole body each step, and gases never sleep),
+and fire's look.
+
 ## The look, as chosen
 
 Three palettes, three kinds of light, water with and without depth, and four stages were shown as

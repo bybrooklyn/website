@@ -297,6 +297,100 @@ fn steam_rises_gathers_level_under_a_lid_and_rains_back_down_as_it_cools() {
     assert_eq!(world.awake(), 0);
 }
 
+/// The height of the water in each column: how many cells of it there are.
+fn depths(world: &World) -> Vec<i32> {
+    (0..world.width).map(|x| (0..world.height).filter(|&y| world.at(x, y) == WATER).count() as i32).collect()
+}
+
+#[test]
+fn water_let_go_finds_its_level_and_sleeps() {
+    // A block of water 60 wide and 100 deep let go at one end of a floor 300 long, in a world that
+    // sleeps as the page's does. It is level from wall to wall within two seconds, to a cell, and
+    // the world is asleep soon after, every cell of water still there.
+    let mut world = World::new(300, 120, 5);
+    for y in 20..120 {
+        world.paint(WATER, 0, y, 59, y, 0, 100, false);
+    }
+    let poured = world.count(WATER);
+    let mut level = None;
+    let mut still = None;
+    for k in 1..=900 {
+        world.step();
+        let now = depths(&world);
+        if level.is_none() && now.iter().max().unwrap() - now.iter().min().unwrap() <= 1 {
+            level = Some(k);
+        }
+        if world.awake() == 0 {
+            still = Some(k);
+            break;
+        }
+    }
+    let now = depths(&world);
+    println!("a block of water let go: level after {level:?} steps, asleep after {still:?}; depths {} to {}", now.iter().min().unwrap(), now.iter().max().unwrap());
+    assert_eq!(world.count(WATER), poured);
+    assert!(level.is_some_and(|k| k <= 120), "level within two seconds\n{}", picture(&world, 0, 60, 119, 119));
+    assert!(still.is_some_and(|k| k <= 400), "and asleep");
+    assert!(now.iter().max().unwrap() - now.iter().min().unwrap() <= 1);
+}
+
+#[test]
+fn a_column_of_water_one_cell_wide_does_not_stand_on_a_pool() {
+    // Water falls ten cells a step, so a thin stream lands faster than its foot alone could carry
+    // away. A column 60 high stood on a pool is gone into it in a quarter of a second.
+    let mut world = World::new(160, 120, 6);
+    for y in 100..120 {
+        world.paint(WATER, 0, y, 159, y, 0, 100, false);
+    }
+    for _ in 0..40 {
+        world.step();
+    }
+    for y in 40..100 {
+        world.paint(WATER, 80, y, 80, y, 0, 100, false);
+    }
+    let poured = world.count(WATER);
+    for _ in 0..15 {
+        world.step();
+    }
+    let highest = (0..120).find(|&y| (0..160).any(|x| world.at(x, y) == WATER)).unwrap();
+    assert!(highest >= 97, "the column is gone into the pool: water as high as row {highest}\n{}", picture(&world, 40, 40, 120, 119));
+    assert_eq!(world.count(WATER), poured);
+}
+
+#[test]
+fn a_hole_dug_deep_in_sand_caves_in_as_a_funnel_and_not_as_a_plug() {
+    // Sand 280 deep from wall to wall, at rest, and a round hole of radius 36 taken out of it 150
+    // under the top. The ground over it sinks in a dip wider than the hole, with sloping sides: once
+    // it is at rest, no column stands more than two cells over the next. Before 17 Nov 2026 the hole
+    // rose as a bubble under a plug of sand and opened a square pit as wide as itself.
+    let mut world = World::new(520, 420, 7);
+    for y in 140..420 {
+        world.paint(SAND, 0, y, 519, y, 0, 100, false);
+    }
+    for _ in 0..60 {
+        world.step();
+    }
+    let grains = world.count(SAND);
+    world.paint(0, 260, 290, 260, 290, 36, 100, false);
+    let taken = grains - world.count(SAND);
+    let top = |w: &World| -> Vec<i32> { (0..520).map(|x| (0..420).find(|&y| w.at(x, y) == SAND).unwrap_or(420)).collect() };
+    let mut still = None;
+    for k in 1..=900 {
+        world.step();
+        if world.awake() == 0 {
+            still = Some(k);
+            break;
+        }
+    }
+    let now = top(&world);
+    let steepest = now.windows(2).map(|w| (w[1] - w[0]).abs()).max().unwrap();
+    let dipped = now.iter().filter(|&&y| y > 141).count();
+    println!("a hole of {taken} grains dug 150 down: asleep after {still:?} steps, the top dipped over {dipped} columns, the steepest step in it {steepest}");
+    assert_eq!(world.count(SAND), grains - taken);
+    assert!(still.is_some_and(|k| k <= 600), "it comes to rest");
+    assert!(dipped > 80, "the dip is wider than the hole of 73: {dipped}");
+    assert!(steepest <= 2, "with sloping sides: a step of {steepest}\n{}", picture(&world, 180, 130, 340, 220));
+}
+
 #[test]
 fn sleeping_chunks_never_hide_work_in_either_order() {
     for order in [Order::Rows, Order::Phases] {
@@ -306,6 +400,10 @@ fn sleeping_chunks_never_hide_work_in_either_order() {
             awake.sleeping = false;
             awake.order = order;
             asleep.order = order;
+            // a liquid finding its level reaches farther than a change wakes, so it is off for this
+            // (see `water_let_go_finds_its_level_and_sleeps` for what it does in a world that sleeps)
+            awake.levelling = false;
+            asleep.levelling = false;
             for k in 0..900 {
                 awake.step();
                 asleep.step();

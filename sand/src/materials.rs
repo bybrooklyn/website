@@ -371,7 +371,7 @@ pub const REACTIONS: &[Reaction] = &[
     // mud that is hot dries to wet dirt, as wet dirt dries to dirt
     line(MUD, EMPTY, 78, 255, WET_DIRT, STEAM, 128, Heat::Carried, 0),
     // a cloud rains itself away: a cell of it, now and then, is a drop of water in the air beside it
-    line(CLOUD, EMPTY, 0, 255, EMPTY, WATER, 6, Heat::Kept, 0),
+    line(CLOUD, EMPTY, 0, 255, EMPTY, WATER, 1, Heat::Kept, 0),
     // lightning that has spent itself is a burst of flame; before that it fuses the sand it has
     // reached, boils water, lights wood and oil, and melts ice and snow, a cell a step
     line(BOLT, ALONE, 0, 60, FIRE, SAME, ALWAYS, Heat::Kept, 200),

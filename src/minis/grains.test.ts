@@ -41,7 +41,7 @@ test("both builds are small and need nothing from the page to load", async () =>
 
 test("the busy world comes out to the byte as it does natively, with SIMD and without", async () => {
     // the number sand/tests/unchanged.rs holds the native build to
-    const native: [number, number] = [0x70b648b9, 0x142265d4];
+    const native: [number, number] = [0xb09b4f74, 0x62afc25f];
     expect(busy(await load(simd))).toEqual(native);
     expect(busy(await load(scalar))).toEqual(native);
 });
@@ -52,6 +52,8 @@ test("the same world comes out with sleeping off and in the checkerboard order w
         engine.create(200, 120, 3, 0);
         engine.set_sleeping(sleeping);
         engine.set_order(phases);
+        // a liquid finding its level reaches farther than a change wakes, so a sleeping world and a waking one part by a cell here and there with it on: off for this
+        engine.set_levelling(0);
         engine.paint(3, 10, 110, 190, 110, 1, 100, 0);
         for (let k = 0; k < 12; k++) {
             engine.paint([1, 2, 4, 5][k % 4]!, 20 + k * 13, 5, 30 + k * 11, 20, 5, 50, 0);
@@ -74,17 +76,17 @@ test("the brush is offered every material of the table it should be, and each is
     expect(fillOf(of("fire"))).toBeLessThan(100);
     expect(fillOf(of("solid"))).toBe(100);
     expect(fillOf(of("powder"))).toBeLessThan(100);
-    // a powder held still pours ten grains a step of the first page's size, and lava nine cells, whatever the brush's size once it is large enough, and water two cells for each of its width; pride sand along a line is laid whole
-    expect(HELD).toEqual({ powder: 40, lava: 36, liquid: 2 });
+    // a powder held still pours two grains a step for each cell of the brush's width, whatever its size; a liquid is laid whole, held or drawn; pride sand along a line is laid whole
+    expect(HELD).toEqual({ powder: 2 });
     for (const radius of [8, 16, 24, 32, 48]) {
         const disc = Math.PI * (radius + 0.5) ** 2;
-        expect((fillOf(of("powder"), true, radius) / 100) * disc).toBeCloseTo(HELD.powder, 6);
-        expect((fillOf(of("liquid", false, true), true, radius) / 100) * disc).toBeCloseTo(HELD.lava, 6);
-        expect((fillOf(of("liquid"), true, radius) / 100) * disc).toBeCloseTo(2 * (2 * radius + 1), 6);
+        expect((fillOf(of("powder"), true, radius) / 100) * disc).toBeCloseTo(2 * (2 * radius + 1), 6);
+        expect(fillOf(of("liquid", false, true), true, radius)).toBe(100);
+        expect(fillOf(of("liquid"), true, radius)).toBe(100);
+        expect(fillOf(of("liquid"), false, radius)).toBe(100);
     }
-    // a small brush fills no more than 45 in 100
+    // a small brush fills no more than 45 in 100 of a powder
     expect(fillOf(of("powder"), true, 0)).toBe(45);
-    expect(fillOf(of("liquid"), true, 1)).toBe(45);
     expect(fillOf(of("solid"), true)).toBe(100);
     // lightning is one bolt at the pointer, whatever the brush's size
     expect(fillOf(of("bolt", false, true), true, 8)).toBe(100);

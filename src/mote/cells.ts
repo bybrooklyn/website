@@ -16,7 +16,8 @@
 // a wide, faint halo, the light a fire throws on what is round it. A cell can be soft (smoke, steam, a
 // flame): it is drawn faint and spread a little into the air around it by the same blur, so that cells
 // of it near each other read as one body. A cell can be deep (water: lighter at its surface, darker
-// below), and can be spray: paler the faster it is falling, by the speed in its fourth byte's high half.
+// below), and can be spray: paler the faster it is falling, by the speed in its fourth byte's high half, where it has
+// air beside it.
 
 /**
  * Where a grid sits on its canvas, in the canvas's own pixels: how many pixels a side each cell is, and
@@ -74,7 +75,7 @@ export const SOFT = 4;
 
 /** It is drawn with depth: lighter in its top cell, darker the deeper below its surface. */
 export const DEEP = 8;
-/** It is drawn paler the faster it is falling: the high half of its fourth byte is its speed. */
+/** It is drawn paler the faster it is falling, where it is loose (not its own kind on every side): the high half of its fourth byte is its speed. */
 export const SPRAY = 16;
 
 /** The speed at which spray is as pale as it gets, and how far toward white that is. */
@@ -283,10 +284,17 @@ vec4 shade(ivec2 at, int depth) {
         }
         cell.rgb = clamp(cell.rgb * (over == 0 ? ${DEPTH.top.toFixed(2)} : 1.06 - ${DEPTH.step.toFixed(3)} * float(over)), 0.0, 1.0);
     }
-    if ((mode & 16u) != 0u) {
-        // spray: paler the faster it falls
+    if ((mode & 16u) != 0u && (raw.a >> 4u) != 0u) {
+        // spray: paler the faster it falls, and only as far as it is loose: a drop with air all round
+        // it is spray, the edge of a falling body is flecked with it, and the inside of one is water
+        ivec2 last = textureSize(cells, 0) - 1;
+        float loose = 0.0;
+        for (int k = 0; k < 4; k++) {
+            ivec2 beside = at + ivec2(k == 0 ? -1 : k == 1 ? 1 : 0, k == 2 ? -1 : k == 3 ? 1 : 0);
+            if (texelFetch(cells, clamp(beside, ivec2(0), last), 0).r != raw.r) loose += 0.5;
+        }
         float fast = min(float(raw.a >> 4u) / ${FOAM.speed.toFixed(1)}, 1.0);
-        cell.rgb = mix(cell.rgb, vec3(0.86, 0.93, 1.0), fast * ${FOAM.pale.toFixed(2)});
+        cell.rgb = mix(cell.rgb, vec3(0.86, 0.93, 1.0), fast * min(loose, 1.0) * ${FOAM.pale.toFixed(2)});
     }
     vec4 sharp = vec4(cell.rgb * cell.a, cell.a);
     // a soft cell is fainter itself, the rest of it in the haze around it; strong enough that a wisp of

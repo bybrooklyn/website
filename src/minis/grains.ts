@@ -23,6 +23,7 @@ export interface Engine {
     gusts(): number;
     gust(): number;
     heard(kind: number): number;
+    set_levelling(on: number): void;
     rewritten(fresh: number): void;
     clear(): void;
     cells(): number;
@@ -165,35 +166,26 @@ export const FINER = 2 / CELL;
 /** How many cells either side of its line a brush of `size` on the slider pours: its size in the first page's cells, scaled; none for lightning, which is one bolt. */
 export const brushCells = (size: number, of?: Pick<Material, "kind">): number => (of?.kind === "bolt" ? 0 : Math.round(size * FINER));
 
-/**
- * How many cells a brush held still pours in a step: so many grains of powder and cells of lava whatever
- * its size (ten grains and nine cells of the first page's size, so as many times more as a cell is now
- * smaller in area), and for any other liquid so many for each cell of the brush's width, so a wider
- * brush gives a wider stream as thick.
- */
-export const HELD = { powder: Math.round(10 * FINER * FINER), lava: Math.round(9 * FINER * FINER), liquid: 2 };
+/** How many grains a step a powder held still pours, for each cell of the brush's width. */
+export const HELD = { powder: 2 };
 
 /**
- * How many cells in 100 a stroke fills: what falls is poured, so it trickles; stone is laid solid.
- * Lava drawn along a line is poured thick, so that it lands as a molten blob and not as drops. Pride
- * sand drawn along a line is laid solid too (the engine lays each part of its ribbon once), so its
- * stripes fall whole. What a brush of `radius` held still pours has left it by the next step, since a
- * grain leaves the brush already falling, so it fills the share of its whole disc that is `HELD` cells:
- * a powder as many grains a step as the sides of a heap carry away (poured faster it stands as a
- * column under the brush), lava as it drains away into its pool, and water as a stream of drops that
- * does not back up to the brush. A small brush pours less, as a brush never fills more than 45 in 100.
- * For a large brush that share is less than one in 100, and it is given as it is, not rounded: the scene
- * carries what is left over to the next step (`sand.ts`), since the engine fills by whole cells in 100.
+ * How many cells in 100 a stroke fills, of what is empty under the brush. A press, and a brush drawn
+ * along, lay the brush's own shape: stone and a liquid whole, a powder 45 in 100, so it is grainy;
+ * pride sand along a line whole, so its stripes fall whole. Held still after the press, a liquid goes
+ * on being laid whole, and since what was laid has fallen out of the brush by the next step, it pours
+ * as a stream as wide as the brush; a powder comes at `HELD.powder` grains a step for each cell of the
+ * brush's width, which a heap carries away as fast as it lands (poured as a liquid is, sand backs up
+ * under the brush as a pillar). For a large brush that share is under one in 100, and it is given as
+ * it is, not rounded: the scene carries what is left over to the next step (`sand.ts`), since the
+ * engine fills by whole cells in 100. Before 17 Nov 2026 a held brush trickled whatever its size and
+ * a drawn one laid 45 in 100 of everything, so water came as a cloud of drops.
  */
 export function fillOf(material: Pick<Material, "kind" | "striped" | "light">, still = false, radius = 0): number {
-    const held = (count: number, most: number) => Math.min(most, (100 * count) / (Math.PI * (radius + 0.5) ** 2));
-    const lava = material.kind === "liquid" && material.light;
-    if (lava) return still ? held(HELD.lava, 100) : 100;
     // lightning is one bolt at the pointer, whatever the brush's size (`brushCells`)
-    if (material.kind === "solid" || material.kind === "bolt") return 100;
+    if (material.kind === "solid" || material.kind === "bolt" || material.kind === "liquid") return 100;
     if (material.striped && !still) return 100;
-    if (still && material.kind === "powder") return held(HELD.powder, 45);
-    if (still && material.kind === "liquid") return held(HELD.liquid * (2 * radius + 1), 45);
+    if (still && material.kind === "powder") return Math.min(45, (100 * HELD.powder * (2 * radius + 1)) / (Math.PI * (radius + 0.5) ** 2));
     return 45;
 }
 

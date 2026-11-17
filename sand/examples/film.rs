@@ -45,6 +45,48 @@ fn held(world: &mut World, of: u8, x: i32, y: i32, radius: i32) {
     world.paint(of, x, y, x, y, radius, (100.0 * cells / area).round().clamp(1.0, 45.0) as u32, false);
 }
 
+/// The page's brush. Dragged, or at the press, it lays its own shape: all of it with a liquid and
+/// 45 cells in 100 with a powder. Held still after that, a liquid goes on filling what of the shape
+/// is empty, and a powder comes at one and a half grains a step for each cell of the brush's width,
+/// what is left over of a share under one in 100 carried to the next step.
+struct Brush {
+    of: u8,
+    radius: i32,
+    carried: f32,
+    pressed: bool,
+}
+
+impl Brush {
+    fn new(of: u8, radius: i32) -> Self {
+        Brush { of, radius, carried: 0.0, pressed: false }
+    }
+
+    fn powder(&self) -> bool {
+        matches!(self.of, SAND | DIRT | SALT | SNOW)
+    }
+
+    /// One step of the brush held still at (x, y).
+    fn held(&mut self, world: &mut World, x: i32, y: i32) {
+        if !self.pressed || !self.powder() {
+            self.pressed = true;
+            world.paint(self.of, x, y, x, y, self.radius, if self.powder() { 45 } else { 100 }, false);
+            return;
+        }
+        let area = std::f32::consts::PI * (self.radius as f32 + 0.5) * (self.radius as f32 + 0.5);
+        let share = 100.0 * 1.5 * (2 * self.radius + 1) as f32 / area + self.carried;
+        let fill = share.floor().min(45.0);
+        self.carried = share - fill;
+        if fill > 0.0 {
+            world.paint(self.of, x, y, x, y, self.radius, fill as u32, false);
+        }
+    }
+
+    /// The brush dragged from one cell to another between two steps.
+    fn dragged(&mut self, world: &mut World, from: (i32, i32), to: (i32, i32)) {
+        world.paint(self.of, from.0, from.1, to.0, to.1, self.radius, if self.powder() { 45 } else { 100 }, false);
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let scene = args.get(1).map(String::as_str).unwrap_or("water");
@@ -52,6 +94,92 @@ fn main() {
     let (wide, high) = (520, 420);
     let mut world = World::new(wide, high, 7);
     let mut frames: Vec<Vec<u8>> = vec![];
+    // The scenes the owner sent word of on 17 Nov 2026, filmed at the steps given: `start-<what>-<radius>`
+    // a brush pressed and held still (what a pour looks like as it begins), `dig` a hole taken out of the
+    // middle of a big pile of sand, `flood` the biggest brush of water dragged across over heaps of sand.
+    let wanted: Option<(&str, Vec<usize>)> = if scene.starts_with("start-") {
+        Some(("start", vec![1, 2, 3, 4, 6, 8, 12, 16, 24, 40, 60, 90]))
+    } else if scene == "dig" {
+        Some(("dig", vec![0, 2, 4, 6, 9, 12, 16, 20, 30, 45, 70, 120]))
+    } else if scene == "flood" {
+        Some(("flood", vec![10, 20, 30, 40, 50, 60, 80, 100, 130, 170, 230, 320]))
+    } else {
+        None
+    };
+    if let Some((kind, shots)) = wanted {
+        let last = *shots.last().unwrap();
+        let mut took = std::time::Duration::ZERO;
+        match kind {
+            "start" => {
+                let mut parts = scene.split('-').skip(1);
+                let of = match parts.next() {
+                    Some("sand") => SAND,
+                    Some("lava") => LAVA,
+                    _ => WATER,
+                };
+                let radius: i32 = parts.next().and_then(|r| r.parse().ok()).unwrap_or(8);
+                world.paint(STONE, 0, 415, 519, 415, 4, 100, false);
+                let mut brush = Brush::new(of, radius);
+                for step in 1..=last {
+                    brush.held(&mut world, 260, 80);
+                    world.step();
+                    if shots.contains(&step) {
+                        frames.push(frame(&world));
+                    }
+                }
+            }
+            "dig" => {
+                // a pile that fills the lower two thirds of the world from wall to wall, come to rest
+                for y in 140..420 {
+                    world.paint(SAND, 0, y, 519, y, 0, 100, false);
+                }
+                for _ in 0..60 {
+                    world.step();
+                }
+                for step in 0..=last {
+                    if step == 0 {
+                        world.paint(0, 260, 290, 260, 290, 36, 100, false);
+                    } else {
+                        world.step();
+                    }
+                    if shots.contains(&step) {
+                        frames.push(frame(&world));
+                    }
+                }
+            }
+            _ => {
+                // two heaps of sand, then the biggest brush of water dragged from left to right over a second
+                let mut sand = Brush::new(SAND, 8);
+                for x in [150, 330] {
+                    for _ in 0..220 {
+                        sand.held(&mut world, x, 200);
+                        world.step();
+                    }
+                }
+                for _ in 0..120 {
+                    world.step();
+                }
+                let mut brush = Brush::new(WATER, 48);
+                for step in 1..=last {
+                    if step <= 60 {
+                        let at = |k: usize| (70 + (k as i32) * 5, 70);
+                        brush.dragged(&mut world, at(step - 1), at(step));
+                    }
+                    let began = std::time::Instant::now();
+                    world.step();
+                    took += began.elapsed();
+                    if shots.contains(&step) {
+                        frames.push(frame(&world));
+                        println!("step {step}: {} cells have found their level so far, {} chunks awake", world.levelled, world.awake());
+                    }
+                }
+                println!("flood: {:.2} ms a step on average over {last} steps", took.as_secs_f64() * 1000.0 / last as f64);
+            }
+        }
+        write(&path, &frames, wide as usize, high as usize);
+        println!("{scene}: {} frames at steps {shots:?}, in {path}", frames.len());
+        return;
+    }
     let (every, count): (usize, usize) = match scene {
         "lake" => (60, 12),
         "fire" => (40, 12),
@@ -178,10 +306,14 @@ fn main() {
             }
         }
     }
-    // four frames across
+    write(&path, &frames, wide as usize, high as usize);
+    println!("{scene}: {} frames, one every {every} steps, in {path}", frames.len());
+}
+
+/// Writes frames side by side, four across, as one plain PPM picture.
+fn write(path: &str, frames: &[Vec<u8>], w: usize, h: usize) {
     let across = 4;
     let down = frames.len().div_ceil(across);
-    let (w, h) = (wide as usize, high as usize);
     let mut sheet = vec![0u8; across * w * down * h * 3];
     for (k, each) in frames.iter().enumerate() {
         let (left, top) = ((k % across) * w, (k / across) * h);
@@ -192,6 +324,5 @@ fn main() {
     }
     let mut out = format!("P6\n{} {}\n255\n", across * w, down * h).into_bytes();
     out.extend_from_slice(&sheet);
-    std::fs::write(&path, out).expect("the picture could not be written");
-    println!("{scene}: {} frames, one every {every} steps, in {path}", frames.len());
+    std::fs::write(path, out).expect("the picture could not be written");
 }

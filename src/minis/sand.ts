@@ -258,7 +258,8 @@ export default function sand(m: Mote): Scene {
         render();
         m.wake();
     };
-    const stroke = (from: [number, number], to: [number, number]) => {
+    /** A stroke of the brush from one cell to another. A press is a `stamp`: it lays the brush's shape as a drawn stroke does, and what is held still after it pours. */
+    const stroke = (from: [number, number], to: [number, number], stamp = false) => {
         if (!engine) return;
         if (blowing) {
             // wind the way the stroke goes; a brush held still stills the air under it
@@ -274,7 +275,7 @@ export default function sand(m: Mote): Scene {
             sound?.knock(1, 260);
             sound?.glide(95, 38, 1.1, 0.22);
         }
-        const still = from[0] === to[0] && from[1] === to[1];
+        const still = !stamp && from[0] === to[0] && from[1] === to[1];
         const cells = brushCells(radius, poured);
         // the engine fills whole cells in 100: what a held brush's share leaves over is carried to its next step
         const share = poured ? fillOf(poured, still, cells) + (still ? carried : 0) : 100;
@@ -900,7 +901,7 @@ export default function sand(m: Mote): Scene {
                 return;
             }
             held = cell;
-            stroke(held, held);
+            stroke(held, held, true);
         },
         slide(hand) {
             lastKind = hand.kind;

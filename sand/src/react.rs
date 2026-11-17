@@ -29,6 +29,24 @@ impl World {
         (0..REACTIONS.len()).filter(|&k| if kind == 0 { hiss(k) } else { flame(k) }).map(|k| self.fired[k]).sum()
     }
 
+    /// Lights the cell at (x, y) as a flame beside it would, at once and not by chance: it becomes
+    /// what its line with fire says, at least as hot as that is made. Gives whether it could burn.
+    /// For the brush, which lays fire on what is there.
+    pub(crate) fn light(&mut self, at: usize, x: i32, y: i32) -> bool {
+        let cell = self.cells[at];
+        let (from, to) = LINES[material(cell) as usize];
+        let Some(k) = (from as usize..to as usize).find(|&k| REACTIONS[k].b == FIRE && REACTIONS[k].a_becomes != SAME) else {
+            return false;
+        };
+        let line = &REACTIONS[k];
+        self.fired[k] += 1;
+        let hot = temperature(cell).max(line.hot).max(crate::materials::MATERIALS[line.a_becomes as usize].made);
+        self.cells[at] = with_temperature(with_state((cell & 0xffff_ff00) | line.a_becomes as u32, self.clock, 0), hot);
+        self.touch(x, y, x, y);
+        self.warmed(x, y, x, y);
+        true
+    }
+
     /// Works a cell's shade, if it follows its heat, and its lines. Gives true if the cell changed
     /// into something else, so it does not move this step.
     #[inline]
