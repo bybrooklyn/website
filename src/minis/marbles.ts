@@ -33,7 +33,7 @@ import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { START, STILL as NO_MOVE, about, asOwn, carriedLevel, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
+import { START, STILL as NO_MOVE, about, asOwn, carriedLevel, clicked, follows, groupFits, groupMisfit, groupSnaps, heldAt, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
@@ -2823,6 +2823,8 @@ export default function marbles(m: Mote): Scene {
 
     /** The last press, for a browser test to read. */
     let pressed: { x: number; y: number; handle?: Handle; kind: string } | undefined;
+    /** The view what is carried was last put under its hand in, to put it there again when the view moves. */
+    let carriedView = orbit;
     let time = 0;
     /** How long the physics, the ghost and the drawing take, in milliseconds, evened out over the last frames; and the longest frame lately: for measuring. */
     const took = { step: 0, draw: 0, ghost: 0, frame: 0, most: 0, bend: 0, bendMost: 0 };
@@ -3216,6 +3218,12 @@ export default function marbles(m: Mote): Scene {
                 const aside = (walking.has("right") ? 1 : 0) - (walking.has("left") ? 1 : 0);
                 if (ahead || aside) orbit = walked(orbit, ahead, aside, dt);
             }
+            // what is in hand stays under the hand while the view moves under it: the keys, the wheel, a glide
+            if (carried && orbit !== carriedView) {
+                const at = heldAt(carried.hand, (id) => held.get(id)?.last, m.pointer);
+                if (at) follow(at.x, at.y, typeof carried.hand === "number" && held.get(carried.hand)?.hand.kind === "touch" ? "touch" : "mouse");
+            }
+            carriedView = orbit;
             // what is carried eases to where it would go: quick to start and slow to settle
             if (carried) {
                 const goal = target(carried);

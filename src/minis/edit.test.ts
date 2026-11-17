@@ -9,7 +9,7 @@
 
 import { expect, test } from "bun:test";
 import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
-import { START, about, asOwn, carriedLevel, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
+import { START, about, asOwn, carriedLevel, clicked, follows, groupFits, groupMisfit, groupSnaps, heldAt, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
 import { makeTable } from "./table";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -268,6 +268,18 @@ test("Page Up and Page Down on a piece in hand outlast the pointer's next move, 
     expect(carriedLevel(6, 1, true, 19, 3)).toBe(23);
     // over a piece the hopper goes at the level found there, the keys still on top
     expect(carriedLevel(6, 1, false, 19, 3)).toBe(9);
+});
+
+test("a piece in hand is held under the pointer or finger carrying it, and under the mouse while a piece from the box is over the scene, so that it stays there as the view moves", () => {
+    const last = (id: number) => (id === 4 ? { x: 120, y: 80 } : undefined);
+    const mouse = { x: 300, y: 250, inside: true };
+    expect(heldAt(4, last, mouse)).toEqual({ x: 120, y: 80 });
+    expect(heldAt("hover", last, mouse)).toEqual(mouse);
+    // the mouse gone over the column: it stays where it was put
+    expect(heldAt("hover", last, { ...mouse, inside: false })).toBeUndefined();
+    // moved by the keys, or by a pointer already let go: nothing to follow
+    expect(heldAt(undefined, last, mouse)).toBeUndefined();
+    expect(heldAt(9, last, mouse)).toBeUndefined();
 });
 
 test("a carried piece snaps to the nearest open end within reach and holds it a little further, and where it would overlap it goes back, saying so", () => {

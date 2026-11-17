@@ -247,6 +247,16 @@ export function carriedLevel(found: number, own: number, overNothing: boolean, l
 }
 
 /**
+ * Where on the screen carried pieces are held: under the pointer or finger carrying them (its last place,
+ * by its number), or under the mouse for pieces picked up from the box, while it is over the scene; none
+ * for pieces moved by the keys. Read again whenever the view moves, so that they stay under the hand.
+ */
+export function heldAt(hand: number | "hover" | undefined, last: (id: number) => { x: number; y: number } | undefined, mouse: { x: number; y: number; inside: boolean }): { x: number; y: number } | undefined {
+    if (hand === "hover") return mouse.inside ? mouse : undefined;
+    return hand === undefined ? undefined : last(hand);
+}
+
+/**
  * The nearest of the places carried pieces could snap to, by how far each is from where they are on the
  * screen, if within `reach` pixels; once snapped, `held` keeps it until half as far again, so that it
  * does not flicker between snapping and not.
