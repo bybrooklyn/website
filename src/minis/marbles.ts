@@ -1555,6 +1555,8 @@ export default function marbles(m: Mote): Scene {
     /** What the result said last, so that it is written again only when it changes. */
     let raceSaid = "";
     let paintRace = (_why?: string) => {};
+    /** The line the race box last showed; none once a race has been run, so that the box shows the line it ran by, whether or not it is being typed in. */
+    let lineShown: number | undefined;
     /** A race with a new line drawn, or with the number given. */
     const startRace = (drawn?: number) => {
         if (!resting().some((piece) => piece.kind.family === "h") || !resting().some((piece) => piece.kind.family === "t")) {
@@ -1569,6 +1571,7 @@ export default function marbles(m: Mote): Scene {
         freshTable();
         lineNumber = drawnOf(drawn ?? 1 + Math.floor(Math.random() * DRAWN[1]));
         race = makeRace(table, raceCount, lineNumber);
+        lineShown = undefined;
         // the starting gates the race put across the hoppers, drawn as the moving parts are
         drawMovers();
         lastRace = { count: raceCount, drawn: lineNumber, text: write(resting()) };
@@ -2126,7 +2129,9 @@ export default function marbles(m: Mote): Scene {
         const raceFold = { ...fold("marbles-race", el("div", { class: "marbles-race-row" }, fewer, counted, more, goRace, againRace, el("label", { class: "marbles-line-label" }, "line ", lineBox), leader), placings, raceNote), from: () => raceTool };
         paintRace = (why?: string) => {
             counted.textContent = `${raceCount} marbles`;
-            if (document.activeElement !== lineBox) lineBox.value = String(lineNumber);
+            // while it is typed in the box keeps what is typed, but for the line a race has just been run by
+            if (document.activeElement !== lineBox || lineShown !== lineNumber) lineBox.value = String(lineNumber);
+            lineShown = lineNumber;
             fewer.disabled = raceCount <= RACE[0];
             more.disabled = raceCount >= RACE[1];
             leader.disabled = !race || race.done || raceStopped;

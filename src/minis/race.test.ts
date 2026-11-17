@@ -9,7 +9,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium } from "../../scripts/browser";
-import { DRAWN, RACE, RACERS, SETTLE, inLine, lineOf, makeRace, progress, runRace, standing, timeOf } from "./race";
+import { DRAWN, RACE, RACERS, SETTLE, drawnOf, inLine, lineOf, makeRace, progress, runRace, standing, timeOf } from "./race";
 import { fit, jointsOf, read, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PACE, makeTable } from "./table";
@@ -184,4 +184,9 @@ test("how far along a way a point is, by the nearest of its places", () => {
     const way: [number, number, number][] = [[0, 0, 0], [3, 0, 0], [3, 4, 0], [3, 4, 10]];
     expect(progress(way, [3.2, 3.9, 0.1])).toBeCloseTo(7, 9);
     expect(progress(way, [-5, 0, 0])).toBe(0);
+});
+
+test("a line typed in the box is run by the nearest number a line can be drawn by, which the box then shows", () => {
+    // what the tester typed: 0, 1500, nothing, 3.7
+    expect([0, 1500, Number(""), 3.7, 417].map(drawnOf)).toEqual([1, 999, 1, 4, 417]);
 });
