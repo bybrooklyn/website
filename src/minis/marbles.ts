@@ -1,7 +1,7 @@
 // The marble run, a draft: build a run from a box of pieces whose ends click together, and let marbles
 // go down it, editing it while they roll. Stages 2 to 4 of its plan (docs/marbles.md): the box, joints,
-// snapping, pillars and marbles; then the editor: a selection of one piece or many, handles to move,
-// turn and resize it, undo without limit, copy, paste and mirror, pieces of one's own, views straight
+// snapping, pillars and marbles; then the editor: a selection of one piece or many, carried, turned,
+// raised and resized by the words of the column and their keys, undo without limit, copy, paste and mirror, pieces of one's own, views straight
 // on, and a ghost marble showing where a marble would go; then bending a piece by points along it,
 // within its limits; then moving and sounding pieces (parts.ts), drawn where Mote's physics has them each
 // frame, and the run's own sound, each strike made by Mote's sound code from how fast it was and what
@@ -14,13 +14,16 @@
 // mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the points a piece is bent by),
 // table.ts (Mote's physics for a run), supports.ts (pillars), checks.ts (open ends), orbit.ts (the
 // camera) and camera.ts (riding, gliding, touring), race.ts (races), share.ts (links and files),
-// runs.ts (made runs), toolbar.ts (the icons and the bar).
+// runs.ts (made runs), toolbar.ts (the column's words and the keys' rule).
 //
-// One finger or the main button on a piece carries it (the whole selection if it is in it); on the
-// table it turns the view; two fingers, the other button, or Shift with the main one, move the view; a
-// pinch or the wheel brings it nearer. A tap chooses a piece; Shift, a long press, or the select tool
-// adds to the choice; a long press on the table, Control with a drag, or the select tool draws a box
-// round many. Keys are listed in the keys panel and in the `keydown` handler below.
+// As in a game's build mode, the left button is only for pieces and the right only for the camera. A
+// click chooses a piece alone (Shift or Control adds or takes it away), a click on the table chooses
+// nothing, a drag from a piece carries it (the whole selection if it is in it), a drag on the table
+// draws a box round many; a click on a piece in the box picks it up to set down with a click; a click on
+// a hopper's box lets its marble go. The right button turns the view, and a right click opens the run's
+// menu; the middle button moves it; the wheel brings it nearer toward the pointer. A finger on a piece
+// carries it and on the table turns the view; two fingers move, pinch and twist it; a long press adds to
+// the choice or draws a box. Keys are listed in the keys fold and in the `keydown` handler below.
 
 import { gl, type Color, type Look, type Part, type Pattern, type View } from "../mote/gl";
 import { turn as turnOf, type Hinge, type Solid } from "../mote/space";
@@ -48,7 +51,7 @@ import { can, fold, icon, keyHeard, keyPlace, word } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
 
-/** Why pieces could not go where they were put, in a few plain words, said under the bar and aloud. */
+/** Why pieces could not go where they were put, in a few plain words, said at the foot of the column and aloud. */
 const REFUSED: Record<Refused, string> = { ground: "it would go below the table", edge: "it would go off the table", room: "it would overlap another piece", against: "no marble could roll into it there" };
 
 /** How wide the view is, up and down, in degrees, with the usual lens. */
@@ -1423,7 +1426,7 @@ export default function marbles(m: Mote): Scene {
     /** How far a key moves a point, in millimetres. */
     const KEY_BEND = 5;
 
-    // ---- what the bar, the strip and the keys do ----
+    // ---- what the column's words and the keys do ----
     /** A marble let go from every hopper, or from the one given. */
     const letGo = (only?: number) => {
         stopRace();
@@ -1507,9 +1510,9 @@ export default function marbles(m: Mote): Scene {
         linked = false;
         history.replaceState(history.state, "", location.pathname + location.search);
     };
-    /** A short word said quietly under the bar, grown from the button pressed, gone after a moment. */
+    /** A short word said quietly at the foot of the column, grown from the word pressed, gone after a moment. */
     let say = (_words: string, _from?: HTMLElement) => {};
-    /** Words said aloud to a screen reader, and not shown: what is said under the bar, and what is seen happen in the scene. */
+    /** Words said aloud to a screen reader, and not shown: what is said in the column, and what is seen happen in the scene. */
     let speak = (_words: string) => {};
     const sharedNow = () => ({ run: resting(), spots, owns: ownsUsed(resting(), owns), race: lastRace?.text === write(resting()) ? { count: lastRace.count, drawn: lastRace.drawn } : undefined });
     const saveFile = (text: string) => {
@@ -1865,7 +1868,7 @@ export default function marbles(m: Mote): Scene {
         tell();
     };
 
-    // ---- the panel: the box, the bar, the strip by the selection ----
+    // ---- the panel: the row of pieces under the scene, and the column of words beside it ----
     let tell = () => {};
     let toggleKeys = () => {};
     let keepOwn = () => {};
@@ -2024,7 +2027,7 @@ export default function marbles(m: Mote): Scene {
         sound?.button.addEventListener("click", () => tell());
         const heading = (words: string) => el("h3", { class: "marbles-group", textContent: words });
         const line = (...tools: HTMLElement[]) => el("div", { class: "marbles-words" }, ...tools);
-        /** Each fold under the bar, one open at a time: opening one shuts the others back into their buttons. */
+        /** Each fold in the column, one open at a time: opening one shuts the others back into their words. */
         const folds: { box: HTMLElement; open(from: HTMLElement, open?: boolean): boolean; shown(): boolean; from: () => HTMLElement }[] = [];
         const only = (which: (typeof folds)[number], from: HTMLElement) => {
             for (const other of folds) if (other !== which && other.shown()) other.open(other.from(), false);
@@ -2275,7 +2278,7 @@ export default function marbles(m: Mote): Scene {
         };
 
         // The scene's own small menu, from a right click that does not move or the keyboard's menu key: Paste
-        // run and Copy run, Ride this marble over a marble, and what the strip offers for what is chosen. It
+        // run and Copy run, Ride this marble over a marble, and what the piece group offers for what is chosen. It
         // grows from the press and shrinks back into it. Shift with the right click leaves the browser's own.
         const menu = el("div", { class: "marbles-menu-box", role: "menu", ariaLabel: "the run's menu" });
         menu.inert = true;
