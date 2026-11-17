@@ -37,7 +37,7 @@ import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, st
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
 import { AXES, ARROW, across, boxed, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
-import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, zoomedAt, type Grip, type Orbit } from "./orbit";
+import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, walked, zoomedAt, type Grip, type Orbit } from "./orbit";
 import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
 import { fits, jointsOf, links, open, read, roomOf, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -1811,26 +1811,14 @@ export default function marbles(m: Mote): Scene {
         sound?.knock(0.3, by > 0 ? 1800 : 1400);
         changed();
     };
-    /** The keys' way of carrying: lift what is chosen and move it a cell or a level, the way the view looks; Enter puts it down. */
-    const nudge = (dx: number, dz: number, dy: number) => {
-        if (!carried) {
-            const pieces = chosenPieces();
-            if (!pieces.length) return;
-            startCarry(pieces, true, pieces[0]!.id, undefined);
-        }
-        const one = carried!;
-        // across and along as the view sees them: the arrows move pieces the way they look to go
-        const quarter = Math.round(orbit.turn / (Math.PI / 2));
-        let [x, z] = [dx, dz];
-        for (let i = 0; i < ((quarter % 4) + 4) % 4; i++) [x, z] = [z, 0 - x];
-        const lowest = Math.min(...placedOf(one).map((piece) => piece.place.y + shapeOf(piece.kind).low));
-        one.move = { ...one.move, x: one.move.x + x, z: one.move.z + z, y: one.move.y + Math.max(-lowest, dy) };
+    /** Page Up and Page Down: what is in hand raised or lowered a level, as it follows the pointer; else what is chosen. */
+    const raise = (by: number) => {
+        const one = carried;
+        if (!one) return raiseChosen(by);
+        one.move = { ...one.move, y: one.move.y + by };
+        one.lift = one.lift === undefined ? undefined : one.lift + by;
         one.snap = undefined;
         one.fits = groupFits(run, placedOf(one));
-        const joins = joinsOf(placedOf(one));
-        // joined by where it is: a click when it comes to meet an open end exactly
-        if (one.fits && joins > one.joins) sound?.knock(0.55, 2100);
-        one.joins = joins;
         paintCarried();
         m.wake();
     };
@@ -2135,44 +2123,49 @@ export default function marbles(m: Mote): Scene {
             hush = setTimeout(() => saying.open(from ?? shareTool, false), 2600);
         };
 
-        // the keys, a plain list, and the runs to start from, each in a fold under the bar
+        // the keys and gestures, a plain list, and the runs to start from, each in a fold in the column
         const KEYS: [string, string][] = [
-            ["tap, click", "choose a piece"],
-            ["Shift, long press", "add a piece to the choice"],
-            ["Ctrl and drag, long press on the table", "choose many in a box"],
+            ["click a piece", "choose it alone; with Shift or Ctrl, add it or take it away"],
+            ["click the table", "choose nothing"],
+            ["drag a piece", "carry it, and what is chosen with it"],
+            ["drag on the table", "choose what is in a box; with Shift, add it"],
+            ["click a piece in the box", "pick it up; click in the scene to set it down"],
+            ["click a hopper's box", "let its marble go"],
+            ["right drag, right click", "turn the view, the run's menu"],
+            ["middle drag, wheel", "move the view, nearer and further"],
+            ["W, A, S, D or arrows", "move the view over the table"],
+            ["Shift+arrows, plus, minus", "turn the view, nearer, further"],
+            ["R, Shift+R, F", "turn a quarter, the other way, mirror"],
+            ["Page Up, Page Down", "raise, lower"],
+            ["N, Shift+N", "longer, shorter"],
+            ["Delete", "take away"],
+            ["Escape", "put back what is in hand, or choose nothing"],
+            ["Enter", "set down what is in hand; on a piece in the box, put it at the end"],
             ["B", "the select tool"],
             ["Ctrl+A, J", "choose all, choose what is joined"],
-            ["Escape", "free the camera, put back, or choose nothing"],
-            ["arrows or WASD", "lift and move a cell"],
-            ["Q, E, Alt+up and down", "a level down, up"],
-            ["Enter", "put down"],
-            ["R, F", "turn, mirror"],
-            ["K, the bend button", "bend what is chosen by its points, its ends staying put"],
+            ["K", "bend what is chosen by its points"],
             ["bending: arrows, Q, E", "move the point aside, up, down"],
             ["bending: comma, full stop, Delete", "the point before, after; straighten it"],
             ["Alt or a second finger, dragging a point", "no snapping"],
-            ["N, Shift+N, its knob", "the next or last setting: a chime bar's note, a lift's height, a spinner's arms, how many marbles tip a seesaw, a length"],
-            ["Delete", "take away"],
             ["Ctrl+C, X, V, D", "copy, cut, paste, duplicate"],
             ["Ctrl+V", "with a run's link or text copied, open that run"],
-            ["right click, menu key", "the run's menu: paste or copy the run, and what is chosen"],
+            ["menu key", "the run's menu"],
             ["Shift and right click", "the browser's own menu"],
             ["Ctrl+Z, Ctrl+Shift+Z", "undo, redo"],
             ["comma, full stop", "the piece before, after"],
             ["Space, Shift+Space", "let a marble go, a stream"],
             ["P, C", "pause, clear the marbles"],
-            ["X", "race the marbles, in a new line"],
-            ["Shift+X", "race them again in the same line"],
-            ["tap a marble, V", "ride along with it, with the next marble"],
-            ["Shift+V", "ride the leader of a race"],
+            ["X, Shift+X", "race the marbles in a new line, in the same line"],
+            ["V, Shift+V", "ride along with the next marble, the leader of a race"],
             ["T", "a tour of the run"],
             ["H, G, Shift+G", "keep this view as a spot, glide to the next spot, the last"],
             ["7, 1, 3", "from above, the front, the side"],
             ["5", "the narrow lens"],
             ["Home, Shift+Home", "fit the run, what is chosen"],
-            ["plus, minus, Shift+arrows", "nearer, further, turn the view"],
             ["M, ?", "sound, these keys"],
             ["L", "the look: full, or plain for a slower graphics card"],
+            ["a finger", "on the table turns the view; a tap chooses; a drag carries; a long press then a drag draws a box"],
+            ["two fingers", "move the view, pinch it nearer, twist it"],
         ];
         const list = el("dl", { class: "marbles-keys-list" });
         for (const [key, what] of KEYS) list.append(el("dt", { textContent: key }), el("dd", { textContent: what }));
@@ -2502,6 +2495,10 @@ export default function marbles(m: Mote): Scene {
     };
 
     // ---- the keyboard ----
+    /** The keys that move the view, by the way each goes: forward, back, left and right as the camera sees them. */
+    const WALKS: Record<string, "ahead" | "back" | "left" | "right"> = { ArrowUp: "ahead", w: "ahead", ArrowDown: "back", s: "back", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
+    /** The keys that move the view held now. */
+    const walking = new Set<"ahead" | "back" | "left" | "right">();
     /** A paste by Control and V: the system's clipboard if it holds a run, else what was copied here. */
     let pasting: ReturnType<typeof setTimeout> | undefined;
     if (!m.preview) {
@@ -2584,11 +2581,8 @@ export default function marbles(m: Mote): Scene {
             if (key === "Escape" && bendDrag) {
                 endBend(true);
                 for (const one of held.values()) if (one.mode === "bend") one.mode = "done";
-            } else if (event.altKey) {
-                if (key === "ArrowUp") nudge(0, 0, 1);
-                else if (key === "ArrowDown") nudge(0, 0, -1);
-                else return;
-            } else if (lower === "k") toggleBending();
+            } else if (event.altKey) return;
+            else if (lower === "k") toggleBending();
             else if (event.shiftKey && key.startsWith("Arrow")) {
                 free();
                 toFree();
@@ -2596,12 +2590,12 @@ export default function marbles(m: Mote): Scene {
                 if (key === "ArrowRight") orbit = kept({ ...orbit, turn: orbit.turn + 0.15 }, orbit);
                 if (key === "ArrowUp") orbit = kept({ ...orbit, tip: orbit.tip + 0.08 }, orbit);
                 if (key === "ArrowDown") orbit = kept({ ...orbit, tip: orbit.tip - 0.08 }, orbit);
-            } else if (key === "ArrowLeft" || lower === "a") nudge(-1, 0, 0);
-            else if (key === "ArrowRight" || lower === "d") nudge(1, 0, 0);
-            else if (key === "ArrowUp" || lower === "w") nudge(0, -1, 0);
-            else if (key === "ArrowDown" || lower === "s") nudge(0, 1, 0);
-            else if (lower === "e" || key === "PageUp") nudge(0, 0, 1);
-            else if (lower === "q" || key === "PageDown") nudge(0, 0, -1);
+            } else if (WALKS[key] ?? WALKS[lower]) {
+                // the view goes over the table for as long as the key is held (step, below)
+                walking.add(WALKS[key] ?? WALKS[lower]!);
+                toFree();
+                easing = undefined;
+            } else if (key === "PageUp" || key === "PageDown") raise(key === "PageUp" ? 1 : -1);
             else if (lower === "r") turnChosen(event.shiftKey ? -1 : 1);
             else if (lower === "f") mirrorChosen();
             else if (key === "Enter") {
@@ -2648,6 +2642,14 @@ export default function marbles(m: Mote): Scene {
             } else return;
             event.preventDefault();
             m.wake();
+        });
+        host.addEventListener("keyup", (event) => {
+            const way = WALKS[event.key] ?? WALKS[event.key.toLowerCase()];
+            if (way) walking.delete(way);
+        });
+        // the keyboard leaving the mini lets go of every key that moves the view
+        host.addEventListener("focusout", (event) => {
+            if (!host.contains(event.relatedTarget as Node | null)) walking.clear();
         });
         // copying, cutting and pasting reach the mini from wherever the keyboard is in it, but not from a box of text
         host.addEventListener("copy", (event) => {
@@ -3201,6 +3203,11 @@ export default function marbles(m: Mote): Scene {
                 }
             }
             stepCamera(dt);
+            if (walking.size) {
+                const ahead = (walking.has("ahead") ? 1 : 0) - (walking.has("back") ? 1 : 0);
+                const aside = (walking.has("right") ? 1 : 0) - (walking.has("left") ? 1 : 0);
+                if (ahead || aside) orbit = walked(orbit, ahead, aside, dt);
+            }
             // what is carried eases to where it would go: quick to start and slow to settle
             if (carried) {
                 const goal = target(carried);
@@ -3234,7 +3241,7 @@ export default function marbles(m: Mote): Scene {
             }
             shake = Math.max(0, shake - dt);
         },
-        resting: () => !m.preview && camera.kind === "free" && !blending && !(race && !race.done && !raceStopped) && gridShown === (building() ? GRID.building : GRID.rolling) && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || (table.marbles.every((one) => one.rest) && table.movers().every(({ solids }) => solids.every((solid) => solid.rest || (solid.driven && !table.running && !solid.v.some((x) => x !== 0)))))) && !held.size && ghost.done && ghostPlays >= 1,
+        resting: () => !m.preview && camera.kind === "free" && !blending && !(race && !race.done && !raceStopped) && gridShown === (building() ? GRID.building : GRID.rolling) && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || (table.marbles.every((one) => one.rest) && table.movers().every(({ solids }) => solids.every((solid) => solid.rest || (solid.driven && !table.running && !solid.v.some((x) => x !== 0)))))) && !held.size && !walking.size && ghost.done && ghostPlays >= 1,
         resize,
         debug: () => [`${run.length} pieces, ${table.marbles.length} marbles, ${table.marbles.filter((one) => one.rest).length} asleep`, `ghost ${took.ghost.toFixed(2)} ms, frame ${took.frame.toFixed(2)} ms`],
         destroy: () => {

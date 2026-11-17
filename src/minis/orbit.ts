@@ -195,6 +195,23 @@ export function zoomedAt(orbit: Orbit, degrees: number, aspect: number, x: numbe
     return pannedTo({ ...orbit, far }, degrees, aspect, grip, x, y);
 }
 
+/** How far the keys move the view each second, as a share of how far off the eye is: so that the view goes as fast on the screen near and far. */
+export const WALK = 0.9;
+
+/**
+ * The camera moved over the table for `seconds` by the keys held: `ahead` forward (1) or back (-1) and
+ * `aside` right (1) or left (-1), as the camera sees them, along the ground, never up or down, at a speed
+ * that suits how near the view is (`WALK`). Forward is the way the eye looks, along the ground; from
+ * above, up the picture.
+ */
+export function walked(orbit: Orbit, ahead: number, aside: number, seconds: number): Orbit {
+    const step = WALK * orbit.far * seconds;
+    const [s, c] = [Math.sin(orbit.turn), Math.cos(orbit.turn)];
+    const long = Math.hypot(ahead, aside) || 1;
+    const [f, r] = [(ahead / long) * step, (aside / long) * step];
+    return { ...orbit, at: [orbit.at[0] - s * f + c * r, orbit.at[1], orbit.at[2] - c * f - s * r] };
+}
+
 /** The camera that frames a box (by its least and greatest corners) from the way it now looks, with a little room round it. */
 export function framing(orbit: Orbit, degrees: number, aspect: number, low: V3, high: V3): Orbit {
     const at: V3 = [(low[0] + high[0]) / 2, (low[1] + high[1]) / 2, (low[2] + high[2]) / 2];

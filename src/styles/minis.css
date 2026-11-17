@@ -608,9 +608,9 @@
 
 .marbles-keys-list {
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.2rem 1rem;
-    margin: 0.8rem 0 0.2rem;
+    grid-template-columns: 1fr;
+    gap: 0 0;
+    margin: 0.5rem 0 0.2rem;
     font-size: 0.85rem;
 }
 
@@ -619,7 +619,7 @@
 }
 
 .marbles-keys-list dd {
-    margin: 0;
+    margin: 0 0 0.35rem;
     color: var(--muted);
 }
 
@@ -890,17 +890,6 @@
 @media (pointer: coarse) {
     .marbles-menu-line {
         min-height: 2.75rem;
-    }
-}
-
-@media (max-width: 30rem) {
-    .marbles-keys-list {
-        grid-template-columns: 1fr;
-        gap: 0 0;
-    }
-
-    .marbles-keys-list dd {
-        margin-bottom: 0.35rem;
     }
 }
 

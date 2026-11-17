@@ -6,7 +6,7 @@
 // pointer went, up and down too. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { enters, eyeOf, FAR, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, TIP, VIEWS, zoomedAt, type Orbit } from "./orbit";
+import { enters, eyeOf, FAR, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, TIP, VIEWS, WALK, walked, zoomedAt, type Orbit } from "./orbit";
 import type { V3 } from "../mote/solids";
 
 const orbit: Orbit = { at: [10, 5, -20], turn: 0.7, tip: 0.6, far: 120 };
@@ -168,4 +168,26 @@ test("the wheel brings the view nearer toward the point of the table under the p
         expect(Math.hypot(there.x - x, there.y - y)).toBeLessThan(0.5);
         expect(now.far).toBeCloseTo(seen.far * 0.8 ** 5 * 1.25 ** 3, 9);
     }
+});
+
+test("the keys move the view over the table the way the camera looks, never up or down, as fast on the screen near and far", () => {
+    const seen: Orbit = { at: [0, 10, 0], turn: 0.75, tip: 0.62, far: 145 };
+    // forward goes the way the eye looks, along the ground: a point ahead comes nearer the middle of the picture
+    const ahead = walked(seen, 1, 0, 1);
+    expect(ahead.at[1]).toBe(seen.at[1]);
+    expect(Math.hypot(ahead.at[0] - seen.at[0], ahead.at[2] - seen.at[2])).toBeCloseTo(WALK * 145, 9);
+    const eye = eyeOf(seen);
+    const away = Math.hypot(ahead.at[0] - eye[0], ahead.at[2] - eye[2]) - Math.hypot(seen.at[0] - eye[0], seen.at[2] - eye[2]);
+    expect(away).toBeCloseTo(WALK * 145, 6);
+    // right goes to the right of the picture: what is looked at moves left on the screen
+    const right = walked(seen, 0, 1, 0.1);
+    const now = project(right, 38, 1.5, seen.at)!;
+    expect(now.x).toBeLessThan(-0.01);
+    expect(Math.abs(now.y)).toBeLessThan(1e-9);
+    // twice as far off, twice as far in a second, so the same on the screen
+    const far = walked({ ...seen, far: 290 }, 0, 1, 0.1);
+    expect(project(far, 38, 1.5, seen.at)!.x).toBeCloseTo(now.x, 9);
+    // two keys at once go no faster than one
+    const both = walked(seen, 1, 1, 1);
+    expect(Math.hypot(both.at[0] - seen.at[0], both.at[2] - seen.at[2])).toBeCloseTo(WALK * 145, 9);
 });
