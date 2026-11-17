@@ -1825,7 +1825,12 @@ export function mountEditor(host: HTMLElement, context: Context) {
     }
     /** The model run on the picture, its mask the cut-out step, laid on nothing to start. */
     async function startCut() {
-        if (!picture || cutBusy || !(await cutAsking.ready(buttons.cutout))) return refresh();
+        if (!picture || cutBusy) return refresh();
+        const ready = await cutAsking.ready(buttons.cutout);
+        // the first time's dialog gives the keyboard back to the bar's word it grew from, outside the editor's keys, where Escape and
+        // Ctrl+Z did nothing; it goes to the picture, as every tool's word gives it
+        if (document.activeElement === buttons.cutout) stage.element.focus({ preventScroll: true });
+        if (!ready || !picture) return refresh();
         cutBusy = true;
         refresh();
         try {
