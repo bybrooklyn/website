@@ -30,6 +30,21 @@ export interface Place {
     scale: number;
     left: number;
     top: number;
+    /**
+     * How many quarter turns the cells as they are kept lie from the grid as it is seen, 0 to 3: the
+     * cell seen at column x, row y is kept at (y, columns - 1 - x) for one turn (`keptCell`), and the
+     * grid kept is then as wide as the one seen is high. For a grid whose keeper turns it, as a world
+     * of sand is turned to turn its gravity, and which is to be seen as it was.
+     */
+    turn?: number;
+}
+
+/** Where the cell seen at column `x`, row `y` of a grid `columns` by `rows` is kept, for `turn` quarter turns. */
+export function keptCell([x, y]: [number, number], turn: number, columns: number, rows: number): [x: number, y: number] {
+    if (turn === 1) return [y, columns - 1 - x];
+    if (turn === 2) return [columns - 1 - x, rows - 1 - y];
+    if (turn === 3) return [rows - 1 - y, x];
+    return [x, y];
 }
 
 /**
@@ -100,6 +115,14 @@ export function blurred(taps: number, sigma: number): { offsets: number[]; weigh
         weights.push((a + b) / total);
     }
     return { offsets, weights };
+}
+
+/** Where a cell kept at column `x`, row `y` is seen, in a grid seen `columns` by `rows`, for `turn` quarter turns: `keptCell` undone. */
+export function seenCell([x, y]: [number, number], turn: number, columns: number, rows: number): [x: number, y: number] {
+    if (turn === 1) return [columns - 1 - y, x];
+    if (turn === 2) return [columns - 1 - x, rows - 1 - y];
+    if (turn === 3) return [y, rows - 1 - x];
+    return [x, y];
 }
 
 /** A grid of cells drawn on a canvas. */
@@ -235,9 +258,17 @@ uniform sampler2D far;
 uniform vec2 origin;
 uniform float scale;
 uniform ivec2 size;
+uniform int turn;
 uniform vec2 grid;
 uniform float glow;
 out vec4 color;
+// Where a cell seen at column and row \`seen\`, counted from the top left, is kept: \`keptCell\`.
+ivec2 kept(ivec2 seen) {
+    if (turn == 1) return ivec2(seen.y, size.x - 1 - seen.x);
+    if (turn == 2) return ivec2(size.x - 1 - seen.x, size.y - 1 - seen.y);
+    if (turn == 3) return ivec2(size.y - 1 - seen.y, seen.x);
+    return seen;
+}
 // A cell as it is drawn itself, its color times its opacity: \`depth\` is how many cells above a deep one are looked at.
 vec4 shade(ivec2 at, int depth) {
     uint mode;
@@ -272,7 +303,7 @@ void main() {
     }
     vec4 sharp;
     if (scale >= 1.0) {
-        sharp = shade(ivec2(int(inside.x), size.y - 1 - int(inside.y)), ${DEPTH.cells});
+        sharp = shade(kept(ivec2(int(inside.x), size.y - 1 - int(inside.y))), ${DEPTH.cells});
     } else {
         // cells smaller than a pixel: those a pixel covers are drawn together, so that a thread of water
         // one cell wide is a faint line and not a row of dots that comes and goes
@@ -285,13 +316,17 @@ void main() {
             for (int dx = 0; dx < ${TOGETHER}; dx++) {
                 ivec2 at = first + ivec2(dx, dy);
                 if (dx >= n || dy >= n || at.x < 0 || at.y < 0 || at.x >= size.x || at.y >= size.y) continue;
-                sum += shade(ivec2(at.x, size.y - 1 - at.y), 3);
+                sum += shade(kept(ivec2(at.x, size.y - 1 - at.y)), 3);
                 count += 1.0;
             }
         }
         sharp = sum / max(count, 1.0);
     }
-    vec2 uv = inside / grid;
+    // the same point among the cells as they are kept, which the pictures of light and haze follow,
+    // counted up from the bottom as they are
+    vec2 seen = vec2(inside.x, float(size.y) - inside.y);
+    vec2 held = turn == 1 ? vec2(seen.y, float(size.x) - seen.x) : turn == 2 ? vec2(float(size.x) - seen.x, float(size.y) - seen.y) : turn == 3 ? vec2(float(size.y) - seen.y, seen.x) : seen;
+    vec2 uv = vec2(held.x, float(turn == 1 || turn == 3 ? size.x : size.y) - held.y) / grid;
     vec4 haze = texture(soft, uv);
     vec4 out4 = sharp + haze * (1.0 - sharp.a);
     // the light falls on the grains near fire and lava, and glows more strongly in the air round them
@@ -348,6 +383,8 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
     g.texStorage2D(g.TEXTURE_2D, 1, g.RGBA8, 256, 3);
     let grid: WebGLTexture | undefined;
     let at: Place = { columns: 0, rows: 0, scale: 1, left: 0, top: 0 };
+    /** The grid as it is kept: as wide as it is seen high when it is a quarter or three turned. */
+    const kept = (of = at) => ((of.turn ?? 0) % 2 ? { columns: of.rows, rows: of.columns } : { columns: of.columns, rows: of.rows });
     /** Whether any kind of cell gives light or is soft, so that the half-sized pictures are worth making. */
     let effects = false;
     /** Something besides the cells changed since the canvas was last drawn. */
@@ -362,7 +399,7 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
     let pairs: [Pair, Pair] | undefined;
     /** Two more pairs, smaller again, for the wide halo. */
     let fars: [Pair, Pair] | undefined;
-    const half = () => [Math.max(1, Math.ceil(at.columns / 2)), Math.max(1, Math.ceil(at.rows / 2))] as const;
+    const half = () => [Math.max(1, Math.ceil(kept().columns / 2)), Math.max(1, Math.ceil(kept().rows / 2))] as const;
     const small = () => [Math.max(1, Math.ceil(half()[0] / HALO.smaller)), Math.max(1, Math.ceil(half()[1] / HALO.smaller))] as const;
     const makePairs = () => {
         for (const pair of [...(pairs ?? []), ...(fars ?? [])]) {
@@ -397,7 +434,7 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
     const send: Cells["send"] = (bytes, stride, border, from, to) => {
         if (!grid) return;
         from = Math.max(0, from);
-        to = Math.min(at.rows - 1, to);
+        to = Math.min(kept().rows - 1, to);
         if (to < from) return;
         stale = true;
         // read straight out of `bytes`, a row at a time with its frame stepped over
@@ -407,7 +444,7 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
         g.pixelStorei(g.UNPACK_ROW_LENGTH, stride);
         g.pixelStorei(g.UNPACK_SKIP_PIXELS, border);
         g.pixelStorei(g.UNPACK_SKIP_ROWS, border + from);
-        g.texSubImage2D(g.TEXTURE_2D, 0, 0, from, at.columns, to - from + 1, g.RGBA_INTEGER, g.UNSIGNED_BYTE, bytes);
+        g.texSubImage2D(g.TEXTURE_2D, 0, 0, from, kept().columns, to - from + 1, g.RGBA_INTEGER, g.UNSIGNED_BYTE, bytes);
     };
 
     return {
@@ -423,12 +460,12 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
             stale = true;
         },
         place(next) {
-            const resized = !grid || next.columns !== at.columns || next.rows !== at.rows;
+            const resized = !grid || kept(next).columns !== kept().columns || kept(next).rows !== kept().rows;
             at = next;
             if (resized) {
                 if (grid) g.deleteTexture(grid);
                 grid = texture(0);
-                g.texStorage2D(g.TEXTURE_2D, 1, g.RGBA8UI, next.columns, next.rows);
+                g.texStorage2D(g.TEXTURE_2D, 1, g.RGBA8UI, kept().columns, kept().rows);
                 makePairs();
             }
             stale = true;
@@ -448,10 +485,14 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
                 // blurred light across and down again at the halo's size: only over the part of the grid
                 // the canvas shows and as far round it as the halo reaches, which in a grid far larger
                 // than its canvas is a small part of it.
+                // the columns and rows the canvas shows, as seen, then where those lie among the cells as kept
+                const [sx0, sx1, sy0, sy1] = [-at.left / at.scale, (canvas.width - at.left) / at.scale, -at.top / at.scale, (canvas.height - at.top) / at.scale];
+                const turn = at.turn ?? 0;
+                const [kx0, kx1, ky0, ky1] = turn === 1 ? [sy0, sy1, at.columns - sx1, at.columns - sx0] : turn === 2 ? [at.columns - sx1, at.columns - sx0, at.rows - sy1, at.rows - sy0] : turn === 3 ? [at.rows - sy1, at.rows - sy0, sx0, sx1] : [sx0, sx1, sy0, sy1];
                 const cut = (smaller: number, width: number, height: number) => {
-                    const [x0, x1] = [Math.floor((-at.left / at.scale - REACH) / smaller), Math.ceil(((canvas.width - at.left) / at.scale + REACH) / smaller)];
+                    const [x0, x1] = [Math.floor((kx0 - REACH) / smaller), Math.ceil((kx1 + REACH) / smaller)];
                     // rows are counted from the top in the grid and from the bottom in these pictures
-                    const [y0, y1] = [Math.floor((at.rows - (canvas.height - at.top) / at.scale - REACH) / smaller), Math.ceil((at.rows + at.top / at.scale + REACH) / smaller)];
+                    const [y0, y1] = [Math.floor((kept().rows - ky1 - REACH) / smaller), Math.ceil((kept().rows - ky0 + REACH) / smaller)];
                     const [left, bottom] = [Math.max(0, x0), Math.max(0, y0)];
                     g.scissor(left, bottom, Math.max(0, Math.min(width, x1) - left), Math.max(0, Math.min(height, y1) - bottom));
                 };
@@ -462,7 +503,7 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
                 g.useProgram(gather.made);
                 g.uniform1i(gather.at("cells"), 0);
                 g.uniform1i(gather.at("colors"), 1);
-                g.uniform2i(gather.at("size"), at.columns, at.rows);
+                g.uniform2i(gather.at("size"), kept().columns, kept().rows);
                 g.drawArrays(g.TRIANGLES, 0, 3);
                 g.useProgram(blur.made);
                 g.uniform1i(blur.at("light"), 2);
@@ -494,6 +535,7 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
             g.uniform2f(drawn.at("origin"), at.left, canvas.height - at.top - at.rows * at.scale);
             g.uniform1f(drawn.at("scale"), at.scale);
             g.uniform2i(drawn.at("size"), at.columns, at.rows);
+            g.uniform1i(drawn.at("turn"), at.turn ?? 0);
             // the half-sized pictures cover a whole number of texels, a cell more than the grid when it is odd
             g.uniform2f(drawn.at("grid"), wide * 2, high * 2);
             g.uniform1i(drawn.at("far"), 4);

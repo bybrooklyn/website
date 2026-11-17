@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium } from "../../scripts/browser";
-import { blurred, cellUnder, fitted, type Place } from "./cells";
+import { blurred, cellUnder, fitted, keptCell, seenCell, type Place } from "./cells";
 
 test("a grid is placed in the middle with the largest whole cells that fit, and never less than one pixel", () => {
     expect(fitted(1000, 600, 300, 200)).toEqual({ columns: 300, rows: 200, scale: 3, left: 50, top: 0 });
@@ -220,6 +220,63 @@ test.skipIf(!chromium())("a grid larger than its canvas is seen in part, each ce
         expect(far!.empty).toEqual([0, 0, 0, 0]);
         // and past the grid's last row, which ends halfway down the canvas, nothing is drawn
         expect(far!.past).toEqual([0, 0, 0, 0]);
+    } finally {
+        await tab.close();
+        await rm(folder, { recursive: true, force: true });
+    }
+}, 30_000);
+
+// A grid seen 64 by 32 whose cells are kept a quarter turned, 32 by 64: a cell kept at (5, 53) is seen
+// at (10, 5), and one kept at (0, 0) in the top right corner.
+const turned = `
+import { cells, keptCell } from "${here}/cells.ts";
+const canvas = document.querySelector("canvas");
+canvas.width = 64; canvas.height = 32;
+const grid = cells(canvas);
+const colors = new Uint8Array(3072);
+colors.set([200, 0, 0, 255], 4);
+colors.set([0, 0, 200, 255], 8);
+grid.palette(colors);
+const bytes = new Uint8Array(32 * 64 * 4);
+const set = ([column, row], material) => bytes.set([material, 128, 0, 0], (row * 32 + column) * 4);
+set(keptCell([10, 5], 1, 64, 32), 1);
+set([0, 0], 2);
+grid.place({ columns: 64, rows: 32, scale: 1, left: 0, top: 0, turn: 1 });
+grid.draw(bytes, 32, 0, 0, 63);
+const g = canvas.getContext("webgl2");
+const pixels = new Uint8Array(64 * 32 * 4);
+g.readPixels(0, 0, 64, 32, g.RGBA, g.UNSIGNED_BYTE, pixels);
+const at = (x, y) => [...pixels.slice(((31 - y) * 64 + x) * 4, ((31 - y) * 64 + x) * 4 + 4)];
+window.result = { red: at(10, 5), beside: at(11, 5), corner: at(63, 0), other: at(0, 0), where: keptCell([10, 5], 1, 64, 32) };
+`;
+
+test("a cell seen is kept a quarter, a half or three quarters turned, and four turns bring it back", () => {
+    expect(keptCell([10, 5], 0, 64, 32)).toEqual([10, 5]);
+    expect(keptCell([10, 5], 1, 64, 32)).toEqual([5, 53]);
+    expect(keptCell([10, 5], 2, 64, 32)).toEqual([53, 26]);
+    expect(keptCell([10, 5], 3, 64, 32)).toEqual([26, 10]);
+    // a turn of the grid as it is kept, (x, y) to (y, wide - 1 - x), is one more turn here
+    const once = keptCell([10, 5], 1, 64, 32);
+    expect(keptCell([10, 5], 2, 64, 32)).toEqual([once[1], 32 - 1 - once[0]]);
+    // and where a kept cell is seen undoes it, for every turn
+    for (const turn of [0, 1, 2, 3]) expect(seenCell(keptCell([10, 5], turn, 64, 32), turn, 64, 32)).toEqual([10, 5]);
+});
+
+test.skipIf(!chromium())("a grid whose cells are kept turned is seen as it was", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "mote-cells-"));
+    const tab = await browser({ width: 300, height: 200 });
+    try {
+        await Bun.write(`${folder}/scene.ts`, turned);
+        const built = await Bun.build({ entrypoints: [`${folder}/scene.ts`], target: "browser" });
+        await Bun.write(`${folder}/page.html`, `<!doctype html><canvas style="width:64px;height:32px"></canvas><script type="module">${await built.outputs[0]!.text()}</script>`);
+        await tab.open(`file://${folder}/page.html`);
+        expect(tab.errors).toEqual([]);
+        const result = await tab.run<Record<string, number[]>>("window.result");
+        expect(result.where).toEqual([5, 53]);
+        expect(result.red).toEqual([200, 0, 0, 255]);
+        expect(result.beside).toEqual([0, 0, 0, 0]);
+        expect(result.corner).toEqual([0, 0, 200, 255]);
+        expect(result.other).toEqual([0, 0, 0, 0]);
     } finally {
         await tab.close();
         await rm(folder, { recursive: true, force: true });

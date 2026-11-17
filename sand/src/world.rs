@@ -42,6 +42,10 @@ const MARGIN_X: i32 = widest();
 const MARGIN_Y: i32 = deepest();
 /// The clock runs 1 to this, then every cell's clock is set back to 0.
 const CLOCK_MOST: u32 = 15;
+/// The side of a block of the wind's field, in cells: the wind is one for every cell of a block.
+pub const GUST: i32 = 16;
+/// The strongest a wind blows along either way: what the brush paints.
+pub const BLOWN: i32 = 100;
 /// The fastest a cell's speed can be kept: sixteen cells a step.
 const SPEED_MOST: u32 = 15;
 /// How hot a flame must be to leap clear as a spark, and how seldom it does: once in this many steps.
@@ -225,6 +229,11 @@ pub struct World {
     pub(crate) rows: Vec<u32>,
     /// How many times each line of `REACTIONS` has happened, by its place in the table.
     pub fired: Vec<u64>,
+    /// The wind, for each block of `GUST` by `GUST` cells, row after row: how hard it blows to the
+    /// right and how hard downward, each from -`BLOWN` to `BLOWN`. Nothing where none was painted.
+    pub winds: Vec<[i8; 2]>,
+    /// How many blocks of wind there are across.
+    pub gusts: i32,
 }
 
 impl World {
@@ -255,6 +264,8 @@ impl World {
             levels: Levels::new(stride * rows),
             rows: vec![0; 2 * stride],
             fired: vec![0; REACTIONS.len()],
+            winds: vec![[0; 2]; (((width + GUST - 1) / GUST) * ((height + GUST - 1) / GUST)) as usize],
+            gusts: (width + GUST - 1) / GUST,
         };
         world.set_edges(Edges::Walled);
         world
@@ -630,6 +641,15 @@ impl World {
         // just left, flows out at once and does not drop a cell at a time. So does a grain of
         // powder in a crowded column (`drop` says which).
         let undermined = speed == 0 && material(below) == EMPTY && clock_of(below) == self.clock;
+        // What is in the air is carried by the wind: the lighter it is the farther, up to four cells
+        // a step for the lightest in the strongest wind, and a rising wind holds up or lifts what is
+        // as light as snow.
+        if open && !undermined {
+            let (right, down) = self.wind(x, y);
+            if (right != 0 || down < 0) && self.blown(at, (x, y), cell, p, (right, down)) {
+                return;
+            }
+        }
         // a grain that drifts goes down to a side now and then as it falls, as a flake of snow does
         if open && p.drift != 0 && p.kind == Kind::Powder {
             let drift = chance(self.seed ^ 0xd21f7, self.steps, at);
@@ -804,7 +824,10 @@ impl World {
             // not between two cells that touch only at their corners
             self.rises_into(p.density, self.cells[to]) && (side == 0 || self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]))
         };
+        // a flame leans with the wind: as often as the wind is strong it goes up to that side
+        let (right, _) = self.wind(x, y);
         let side: isize = match roll & 7 {
+            _ if right != 0 && (((roll >> 24) & 127) as i32) * BLOWN < right.abs() * 127 => right.signum() as isize,
             0 => -1,
             7 => 1,
             _ => 0,
@@ -833,6 +856,37 @@ impl World {
             return;
         }
         self.stay(x, y);
+    }
+
+    /// Carries a cell that is in the air with the wind: aside as many cells as the wind is strong and
+    /// the cell light, the part of a cell left over by chance, through open air only, and falling a
+    /// cell as it goes; and where the wind rises and the cell is as light as snow, up a cell, by chance
+    /// as often as the wind is strong. Gives whether it was moved.
+    #[inline(never)]
+    fn blown(&mut self, at: usize, (x, y): (i32, i32), cell: u32, p: Props, (right, down): (i32, i32)) -> bool {
+        let s = self.stride;
+        let roll = chance(self.seed ^ 0xb10e, self.steps, at);
+        let light = 255 - p.density as i32;
+        if down < 0 && p.density < LIGHT_POWDER && ((roll >> 16) & 127) as i32 * BLOWN < -down * 127 && material(self.cells[at - s]) == EMPTY {
+            self.swap(at, at - s, 1, (x, y), (x, y - 1));
+            return true;
+        }
+        // in 256ths of a cell: four cells for the lightest in the strongest wind
+        let far = right.abs() * light * 4 * 256 / (BLOWN * 255);
+        let cells = (far >> 8) + (((roll & 255) as i32) < (far & 255)) as i32;
+        let side: isize = if right > 0 { 1 } else { -1 };
+        let (mut to, mut gone) = (at, 0);
+        while gone < cells && material(self.cells[to.wrapping_add_signed(side)]) == EMPTY {
+            to = to.wrapping_add_signed(side);
+            gone += 1;
+        }
+        if gone == 0 {
+            return false;
+        }
+        // and down a cell from there if it can, so that it still falls as it is carried
+        let (to, fell) = if material(self.cells[to + s]) == EMPTY { (to + s, 1) } else { (to, 0) };
+        self.swap(at, to, speed_of(cell).max(1), (x, y), (x + gone * side as i32, y + fell));
+        true
     }
 
     /// The rule for lightning: down through the air, up to `fall` cells in a step, a cell aside now
@@ -1038,6 +1092,26 @@ impl World {
             self.swap(at, at - s, 0, (x, y), (x, y - 1));
             return;
         }
+        // The wind carries a gas along with it, a cell a step as often as the wind is strong, and a
+        // wind that blows down holds it down. It could always have, so it is reached again.
+        let (right, down) = self.wind(x, y);
+        if right != 0 || down != 0 {
+            let blow = chance(self.seed ^ 0xb10e, self.steps, at);
+            let side: isize = if right > 0 { 1 } else { -1 };
+            if ((blow & 127) as i32) * BLOWN < right.abs() * 127 && self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) {
+                self.swap(at, at.wrapping_add_signed(side), 0, (x, y), (x + side as i32, y));
+                return;
+            }
+            if down > 0 && (((blow >> 8) & 127) as i32) * BLOWN < down * 127 {
+                if material(self.cells[at + s]) == EMPTY {
+                    self.swap(at, at + s, 0, (x, y), (x, y + 1));
+                } else {
+                    self.stay(x, y);
+                }
+                return;
+            }
+            self.stay(x, y);
+        }
         // A gas that hovers, a cloud, does not rise: now and then it drifts a cell to a side. It could
         // always have, so it is reached again next step.
         if p.drift != 0 {
@@ -1241,6 +1315,126 @@ impl World {
         if painted {
             self.touch(left, top, right, bottom);
             self.warmed(left, top, right, bottom);
+        }
+    }
+
+    /// The wind at the cell (x, y): how hard it blows to the right and downward.
+    #[inline(always)]
+    pub(crate) fn wind(&self, x: i32, y: i32) -> (i32, i32) {
+        let [right, down] = self.winds[((y / GUST) * self.gusts + x / GUST) as usize];
+        (right as i32, down as i32)
+    }
+
+    /// Paints wind along the line from (x0, y0) to (x1, y1), `radius` cells either side: every block
+    /// of the field that the stroke reaches blows the way the stroke went, as hard as wind blows. A
+    /// stroke that goes nowhere stills the blocks under it. What the wind could now move is woken.
+    pub fn blow(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, radius: i32) {
+        let (dx, dy) = ((x1 - x0) as f32, (y1 - y0) as f32);
+        let long = root(dx * dx + dy * dy);
+        let still = x0 == x1 && y0 == y1;
+        let blown = if still { [0, 0] } else { [(dx / long * BLOWN as f32) as i8, (dy / long * BLOWN as f32) as i8] };
+        let reach = radius.clamp(0, 256) + GUST / 2;
+        let (left, right) = ((x0.min(x1) - reach).max(0), (x0.max(x1) + reach).min(self.width - 1));
+        let (top, bottom) = ((y0.min(y1) - reach).max(0), (y0.max(y1) + reach).min(self.height - 1));
+        if left > right || top > bottom {
+            return;
+        }
+        for by in top / GUST..=bottom / GUST {
+            for bx in left / GUST..=right / GUST {
+                // by the block's middle, how far it lies from the stroke
+                let (px, py) = ((bx * GUST + GUST / 2 - x0) as f32, (by * GUST + GUST / 2 - y0) as f32);
+                let along = if still { 0.0 } else { ((px * dx + py * dy) / (long * long)).clamp(0.0, 1.0) };
+                let (ox, oy) = (px - along * dx, py - along * dy);
+                if ox * ox + oy * oy <= (reach * reach) as f32 {
+                    self.winds[(by * self.gusts + bx) as usize] = blown;
+                }
+            }
+        }
+        self.touch(left, top, right, bottom);
+    }
+
+    /// Stills every wind.
+    pub fn still(&mut self) {
+        self.winds.fill([0; 2]);
+    }
+
+    /// How many blocks of the field have a wind in them.
+    pub fn windy(&self) -> usize {
+        self.winds.iter().filter(|wind| **wind != [0, 0]).count()
+    }
+
+    /// Turns the world a quarter, so that what was its left side is its floor: the cell at (x, y) is
+    /// at (y, width - 1 - x) of a world as wide as this was high. Everything is at rest and awake
+    /// afterward, with its heat and shade. The page draws the world turned back the other way, so that
+    /// what is seen stays where it was and falls another way: this is how gravity is turned, the
+    /// rules themselves knowing only down.
+    pub fn turn(&mut self) {
+        let (wide, high) = (self.width, self.height);
+        let mut next = World::new(high, wide, self.seed);
+        for y in 0..high {
+            for x in 0..wide {
+                let to = next.index(y, wide - 1 - x);
+                next.cells[to] = self.cells[self.index(x, y)] & 0x00ff_ffff;
+            }
+        }
+        // each block's wind is that of the block its middle came from, turned as the world is: what
+        // blew to the right blows up the new world, and what blew down blows to its right
+        for by in 0..(wide + GUST - 1) / GUST {
+            for bx in 0..next.gusts {
+                let (cx, cy) = ((bx * GUST + GUST / 2).min(high - 1), (by * GUST + GUST / 2).min(wide - 1));
+                let (right, down) = self.wind(wide - 1 - cy, cx);
+                next.winds[(by * next.gusts + bx) as usize] = [down as i8, -right as i8];
+            }
+        }
+        next.steps = self.steps;
+        next.strokes = self.strokes + 1;
+        next.sleeping = self.sleeping;
+        next.order = self.order;
+        next.fired = core::mem::take(&mut self.fired);
+        next.set_edges(self.edges);
+        next.touch(0, 0, high - 1, wide - 1);
+        next.warmed(0, 0, high - 1, wide - 1);
+        *self = next;
+    }
+
+    /// Shakes the world once: every grain of powder and cell of liquid with open air over it is
+    /// thrown up by chance, one time in two, as many as `by` cells and no farther than the air reaches,
+    /// and now and then a cell aside as well, to fall back as the step lets it. Called for a few steps
+    /// running, it is a tremor: heaps slump to a gentler slope and a lake slops.
+    pub fn shake(&mut self, by: u32) {
+        self.strokes += 1;
+        let s = self.stride;
+        // from the top down, so a cell thrown up is not reached again
+        for y in 1..self.height {
+            for x in 0..self.width {
+                let at = self.index(x, y);
+                let cell = self.cells[at];
+                if !matches!(props(cell).kind, Kind::Powder | Kind::Liquid) || material(self.cells[at - s]) != EMPTY {
+                    continue;
+                }
+                let roll = chance(self.seed ^ 0x5ba4e, self.strokes, at);
+                if roll & 1 == 0 {
+                    continue;
+                }
+                let (mut to, mut up) = (at - s, 1);
+                while up < 1 + (roll >> 1) % by.max(1) && (up as i32) < y && material(self.cells[to - s]) == EMPTY {
+                    to -= s;
+                    up += 1;
+                }
+                let side: isize = match (roll >> 8) & 7 {
+                    0 => -1,
+                    7 => 1,
+                    _ => 0,
+                };
+                let aside = to.wrapping_add_signed(side);
+                let (to, tx) = if side != 0 && material(self.cells[aside]) == EMPTY { (aside, x + side as i32) } else { (to, x) };
+                self.cells[to] = with_state(cell, 0, 0);
+                self.cells[at] = AIR;
+                self.touch(x.min(tx), y - up as i32, x.max(tx), y);
+                if temperature(cell) != ROOM || restless(cell) {
+                    self.warmed(x.min(tx), y - up as i32, x.max(tx), y);
+                }
+            }
         }
     }
 
@@ -1487,6 +1681,108 @@ mod tests {
             world.step();
         }
         assert!(world.band_changed(0) && world.band_changed(1) && !world.band_changed(3));
+    }
+
+    #[test]
+    fn wind_carries_what_is_in_the_air_the_lighter_the_farther_and_is_stilled() {
+        use crate::materials::{SMOKE, SNOW};
+        // the column a grain let go at column 100 has reached when it has fallen 100 cells
+        let landed = |of: u8, windy: bool| {
+            let mut world = World::new(400, 200, 9);
+            if windy {
+                world.blow(40, 100, 360, 100, 120);
+            }
+            world.paint(of, 100, 30, 100, 30, 0, 100, false);
+            for _ in 0..400 {
+                world.step();
+                let at = (0..400).flat_map(|x| (0..200).map(move |y| (x, y))).find(|&(x, y)| world.at(x, y) == of);
+                if let Some((x, _)) = at.filter(|&(_, y)| y >= 130) {
+                    return x;
+                }
+            }
+            panic!("it never fell 100 cells");
+        };
+        assert_eq!(landed(SAND, false), 100);
+        let (sand, snow) = (landed(SAND, true), landed(SNOW, true));
+        assert!(sand > 110 && snow > sand + 60, "sand is carried a little and snow far: sand to {sand}, snow to {snow}");
+        // smoke goes with it
+        let mut world = World::new(400, 200, 9);
+        world.blow(40, 100, 360, 100, 120);
+        assert_eq!(world.windy(), 25 * 13);
+        world.paint(SMOKE, 100, 150, 100, 150, 2, 100, false);
+        for _ in 0..40 {
+            world.step();
+        }
+        let smoke: Vec<i32> = (0..400).filter(|&x| (0..200).any(|y| world.at(x, y) == SMOKE)).collect();
+        assert!(smoke.iter().all(|&x| x > 105), "smoke is blown along: columns {:?} to {:?}", smoke.first(), smoke.last());
+        // a stroke that goes nowhere stills the blocks under it, and the word stills them all
+        world.blow(200, 100, 200, 100, 20);
+        assert!(world.windy() < 25 * 13 && world.wind(200, 100) == (0, 0) && world.wind(60, 100).0 == BLOWN);
+        world.still();
+        assert_eq!(world.windy(), 0);
+        // turned with the world, a wind to the right blows up the turned world, which is seen as to the right still
+        world.blow(40, 100, 360, 100, 120);
+        world.turn();
+        assert_eq!(world.wind(100, 200), (0, -BLOWN));
+    }
+
+    #[test]
+    fn a_turn_puts_the_left_side_down_keeps_every_cell_and_four_turns_bring_the_world_back() {
+        let mut world = World::new(90, 50, 6);
+        // stone along the left side, a cell of water by the top right corner, sand on the floor
+        world.paint(STONE, 0, 0, 0, 49, 0, 100, false);
+        world.paint(SAND, 10, 49, 80, 49, 0, 100, false);
+        let water = world.index(88, 1);
+        world.cells[water] = WATER as u32 | 77 << 8 | 60 << 16;
+        let before = world.cells.clone();
+        let (stone, sand) = (world.count(STONE), world.count(SAND));
+        world.turn();
+        assert_eq!((world.width, world.height), (50, 90));
+        // the left side is the floor, the floor the right side, and the water is by the top left
+        assert!((0..50).all(|x| world.at(x, 89) == STONE));
+        assert!((10..=80).all(|y| world.at(49, 89 - y) == SAND));
+        assert_eq!((world.at(1, 1), world.get(1, 1) >> 8 & 0xffff), (WATER, 77 | 60 << 8), "with its shade and heat");
+        assert_eq!((world.count(STONE), world.count(SAND), world.count(WATER)), (stone, sand, 1));
+        assert!(world.awake() > 0 && material(world.get(-1, 0)) == WALL && material(world.get(50, 89)) == WALL);
+        // the sand that lay on the floor now stands against the right side, and falls
+        world.step();
+        world.step();
+        assert!(world.at(49, 9) == EMPTY || world.at(49, 10) == EMPTY, "it falls the new way");
+        // four turns of a world that has not been stepped bring every cell back, at rest
+        let mut round = World::new(90, 50, 6);
+        round.cells = before.clone();
+        for _ in 0..4 {
+            round.turn();
+        }
+        assert!(round.cells.iter().zip(&before).all(|(now, was)| now & 0x00ff_ffff == was & 0x00ff_ffff));
+    }
+
+    #[test]
+    fn a_shake_throws_up_what_lies_open_keeps_every_grain_and_lets_a_steep_heap_slump() {
+        let mut world = World::new(160, 100, 4);
+        // a block of sand standing with upright sides, twenty wide and forty high, on the floor
+        for y in 60..100 {
+            world.paint(SAND, 70, y, 89, y, 0, 100, false);
+        }
+        for _ in 0..200 {
+            world.step();
+        }
+        let sand = world.count(SAND);
+        let top = |w: &World| (0..100).find(|&y| (0..160).any(|x| w.at(x, y) == SAND)).unwrap();
+        let wide = |w: &World| (0..160).filter(|&x| (0..100).any(|y| w.at(x, y) == SAND)).count();
+        let (top_before, wide_before) = (top(&world), wide(&world));
+        world.shake(3);
+        assert!(top(&world) < top_before, "grains at the top are thrown up");
+        for _ in 0..30 {
+            world.shake(3);
+            world.step();
+        }
+        for _ in 0..300 {
+            world.step();
+        }
+        assert_eq!(world.count(SAND), sand, "no grain is made or lost");
+        assert!(top(&world) > top_before && wide(&world) > wide_before, "the heap is lower and wider: top {} from {top_before}, {} wide from {wide_before}", top(&world), wide(&world));
+        assert_eq!(world.awake(), 0, "and comes to rest");
     }
 
     #[test]

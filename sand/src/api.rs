@@ -8,7 +8,7 @@
 
 use crate::Shared;
 use crate::materials::{MATERIALS, PALETTE};
-use crate::world::{BORDER, CHUNK, Edges, Order, World};
+use crate::world::{BORDER, CHUNK, Edges, GUST, Order, World};
 
 static WORLD: Shared<Option<World>> = Shared::new(None);
 
@@ -76,6 +76,67 @@ pub extern "C" fn flag(material: u32, x: i32, y: i32, wide: i32, high: i32, firs
         && MATERIALS[material as usize].paint
     {
         world.flag(material as u8, x, y, wide, high, first.min(255) as u8, count.min(255) as u8);
+    }
+}
+
+/// Paints wind along a line between two cells, `radius` cells either side: the blocks of the wind's
+/// field it reaches blow the way the line goes. A line that goes nowhere stills the blocks under it.
+#[unsafe(no_mangle)]
+pub extern "C" fn blow(x0: i32, y0: i32, x1: i32, y1: i32, radius: i32) {
+    if let Some(world) = world() {
+        world.blow(x0, y0, x1, y1, radius);
+    }
+}
+
+/// Stills every wind.
+#[unsafe(no_mangle)]
+pub extern "C" fn still() {
+    if let Some(world) = world() {
+        world.still();
+    }
+}
+
+/// How many blocks of the wind's field have a wind in them: 0 when the air is still.
+#[unsafe(no_mangle)]
+pub extern "C" fn windy() -> u32 {
+    world().map_or(0, |world| world.windy() as u32)
+}
+
+/// Where the wind's field is: two bytes a block, how hard it blows to the right and downward, each
+/// from -100 to 100, `gusts` blocks to a row.
+#[unsafe(no_mangle)]
+pub extern "C" fn winds() -> *const [i8; 2] {
+    world().map_or(core::ptr::null(), |world| world.winds.as_ptr())
+}
+
+/// How many blocks of the wind's field there are across.
+#[unsafe(no_mangle)]
+pub extern "C" fn gusts() -> u32 {
+    world().map_or(0, |world| world.gusts as u32)
+}
+
+/// How many cells a side a block of the wind's field is.
+#[unsafe(no_mangle)]
+pub extern "C" fn gust() -> u32 {
+    GUST as u32
+}
+
+/// Turns the world a quarter, so that what was its left side is its floor: its width and height
+/// change places, and `cells` and `stride` are other than they were, so the page makes its view of
+/// the cells again. The page draws it turned back, which is how gravity is turned.
+#[unsafe(no_mangle)]
+pub extern "C" fn turn() {
+    if let Some(world) = world() {
+        world.turn();
+    }
+}
+
+/// Shakes the world once: what lies open to the air is thrown up to `by` cells, to fall back. Called
+/// before each of a few steps, it is a tremor.
+#[unsafe(no_mangle)]
+pub extern "C" fn shake(by: u32) {
+    if let Some(world) = world() {
+        world.shake(by.min(16));
     }
 }
 

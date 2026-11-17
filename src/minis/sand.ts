@@ -13,7 +13,7 @@
 // when it is too large for one. The world steps sixty times a second while anything in it moves or
 // a pointer is pouring, and rests otherwise, as Mote does when out of sight.
 
-import { cells, cellUnder, type Place } from "../mote/cells";
+import { cells, cellUnder, keptCell, seenCell, type Place } from "../mote/cells";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { colorRow, FLAGS, place as stripesOf } from "./flags";
@@ -37,6 +37,9 @@ const SHAPES = ["free", "line", "box", "fill"] as const;
 /** How many strokes back the world is kept, to be undone; and the most cells a fill takes, past which a space is not closed. */
 const KEPT = 20;
 const FILL_MOST = 200_000;
+/** Which way things fall, for each quarter the world has been turned; and how many steps a shake lasts and how far it throws a grain. */
+const FALLS = ["down", "left", "up", "right"] as const;
+const SHAKE = { steps: 20, by: 3 };
 /** Which way each arrow key moves the view. */
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
@@ -90,7 +93,12 @@ export default function sand(m: Mote): Scene {
     let pinch: { apart: number; zoom: number; at: [number, number] } | undefined;
     /** The arrow keys held, and how far the wheel has turned toward the next stop of zoom. */
     const moving = new Set<string>();
+    let wheeled = 0;
+    /** How many quarters the world has been turned (`FALLS`), and how many steps of a shake are left. */
     let turned = 0;
+    let shaking = 0;
+    /** The brush paints wind, not a material. */
+    let blowing = false;
     /** The stage fills the window, and what keeps its place in the page meanwhile. */
     let filled = false;
     let holder: HTMLElement | undefined;
@@ -105,17 +113,24 @@ export default function sand(m: Mote): Scene {
     const ratio = () => (m.width > 0 ? m.canvas.width / m.width : window.devicePixelRatio || 1);
     /** The canvas's own pixels a cell is drawn at one CSS pixel a cell, in whole pixels so grains are square and sharp. */
     const base = () => Math.max(1, Math.round(CELL * ratio()));
-    const frame = (): Frame | undefined => (engine ? { columns: engine.width(), rows: engine.height(), wide: under.width, high: under.height } : undefined);
+    /** The world as it is seen, which a world turned a quarter or three is kept on its side of. */
+    const frame = (): Frame | undefined => (engine ? { columns: turned % 2 ? engine.height() : engine.width(), rows: turned % 2 ? engine.width() : engine.height(), wide: under.width, high: under.height } : undefined);
+    /** The engine's cell under a point of the stage. */
+    const cellAt = (point: { x: number; y: number }): [number, number] => keptCell(cellUnder(point.x, point.y, at!, ratio()), turned, at!.columns, at!.rows);
+    /** The page's view of the engine's cells, made again whenever the engine may have moved them or grown its memory. */
+    const viewCells = () => {
+        if (engine) bytes = new Uint8Array(engine.memory.buffer, engine.cells(), engine.stride() * (engine.height() + 2 * engine.border()) * 4);
+    };
     /** Looks at the world as `next` says, kept to the world, and puts the grid there. */
     const look = (next: View) => {
         const size = frame();
         if (!size || !grid) return;
         view = keptView(next, base(), size);
-        at = { columns: size.columns, rows: size.rows, scale: view.zoom, left: Math.round(size.wide / 2 - view.x * view.zoom), top: Math.round(size.high / 2 - view.y * view.zoom) };
+        at = { columns: size.columns, rows: size.rows, scale: view.zoom, left: Math.round(size.wide / 2 - view.x * view.zoom), top: Math.round(size.high / 2 - view.y * view.zoom), turn: turned };
         grid.place(at);
         // a brush held down stays under its pointer as the world moves under it
         const hand = pouring === undefined ? undefined : hands.get(pouring);
-        if (held && hand) held = cellUnder(hand.x, hand.y, at, ratio());
+        if (held && hand) held = cellAt(hand);
         seen();
         m.wake();
     };
@@ -151,8 +166,8 @@ export default function sand(m: Mote): Scene {
     /** Makes a new world of this size, and the views of the engine's memory that go with it. */
     const begin = (made: Engine, columns: number, rows: number): boolean => {
         if (!made.create(columns, rows, (Math.random() * 2 ** 32) >>> 0, 0)) return false;
-        // memory grows only in `create`, so these views stay good until the next
-        bytes = new Uint8Array(made.memory.buffer, made.cells(), made.stride() * (rows + 2 * made.border()) * 4);
+        turned = 0;
+        viewCells();
         palette = new Uint8Array(3072);
         palette.set(new Uint8Array(made.memory.buffer, made.palette(), 2048));
         palette.set(colorRow(), 2048);
@@ -208,6 +223,12 @@ export default function sand(m: Mote): Scene {
     };
     const stroke = (from: [number, number], to: [number, number]) => {
         if (!engine) return;
+        if (blowing) {
+            // wind the way the stroke goes; a brush held still stills the air under it
+            engine.blow(from[0], from[1], to[0], to[1], brushCells(radius));
+            render();
+            return;
+        }
         forgetLink();
         const still = from[0] === to[0] && from[1] === to[1];
         const cells = brushCells(radius, poured);
@@ -291,7 +312,7 @@ export default function sand(m: Mote): Scene {
                 button.setAttribute("aria-pressed", String(on));
                 button.classList.toggle("quiet", !on);
             });
-            for (const [button, can] of [[undone, past.length > 0], [redone, future.length > 0]] as const) {
+            for (const [button, can] of [[undone, past.length > 0], [redone, future.length > 0], [calmed, (engine?.windy() ?? 0) > 0]] as const) {
                 button.inert = !can;
                 button.classList.toggle("faint", !can);
             }
@@ -350,6 +371,64 @@ export default function sand(m: Mote): Scene {
             }
             grow.textContent = filled ? "back to the page" : "fill the window";
         };
+        // which way things fall, turned a quarter at each press, and a shake
+        const falls = el("button", {
+            type: "button",
+            class: "quiet",
+            textContent: "gravity: down",
+            onclick: () => {
+                if (!engine) return;
+                // the engine turns the world and the grid is drawn turned back: what is seen stays, and falls another way
+                engine.turn();
+                turned = (turned + 1) % FALLS.length;
+                viewCells();
+                fresh = true;
+                past.length = future.length = 0;
+                pouring = held = anchor = undefined;
+                forgetLink();
+                falls.textContent = `gravity: ${FALLS[turned]}`;
+                look(view);
+                render();
+            },
+        });
+        falls.dataset.widest = "gravity: right";
+        const shake = el("button", {
+            type: "button",
+            class: "quiet",
+            textContent: "shake",
+            onclick: () => {
+                keep();
+                forgetLink();
+                shaking = SHAKE.steps;
+                // the stage trembles with it, unless less motion was asked for
+                if (!calm()) for (const canvas of [under, m.canvas]) canvas.animate([0, -2, 2, -1, 1, 0].map((by) => ({ translate: `${by}px ${-by}px` })), { duration: (SHAKE.steps / STEPS_PER_SECOND) * 1000 });
+                m.wake();
+            },
+        });
+        // wind: while it is on the brush paints wind the way it is drawn, and the wind there is shown
+        const wind = el("button", {
+            type: "button",
+            class: "quiet",
+            textContent: "wind: off",
+            onclick: () => {
+                blowing = !blowing;
+                wind.textContent = blowing ? "wind: on" : "wind: off";
+                wind.setAttribute("aria-pressed", String(blowing));
+                m.wake();
+            },
+        });
+        wind.dataset.widest = "wind: off";
+        wind.setAttribute("aria-pressed", "false");
+        const calmed = el("button", {
+            type: "button",
+            class: "quiet",
+            textContent: "still the wind",
+            onclick: () => {
+                engine?.still();
+                render();
+                m.wake();
+            },
+        });
         const pause = el("button", { type: "button", class: "quiet", textContent: "pause", title: "pause (Space)", onclick: () => setPaused(!paused) });
         setPaused = (on: boolean) => {
             paused = on;
@@ -395,7 +474,16 @@ export default function sand(m: Mote): Scene {
         const share = el("button", { type: "button", class: "quiet sand-link", textContent: "copy link to this world" });
         share.onclick = async () => {
             if (!engine || !bytes) return;
-            const text = await pack(tokensOf(bytes, engine.stride(), engine.border(), engine.width(), engine.height(), striped()?.number ?? 0), engine.width(), engine.height(), striped()?.number ?? 0);
+            // as it is seen: a world turned to turn its gravity is sent the way up it looks, and falls down again when opened
+            const [kept, size] = [tokensOf(bytes, engine.stride(), engine.border(), engine.width(), engine.height(), striped()?.number ?? 0), frame()!];
+            const across = engine.width();
+            const seen = turned
+                ? Uint8Array.from({ length: size.columns * size.rows }, (_, k) => {
+                      const [x, y] = keptCell([k % size.columns, Math.floor(k / size.columns)], turned, size.columns, size.rows);
+                      return kept[y * across + x]!;
+                  })
+                : kept;
+            const text = await pack(seen, size.columns, size.rows, striped()?.number ?? 0);
             if (text.length > LINK_MOST) {
                 // too large for an address: kept as a file, opened again by dropping it here or choosing it
                 const link = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "world.sand" });
@@ -430,7 +518,7 @@ export default function sand(m: Mote): Scene {
         // the brush's size is a line of the materials it pours, so that the whole column is in a laptop's first screen
         // what is used most comes first: where the column is longer than the stage is high it scrolls, and
         // shows by a fade at its foot that more lies below
-        box.append(group("materials"), picks, flags, ...line("brush", size), shapes, group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), group("view"), el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow, group("share"), share, opener, chooser);
+        box.append(group("materials"), picks, flags, ...line("brush", size), shapes, group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), group("view"), el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow, group("forces"), el("div", { class: "sand-controls sand-across" }, falls, shake), el("div", { class: "sand-controls sand-across" }, wind, calmed), group("share"), share, opener, chooser);
         const below = () => box.classList.toggle("more-below", box.scrollTop + box.clientHeight < box.scrollHeight - 2);
         box.addEventListener("scroll", below, { passive: true });
         new ResizeObserver(below).observe(box);
@@ -511,10 +599,10 @@ export default function sand(m: Mote): Scene {
             event.preventDefault();
             if (!event.ctrlKey && !event.metaKey) return resize(event.deltaY < 0 ? 1 : -1);
             // a pinch comes in many small turns: each counts for more, so a pinch is a stop or two
-            turned += event.deltaY * (event.deltaMode === 1 ? 16 : 1) * (Math.abs(event.deltaY) < 30 && event.deltaMode === 0 ? 5 : 1);
-            while (Math.abs(turned) >= MOVES.notch) {
-                zoomBy(turned < 0 ? 1 : -1, event.offsetX * ratio(), event.offsetY * ratio());
-                turned -= Math.sign(turned) * MOVES.notch;
+            wheeled += event.deltaY * (event.deltaMode === 1 ? 16 : 1) * (Math.abs(event.deltaY) < 30 && event.deltaMode === 0 ? 5 : 1);
+            while (Math.abs(wheeled) >= MOVES.notch) {
+                zoomBy(wheeled < 0 ? 1 : -1, event.offsetX * ratio(), event.offsetY * ratio());
+                wheeled -= Math.sign(wheeled) * MOVES.notch;
             }
         },
         { passive: false },
@@ -585,7 +673,9 @@ export default function sand(m: Mote): Scene {
         const cell = at.scale / ratio();
         m.ctx.beginPath();
         if (poured?.striped && whole) {
-            const { wide, high } = flagSize(radius, engine.width(), engine.height());
+            // the flag is laid among the cells as they are kept: on its side where the world is a quarter turned
+            const laid = flagSize(radius, engine.width(), engine.height());
+            const [wide, high] = turned % 2 ? [laid.high, laid.wide] : [laid.wide, laid.high];
             const [column, row] = cellUnder(m.pointer.x, m.pointer.y, at, ratio());
             const x = (at.left / ratio()) + (column - (wide >> 1)) * cell;
             const y = (at.top / ratio()) + (row - (high >> 1)) * cell;
@@ -605,6 +695,33 @@ export default function sand(m: Mote): Scene {
         m.ctx.strokeStyle = m.color("--muted");
         m.ctx.lineWidth = 1;
         m.ctx.stroke();
+    };
+    /** The wind, while the brush paints it: for each block of the field in view that has one, a short stroke the way it blows, with a dot at its head. */
+    const gusts = () => {
+        if (!at || !engine || !blowing) return;
+        const [block, across] = [engine.gust(), engine.gusts()];
+        const field = new Int8Array(engine.memory.buffer, engine.winds(), across * Math.ceil(engine.height() / block) * 2);
+        const pixel = at.scale / ratio();
+        m.ctx.strokeStyle = m.ctx.fillStyle = m.color("--muted");
+        m.ctx.lineWidth = 1;
+        for (let k = 0; k < field.length; k += 2) {
+            const [right, down] = [field[k]!, field[k + 1]!];
+            if (!right && !down) continue;
+            const [column, row] = seenCell([(((k / 2) % across) + 0.5) * block, (Math.floor(k / 2 / across) + 0.5) * block], turned, at.columns, at.rows);
+            const [x, y] = [(at.left + column * at.scale) / ratio(), (at.top + row * at.scale) / ratio()];
+            if (x < -block || y < -block || x > m.width + block || y > m.height + block) continue;
+            // the way it blows as it is seen, where the world has been turned
+            const [dx, dy] = turned === 1 ? [-down, right] : turned === 2 ? [-right, -down] : turned === 3 ? [down, -right] : [right, down];
+            const long = Math.max(3, Math.min(block * pixel * 0.4, 9));
+            const [hx, hy] = [x + (dx / 100) * long, y + (dy / 100) * long];
+            m.ctx.beginPath();
+            m.ctx.moveTo(x - (dx / 100) * long, y - (dy / 100) * long);
+            m.ctx.lineTo(hx, hy);
+            m.ctx.stroke();
+            m.ctx.beginPath();
+            m.ctx.arc(hx, hy, 1.5, 0, Math.PI * 2);
+            m.ctx.fill();
+        }
     };
     /** A thin rule along the world's edges, wherever the view shows past them. */
     const edges = () => {
@@ -646,22 +763,27 @@ export default function sand(m: Mote): Scene {
                 // a pointer held still keeps pouring; pride sand only once it has stopped, so that a
                 // stroke's stripes are not poured over as they fall
                 if (held && !(poured?.striped && m.time - moved < STOPPED)) stroke(held, held);
+                if (shaking > 0) {
+                    engine.shake(SHAKE.by);
+                    shaking--;
+                }
                 engine.step(1);
             }
         },
         draw() {
             if (engine && grid && bytes && at) {
                 const [stride, border] = [engine.stride(), engine.border()];
-                if (fresh) grid.send(bytes, stride, border, 0, at.rows - 1);
+                const high = engine.height();
+                if (fresh) grid.send(bytes, stride, border, 0, high - 1);
                 else {
                     // only the bands of rows that changed, each run of them sent together
                     const rows = engine.band_rows();
-                    const bands = Math.ceil(at.rows / rows);
+                    const bands = Math.ceil(high / rows);
                     for (let band = 0; band < bands; band++) {
                         if (!engine.band_changed(band)) continue;
                         let last = band;
                         while (last + 1 < bands && engine.band_changed(last + 1)) last++;
-                        grid.send(bytes, stride, border, band * rows, Math.min(at.rows, (last + 1) * rows) - 1);
+                        grid.send(bytes, stride, border, band * rows, Math.min(high, (last + 1) * rows) - 1);
                         band = last;
                     }
                 }
@@ -670,6 +792,7 @@ export default function sand(m: Mote): Scene {
                 fresh = false;
             }
             edges();
+            gusts();
             outline();
             if (note) {
                 // beside where it was pressed, and kept inside the stage
@@ -703,14 +826,15 @@ export default function sand(m: Mote): Scene {
                 return;
             }
             if (pouring !== undefined || dragged) return;
-            const cell = cellUnder(hand.x, hand.y, at, ratio());
-            keep();
+            const cell = cellAt(hand);
+            if (blowing && shape === "fill") return;
+            if (!blowing) keep();
             if (shape === "fill") {
                 // a closed space, filled at a press; one not closed is left as it is, and says so
                 forgetLink();
                 const filled = engine!.flood(poured?.number ?? 0, cell[0], cell[1], FILL_MOST);
                 // the fill may have grown the engine's memory: the cells are looked at anew
-                bytes = new Uint8Array(engine!.memory.buffer, engine!.cells(), engine!.stride() * (engine!.height() + 2 * engine!.border()) * 4);
+                viewCells();
                 if (!filled) {
                     past.pop();
                     render();
@@ -722,8 +846,8 @@ export default function sand(m: Mote): Scene {
             pouring = hand.id;
             laid = false;
             if (shape !== "free") {
-                // a line or a box is drawn from here to where the pointer is let go
-                anchor = cell;
+                // a line or a box is drawn from here, as it is seen, to where the pointer is let go
+                anchor = cellUnder(hand.x, hand.y, at, ratio());
                 return;
             }
             held = cell;
@@ -742,7 +866,7 @@ export default function sand(m: Mote): Scene {
                 m.wake();
                 return;
             }
-            const next = cellUnder(hand.x, hand.y, at, ratio());
+            const next = cellAt(hand);
             if (next[0] === held[0] && next[1] === held[1]) return;
             stroke(held, next);
             held = next;
@@ -756,7 +880,8 @@ export default function sand(m: Mote): Scene {
                     // the line, or the four sides of the box, from where it began to here
                     const [a, b] = [anchor, cellUnder(hand.x, hand.y, at, ratio())];
                     const sides: [[number, number], [number, number]][] = shape === "box" ? [[a, [b[0], a[1]]], [[b[0], a[1]], b], [b, [a[0], b[1]]], [[a[0], b[1]], a]] : [[a, b]];
-                    for (const [from, to] of sides) stroke(from, to);
+                    const place = at;
+                    for (const [from, to] of sides) stroke(keptCell(from, turned, place.columns, place.rows), keptCell(to, turned, place.columns, place.rows));
                 }
                 pouring = held = anchor = undefined;
             }
@@ -773,7 +898,7 @@ export default function sand(m: Mote): Scene {
         keydown(name) {
             if (name === "action") setPaused(!paused);
         },
-        resting: () => !engine || (pouring === undefined && !glide && !note && moving.size === 0 && (paused || engine.awake() === 0)),
+        resting: () => !engine || (pouring === undefined && !glide && !note && moving.size === 0 && (paused || (shaking === 0 && engine.awake() === 0))),
         debug: () => (engine ? [`steps ${engine.steps()}`, `awake chunks ${engine.awake()}`, `world ${engine.width()} by ${engine.height()}`, `a cell is ${view.zoom.toFixed(2)} pixels`] : []),
         destroy() {
             window.removeEventListener("hashchange", followed);

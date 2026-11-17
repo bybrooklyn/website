@@ -14,6 +14,14 @@ export interface Engine {
     paint_striped(material: number, x0: number, y0: number, x1: number, y1: number, radius: number, fill: number, first: number, count: number): void;
     flag(material: number, x: number, y: number, wide: number, high: number, first: number, count: number): void;
     flood(material: number, x: number, y: number, most: number): number;
+    turn(): void;
+    shake(by: number): void;
+    blow(x0: number, y0: number, x1: number, y1: number, radius: number): void;
+    still(): void;
+    windy(): number;
+    winds(): number;
+    gusts(): number;
+    gust(): number;
     rewritten(fresh: number): void;
     clear(): void;
     cells(): number;

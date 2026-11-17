@@ -1284,6 +1284,35 @@ Asked for on 17 November 2026.
   (`mote-over`, as the marble run's is), and with it the world's edge rule, the word about a fill, and
   the soft shade at the stage's edges.
 
+## Forces: gravity that turns, a shake, and wind
+
+Asked for on 17 November 2026. Three words and a pair under "forces" in the column, below "view".
+
+- **Gravity turns a quarter at each press**: down, left, up, right, and the word says which. The rules
+  know only down, so the engine turns the whole world instead (`turn`: the cell at (x, y) goes to
+  (y, width - 1 - x), in a world as wide as it was high, everything at rest and awake) and the page
+  draws it turned back (`turn` of a grid's `Place` in `cells.ts`, `keptCell` and `seenCell`), so what
+  is seen stays where it was and falls the new way. The pointer, a line, a box and a fill are all
+  given to the engine among the cells as it keeps them. A turn forgets what could be undone. A link or
+  a file holds the world as it is seen, and it falls down again when opened. In a world 2,400 wide,
+  what falls to the left falls far: "see it all" is the view for it.
+- **Shake** throws up every grain of powder and cell of liquid that has open air over it, by chance,
+  up to three cells, before each of twenty steps (`shake`), while the stage trembles for the same third
+  of a second (not for someone who asked for less motion): a heap standing with upright sides ends
+  lower and wider, no grain made or lost, and a lake slops. It is undone as a stroke is.
+- **Wind is painted.** With "wind: on" the brush paints wind and not a material: the blocks of a field
+  of the engine's, sixteen cells a side, that a stroke reaches blow the way the stroke was drawn (a
+  line and a box paint it too, a box round its four sides), and a brush held still stills the air
+  under it; "still the wind" stills it all, and is faint while the air is still. While the word is on,
+  each block in view that has a wind shows a short stroke the way it blows, with a dot at its head;
+  nothing of it is drawn otherwise. What is in the air is carried along as it falls, the lighter the
+  farther, up to four cells a step: let go 100 cells up in a wind across, sand lands some ten cells
+  along and snow more than seventy. Flames lean with it, smoke, steam and a cloud go with it, and a
+  wind painted upward holds up or lifts what is as light as snow or ash. Grains at rest are not moved.
+  The winds turn with the world when gravity is turned, and are not kept in a link or undone.
+
+The engine's module is 121 KiB of the 128 it is held to (`scripts/wasm.ts`).
+
 ## The look, as chosen
 
 Three palettes, three kinds of light, water with and without depth, and four stages were shown as
