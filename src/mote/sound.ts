@@ -207,6 +207,8 @@ export function sounds(m: Pick<Mote, "recall" | "keep">): Sounds {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quiet";
+    // the wider of its two words, for a line that keeps a word's room so that nothing after it moves when it changes
+    button.dataset.widest = "sound: off";
     const say = () => {
         button.textContent = on ? "sound: on" : "sound: off";
         button.setAttribute("aria-pressed", String(on));
