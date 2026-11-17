@@ -16,7 +16,7 @@
 //   laid.show("clear");
 //   box.say("Cut out in 2.2 s.");
 
-import { make } from "./ui";
+import { make, still } from "./ui";
 
 /** Names that keep their capital in a label though only their first letter is one; others are known by a capital inside them. */
 const NAMES = ["Markdown", "Opus", "Ogg", "Mbps", "Google", "Drive", "Hugging", "Face", "Chrome", "Chromium", "Firefox", "Safari"];
@@ -297,10 +297,45 @@ export function pictured<T extends string>(heading: string, options: Pictured<T>
  * shut and grows open again, and while shut it is out of reach, never drawn faint. `shown` says which it is to be now.
  */
 export function fold<E extends HTMLElement>(thing: E, shown: boolean): E {
+    const was = thing.classList.contains("quire-bench-fold") && !thing.classList.contains("away");
     thing.classList.add("quire-bench-fold");
+    if (was !== shown && thing.isConnected && !still()) glide(thing, shown);
+    else if (!shown) {
+        // shut with no glide, a height let go after opening goes too, or the fold would stay open
+        clearTimeout(gliding.get(thing));
+        thing.style.maxHeight = "";
+    }
     thing.classList.toggle("away", !shown);
     thing.inert = !shown;
     return thing;
+}
+
+/** When each fold's glide ends and it is let be as tall as it is, by the fold. */
+const gliding = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+
+/**
+ * A fold's height glides over the distance it really has: from its own height to none as it shuts, and from none to its own
+ * height as it opens, which is then let go so that what grows inside it later is not cut off. Its height had glided between
+ * none and the stylesheet's 40rem, so that a short fold leapt open in a frame or two and shut only after a wait.
+ */
+function glide(thing: HTMLElement, shown: boolean) {
+    clearTimeout(gliding.get(thing));
+    // shutting starts from the height it has now, not from no limit at all, which a height cannot glide from
+    if (!shown) {
+        thing.style.maxHeight = `${thing.scrollHeight}px`;
+        void thing.offsetHeight;
+        thing.style.maxHeight = "";
+        return;
+    }
+    // shut, it has none of the room it takes above its first line when open (the stylesheet's 0.8rem and its rule), which is added
+    thing.style.maxHeight = `calc(${thing.scrollHeight}px + 1rem)`;
+    // the glide's length in the stylesheet, and a little more
+    gliding.set(
+        thing,
+        setTimeout(() => {
+            if (!thing.classList.contains("away")) thing.style.maxHeight = "none";
+        }, 400),
+    );
 }
 
 /** A thing that is on or off, as a box to tick before its words: its row, the box itself, and `set`, which shows it on or off without telling the tool. */

@@ -10,6 +10,7 @@
 //   const crop = side.page("crop", "quire-img-crop-page");
 //   crop.body.append(...); crop.open();
 
+import { fold } from "../core/bench";
 import { make, still } from "../core/ui";
 
 /** A page of the column: its element, where its controls go, and whether it is the one shown. */
@@ -130,15 +131,15 @@ export function sideColumn(hooks: SideHooks) {
 
     /** Says what is being done now over the page, with its few words to press, or folds the line away when nothing is. */
     function say(said: { words: string; controls?: HTMLElement[] } | undefined) {
-        doing.classList.toggle("away", !said);
-        doing.inert = !said;
-        if (!said) return;
+        // folded by the kit, whose glide spans the line's own height
+        if (!said) return void fold(doing, false);
         const line = make("p", "quire-img-doing-said", said.words);
         const before = new Set([...doing.querySelectorAll("button")].map((each) => each.textContent));
         doing.replaceChildren(line, ...(said.controls?.length ? [make("div", "quire-img-doing-controls")] : []));
         doing.querySelector(".quire-img-doing-controls")?.append(...(said.controls ?? []));
         // what is new in the line grows in, rather than appearing
         if (!still()) for (const control of said.controls ?? []) if (!before.has(control.textContent)) control.classList.add("grows");
+        fold(doing, true);
     }
 
     return { element, doing, page, show, say, keepKeyboard, current: () => current };
