@@ -1129,7 +1129,10 @@ export default function marbles(m: Mote): Scene {
             sound?.knock(0.3, 500);
         } else if (one.fits) {
             if (one.inRun) run = run.map((piece) => placed.find((other) => other.id === piece.id) ?? piece);
-            else run = [...run, ...placed];
+            else {
+                run = [...run, ...placed];
+                speak(`${namedOf(placed)} placed`);
+            }
             chosen.clear();
             for (const piece of placed) chosen.add(piece.id);
             end = open(run).find((joint) => ids.has(joint.id)) ?? end;
@@ -1204,6 +1207,8 @@ export default function marbles(m: Mote): Scene {
     };
     /** Pieces given new numbers, to be added to the run. */
     const fresh = (pieces: Placed[]) => pieces.map((piece) => ({ ...piece, kind: { ...piece.kind, sizes: [...piece.kind.sizes] }, id: nextId++ }));
+    /** What pieces are called, to say so: one by its name in the box, more as so many pieces. */
+    const namedOf = (pieces: Placed[]): string => (pieces.length === 1 ? (BOX.find((entry) => keyOf(entry.kind) === keyOf(pieces[0]!.kind))?.name ?? "a piece") : `${pieces.length} pieces`);
     const fromBox = (kind: Kind): Placed[] => [{ id: nextId++, kind: { ...kind, sizes: [...kind.sizes] }, place: { x: 0, z: 0, y: -shapeOf(kind).low, turn: 0 } }];
 
     // ---- the handles ----
@@ -1609,6 +1614,8 @@ export default function marbles(m: Mote): Scene {
     };
     /** A short word said quietly under the bar, grown from the button pressed, gone after a moment. */
     let say = (_words: string, _from?: HTMLElement) => {};
+    /** Words said aloud to a screen reader, and not shown: what is said under the bar, and what is seen happen in the scene. */
+    let speak = (_words: string) => {};
     const sharedNow = () => ({ run: resting(), spots, owns: ownsUsed(resting(), owns), race: lastRace?.text === write(resting()) ? { count: lastRace.count, drawn: lastRace.drawn } : undefined });
     const saveFile = (text: string) => {
         const link = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "marble run.marbles" });
@@ -2030,7 +2037,7 @@ export default function marbles(m: Mote): Scene {
                 if (!placeAtEnd(make(), own.left + own.width / 2 - rect.left)) {
                     button.animate?.([{ translate: "0" }, { translate: "-3px" }, { translate: "3px" }, { translate: "0" }], { duration: reduced ? 0 : 220 });
                     sound?.knock(0.2, 300);
-                }
+                } else speak(`${name} placed`);
             });
             return button;
         };
@@ -2136,7 +2143,17 @@ export default function marbles(m: Mote): Scene {
             const finished = placed.filter((one) => one.time !== undefined).length;
             const verdict = raceStopped ? "Stopped before the end." : !race?.done || finished < 2 ? "" : inLine(race) ? "No marble passed another: the line decided it." : placed.some((one) => one.close) ? "A photo finish: within a hundredth of a second." : "Places changed on the way.";
             raceNote.textContent = why ?? (race ? `Line ${race.drawn}. ${verdict}`.trim() : "");
+            // said aloud once a race is over, or stopped, with every placing as it is shown, and whatever is said instead of a race
+            const over = race && (race.done || raceStopped) ? `${race.drawn} ${raceStopped}` : "";
+            if (why) speak(why);
+            else if (over && over !== told) {
+                const placings = placed.map((one, place) => `${one.time !== undefined ? `${place + 1}, ` : ""}${one.racer.name}, ${one.time !== undefined ? timeOf(one.time) : one.racer.out ? OUT_WORDS[one.racer.out] : "stopped"}`);
+                speak(`${placings.join("; ")}. ${raceNote.textContent}`);
+            }
+            told = over;
         };
+        /** The race last said aloud, so that it is said once. */
+        let told = "";
         paintRace();
         folds.push(raceFold);
         showRace = () => {
@@ -2170,7 +2187,18 @@ export default function marbles(m: Mote): Scene {
         const words = el("span", {});
         const saying = { ...fold("marbles-said", words), from: () => shareTool };
         let hush: ReturnType<typeof setTimeout> | undefined;
+        // said aloud too: the fold is hidden from a screen reader whenever it is shut
+        const aloud = el("p", { class: "unseen" });
+        aloud.setAttribute("aria-live", "polite");
+        let hushAloud: ReturnType<typeof setTimeout> | undefined;
+        speak = (text: string) => {
+            // emptied first and filled a moment later, so that the same words said again are heard again
+            aloud.textContent = "";
+            clearTimeout(hushAloud);
+            hushAloud = setTimeout(() => (aloud.textContent = text), 60);
+        };
         say = (text: string, from?: HTMLElement) => {
+            speak(text);
             words.textContent = text;
             clearTimeout(hush);
             saying.open(from ?? shareTool, true);
@@ -2272,7 +2300,7 @@ export default function marbles(m: Mote): Scene {
         runList.append(el("li", { class: "marbles-rule" }, opener, chooser), el("li", {}, paster, pasted));
         const runs = { ...fold("marbles-menu", runList), from: () => runsTool };
         folds.push(keys, runs);
-        panel.append(box, bar, keys.box, runs.box, raceFold.box, spotsFold.box, saying.box);
+        panel.append(box, bar, keys.box, runs.box, raceFold.box, spotsFold.box, saying.box, aloud);
         // a file dropped anywhere on the mini opens
         const host = m.canvas.parentElement!;
         host.addEventListener("dragover", (event) => event.preventDefault());
