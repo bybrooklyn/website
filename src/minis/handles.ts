@@ -168,38 +168,3 @@ export function pixelsOf(orbit: Orbit, degrees: number, width: number, height: n
     // the picture's units are half its height to a unit, and these are a centimetre's
     return { up: (seen.lu * height) / 2 / 10, aside: (seen.la * height) / 2 / 10 };
 }
-
-/** A box on the screen, in pixels: its left, right, top and bottom. */
-export interface Rect {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-}
-
-/**
- * Where the strip of tools for what is chosen goes on a screen `width` by `height`: above the chosen
- * pieces and their handles, or under them where there is no room above, or beside them where there is
- * room for neither, always wholly on the screen and never over the pieces (`chosen`) or the handles
- * (`kept`). Nowhere, while too little of what is chosen is on the screen to be seen (less than `seen`
- * pixels each way), or where there is no room for it beside the pieces: so it never floats over nothing
- * at an edge, and never hides what it acts on.
- */
-export function stripPlace(chosen: Rect, kept: Rect | undefined, strip: { w: number; h: number }, width: number, height: number, seen = 24, gap = 10, edge = 8): { x: number; y: number; below: boolean } | undefined {
-    const inside = Math.min(chosen.right, width) - Math.max(chosen.left, 0) >= Math.min(seen, chosen.right - chosen.left) && Math.min(chosen.bottom, height) - Math.max(chosen.top, 0) >= Math.min(seen, chosen.bottom - chosen.top);
-    const onScreen = chosen.right > 0 && chosen.left < width && chosen.bottom > 0 && chosen.top < height;
-    if (!inside || !onScreen) return undefined;
-    const all: Rect = kept ? { left: Math.min(chosen.left, kept.left), right: Math.max(chosen.right, kept.right), top: Math.min(chosen.top, kept.top), bottom: Math.max(chosen.bottom, kept.bottom) } : chosen;
-    // across, by the middle of what of it is on the screen
-    const middle = (Math.max(all.left, 0) + Math.min(all.right, width)) / 2;
-    const x = Math.max(edge, Math.min(width - strip.w - edge, middle - strip.w / 2));
-    const above = all.top - gap - strip.h;
-    if (above >= edge) return { x, y: above, below: false };
-    const under = all.bottom + gap;
-    if (under + strip.h <= height - edge) return { x, y: under, below: true };
-    // beside, level with the middle of what is on the screen
-    const y = Math.max(edge, Math.min(height - strip.h - edge, (Math.max(all.top, 0) + Math.min(all.bottom, height)) / 2 - strip.h / 2));
-    if (all.right + gap + strip.w <= width - edge) return { x: all.right + gap, y, below: false };
-    if (all.left - gap - strip.w >= edge) return { x: all.left - gap - strip.w, y, below: false };
-    return undefined;
-}

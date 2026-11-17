@@ -35,7 +35,7 @@ import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, ride
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
-import { AXES, ARROW, across, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, stripPlace, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
+import { AXES, ARROW, across, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, type Grip, type Orbit } from "./orbit";
 import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
@@ -44,7 +44,7 @@ import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { NOTES, type Body, type Moving } from "./parts";
 import { chainAt, chainLength, makeTable, type Table } from "./table";
-import { fold, icon, keyHeard, keyPlace, stacking, swap, tool } from "./toolbar";
+import { can, fold, icon, keyHeard, keyPlace, word } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
 
@@ -1862,16 +1862,17 @@ export default function marbles(m: Mote): Scene {
     let showRace = () => {};
     let openMenu = (_x: number, _y: number, _keyboard: boolean) => {};
     let closeMenu = (): boolean => false;
-    /** Whether the scene's menu is open; the strip by what is chosen keeps away while it is. */
+    /** Whether the scene's menu is open. */
     let menuShown = false;
     /** The next press on the scene shut the menu, and does nothing more. */
     let swallow = false;
     /** What to undo when the mini goes: listeners on the page, and things added to it. */
     const leaving: (() => void)[] = [];
     let ownBox = (_grown?: number) => {};
-    const strip = el("div", { class: "marbles-strip", role: "toolbar", ariaLabel: "what is chosen" });
     if (!m.preview) {
+        // the column beside the scene, as the Walker's is, and the row of pieces straight under the scene
         const panel = m.panel();
+        panel.classList.add("marbles-side");
         const box = el("div", { class: "marbles-box", role: "toolbar", ariaLabel: "the box of pieces" });
         const pictures = paintBox(view, colors, BOX.map((entry) => [{ id: 0, kind: entry.kind, place: { x: 0, z: 0, y: 0, turn: 0 } }]));
         /** A button of the box: pressed, its pieces go at the open end; dragged up, they are carried into the scene. */
@@ -1958,32 +1959,35 @@ export default function marbles(m: Mote): Scene {
             });
         };
         ownBox();
+        // a soft fade at an end of the row where more of it lies beyond
+        const edges = () => {
+            box.classList.toggle("more-before", box.scrollLeft > 2);
+            box.classList.toggle("more-after", box.scrollLeft + box.clientWidth < box.scrollWidth - 2);
+        };
+        box.addEventListener("scroll", edges, { passive: true });
+        new ResizeObserver(edges).observe(box);
 
-        // the bar: choosing and undo, marbles, the view, and the rest
-        const selectTool = tool("select", "Select: a drag draws a box, a tap adds a piece", "B", toggleSelecting, true);
-        const undoTool = tool("undo", "Undo", "Ctrl+Z", undo);
-        const redoTool = tool("redo", "Redo", "Ctrl+Shift+Z", redo);
-        const pasteTool = tool("paste", "Paste at the open end", "Ctrl+V", () => clip && paste(clip, false));
-        const goTool = tool("go", "Let a marble go", "Space", letGo);
-        const streamTool = tool("stream", "Stream of marbles", "Shift+Space", toggleStream, true);
-        const pauseTool = tool("pause", "Pause", "P", togglePause);
-        const resetTool = tool("reset", "Clear the marbles", "C", clearMarbles);
-        const fitTool = tool("fit", "Fit the run", "Home", () => fitRun());
-        const soundTool = tool("quiet", "Sound", "M", () => {
-            sound?.button.click();
-            tell();
-        });
-        const keysTool = tool("keys", "Keys", "?", () => toggleKeys());
-        const runsTool = tool("runs", "Start from", "", () => only(runs, runsTool));
-        const raceTool = tool("race", "Race", "X", () => only(raceFold, raceTool));
-        const rideTool = tool("ride", "Ride along with a marble", "V", rideNext, true);
+        // the column's words, in groups under small headings: the marbles, building, the view, sharing, and what is chosen
+        const goTool = word("let a marble go", "Let a marble go", "Space", letGo);
+        const streamTool = word("stream: off", "Stream of marbles", "Shift+Space", toggleStream, true);
+        const pauseTool = word("pause", "Pause", "P", togglePause);
+        const resetTool = word("clear the marbles", "Clear the marbles", "C", clearMarbles);
+        const raceTool = word("race", "Race", "X", () => only(raceFold, raceTool));
+        const selectTool = word("select: off", "Select: a drag draws a box, a tap adds a piece", "B", toggleSelecting, true);
+        const undoTool = word("undo", "Undo", "Ctrl+Z", undo);
+        const redoTool = word("redo", "Redo", "Ctrl+Shift+Z", redo);
+        const pasteTool = word("paste", "Paste at the open end", "Ctrl+V", () => clip && paste(clip, false));
+        const runsTool = word("start from", "Start from a made run, an empty table or a file", "", () => only(runs, runsTool));
+        const fitTool = word("fit the run", "Fit the run", "Home", () => fitRun());
+        const rideTool = word("ride: off", "Ride along with a marble", "V", rideNext, true);
         rideTool.classList.add("marbles-ride");
-        const spotsTool = tool("spots", "Spots", "H, G", () => only(spotsFold, spotsTool));
-        const tourTool = tool("tour", "A tour of the run", "T", () => (camera.kind === "tour" ? toFree() : tourRun()), true);
-        const shareTool = tool("share", "Share: copy a link to this run", "", () => void shareRun(shareTool));
-        const group = (...tools: HTMLElement[]) => el("div", { class: "marbles-group" }, ...tools);
-        const bar = el("div", { class: "marbles-bar", role: "toolbar", ariaLabel: "tools" }, group(selectTool, undoTool, redoTool, pasteTool), group(goTool, streamTool, pauseTool, resetTool, raceTool), group(fitTool, rideTool, spotsTool, tourTool), group(shareTool, soundTool, keysTool, runsTool));
-        queueMicrotask(() => stacking(bar));
+        const spotsTool = word("spots", "Spots", "H, G", () => only(spotsFold, spotsTool));
+        const tourTool = word("tour: off", "A tour of the run", "T", () => (camera.kind === "tour" ? toFree() : tourRun()), true);
+        const shareTool = word("copy link", "Share: copy a link to this run", "", () => void shareRun(shareTool));
+        const keysTool = word("keys", "Keys", "?", () => toggleKeys());
+        sound?.button.addEventListener("click", () => tell());
+        const heading = (words: string) => el("h3", { class: "marbles-group", textContent: words });
+        const line = (...tools: HTMLElement[]) => el("div", { class: "marbles-words" }, ...tools);
         /** Each fold under the bar, one open at a time: opening one shuts the others back into their buttons. */
         const folds: { box: HTMLElement; open(from: HTMLElement, open?: boolean): boolean; shown(): boolean; from: () => HTMLElement }[] = [];
         const only = (which: (typeof folds)[number], from: HTMLElement) => {
@@ -1991,9 +1995,9 @@ export default function marbles(m: Mote): Scene {
             which.open(from);
         };
 
-        // the race: how many, go, ride the leader, and the result, small and quiet under the bar
-        const fewer = el("button", { type: "button", class: "marbles-step", textContent: "−", ariaLabel: "one marble fewer", onclick: () => raceBy(-1) });
-        const more = el("button", { type: "button", class: "marbles-step", textContent: "+", ariaLabel: "one marble more", onclick: () => raceBy(1) });
+        // the race: how many, go, ride the leader, and the result, small and quiet under its word
+        const fewer = el("button", { type: "button", textContent: "fewer", title: "One marble fewer", onclick: () => raceBy(-1) });
+        const more = el("button", { type: "button", textContent: "more", title: "One marble more", onclick: () => raceBy(1) });
         const counted = el("span", { class: "marbles-race-count" });
         const goRace = el("button", { type: "button", textContent: "race them", onclick: () => startRace() });
         // the number the line is drawn by: shown, and given again by same line, or by a number typed in
@@ -2013,9 +2017,9 @@ export default function marbles(m: Mote): Scene {
             // while it is typed in the box keeps what is typed, but for the line a race has just been run by
             if (document.activeElement !== lineBox || lineShown !== lineNumber) lineBox.value = String(lineNumber);
             lineShown = lineNumber;
-            fewer.disabled = raceCount <= RACE[0];
-            more.disabled = raceCount >= RACE[1];
-            leader.disabled = !race || race.done || raceStopped;
+            can(fewer, raceCount > RACE[0]);
+            can(more, raceCount < RACE[1]);
+            can(leader, Boolean(race && !race.done && !raceStopped));
             const placed = race ? standing(race) : [];
             placings.replaceChildren(...placed.map((one, place) => {
                 const look = RACERS[one.racer.index]!;
@@ -2052,24 +2056,16 @@ export default function marbles(m: Mote): Scene {
         const spotsFold = { ...fold("marbles-spots", spotRow, el("p", { class: "marbles-race-row" }, keepView)), from: () => spotsTool };
         paintSpots = () => {
             spotRow.replaceChildren(...spots.map((_, index) => {
-                const button = el("button", { type: "button", class: "marbles-spot", textContent: String(index + 1), title: `Glide to spot ${index + 1} (G)`, ariaLabel: `glide to spot ${index + 1}`, onclick: () => glideTo(index) });
-                const away = el("span", { class: "marbles-unkeep", role: "button", tabIndex: 0, title: `Forget spot ${index + 1}`, ariaLabel: `forget spot ${index + 1}` }, icon("close"));
-                const forget = (event: Event) => {
-                    event.stopPropagation();
-                    setSpots(spots.filter((__, i) => i !== index));
-                };
-                away.addEventListener("click", forget);
-                // Enter presses it, as it does a button; Space lets a marble go from here too
-                away.addEventListener("keydown", (event) => event.key === "Enter" && forget(event));
-                button.append(away);
-                return button;
+                const button = el("button", { type: "button", textContent: `spot ${index + 1}`, title: `Glide to spot ${index + 1} (G)`, onclick: () => glideTo(index) });
+                const away = el("button", { type: "button", class: "quiet", textContent: "forget", title: `Forget spot ${index + 1}`, ariaLabel: `forget spot ${index + 1}`, onclick: () => setSpots(spots.filter((__, i) => i !== index)) });
+                return el("span", { class: "marbles-spot" }, button, away);
             }));
-            keepView.disabled = spots.length >= MOST.spots;
+            can(keepView, spots.length < MOST.spots);
         };
         paintSpots();
         folds.push(spotsFold);
 
-        // a short word said under the bar, grown from the button pressed and gone after a moment
+        // a short word said at the foot of the column, grown from the word pressed and gone after a moment
         const words = el("span", {});
         const saying = { ...fold("marbles-said", words), from: () => shareTool };
         let hush: ReturnType<typeof setTimeout> | undefined;
@@ -2186,7 +2182,6 @@ export default function marbles(m: Mote): Scene {
         runList.append(el("li", { class: "marbles-rule" }, opener, chooser), el("li", {}, paster, pasted));
         const runs = { ...fold("marbles-menu", runList), from: () => runsTool };
         folds.push(keys, runs);
-        panel.append(box, bar, keys.box, runs.box, raceFold.box, spotsFold.box, saying.box, aloud);
         // a file dropped anywhere on the mini opens
         const host = m.canvas.parentElement!;
         host.addEventListener("dragover", (event) => event.preventDefault());
@@ -2195,14 +2190,20 @@ export default function marbles(m: Mote): Scene {
             void openFile(event.dataTransfer?.files[0]);
         });
 
-        // the strip by what is chosen
-        const turnTool = tool("turn", "Turn", "R", () => turnChosen(1));
-        const mirrorTool = tool("mirror", "Mirror", "F", mirrorChosen);
-        const joinedTool = tool("joined", "Choose what is joined", "J", selectJoined);
-        const copyTool = tool("copy", "Copy", "Ctrl+C", copyChosen);
-        const duplicateTool = tool("duplicate", "Duplicate", "Ctrl+D", () => duplicate(false));
-        const keepTool = tool("keep", "Keep as a piece of your own", "", () => naming(true));
-        const removeTool = tool("remove", "Take away", "Delete", removeChosen);
+        // what is chosen: the words the strip over the scene had, there all the time, faint while nothing is chosen
+        const turnTool = word("turn", "Turn", "R", () => turnChosen(1));
+        const mirrorTool = word("mirror", "Mirror", "F", mirrorChosen);
+        const bendTool = word("bend: off", "Bend: drag its points", "K", () => toggleBending(), true);
+        const straightenTool = word("straighten", "Straighten", "", straightenChosen);
+        const joinedTool = word("join", "Choose what is joined", "J", selectJoined);
+        const copyTool = word("copy", "Copy", "Ctrl+C", copyChosen);
+        const duplicateTool = word("duplicate", "Duplicate", "Ctrl+D", () => duplicate(false));
+        const keepTool = word("make my own", "Keep as a piece of your own", "", () => naming(true));
+        const removeTool = word("delete", "Take away", "Delete", removeChosen);
+        const longerTool = word("longer", "Longer", "N", () => stepSetting(1));
+        const shorterTool = word("shorter", "Shorter", "Shift+N", () => stepSetting(-1));
+        const raiseTool = word("raise", "Raise a level", "Page Up", () => raiseChosen(1));
+        const lowerTool = word("lower", "Lower a level", "Page Down", () => raiseChosen(-1));
         const name = el("input", { type: "text", class: "marbles-name", ariaLabel: "the piece's name", maxLength: 30 });
         const keepIt = () => {
             const pieces = chosenPieces();
@@ -2219,23 +2220,18 @@ export default function marbles(m: Mote): Scene {
             if (event.key === "Enter") keepIt();
             if (event.key === "Escape") naming(false);
         });
-        const bendTool = tool("bend", "Bend: drag its points", "K", () => toggleBending(), true);
-        const straightenTool = tool("straighten", "Straighten", "", straightenChosen);
-        const tools = el("div", { class: "marbles-strip-tools" }, turnTool, mirrorTool, bendTool, straightenTool, joinedTool, copyTool, duplicateTool, keepTool, removeTool);
-        const form = el("div", { class: "marbles-strip-name" }, name, tool("done", "Keep it", "Enter", keepIt), tool("close", "Not now", "Escape", () => naming(false)));
-        form.inert = true;
-        strip.append(tools, form);
+        const pieceTools = [turnTool, mirrorTool, bendTool, straightenTool, joinedTool, copyTool, duplicateTool, keepTool, removeTool, longerTool, shorterTool, raiseTool, lowerTool];
+        // the name of a piece of one's own, asked for in a fold under the piece's words
+        const form = fold("marbles-naming", el("div", { class: "marbles-words" }, name, word("keep it", "Keep it", "Enter", keepIt), word("not now", "Not now", "Escape", () => naming(false))));
         const naming = (on: boolean) => {
-            strip.classList.toggle("naming", on);
-            form.inert = !on;
-            tools.inert = on;
+            if (on && !chosen.size) return refuse();
+            form.open(keepTool, on);
             if (on) {
                 name.value = `piece ${owns.length + 1}`;
                 name.focus();
                 name.select();
             } else m.canvas.focus({ preventScroll: true });
         };
-        m.canvas.parentElement!.append(strip);
 
         // The scene's own small menu, from a right click that does not move or the keyboard's menu key: Paste
         // run and Copy run, Ride this marble over a marble, and what the strip offers for what is chosen. It
@@ -2331,27 +2327,55 @@ export default function marbles(m: Mote): Scene {
             if (event.shiftKey) event.stopPropagation();
         }, true);
 
+        const row = el("div", { class: "mote-panel marbles-row" }, box);
+        m.canvas.parentElement!.insertBefore(row, panel);
+        leaving.push(() => row.remove());
+        panel.append(
+            heading("run"),
+            line(goTool, streamTool, pauseTool, resetTool, raceTool),
+            raceFold.box,
+            heading("build"),
+            line(selectTool, undoTool, redoTool, pasteTool, runsTool),
+            runs.box,
+            heading("view"),
+            line(fitTool, rideTool, spotsTool, tourTool),
+            spotsFold.box,
+            heading("share"),
+            line(shareTool, ...(sound ? [sound.button] : []), keysTool),
+            keys.box,
+            heading("piece"),
+            line(...pieceTools),
+            form.box,
+            saying.box,
+            aloud,
+        );
+
         tell = () => {
-            selectTool.setAttribute("aria-pressed", String(selecting));
-            streamTool.setAttribute("aria-pressed", String(streaming));
-            undoTool.disabled = !canUndo(steps);
-            redoTool.disabled = !canRedo(steps);
-            pasteTool.disabled = !clip;
-            const one = chosen.size === 1 ? run.find((piece) => chosen.has(piece.id)) : undefined;
-            bendTool.setAttribute("aria-pressed", String(bending));
-            bendTool.disabled = !one || !pointsOf(one.kind);
-            straightenTool.disabled = !one || !isBent(one.kind);
-            if (playing) swap(pauseTool, "pause", "Pause", "P");
-            else swap(pauseTool, "play", "Play", "P");
-            const on = sound?.button.getAttribute("aria-pressed") === "true";
-            swap(soundTool, on ? "sound" : "quiet", on ? "Sound is on" : "Sound is off", "M");
-            soundTool.setAttribute("aria-pressed", String(on));
-            fitTool.replaceChildren(icon(chosen.size ? "fit-chosen" : "fit"));
+            const on = (button: HTMLElement, words: string, yes: boolean) => {
+                button.textContent = `${words}: ${yes ? "on" : "off"}`;
+                button.setAttribute("aria-pressed", String(yes));
+            };
+            on(selectTool, "select", selecting);
+            on(streamTool, "stream", streaming);
+            on(rideTool, "ride", camera.kind === "ride");
+            on(tourTool, "tour", camera.kind === "tour");
+            on(bendTool, "bend", bending);
+            can(undoTool, canUndo(steps));
+            can(redoTool, canRedo(steps));
+            can(pasteTool, Boolean(clip));
+            pauseTool.textContent = playing ? "pause" : "play";
+            pauseTool.title = playing ? "Pause (P)" : "Play (P)";
+            fitTool.textContent = chosen.size ? "fit what is chosen" : "fit the run";
             fitTool.title = chosen.size ? "Fit what is chosen (Shift+Home)" : "Fit the run (Home)";
             fitTool.onclick = () => (chosen.size ? fitChosen() : fitRun());
-            rideTool.setAttribute("aria-pressed", String(camera.kind === "ride"));
             rideTool.classList.toggle("offering", Boolean(offered));
-            tourTool.setAttribute("aria-pressed", String(camera.kind === "tour"));
+            // what is chosen: the piece's words alive while something is, each as far as it can act
+            const one = chosen.size === 1 ? run.find((piece) => chosen.has(piece.id)) : undefined;
+            for (const tool of pieceTools) can(tool, chosen.size > 0);
+            can(bendTool, Boolean(one && pointsOf(one.kind)));
+            can(straightenTool, Boolean(one && isBent(one.kind)));
+            can(longerTool, Boolean(one && stepped(one.kind, 1)));
+            can(shorterTool, Boolean(one && stepped(one.kind, -1)));
         };
         keepOwn = () => naming(true);
     }
@@ -3170,7 +3194,6 @@ export default function marbles(m: Mote): Scene {
         resize,
         debug: () => [`${run.length} pieces, ${table.marbles.length} marbles, ${table.marbles.filter((one) => one.rest).length} asleep`, `ghost ${took.ghost.toFixed(2)} ms, frame ${took.frame.toFixed(2)} ms`],
         destroy: () => {
-            strip.remove();
             for (const one of leaving) one();
             view?.dispose();
         },
@@ -3247,7 +3270,7 @@ export default function marbles(m: Mote): Scene {
         },
     };
 
-    /** What is drawn flat over the scene: the box being drawn to choose many, the little axes, and the strip's place by the selection. */
+    /** What is drawn flat over the scene: the ring round a marble offered, the box being drawn to choose many, and the little axes. */
     function overlay() {
         const ctx = m.ctx;
         // the marble offered once a ride lets go: a thin still ring round it, until it is ridden or goes
@@ -3330,34 +3353,6 @@ export default function marbles(m: Mote): Scene {
             }
         }
         ctx.globalAlpha = 1;
-        // the strip grows by what is chosen, above it, or under it where there is no room above
-        const pieces = chosenPieces();
-        const wanted = pieces.length > 0 && !menuShown && !carried && !bendDrag && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
-        // where it goes: by what is chosen, measured by the corners of the room its pieces take up, and
-        // clear of the handles; nowhere while what is chosen is off the screen (it shrinks away, and grows
-        // again by the pieces when they come back into view), so that it never floats over the empty table
-        let place: ReturnType<typeof stripPlace>;
-        if (wanted) {
-            const chosenRect: Rect = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
-            for (const piece of pieces) {
-                const room = shapeOf(piece.kind).room;
-                for (const box of room.filter((_, i) => i % Math.max(1, Math.floor(room.length / 12)) === 0 || i === room.length - 1)) {
-                    const placed = boxToWorld(piece.place, box);
-                    for (const corner of [0, 1, 2, 3, 4, 5, 6, 7]) {
-                        const seenAt = onScreen([0, 1, 2].map((axis) => placed.at[axis]! + placed.half[axis]! * ((corner >> axis) & 1 ? 1 : -1)) as V3);
-                        if (!seenAt) continue;
-                        [chosenRect.left, chosenRect.right, chosenRect.top, chosenRect.bottom] = [Math.min(chosenRect.left, seenAt.x), Math.max(chosenRect.right, seenAt.x), Math.min(chosenRect.top, seenAt.y), Math.max(chosenRect.bottom, seenAt.y)];
-                    }
-                }
-            }
-            if (Number.isFinite(chosenRect.left)) place = stripPlace(chosenRect, undefined, { w: strip.offsetWidth, h: strip.offsetHeight }, m.width, m.height);
-        }
-        strip.classList.toggle("shown", Boolean(place));
-        strip.inert = !place;
-        if (!place) return;
-        const at = `${Math.round(place.x)}px ${Math.round(place.y)}px`;
-        if (strip.style.translate !== at) strip.style.translate = at;
-        strip.classList.toggle("below", place.below);
     }
 }
 
