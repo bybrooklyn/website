@@ -33,7 +33,7 @@ import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { START, STILL as NO_MOVE, about, asOwn, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
+import { START, STILL as NO_MOVE, about, asOwn, carriedLevel, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
@@ -283,6 +283,8 @@ interface Carried {
     box?: Pose;
     /** For a new hopper, or any group pressed in that marbles start from: how many levels it is raised when over nothing, as a pressed one would be (`START`). */
     lift?: number;
+    /** How many levels Page Up and Page Down have raised them by while carried. */
+    raised: number;
     parts: Map<number, Drawn[]>;
 }
 
@@ -1041,7 +1043,7 @@ export default function marbles(m: Mote): Scene {
         const outs = open(home).filter((joint) => isOut(home.find((piece) => piece.id === joint.id)!.kind, joint.joint));
         const starts = !inRun && outs.length && outs.length === open(home).length;
         const lift = starts ? START - Math.round(Math.max(...outs.map((joint) => joint.at[1])) / LEVEL) : undefined;
-        carried = { home: home.map((piece) => ({ ...piece })), original: home.map((piece) => ({ ...piece })), inRun, anchor, pivot, move: { ...NO_MOVE }, snaps, fits: inRun, away: false, shown: { at: pivot, angle: 0, scale: inRun ? 1 : 0.4 }, grab, hand, joins: 0, parts, lift };
+        carried = { home: home.map((piece) => ({ ...piece })), original: home.map((piece) => ({ ...piece })), inRun, anchor, pivot, move: { ...NO_MOVE }, snaps, fits: inRun, away: false, shown: { at: pivot, angle: 0, scale: inRun ? 1 : 0.4 }, grab, hand, joins: 0, parts, lift, raised: 0 };
         carried.joins = joinsOf(home);
         if (inRun) changed(false);
         if (at) follow(at.x, at.y, typeof hand === "number" && held.get(hand)?.hand.kind === "touch" ? "touch" : "mouse", !inRun);
@@ -1066,14 +1068,13 @@ export default function marbles(m: Mote): Scene {
             .filter((found) => found.seen)
             .sort((a, b) => Math.hypot(a.seen!.x - x, a.seen!.y - y) - Math.hypot(b.seen!.x - x, b.seen!.y - y))[0];
         if (!below && nearestEnd) level = Math.max(level, Math.round(nearestEnd.joint.at[1] / LEVEL));
-        // a new hopper over nothing rides as high as one pressed in would go
-        if (!below && one.lift !== undefined) level = anchor.place.y + one.lift;
         if (below) {
             const dot = (p: V3) => (p[0] - line.from[0]) * line.way[0] + (p[1] - line.from[1]) * line.way[1] + (p[2] - line.from[2]) * line.way[2];
             const hit = jointsOf(below).map((joint) => ({ joint, d: Math.hypot(...line.way.map((w, axis) => joint.at[axis]! - line.from[axis]! - w * dot(joint.at))) })).sort((a, b) => a.d - b.d)[0];
             if (hit) level = Math.max(level, Math.round(hit.joint.at[1] / LEVEL));
         }
-        const dy = level - anchor.place.y;
+        // a new hopper over nothing rides as high as one pressed in would go; Page Up and Page Down stay on top
+        const dy = carriedLevel(level, anchor.place.y, !below, one.lift, one.raised) - anchor.place.y;
         const point = ground(line, one.pivot[1] + dy * LEVEL);
         let want: V3 = target(one).at;
         if (point) {
@@ -1819,7 +1820,7 @@ export default function marbles(m: Mote): Scene {
         const one = carried;
         if (!one) return raiseChosen(by);
         one.move = { ...one.move, y: one.move.y + by };
-        one.lift = one.lift === undefined ? undefined : one.lift + by;
+        one.raised += by;
         one.snap = undefined;
         one.fits = groupFits(run, placedOf(one));
         paintCarried();

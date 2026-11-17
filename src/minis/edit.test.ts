@@ -9,7 +9,7 @@
 
 import { expect, test } from "bun:test";
 import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
-import { START, about, asOwn, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
+import { START, about, asOwn, carriedLevel, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
 import { makeTable } from "./table";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -257,6 +257,17 @@ test("a click chooses a piece alone, Shift or Control adds it or takes it away, 
     expect([...clicked(chosen, undefined, true)]).toEqual([]);
     // what was chosen is left as it was
     expect([...chosen]).toEqual([1, 2]);
+});
+
+test("Page Up and Page Down on a piece in hand outlast the pointer's next move, over a piece, over nothing, and on a new hopper riding high", () => {
+    // found at level 6 under the pointer, raised two by the keys: the next move keeps it two up
+    expect(carriedLevel(6, 0, true, undefined, 2)).toBe(8);
+    expect(carriedLevel(6, 0, false, undefined, -1)).toBe(5);
+    // a new hopper over nothing rides `lift` above its own level, and the keys add to that
+    expect(carriedLevel(6, 1, true, 19, 0)).toBe(20);
+    expect(carriedLevel(6, 1, true, 19, 3)).toBe(23);
+    // over a piece the hopper goes at the level found there, the keys still on top
+    expect(carriedLevel(6, 1, false, 19, 3)).toBe(9);
 });
 
 test("a carried piece snaps to the nearest open end within reach and holds it a little further, and where it would overlap it goes back, saying so", () => {
