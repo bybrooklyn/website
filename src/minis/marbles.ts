@@ -30,7 +30,7 @@ import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { STILL as NO_MOVE, about, asOwn, clicked, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
+import { START, STILL as NO_MOVE, about, asOwn, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, snapNear, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
@@ -276,6 +276,10 @@ interface Carried {
     cycle?: { snaps: GroupSnap[]; at: number };
     /** How many joints join them to the rest now, to click when one more meets. */
     joins: number;
+    /** Where they came from in the box, to go back to when put back. */
+    box?: Pose;
+    /** For a new hopper, or any group pressed in that marbles start from: how many levels it is raised when over nothing, as a pressed one would be (`START`). */
+    lift?: number;
     parts: Map<number, Drawn[]>;
 }
 
@@ -1029,7 +1033,12 @@ export default function marbles(m: Mote): Scene {
             if (point) grab = [pivot[0] - point[0], pivot[2] - point[2]];
         }
         const others = inRun ? run.filter((piece) => !home.some((one) => one.id === piece.id)) : run;
-        carried = { home: home.map((piece) => ({ ...piece })), original: home.map((piece) => ({ ...piece })), inRun, anchor, pivot, move: { ...NO_MOVE }, snaps: groupSnaps(others, home), fits: inRun, away: false, shown: { at: pivot, angle: 0, scale: inRun ? 1 : 0.4 }, grab, hand, joins: 0, parts };
+        // only the joins marbles can follow, never so that the run climbs (`follows`, edit.ts)
+        const snaps = groupSnaps(others, home).filter((snap) => follows(others, home, snap));
+        const outs = open(home).filter((joint) => isOut(home.find((piece) => piece.id === joint.id)!.kind, joint.joint));
+        const starts = !inRun && outs.length && outs.length === open(home).length;
+        const lift = starts ? START - Math.round(Math.max(...outs.map((joint) => joint.at[1])) / LEVEL) : undefined;
+        carried = { home: home.map((piece) => ({ ...piece })), original: home.map((piece) => ({ ...piece })), inRun, anchor, pivot, move: { ...NO_MOVE }, snaps, fits: inRun, away: false, shown: { at: pivot, angle: 0, scale: inRun ? 1 : 0.4 }, grab, hand, joins: 0, parts, lift };
         carried.joins = joinsOf(home);
         if (inRun) changed(false);
         if (at) follow(at.x, at.y, typeof hand === "number" && held.get(hand)?.hand.kind === "touch" ? "touch" : "mouse", !inRun);
@@ -1054,6 +1063,8 @@ export default function marbles(m: Mote): Scene {
             .filter((found) => found.seen)
             .sort((a, b) => Math.hypot(a.seen!.x - x, a.seen!.y - y) - Math.hypot(b.seen!.x - x, b.seen!.y - y))[0];
         if (!below && nearestEnd) level = Math.max(level, Math.round(nearestEnd.joint.at[1] / LEVEL));
+        // a new hopper over nothing rides as high as one pressed in would go
+        if (!below && one.lift !== undefined) level = anchor.place.y + one.lift;
         if (below) {
             const dot = (p: V3) => (p[0] - line.from[0]) * line.way[0] + (p[1] - line.from[1]) * line.way[1] + (p[2] - line.from[2]) * line.way[2];
             const hit = jointsOf(below).map((joint) => ({ joint, d: Math.hypot(...line.way.map((w, axis) => joint.at[axis]! - line.from[axis]! - w * dot(joint.at))) })).sort((a, b) => a.d - b.d)[0];
@@ -1096,8 +1107,8 @@ export default function marbles(m: Mote): Scene {
         for (const parts of one.parts.values()) for (const { part, plain, glass } of parts) if (!glass) part.look = shared(plain, rim);
     };
 
-    /** Lets go of what is carried: put in the run where it fits, taken away over the box, or back where it was. */
-    const drop = () => {
+    /** Lets go of what is carried: put in the run where it fits, taken away over the box, or back where it was, saying why unless `quiet`. */
+    const drop = (quiet = false) => {
         const one = carried;
         if (!one) return;
         carried = undefined;
@@ -1135,10 +1146,14 @@ export default function marbles(m: Mote): Scene {
             // back where they came from, as they were, saying why
             each((_, index) => placeOf(one.original[index]!));
             refuse();
-            say(REFUSED[groupMisfit(run, placed) ?? "room"]);
+            if (!quiet) say(REFUSED[groupMisfit(run, placed) ?? "room"]);
+        } else if (one.box) {
+            // back into its place in the box, where it came from
+            each(() => ({ ...one.box!, scale: 0.05 }));
+            if (!quiet) say(REFUSED[groupMisfit(run, placed) ?? "room"]);
         } else {
             each((piece) => ({ ...poseIn(one, piece), scale: 0.05 }));
-            say(REFUSED[groupMisfit(run, placed) ?? "room"]);
+            if (!quiet) say(REFUSED[groupMisfit(run, placed) ?? "room"]);
         }
         changed();
     };
@@ -1147,7 +1162,7 @@ export default function marbles(m: Mote): Scene {
         if (!carried) return;
         carried.fits = false;
         carried.away = false;
-        drop();
+        drop(true);
     };
 
     const fly = (parts: { part: Part }[], from: Pose, to: Pose, done: () => void) => {
@@ -1882,13 +1897,21 @@ export default function marbles(m: Mote): Scene {
         panel.classList.add("marbles-side");
         const box = el("div", { class: "marbles-box", role: "toolbar", ariaLabel: "the box of pieces" });
         const pictures = paintBox(view, colors, BOX.map((entry) => [{ id: 0, kind: entry.kind, place: { x: 0, z: 0, y: 0, turn: 0 } }]));
-        /** A button of the box: pressed, its pieces go at the open end; dragged up, they are carried into the scene. */
+        /**
+         * A button of the box. Clicked with the mouse, its pieces are picked up: they come from their place
+         * in the box to the pointer and follow it over the scene, snapping to an open end near it, until a
+         * click sets them down; a click on it again puts them back. Tapped, or pressed by the keyboard,
+         * they go at the open end. Dragged up, they are carried into the scene.
+         */
         const boxButton = (name: string, picture: HTMLCanvasElement | undefined, make: () => Placed[], className = "marbles-piece") => {
             const button = el("button", { type: "button", class: className, title: name, ariaLabel: `${name}: press to put it at the end of the run, or drag it up into the scene` }, picture ?? "", el("span", { textContent: name }));
             let pressed: { id: number; x: number; y: number; dragging: boolean } | undefined;
+            /** What pressed it last: a finger has no pointer for a piece to follow. */
+            let by = "mouse";
             /** A drag out of the box ends with the browser's click on the button, which is not a press. */
             let dragged = false;
             button.addEventListener("pointerdown", (event) => {
+                by = event.pointerType;
                 if ((event.target as Element).closest(".marbles-unkeep")) return;
                 pressed = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false };
                 button.setPointerCapture(event.pointerId);
@@ -1923,16 +1946,34 @@ export default function marbles(m: Mote): Scene {
                     dragged = false;
                     return;
                 }
-                if (carried) cancel();
                 const rect = m.canvas.getBoundingClientRect();
                 const own = button.getBoundingClientRect();
-                if (!placeAtEnd(make(), own.left + own.width / 2 - rect.left)) {
+                const x = own.left + own.width / 2 - rect.left;
+                // pressed again while its pieces are in hand: they go back
+                const again = carried?.hand === "hover" && holding === button;
+                if (carried) cancel();
+                if (again) return;
+                if (event.detail > 0 && by !== "touch") {
+                    // into the hand, from just under the scene where the box is
+                    const group = make();
+                    startCarry(group, false, group[0]!.id, "hover");
+                    if (!carried) return;
+                    holding = button;
+                    follow(x, m.height + 1, "mouse", true);
+                    carried.box = { ...carried.shown };
+                    if (m.pointer.inside) follow(m.pointer.x, m.pointer.y, "mouse");
+                    sound?.knock(0.2, 1900);
+                    return;
+                }
+                if (!placeAtEnd(make(), x)) {
                     button.animate?.([{ translate: "0" }, { translate: "-3px" }, { translate: "3px" }, { translate: "0" }], { duration: reduced ? 0 : 220 });
                     sound?.knock(0.2, 300);
                 } else speak(`${name} placed`);
             });
             return button;
         };
+        /** The box's button whose pieces are in hand, to put them back when it is pressed again. */
+        let holding: HTMLButtonElement | undefined;
         BOX.forEach((entry, index) => box.append(boxButton(entry.name, pictures[index], () => fromBox(entry.kind))));
         /** The pieces of one's own, after the made ones, each with a cross that takes it out of the box. */
         let ownButtons: HTMLButtonElement[] = [];
@@ -2943,10 +2984,12 @@ export default function marbles(m: Mote): Scene {
                 return;
             }
             // a paste that follows the mouse is put down where it is pressed
-            if (carried?.hand === "hover") {
+            // a piece in hand, from the box or a paste: a click sets it down, a right click puts it back, the middle button moves the view
+            if (carried?.hand === "hover" && hand.button !== 1) {
                 one.mode = "done";
                 held.set(hand.id, one);
-                drop();
+                if (hand.button === 2) cancel();
+                else drop();
                 return;
             }
             // pieces lifted by the keys are put down when the pointer is used

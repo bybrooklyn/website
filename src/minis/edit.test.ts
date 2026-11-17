@@ -9,7 +9,7 @@
 
 import { expect, test } from "bun:test";
 import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
-import { START, about, asOwn, clicked, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
+import { START, about, asOwn, clicked, follows, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
 import { makeTable } from "./table";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -272,4 +272,14 @@ test("a carried piece snaps to the nearest open end within reach and holds it a 
     expect(groupMisfit(two, [{ ...two[1]!, place: { x: 1, z: 0, y: 1, turn: 0 } }])).toBe("room");
     expect(groupMisfit(two, [{ ...two[1]!, place: { x: 5, z: 5, y: 0, turn: 0 } }])).toBe("ground");
     expect(groupMisfit(two, [{ ...two[1]!, place: { x: 5, z: 7, y: 1, turn: 0 } }])).toBeUndefined();
+});
+
+test("a piece carried from the box snaps only where marbles can follow: a slope at a hopper by its high end, never by its low one", () => {
+    const hopper: Placed[] = [{ id: 1, kind: kind("h"), place: { x: 0, z: 0, y: 10, turn: 0 } }];
+    const slope: Placed[] = [{ id: 2, kind: kind("d", [2, 2]), place: { x: 0, z: 0, y: 3, turn: 0 } }];
+    const all = groupSnaps(hopper, slope);
+    expect(all.length).toBe(2);
+    const kept = all.filter((snap) => follows(hopper, slope, snap));
+    expect(kept.length).toBe(1);
+    expect(kept[0]!.joint.joint).toBe(0);
 });

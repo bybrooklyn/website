@@ -139,6 +139,13 @@ export function groupSnaps(run: Placed[], group: Placed[]): GroupSnap[] {
 /** Whether a joint of a piece is a way out for marbles: every piece's first joint is its way in, but the hopper's, its only, which is its way out. */
 export const isOut = (kind: Kind, joint: number): boolean => joint > 0 || kind.family === "h";
 
+/** Whether marbles can follow a join of a group to the run: a way out of one into a way in of the other, never two ways out or two ways in. */
+export function follows(run: Placed[], group: Placed[], snap: GroupSnap): boolean {
+    const mine = group.find((piece) => piece.id === snap.joint.id);
+    const theirs = run.find((piece) => piece.id === snap.to.id);
+    return Boolean(mine && theirs) && !isOut(mine!.kind, snap.joint.joint) === isOut(theirs!.kind, snap.to.joint);
+}
+
 /**
  * How high a hopper, or any group with a way out, is put when it has nothing to join, in levels: where
  * the plan's own runs built by pressing were raised to (19 and 22 levels), room under it for the box's
@@ -193,9 +200,8 @@ export function placing(run: Placed[], group: Placed[], end: { id: number; joint
                 const [ax, az] = rotated(joint.at[0], joint.at[2], turn);
                 const move: Move = { turn, x: Math.round((to.at[0] - ax) / CELL), z: Math.round((to.at[2] - az) / CELL), y: Math.round((to.at[1] - joint.at[1]) / LEVEL) };
                 const forward = !isOut(kindOf(group, joint.id), joint.joint);
-                const follows = forward === isOut(kindOf(others, to.id), to.joint);
                 const atEnd = Boolean(end && to.id === end.id && to.joint === end.joint);
-                tried.push({ move, joint, to, why: groupMisfit(others, group.map((piece) => moved(piece, move))), follows, forward, atEnd });
+                tried.push({ move, joint, to, why: groupMisfit(others, group.map((piece) => moved(piece, move))), follows: follows(others, group, { move, joint, to }), forward, atEnd });
                 break;
             }
         }
