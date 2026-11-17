@@ -2382,7 +2382,7 @@ export default function marbles(m: Mote): Scene {
             line(selectTool, undoTool, redoTool, pasteTool, runsTool),
             runs.box,
             heading("view"),
-            line(fitTool, rideTool, spotsTool, tourTool),
+            line(rideTool, spotsTool, tourTool, fitTool),
             spotsFold.box,
             heading("share"),
             line(shareTool, ...(sound ? [sound.button] : []), keysTool),
@@ -2397,6 +2397,7 @@ export default function marbles(m: Mote): Scene {
         tell = () => {
             const on = (button: HTMLElement, words: string, yes: boolean) => {
                 button.textContent = `${words}: ${yes ? "on" : "off"}`;
+                button.dataset.widest = `${words}: off`;
                 button.setAttribute("aria-pressed", String(yes));
             };
             on(selectTool, "select", selecting);
@@ -2408,8 +2409,11 @@ export default function marbles(m: Mote): Scene {
             can(redoTool, canRedo(steps));
             can(pasteTool, Boolean(clip));
             pauseTool.textContent = playing ? "pause" : "play";
+            pauseTool.dataset.widest = "pause";
             pauseTool.title = playing ? "Pause (P)" : "Play (P)";
             fitTool.textContent = chosen.size ? "fit what is chosen" : "fit the run";
+            // the last word of its line, with the room of its longer words, so that choosing a piece moves no line of the column
+            fitTool.dataset.widest = "fit what is chosen";
             fitTool.title = chosen.size ? "Fit what is chosen (Shift+Home)" : "Fit the run (Home)";
             fitTool.onclick = () => (chosen.size ? fitChosen() : fitRun());
             rideTool.classList.toggle("offering", Boolean(offered));
@@ -3134,8 +3138,8 @@ export default function marbles(m: Mote): Scene {
             } else if (one.mode === "press" && one.hand.button === 2) {
                 // the right button pressed and let go without turning the view: the run's menu
                 if (!cancelled) openMenu(hand.x, hand.y, false);
-            } else if (one.mode === "press" && hand.kind === "touch" && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
-                // a tap on a marble going down the run: the camera rides it
+            } else if (one.mode === "press" && !hand.shift && !hand.ctrl && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
+                // a tap or a click on a marble going down the run: the camera rides it
                 rideOn(marbleAt(hand.x, hand.y, hand.kind)!);
             } else if (one.mode === "press" && one.piece && !hand.shift && !hand.ctrl && !selecting && onHopperBox(one.piece, hand.x, hand.y)) {
                 // a click on a hopper's box, not its chute, lets its marble go

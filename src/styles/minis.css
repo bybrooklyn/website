@@ -584,6 +584,16 @@
     margin-inline-start: 0;
 }
 
+/* a word whose words change (stream: off and on, pause and play) keeps the room of its widest, so that
+   nothing beside or under it moves when it changes */
+.marbles-words button[data-widest]::after {
+    content: attr(data-widest);
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+}
+
 /* a word that cannot act now is faint, and out of reach (inert), never hidden */
 .mote-panel button.faint {
     color: var(--muted);

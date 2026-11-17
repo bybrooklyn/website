@@ -1237,8 +1237,9 @@ a box piece, still puts it at the end of the run, and a drag from the box still 
 hopper's box (not its chute) lets its marble go; a click on its chute chooses it. The right button turns
 the view and a right click with no drag opens the run's menu; the middle button moves the view, the table
 staying exactly under the pointer; the wheel zooms toward what is under the pointer, that point of the
-table staying under it (`zoomedAt` in `orbit.ts`). A click on a rolling marble no longer rides it with the
-mouse (the menu's Ride this marble and V do); a tap on one still does.
+table staying under it (`zoomedAt` in `orbit.ts`). A click on a rolling marble rides it, as a tap does
+(so do the menu's Ride this marble and V): for a while on the day the build mode was made a click did not,
+which nobody had asked for.
 
 **The keys** (only while the keyboard is in the mini, never from a box of text): W, A, S, D and the arrows
 move the view over the table, forward, left, back and right as the camera sees it, smoothly for as long as
