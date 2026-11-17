@@ -180,7 +180,7 @@ test("a folding section's arrow folds it away in the editor and back, changing n
     expect(await bodyHeight()).toBeGreaterThan(10);
 });
 
-test("a right-click in a table opens its menu, with every command and those that cannot act here dimmed; the menu key opens it at the cell", async () => {
+test("a right-click in a table opens its menu, cut, copy and the pastes first, with every command and those that cannot act here dimmed; the menu key opens it at the cell", async () => {
     if (skip("a table's menu")) return;
     const { tab } = page!;
     const table = "| a | b |\n| --- | --- |\n| 1 | 2 |\n";
@@ -190,6 +190,10 @@ test("a right-click in a table opens its menu, with every command and those that
     await tab.run("(() => { const cell = document.querySelectorAll('.quire td')[1]; const box = cell.getBoundingClientRect(); cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: box.left + 4, clientY: box.top + 4 })); })()");
     await tab.wait(400);
     expect(await lines()).toEqual([
+        ["Cut", true],
+        ["Copy", true],
+        ["Paste", false],
+        ["Paste without formatting", false],
         ["Add a row above", false],
         ["Add a row below", false],
         ["Add a column to the left", false],
@@ -213,12 +217,10 @@ test("a right-click in a table opens its menu, with every command and those that
     await tab.run("q.surface.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))");
     await tab.wait(400);
     const dimmed = (await lines()).filter(([, off]) => off).map(([label]) => label);
-    expect(dimmed).toEqual(["Add a row above", "Remove this row"]);
-    expect(await tab.run("document.activeElement.textContent")).toBe("Add a row below");
-    await tab.press("ArrowDown");
-    await tab.press("ArrowDown");
-    await tab.press("ArrowDown");
-    expect(await tab.run("document.activeElement.textContent")).toBe("Remove this column");
+    expect(dimmed).toEqual(["Cut", "Copy", "Add a row above", "Remove this row"]);
+    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Paste");
+    for (let step = 0; step < 5; step++) await tab.press("ArrowDown");
+    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Remove this column");
     await tab.press("Escape");
     await tab.wait(300);
     expect(await keyboard()).toBe("writing");

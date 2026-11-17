@@ -29,8 +29,8 @@ export function menuLines(first: MenuItem[], selected: boolean, clip: (how: "cut
     return [...first, ...(first.length ? [RULE] : []), { label: "Cut", icon: "cut", hint: "Ctrl+X", disabled: !selected, run: clip("cut") }, { label: "Copy", icon: "copy", hint: "Ctrl+C", disabled: !selected, run: clip("copy") }, ...rest];
 }
 
-/** Builds the text's menu for a surface; `menus` gives the menus' lines as they stand now, and `first` the lines for what is under a point pressed (or at the caret, with no point). */
-export function createTextMenu(surface: Surface, menus: () => { items: () => MenuItem[] }[], first?: (at?: { x: number; y: number }) => MenuItem[]): { destroy(): void } {
+/** Builds the text's menu for a surface; `menus` gives the menus' lines as they stand now, and `first` the lines for what is under a point pressed (or at the caret, with no point). `clipboard` gives its cut, copy and paste lines, for a table's menu to offer too. */
+export function createTextMenu(surface: Surface, menus: () => { items: () => MenuItem[] }[], first?: (at?: { x: number; y: number }) => MenuItem[]): { clipboard(): MenuItem[]; destroy(): void } {
     const root = surface.element;
     const menu = flowMenu("Text", { className: "quire-text-menu" });
     const anchor = make("span", "quire-anchor");
@@ -40,14 +40,14 @@ export function createTextMenu(surface: Surface, menus: () => { items: () => Men
         surface.focus();
         document.execCommand(how);
     };
+    const selected = () => {
+        const { anchor: from, focus } = surface.getSelection();
+        return from.path.join() !== focus.path.join() || from.offset !== focus.offset;
+    };
     function open(x: number, y: number, keyboard: boolean) {
         Object.assign(anchor.style, { left: `${x}px`, top: `${y}px`, height: "0px" });
         if (!anchor.isConnected) document.body.append(anchor);
-        const selected = (() => {
-            const { anchor: from, focus } = surface.getSelection();
-            return from.path.join() !== focus.path.join() || from.offset !== focus.offset;
-        })();
-        menu.open(anchor, menuLines(first?.(keyboard ? undefined : { x, y }) ?? [], selected, clip, linesFor(menus())), keyboard);
+        menu.open(anchor, menuLines(first?.(keyboard ? undefined : { x, y }) ?? [], selected(), clip, linesFor(menus())), keyboard);
     }
     /** Not in a table, a picture or a control drawn in the text, each of which has its own. */
     const plain = (target: EventTarget | null) => {
@@ -75,6 +75,7 @@ export function createTextMenu(surface: Surface, menus: () => { items: () => Men
     document.addEventListener("contextmenu", onMenu);
     root.addEventListener("keydown", onKey);
     return {
+        clipboard: () => menuLines([], selected(), clip, linesFor(menus()).filter((line) => line.key === "paste" || line.key === "pastePlain")),
         destroy() {
             document.removeEventListener("contextmenu", onMenu);
             root.removeEventListener("keydown", onKey);

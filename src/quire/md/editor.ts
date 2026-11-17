@@ -595,7 +595,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const emojiList = createEmojiPicker(surface);
     // suggested words, faint after the caret, from her own writing (suggest-view.ts); after the emoji list, which takes Tab first
     const suggestions = mountSuggestions(surface, paper, { stores: () => options.learnFrom?.() ?? [], current: () => ({ store, id }), say: (short, full) => bar.setStatus(short, full) });
-    const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
+    const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom, () => textMenu.clipboard());
     const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host, top: () => bar.element.getBoundingClientRect().bottom });
     // a code block's language and a callout's kind, each a menu from its control in the text
     const blockMenus = createBlockMenus(surface);

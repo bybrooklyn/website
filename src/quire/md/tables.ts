@@ -3,7 +3,8 @@
 // the column (numbers by value when the column holds only numbers). A right-click in the table, the
 // keyboard's menu key there, or the strip's three dots open the table's menu, which holds all of it
 // as Docs' does: a row above or below, a column left or right, removing the row, the column or the
-// table, the two sorts and the alignments. What cannot be done where the cursor is (a row above the
+// table, the two sorts and the alignments; opened in the table by a right-click or the menu key, cut,
+// copy and the pastes come first, as the text's own menu has them (text-menu.ts). What cannot be done where the cursor is (a row above the
 // heading row, removing the heading row or the only column) is shown and cannot be pressed. Tab moves
 // between cells (keys.ts). What each control does, cursor and all, is pure and tested; the strip and
 // the menu are DOM.
@@ -13,7 +14,7 @@ import type { State } from "./history";
 import { caret, tableOf } from "./keys";
 import { linesAround, placeClear } from "../core/strips";
 import type { Surface } from "./surface";
-import { control, dots, flowMenu, icon, make, type MenuItem } from "../core/ui";
+import { control, dots, flowMenu, icon, make, ruled, type MenuItem } from "../core/ui";
 
 /** The table the cursor is in, and which row (0 is the heading row) and column. */
 export function tableAt(doc: Document, path: number[]): { path: number[]; table: Table; row: number; column: number } | undefined {
@@ -102,9 +103,10 @@ export function sortHere(descending: boolean): (state: State) => State {
 
 /**
  * Builds the table controls for a surface. `top` is how far down the window the editor's own top
- * reaches: the controls stay under it, never drawn over the tools there.
+ * reaches: the controls stay under it, never drawn over the tools there. `clipboard` gives the
+ * text menu's cut, copy and paste lines, which a right-click in a cell offers first.
  */
-export function createTableTools(surface: Surface, top: () => number = () => 0): { element: HTMLElement; lines(): MenuItem[]; destroy(): void } {
+export function createTableTools(surface: Surface, top: () => number = () => 0, clipboard: () => MenuItem[] = () => []): { element: HTMLElement; lines(): MenuItem[]; destroy(): void } {
     const root = surface.element;
     const tools = make("div", "quire-table-tools");
     tools.setAttribute("role", "toolbar");
@@ -157,14 +159,11 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
     }
     /** Opens the menu under a control, or at a point in the window. */
     function openMenu(at: HTMLElement | { x: number; y: number }, keyboard = false) {
-        let trigger: HTMLElement;
-        if (at instanceof HTMLElement) trigger = at;
-        else {
-            Object.assign(anchor.style, { left: `${at.x}px`, top: `${at.y}px`, height: "0px" });
-            if (!anchor.isConnected) document.body.append(anchor);
-            trigger = anchor;
-        }
-        menu.open(trigger, menuLines(), keyboard);
+        if (at instanceof HTMLElement) return menu.open(at, menuLines(), keyboard);
+        Object.assign(anchor.style, { left: `${at.x}px`, top: `${at.y}px`, height: "0px" });
+        if (!anchor.isConnected) document.body.append(anchor);
+        // in a cell, as in the text, what the clipboard can do comes first
+        menu.open(anchor, ruled(clipboard(), menuLines()), keyboard);
     }
     /** When the menu was last opened from the keyboard, whose own menu event may follow. */
     let keyedAt = -Infinity;
