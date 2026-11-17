@@ -23,11 +23,11 @@ test("a line the document does not have, or that cannot act now, is left out", (
     expect(linesFor(menus).map((line) => line.label)).toEqual(["Bold"]);
 });
 
-test("lines given first (a misspelled word's) come before Cut and Copy with a rule under them, and Cut and Copy are dimmed with nothing selected", () => {
+test("lines given first (a misspelled word's) come before Cut and Copy with a rule under them, the pastes go with Cut and Copy, and Cut and Copy are dimmed with nothing selected", () => {
     const clip = () => () => {};
     const first = [item("", "The"), item("", "Add to dictionary")];
-    const lines = menuLines(first, false, clip, [item("bold", "Bold")]);
-    expect(lines.map((line) => (line.rule ? "|" : line.label))).toEqual(["The", "Add to dictionary", "|", "Cut", "Copy", "Bold"]);
+    const lines = menuLines(first, false, clip, [item("paste", "Paste"), item("bold", "Bold")]);
+    expect(lines.map((line) => (line.rule ? "|" : line.label))).toEqual(["The", "Add to dictionary", "|", "Cut", "Copy", "Paste", "|", "Bold"]);
     expect(lines[3]!.disabled).toBe(true);
     expect(menuLines([], true, clip, []).map((line) => [line.label, line.disabled])).toEqual([["Cut", false], ["Copy", false]]);
 });

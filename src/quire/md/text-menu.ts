@@ -12,7 +12,7 @@
 //   const menu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));   // menu.destroy()
 
 import type { Surface } from "./surface";
-import { everyLine, flowMenu, make, RULE, type MenuItem } from "../core/ui";
+import { everyLine, flowMenu, make, ruled, type MenuItem } from "../core/ui";
 
 /** The commands of the text's menu after cut and copy, by their names in the menus' table (menus.ts), in its order. */
 export const TEXT_COMMANDS = ["paste", "pastePlain", "link", "comment", "bold", "italic", "underline"];
@@ -24,9 +24,13 @@ export function linesFor(menus: { items: () => MenuItem[] }[]): MenuItem[] {
     return TEXT_COMMANDS.flatMap((key) => all.find((item) => item.key === key && !item.disabled) ?? []);
 }
 
-/** Every line of the text's menu, in order: the lines given first (a misspelled word's) with a rule under them, then Cut and Copy (dimmed with nothing selected), then the menus' own. */
+/** The menus' own lines that paste, which go with Cut and Copy. */
+const pasting = (line: MenuItem) => line.key === "paste" || line.key === "pastePlain";
+
+/** Every line of the text's menu, in order: the lines given first (a misspelled word's), then Cut and Copy (dimmed with nothing selected) with the menus' pastes, then the menus' others, a rule between each group. */
 export function menuLines(first: MenuItem[], selected: boolean, clip: (how: "cut" | "copy") => () => void, rest: MenuItem[]): MenuItem[] {
-    return [...first, ...(first.length ? [RULE] : []), { label: "Cut", icon: "cut", hint: "Ctrl+X", disabled: !selected, run: clip("cut") }, { label: "Copy", icon: "copy", hint: "Ctrl+C", disabled: !selected, run: clip("copy") }, ...rest];
+    const cuts: MenuItem[] = [{ label: "Cut", icon: "cut", hint: "Ctrl+X", disabled: !selected, run: clip("cut") }, { label: "Copy", icon: "copy", hint: "Ctrl+C", disabled: !selected, run: clip("copy") }];
+    return ruled(first, [...cuts, ...rest.filter(pasting)], rest.filter((line) => !pasting(line)));
 }
 
 /** Builds the text's menu for a surface; `menus` gives the menus' lines as they stand now, and `first` the lines for what is under a point pressed (or at the caret, with no point). `clipboard` gives its cut, copy and paste lines, for a table's menu to offer too. */
@@ -75,7 +79,7 @@ export function createTextMenu(surface: Surface, menus: () => { items: () => Men
     document.addEventListener("contextmenu", onMenu);
     root.addEventListener("keydown", onKey);
     return {
-        clipboard: () => menuLines([], selected(), clip, linesFor(menus()).filter((line) => line.key === "paste" || line.key === "pastePlain")),
+        clipboard: () => menuLines([], selected(), clip, linesFor(menus()).filter(pasting)),
         destroy() {
             document.removeEventListener("contextmenu", onMenu);
             root.removeEventListener("keydown", onKey);
