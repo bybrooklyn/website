@@ -106,3 +106,30 @@ test("the kind and the color chosen are what the next piece is, and a hue by cha
     expect(last.kind).toBe("wedge");
     expect(last.color.startsWith("oklch(0.610 0.100 ")).toBe(true);
 });
+
+test("Z takes back the pieces dropped, newest first, and never the pile it opened on; clear empties the box", () => {
+    const { m } = stage(800, 400);
+    const scene = blocks(m);
+    const start = scene.pieces().length;
+    // nothing dropped yet: the pile it opened on is not taken back
+    expect(scene.undo()).toBe(false);
+    expect(scene.pieces().length).toBe(start);
+    for (const x of [100, 300, 700]) scene.double!(x, 60);
+    expect(scene.pieces().length).toBe(start + 3);
+    expect(scene.undo()).toBe(true);
+    expect(scene.pieces().length).toBe(start + 2);
+    // one taken away with Backspace (the newest, with the pointer elsewhere) is not taken back a second time
+    expect(scene.remove()).toBe(true);
+    expect(scene.undo()).toBe(true);
+    expect(scene.pieces().length).toBe(start);
+    expect(scene.undo()).toBe(false);
+    // clear takes everything, the opening pile too, and leaves nothing to take back; the box takes pieces again
+    scene.double!(100, 60);
+    scene.clear();
+    expect(scene.pieces().length).toBe(0);
+    expect(scene.undo()).toBe(false);
+    scene.double!(100, 60);
+    expect(scene.pieces().length).toBe(1);
+    expect(scene.undo()).toBe(true);
+    expect(scene.pieces().length).toBe(0);
+});

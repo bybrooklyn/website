@@ -15,17 +15,22 @@ import { Flat, radius, send, trace, wake, type Body, type Mote, type P, type Sce
 import { el } from "../mote/stage";
 import { choices, deep, grey, HUES, hues, KINDS, kindFor, ramp, tint, tones, toRemove, type Kind } from "./tints";
 
-const MOST = 60;
+/** How many pieces the small pile shown in a list holds: it drops one by itself every couple of seconds, for ever, so its oldest goes. On its own page a pile has no limit. */
+const MOST_SMALL = 14;
 const FLOOR = 6;
 /** Every piece is this big, wherever the pile is shown. */
 const SIZE = 40;
 
-export const label = "A pile of blocks. Drag one to throw it. Double-click an empty spot, or press Space, to drop another. Backspace takes one away.";
+export const label = "A pile of blocks. Drag one to throw it. Double-click an empty spot, or press Space, to drop another. Backspace takes one away, and Z takes back the last one dropped.";
 
 /** The pile, with what a test or the panel asks of it beside what the stage does. */
 export type Blocks = Scene & {
     /** Takes a piece away, as Backspace does; says whether there was one to take. */
     remove(): boolean;
+    /** Takes back the piece dropped last, as Z does: only what was dropped, never the pile it opened on. Says whether there was one. */
+    undo(): boolean;
+    /** Takes every piece away, as the word "clear" does. */
+    clear(): void;
     /** Sets what is dropped next: its kind, its hue (none for a hue by chance) and how dark. */
     choose(to: { kind?: Kind; hue?: number | undefined; dark?: number }): void;
     /** The pieces now in the pile, oldest first: each one's kind and color. */
@@ -41,8 +46,12 @@ export default function blocks(m: Mote): Blocks {
     /** What is dropped next, as it was left on the last visit. */
     let chosen = choices(m.recall?.("choices", undefined, 1));
     let walls: Wall | undefined;
-    const most = m.preview ? 14 : MOST;
+    const most = m.preview ? MOST_SMALL : Infinity;
     let dropped = 0;
+    /** The pieces dropped by hand that are still in the pile, oldest first: what Z takes back, newest first. */
+    const placed: Body[] = [];
+    /** The column's words follow what can be done (a word that cannot act is faint); set once the column is made. */
+    let said = () => {};
     // The box's corners are rounded, and its walls follow them: how round is read from the page.
     const round = Number.parseFloat(getComputedStyle(m.canvas.parentElement ?? m.canvas).borderTopLeftRadius) || 0;
 
@@ -62,23 +71,42 @@ export default function blocks(m: Mote): Blocks {
             : flat.shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]]);
         send(block, 0, 0, (Math.random() - 0.5) * 1.2);
         add(block, kind);
-        if (pile.length > most) {
-            const oldest = pile.shift()!;
-            flat.remove(oldest);
-            looks.delete(oldest);
-        }
+        placed.push(block);
+        if (pile.length > most) take(pile[0]!);
+        said();
+    };
+
+    /** Takes one piece out of the pile and the physics; what rested on it wakes and falls. */
+    const take = (gone: Body) => {
+        pile.splice(pile.indexOf(gone), 1);
+        if (placed.includes(gone)) placed.splice(placed.indexOf(gone), 1);
+        looks.delete(gone);
+        flat.remove(gone);
+        for (const block of pile) wake(block);
+        m.wake?.();
+        said();
     };
 
     /** Takes a piece away: the one held, else the one under the pointer, else the newest. What rested on it wakes and falls. */
     const remove = () => {
         const gone = toRemove(pile, flat.hand.held, m.pointer.inside ? flat.at(m.pointer.x, m.pointer.y) : undefined);
         if (!gone) return false;
-        pile.splice(pile.indexOf(gone), 1);
-        looks.delete(gone);
-        flat.remove(gone);
-        for (const block of pile) wake(block);
-        m.wake?.();
+        take(gone);
         return true;
+    };
+    /** Takes back the piece dropped last, if any dropped is still there: one in the hand is let go first. */
+    const undo = () => {
+        const last = placed.at(-1);
+        if (!last) return false;
+        if (flat.hand.held === last) flat.hand.drop();
+        take(last);
+        return true;
+    };
+    /** Takes every piece away, the pile it opened on too. */
+    const clear = () => {
+        flat.hand.drop();
+        for (const block of [...pile]) take(block);
+        m.wake?.();
     };
 
     /** The inside of the box as one closed wall: the top and sides with the box's two upper corners as the curves they are, and the floor, which is flat from side to side. */
@@ -101,11 +129,7 @@ export default function blocks(m: Mote): Blocks {
     };
     /** Anything that has got out of the box all the same is taken away, so the pile can come to rest. */
     const lost = () => {
-        for (const block of pile.filter((one) => one.y > m.height + SIZE * 4 || one.x < -SIZE * 4 || one.x > m.width + SIZE * 4)) {
-            pile.splice(pile.indexOf(block), 1);
-            looks.delete(block);
-            flat.remove(block);
-        }
+        for (const block of pile.filter((one) => one.y > m.height + SIZE * 4 || one.x < -SIZE * 4 || one.x > m.width + SIZE * 4)) take(block);
     };
 
     enclose();
@@ -130,8 +154,12 @@ export default function blocks(m: Mote): Blocks {
     // Backspace and Delete take a piece away wherever the keyboard is in the mini, the column too; and
     // Space pressed in the column drops a piece as it does on the pile, where it would press again what was pressed last
     (m.canvas.parentElement ?? m.canvas).addEventListener?.("keydown", (event) => {
-        if (event.metaKey || event.ctrlKey || event.altKey || m.preview) return;
-        if (event.key === "Backspace" || event.key === "Delete") remove();
+        if (m.preview || event.altKey) return;
+        // Z, with Control or Command or alone, takes back the last piece dropped
+        const z = event.key.toLowerCase() === "z" && !event.shiftKey;
+        if ((event.metaKey || event.ctrlKey) && !z) return;
+        if (z) undo();
+        else if (event.key === "Backspace" || event.key === "Delete") remove();
         else if (event.key === " " && event.target !== m.canvas) another();
         else return;
         event.preventDefault();
@@ -160,9 +188,19 @@ export default function blocks(m: Mote): Blocks {
         const darkBar = bar("Darkness", 100, (value) => choose({ dark: value / 100 }));
         const chance = el("button", { type: "button", class: "blocks-chance", textContent: "random", title: "A different color for every piece", onclick: () => choose({ hue: undefined }) });
         const taken = el("button", { type: "button", class: "quiet", textContent: "remove", title: "Take a piece away (Backspace)", onclick: () => void remove() });
+        const back = el("button", { type: "button", class: "quiet", textContent: "undo", title: "Take back the last piece dropped (Z)", onclick: () => void undo() });
+        const emptied = el("button", { type: "button", class: "quiet", textContent: "clear", title: "Take every piece away", onclick: clear });
+        said = () => {
+            for (const [button, can] of [[back, placed.length > 0], [taken, pile.length > 0], [emptied, pile.length > 0]] as const) {
+                // one that held the keyboard gives it back to the pile, so the keys go on being heard
+                if (!can && document.activeElement === button) (m.canvas as HTMLElement).focus?.();
+                button.classList.toggle("faint", !can);
+                button.inert = !can;
+            }
+        };
         const column = m.panel();
         column.classList.add("blocks-side");
-        column.append(group("shape"), shapes, group("color"), hueBar, darkBar, chance, el("div", { class: "blocks-end" }, taken));
+        column.append(group("shape"), shapes, group("color"), hueBar, darkBar, chance, el("div", { class: "blocks-end" }, back, taken, emptied));
         shown = () => {
             kinds.forEach((input, index) => (input.checked = KINDS[index] === chosen.kind));
             chance.setAttribute("aria-pressed", String(chosen.hue === undefined));
@@ -177,10 +215,13 @@ export default function blocks(m: Mote): Blocks {
             darkBar.style.setProperty("--handle", chosen.hue === undefined ? grey(chosen.dark) : tint(chosen.hue, chosen.dark));
         };
         shown();
+        said();
     }
 
     return {
         remove,
+        undo,
+        clear,
         choose,
         pieces: () => pile.map((block) => ({ kind: looks.get(block)!.kind, color: looks.get(block)!.color })),
         step(dt) {

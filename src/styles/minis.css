@@ -421,6 +421,11 @@
     border-top: 0.0625rem solid var(--rule);
 }
 
+/* its words in a row, a little apart, as the Sand's are */
+.blocks-end button + button {
+    margin-inline-start: 0.8rem;
+}
+
 /* Comet's panel is one quiet line: which field and the shots on it, and the sound. */
 .mini-stage[data-mini="comet"] {
     --panel-room: 4.5rem;

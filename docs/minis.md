@@ -22,8 +22,9 @@ How to add a mini is in `src/mote/README.md`.
 ## Built
 
 - **Blocks** (toy, 2D; `blocks.ts`): a pile of blocks with real physics. A piece can be dragged and thrown;
-  a double click on an empty spot, or Space, drops a new block, now and then a ball or a wedge. After sixty
-  pieces the oldest is taken away. It is also what posts embed. Backspace or Delete takes a piece away: the
+  a double click on an empty spot, or Space, drops a new block, now and then a ball or a wedge. A pile
+  has no limit (until 17 Nov 2026 the oldest piece went after sixty; the small pile shown in a list
+  still keeps fourteen, since it drops one by itself for ever). It is also what posts embed. Backspace or Delete takes a piece away: the
   one held, else the one under the pointer, else the newest. A column beside the pile (under it on
   a phone), written as the Walker's and Sand's are, chooses what is dropped next: its kind as round dots
   (any, block, ball, wedge); its color on two bars in the manner of a game's color sliders, every hue in a
@@ -32,6 +33,10 @@ How to add a mini is in `src/mote/README.md`.
   the keyboard is in the mini, the column too. The choice is kept between visits; the pile always opens in
   its soft colors. The arithmetic is in `tints.ts`. These came from a visitor's letter; the first build of
   them was a row under the pile with a wheel of hues, which was not what was meant and was replaced.
+  Asked for by the owner on 17 Nov 2026: Z (alone, or with Control or Command) takes back the piece
+  dropped last, newest first, and never the pile it opened on; and three words at the column's foot,
+  "undo", "remove" and "clear", the last emptying the box. Each is faint, and out of reach, while it has
+  nothing to act on, and one that goes faint while it holds the keyboard gives it back to the pile.
 - **Feedback** is a letter: every mini's page ends with a link that opens an email to the site's address
   with the subject filled in for that mini, and the footer has one for the site. No form and no server.
 - **Dice** (toy, 3D; first called Table; `dice.ts`, `tower.ts`, `rolls.ts`, `luck.ts`): a dice tower. Dice
