@@ -328,7 +328,7 @@ fn water_let_go_finds_its_level_and_sleeps() {
     let now = depths(&world);
     println!("a block of water let go: level after {level:?} steps, asleep after {still:?}; depths {} to {}", now.iter().min().unwrap(), now.iter().max().unwrap());
     assert_eq!(world.count(WATER), poured);
-    assert!(level.is_some_and(|k| k <= 120), "level within two seconds\n{}", picture(&world, 0, 60, 119, 119));
+    assert!(level.is_some_and(|k| k <= 120), "level within two seconds: {level:?}\n{}", picture(&world, 0, 60, 119, 119));
     assert!(still.is_some_and(|k| k <= 400), "and asleep");
     assert!(now.iter().max().unwrap() - now.iter().min().unwrap() <= 1);
 }

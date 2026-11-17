@@ -1416,9 +1416,22 @@ again, natively and in the page's built modules. Changed on purpose: a poured gr
 core of lava that may stay molten sealed in rock (a tenth, was a twentieth: the pool lies lower and
 wider now).
 
-**Not yet done from that day's list**: the page's speed (the engine still steps on the page's own
-thread, the old pass that joins vessels still walks a whole body each step, and gases never sleep),
-and fire's look.
+**The pass that joins vessels runs one step in eight for liquids** (`level.rs`). It walks every cell of
+a body near any change, so a lake with a drop falling into it was walked whole every step: most of a
+busy step. A liquid in the open levels cell by cell now, so the pass is left with what that cannot do,
+two vessels joined under a wall, and a quarter as often does it with four times the cells a pass. What
+has changed since it last ran is kept for each chunk (`due`), and a chunk it is owed in counts as
+awake, so a world does not go to sleep a cell out of level. For gases it runs every step as before:
+they have no rule of their own that gathers them under a lid, and it is this pass that carries a body
+of steam up as fast as it rises (tried at one step in two, half as much steam left the brush and a
+fifth as much gathered under a lid before it cooled; working each gas cell one step in two was tried
+too and taken out for the same reason). Measured in the page's built engine, in the page's world of
+2,400 by 1,200, with the largest brush of water dragged over heaps of sand for three seconds, 227,000
+cells of water: a step while pouring 4.5 ms where it was 6.8, settling 2.7 where it was 5.4, and after
+that 0.9 where it was 3.7.
+
+**Not yet done from that day's list**: the engine still steps on the page's own thread, so a slow
+step is felt by the whole page; gases cost as they did; and fire's look.
 
 ## The look, as chosen
 

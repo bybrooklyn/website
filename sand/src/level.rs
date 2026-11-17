@@ -20,8 +20,18 @@ use crate::materials::{Kind, TABLE};
 use crate::world::{World, clock_of, material, with_state};
 use alloc::vec::Vec;
 
-/// How many cells a body moves in one step.
-const PER_BODY: usize = 64;
+/// How many cells a body moves in one pass.
+const PER_BODY: usize = 256;
+/// The pass runs one step in this many, over everything that has changed since it last ran. Walking a
+/// whole lake or a whole cloud every step that a drop fell into it was most of a busy step; and a
+/// liquid in the open finds its level cell by cell now (`levels` in `world.rs`), so this is left with
+/// what that cannot do: two vessels joined under a wall, and a gas gathering under a lid.
+const EVERY: u64 = 8;
+/// A gas is looked at every step, as it always was: it has no rule of its own that gathers it under a
+/// lid, as a liquid has one that levels it in the open, and it is this pass that carries a body of
+/// steam upward as fast as it rises (at one step in two, half as much steam left the brush and a
+/// fifth as much gathered under a lid before it cooled).
+const EVERY_GAS: u64 = 1;
 /// How many bodies may move cells in one step. Past this, those with the lowest first cell go
 /// first and the rest wait a step.
 const BODIES: usize = 64;
@@ -118,10 +128,21 @@ impl World {
             self.levels.marks.fill(0);
             self.levels.body = 0;
         }
+        for chunk in self.chunks.iter_mut() {
+            let now = chunk.now;
+            if !now.is_empty() {
+                chunk.due.add(now.x0, now.y0, now.x1, now.y1);
+            }
+        }
+        let liquids = self.steps.is_multiple_of(EVERY);
+        if !liquids && !self.steps.is_multiple_of(EVERY_GAS) {
+            return;
+        }
         self.levels.first = self.levels.body + 1;
         self.levels.count = 0;
         for id in 0..self.chunks.len() {
-            let rect = self.chunks[id].now;
+            // what is owed stays owed until the liquids have had their turn
+            let rect = if liquids { core::mem::replace(&mut self.chunks[id].due, crate::world::Rect::EMPTY) } else { self.chunks[id].due };
             if rect.is_empty() {
                 continue;
             }
@@ -129,7 +150,8 @@ impl World {
                 for x in rect.x0..=rect.x1 {
                     let at = self.index(x, y);
                     let cell = self.cells[at];
-                    if TABLE[material(cell) as usize].level != 0 && !self.counted(at) {
+                    let made = &TABLE[material(cell) as usize];
+                    if made.level != 0 && (liquids || made.kind == Kind::Gas) && !self.counted(at) {
                         self.body(at);
                     }
                 }

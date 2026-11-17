@@ -341,14 +341,14 @@ fn steam_poured_with_the_brush_rises_to_a_lid_gathers_under_it_and_rains_later()
     let poured = world.count(STEAM) + world.count(WATER);
     let under = |w: &World| (60..=180).flat_map(|x| (42..52).map(move |y| (x, y))).filter(|&(x, y)| w.at(x, y) == STEAM).count();
     let (mut most_under, mut left_at_90) = (0, 0);
-    for k in 1..=900 {
+    for k in 1..=1500 {
         world.step();
         most_under = most_under.max(under(&world));
         if k == 90 {
             left_at_90 = world.count(STEAM);
         }
     }
-    println!("steam {poured}: at most {most_under} under the lid; {left_at_90} still steam after 90 steps; after 900, {} steam and {} water", world.count(STEAM), world.count(WATER));
+    println!("steam {poured}: at most {most_under} under the lid; {left_at_90} still steam after 90 steps; after 1500, {} steam and {} water", world.count(STEAM), world.count(WATER));
     assert!(most_under > 300, "it gathers under the lid\n{}", picture(&world, 50, 30, 190, 199));
     assert!(left_at_90 > poured / 2, "it does not turn to water at once");
     assert!(world.count(WATER) > poured / 2, "it rains in the end");

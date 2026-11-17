@@ -112,7 +112,7 @@ impl Rect {
         self.x0 > self.x1
     }
 
-    fn add(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
+    pub(crate) fn add(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
         self.x0 = self.x0.min(x0);
         self.y0 = self.y0.min(y0);
         self.x1 = self.x1.max(x1);
@@ -134,11 +134,14 @@ pub(crate) struct Chunk {
     /// falling through air all at one temperature changes no temperature.
     pub warm_now: Rect,
     pub warm_next: Rect,
+    /// Where something has changed since the pass that joins vessels last ran (`level.rs`): it runs
+    /// one step in eight, over all of this.
+    pub due: Rect,
     stirred: bool,
 }
 
 impl Chunk {
-    const ASLEEP: Chunk = Chunk { now: Rect::EMPTY, next: Rect::EMPTY, warm_now: Rect::EMPTY, warm_next: Rect::EMPTY, stirred: false };
+    const ASLEEP: Chunk = Chunk { now: Rect::EMPTY, next: Rect::EMPTY, warm_now: Rect::EMPTY, warm_next: Rect::EMPTY, due: Rect::EMPTY, stirred: false };
 }
 
 /// The material of a cell.
@@ -376,9 +379,11 @@ impl World {
         hash
     }
 
-    /// How many chunks will be worked through next step.
+    /// How many chunks have work still to come: those that will be worked through next step, and
+    /// those where the pass that joins vessels is still owed (it runs one step in eight). A world is
+    /// at rest when there are none.
     pub fn awake(&self) -> usize {
-        self.chunks.iter().filter(|chunk| !chunk.next.is_empty() || !chunk.warm_next.is_empty()).count()
+        self.chunks.iter().filter(|chunk| !chunk.next.is_empty() || !chunk.warm_next.is_empty() || !chunk.due.is_empty()).count()
     }
 
     /// The first and last rows changed since `forget_changed`, or an empty range.
