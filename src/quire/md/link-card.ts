@@ -24,6 +24,20 @@ export function webAddress(text: string): string | undefined {
     return url.protocol === "mailto:" ? (/^[^@/]+@[^@/]+\.[^@/]+$/.test(url.pathname) ? address : undefined) : url.hostname ? address : undefined;
 }
 
+/**
+ * An address as typed into the link field, with `https://` put before it when it names a site but
+ * no scheme ("example.com/page"), as Docs does: kept as typed, it would point at a page of this site
+ * that is not there. A scheme, a place in this site or this document (`/`, `#`, `?`, `.`) and anything
+ * with no dot in its first part are left as they are.
+ */
+export function withScheme(typed: string): string {
+    const address = typed.trim();
+    // a scheme is letters then a colon not followed by a digit, which would be the port after a host
+    if (!address || /^[a-z][a-z\d+.-]*:(?!\d)/i.test(address) || /^[/#?.]/.test(address) || /\s/.test(address)) return address;
+    const host = address.split(/[/?#]/)[0]!;
+    return /^[^@]+\.[^.@]+$/.test(host.replace(/:\d+$/, "")) ? `https://${address}` : address;
+}
+
 const parse = (href: string): URL | undefined => {
     try {
         return new URL(href);
@@ -328,7 +342,7 @@ export function createLinkCard(surface: Surface, edit: (from: HTMLElement) => vo
 
 /** A field for a link's address, with a button to set it and, for a link already there, one to take it off. Enter sets, Escape cancels. */
 export function linkForm(current: string | undefined, done: { set(href: string): void; remove(): void; cancel(): void }, places: { label: string; href: string; kind: string }[] = []): HTMLElement {
-    const form = fieldForm({ value: current, label: "Link address", placeholder: "Paste or type an address", type: "url", button: "set", said: "Set the link" }, { set: (href) => (href ? done.set(href) : current ? done.remove() : done.cancel()), cancel: done.cancel });
+    const form = fieldForm({ value: current, label: "Link address", placeholder: "Paste or type an address", type: "url", button: "set", said: "Set the link" }, { set: (href) => (href ? done.set(withScheme(href)) : current ? done.remove() : done.cancel()), cancel: done.cancel });
     if (current) form.append(control("Remove the link", icon("trash"), () => done.remove()));
     if (!places.length) return form;
     // the document's own headings and bookmarks, to link to by their names

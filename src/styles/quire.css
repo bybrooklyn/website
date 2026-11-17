@@ -1456,8 +1456,9 @@
     background-color: color-mix(in oklch, var(--accent) 28%, transparent);
 }
 
-/* every place selected by Select all matching text, drawn as the selection is */
-::highlight(quire-matching) {
+/* every place selected by Select all matching text, and the words a link is being written for, drawn as the selection is */
+::highlight(quire-matching),
+::highlight(quire-held) {
     background-color: color-mix(in oklch, var(--accent), transparent 72%);
 }
 
@@ -3153,6 +3154,13 @@ body.quire-app,
 .quire-row-word.open {
     background: color-mix(in oklch, var(--accent) 22%, transparent);
     color: var(--accent);
+}
+
+/* on a phone the seven words keep less room either side, so that Help is whole in the window */
+@media (max-width: 28rem) {
+    .quire-row-word {
+        padding: 0 0.25rem;
+    }
 }
 
 /* in a menu where some lines have an icon, every label starts at the same place, with an icon before it or not */

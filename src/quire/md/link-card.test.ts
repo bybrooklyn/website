@@ -5,7 +5,21 @@
 import { expect, test } from "bun:test";
 import { read } from "./read";
 import { write } from "./write";
-import { cutMiddle, shortFor, showAs, webAddress, wordsFor } from "./link-card";
+import { cutMiddle, shortFor, showAs, webAddress, withScheme, wordsFor } from "./link-card";
+
+test("an address typed with no scheme gets https:// when it names a site, and a scheme, a place in the site or the document, or a word with no dot is kept as typed", () => {
+    expect(withScheme("example.com")).toBe("https://example.com");
+    expect(withScheme(" www.example.co.uk/a/b?c=1#d ")).toBe("https://www.example.co.uk/a/b?c=1#d");
+    expect(withScheme("http://example.com")).toBe("http://example.com");
+    expect(withScheme("mailto:someone@example.com")).toBe("mailto:someone@example.com");
+    expect(withScheme("/blog/post")).toBe("/blog/post");
+    expect(withScheme("#a-heading")).toBe("#a-heading");
+    expect(withScheme("./notes.md")).toBe("./notes.md");
+    expect(withScheme("readme")).toBe("readme");
+    expect(withScheme("someone@example.com")).toBe("someone@example.com");
+    expect(withScheme("two words.com")).toBe("two words.com");
+    expect(withScheme("")).toBe("");
+});
 
 test("a web address is http, https or mailto alone, trimmed; other schemes and text around it are not", () => {
     expect(webAddress("  https://github.com/anomalyco/rune \n")).toBe("https://github.com/anomalyco/rune");

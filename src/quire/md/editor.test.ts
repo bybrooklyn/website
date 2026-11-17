@@ -703,6 +703,35 @@ used("the Markdown view flows open beside the text, and what is typed in either 
     await tab.wait(300);
 });
 
+used("every line of every menu, and of the bar's three dots on a phone, shows a sign before its words, and on a small phone every menu word is whole", async () => {
+    await reset("Words\n", [0], 0);
+    /** The lines of the menus open now that have no sign, a tick being one. */
+    const bare = () => tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].filter((line) => !line.querySelector('svg')).map((line) => line.textContent.trim())");
+    const words = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu-row .quire-row-word')].map((word) => word.textContent)");
+    for (const word of words) {
+        await menuLine(word);
+        await tab.wait(500);
+        expect({ word, bare: await bare() }).toEqual({ word, bare: [] });
+        await tab.press("Escape");
+        await tab.wait(300);
+    }
+    try {
+        // on a small phone every menu word is whole in the window, the last too
+        await tab.resize(360, 780);
+        await tab.wait(400);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu-row .quire-row-word')].filter((word) => word.getBoundingClientRect().right > document.documentElement.clientWidth).map((word) => word.textContent)")).toEqual([]);
+        await tab.resize(390, 844);
+        await tab.wait(400);
+        await press(".quire-bar button", "More tools");
+        await tab.wait(500);
+        expect(await bare()).toEqual([]);
+        await tab.press("Escape");
+    } finally {
+        await tab.resize(1300, 900);
+        await tab.wait(300);
+    }
+});
+
 used("Link opens a field that sets a link, and the Insert menu adds code and a footnote", async () => {
     await reset("a word here\n", [0], 2, [0], 6);
     // the link button folds into the three dots at this width; Insert has it too
@@ -717,7 +746,7 @@ used("Link opens a field that sets a link, and the Insert menu adds code and a f
     await button("Link");
     await tab.wait(500);
     expect(await tab.run("document.activeElement.value")).toBe("/somewhere");
-    await press(".quire-menu.open button", "Remove the link");
+    await press(".quire-select-bar.shown button", "Remove the link");
     expect(await md()).toBe("a word here\n");
 
     await reset("Above\n", [0], 5);
@@ -811,7 +840,7 @@ used("the selection bar never covers a heading over the selection, nor the line 
     expect(overlaps(seen.bar, seen.selection)).toBe(false);
 });
 
-used("Ctrl+K opens a link field that can be seen at every width, from the three dots when the bar's Link button is folded away", async () => {
+used("Ctrl+K opens a link field that can be seen at every width, at the words whether or not the bar's Link button is folded away", async () => {
     try {
         for (const width of [1300, 900, 600, 390]) {
             await tab.resize(width, 900);
@@ -820,7 +849,7 @@ used("Ctrl+K opens a link field that can be seen at every width, from the three 
             await tab.press("k", { ctrl: true });
             await tab.wait(500);
             const seen = await tab.run<{ open: boolean; hit: boolean; focused: boolean }>(`(() => {
-                const menu = [...document.querySelectorAll('.quire-menu')].find((each) => each.matches(':popover-open') && each.querySelector('.quire-link-field'));
+                const menu = [...document.querySelectorAll('.quire-select-bar.shown')].find((each) => each.querySelector('.quire-link-field'));
                 if (!menu) return { open: false, hit: false, focused: false };
                 const box = menu.getBoundingClientRect();
                 return { open: true, hit: menu.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)), focused: document.activeElement?.classList.contains('quire-link-field') };

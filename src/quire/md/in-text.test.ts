@@ -180,7 +180,7 @@ test("a folding section's arrow folds it away in the editor and back, changing n
     expect(await bodyHeight()).toBeGreaterThan(10);
 });
 
-test("a right-click in a table opens its menu, with every command and those that cannot act here dimmed; the menu key opens it at the cell", async () => {
+test("a right-click in a table opens its menu, cut, copy and the pastes first, with every command and those that cannot act here dimmed; the menu key opens it at the cell", async () => {
     if (skip("a table's menu")) return;
     const { tab } = page!;
     const table = "| a | b |\n| --- | --- |\n| 1 | 2 |\n";
@@ -190,6 +190,10 @@ test("a right-click in a table opens its menu, with every command and those that
     await tab.run("(() => { const cell = document.querySelectorAll('.quire td')[1]; const box = cell.getBoundingClientRect(); cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: box.left + 4, clientY: box.top + 4 })); })()");
     await tab.wait(400);
     expect(await lines()).toEqual([
+        ["Cut", true],
+        ["Copy", true],
+        ["Paste", false],
+        ["Paste without formatting", false],
         ["Add a row above", false],
         ["Add a row below", false],
         ["Add a column to the left", false],
@@ -213,12 +217,10 @@ test("a right-click in a table opens its menu, with every command and those that
     await tab.run("q.surface.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))");
     await tab.wait(400);
     const dimmed = (await lines()).filter(([, off]) => off).map(([label]) => label);
-    expect(dimmed).toEqual(["Add a row above", "Remove this row"]);
-    expect(await tab.run("document.activeElement.textContent")).toBe("Add a row below");
-    await tab.press("ArrowDown");
-    await tab.press("ArrowDown");
-    await tab.press("ArrowDown");
-    expect(await tab.run("document.activeElement.textContent")).toBe("Remove this column");
+    expect(dimmed).toEqual(["Cut", "Copy", "Add a row above", "Remove this row"]);
+    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Paste");
+    for (let step = 0; step < 5; step++) await tab.press("ArrowDown");
+    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Remove this column");
     await tab.press("Escape");
     await tab.wait(300);
     expect(await keyboard()).toBe("writing");
@@ -282,6 +284,70 @@ test("find stepping to a match brings no bar over it", async () => {
     await tab.wait(300);
     expect(await tab.run("(() => { const { anchor, focus } = q.surface.getSelection(); return Math.abs(focus.offset - anchor.offset); })()")).toBe(5);
     expect(await tab.run("!!document.querySelector('.quire-select-bar.shown')")).toBe(false);
+});
+
+test("Ctrl+K opens the link field at the selected words, which stay drawn as selected, and an address typed with no scheme gets https://", async () => {
+    if (skip("the link field at the words")) return;
+    const { tab } = page!;
+    const words = Array.from({ length: 120 }, (_, k) => `word${k}`).join(" ");
+    await page!.reset(`${words}\n`, [0], 0);
+    const start = words.indexOf("word60");
+    await tab.run(`q.select([0], ${start}, [0], ${start + 6})`);
+    await tab.wait(300);
+    await tab.press("k", { ctrl: true });
+    await tab.wait(400);
+    expect(await tab.run("document.activeElement.closest('.quire-select-bar.shown')?.querySelector('.quire-link-field') === document.activeElement")).toBe(true);
+    // beside its words, covering neither them nor the lines round them, and the words still drawn as selected
+    const field = await tab.run<{ x: number; y: number; width: number; height: number }>("q.box('.quire-select-bar.shown')");
+    const chosen = await tab.run<{ left: number; right: number; top: number; bottom: number; line: number }>(`(() => { const box = q.surface.rangeOf({ path: [0], offset: ${start} }, { path: [0], offset: ${start + 6} }).getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, line: parseFloat(getComputedStyle(q.surface.element).lineHeight) }; })()`);
+    expect(covers(field, chosen.top, chosen.bottom, chosen.line - 1)).toBe(false);
+    expect(field.x < chosen.right && field.x + field.width > chosen.left).toBe(true);
+    expect(await tab.run("CSS.highlights.get('quire-held')?.size ?? 0")).toBe(1);
+    await tab.type("example.com");
+    await tab.press("Enter");
+    await tab.wait(200);
+    expect(await page!.md()).toBe(words.replace("word60", "[word60](https://example.com)") + "\n");
+    expect(await keyboard()).toBe("writing");
+    expect(await tab.run("CSS.highlights.has('quire-held')")).toBe(false);
+    // with only a caret in a link, Ctrl+K opens the same field there, holding its address
+    await tab.run(`q.select([0], ${start + 2})`);
+    await tab.press("k", { ctrl: true });
+    await tab.wait(400);
+    expect(await tab.run("document.activeElement.closest('.quire-select-bar.shown') ? document.activeElement.value : ''")).toBe("https://example.com");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await keyboard()).toBe("writing");
+});
+
+test("resting on a link shows a card to open, copy, edit or remove it; an address pasted over words links them, and one pasted alone offers words or a short form", async () => {
+    if (skip("the link card and chip")) return;
+    const { tab } = page!;
+    await page!.reset("One [two](https://example.com/two) three\n", [0], 0);
+    const link = await tab.run<{ x: number; y: number }>("q.at('.quire a')");
+    await tab.move(link.x, link.y + 300);
+    await tab.move(link.x, link.y);
+    await tab.wait(900);
+    expect(await tab.run("[...document.querySelectorAll('.quire-link-card.shown a, .quire-link-card.shown button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Open (Alt+Enter)", "Copy", "Edit (Ctrl+K)", "Remove"]);
+    expect(await tab.run("document.querySelector('.quire-link-card.shown .quire-link-where').textContent")).toBe("https://example.com/two");
+    await page!.press(".quire-link-card.shown button", "Remove");
+    expect(await page!.md()).toBe("One two three\n");
+    await tab.move(link.x, link.y + 300);
+    // a paste as the browser gives one, from the clipboard
+    const paste = (text: string) => tab.run(`(() => { const data = new DataTransfer(); data.setData("text/plain", ${JSON.stringify(text)}); q.surface.element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); })()`);
+    await page!.reset("Four five six\n", [0], 5, [0], 9);
+    await paste("https://example.org/x");
+    await tab.wait(200);
+    expect(await page!.md()).toBe("Four [five](https://example.org/x) six\n");
+    await page!.reset("See\n", [0], 3);
+    await tab.type(" ");
+    await paste("https://github.com/owner/some-repo/issues/12");
+    await tab.wait(400);
+    expect(await tab.run("document.querySelector('.quire-link-card.shown .quire-link-words').value")).toBe("Some repo issue 12");
+    expect(await tab.run("[...document.querySelectorAll('.quire-link-card.shown button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Short form", "Keep address"]);
+    await tab.press("Tab");
+    await tab.press("Enter");
+    await tab.wait(200);
+    expect(await page!.md()).toBe("See [Some repo issue 12](https://github.com/owner/some-repo/issues/12)\n");
 });
 
 test("a table's strip and a picture's strip cover neither their table or picture nor the line before it", async () => {
@@ -373,15 +439,15 @@ test("a right-click on words opens the text's own menu, whose lines do what the 
     expect(await rightClick(true)).toBe(false);
     expect(await rightClick(false)).toBe(true);
     await tab.wait(400);
-    expect(await tab.run("[...document.querySelectorAll('.quire-text-menu.open .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Cut", "Copy", "Link", "Comment", "Bold", "Italic", "Underline"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-text-menu.open .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Cut", "Copy", "Paste", "Paste without formatting", "Link", "Comment", "Bold", "Italic", "Underline"]);
     await page!.press(".quire-text-menu.open .quire-menu-line", "Bold");
     await tab.wait(50);
     expect(await page!.md()).toBe("Some **words** here.\n");
-    // the menu key opens it at the caret with its first line ready; with nothing selected, cut and copy are dimmed and passed over
+    // the menu key opens it at the caret with its first line ready; with nothing selected, cut and copy are dimmed and passed over to Paste
     await tab.run("q.select([0], 2)");
     await tab.run("q.surface.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))");
     await tab.wait(400);
-    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Link");
+    expect(await tab.run("document.activeElement.querySelector('.quire-menu-label').textContent")).toBe("Paste");
     await tab.press("Escape");
     await tab.wait(300);
     expect(await keyboard()).toBe("writing");

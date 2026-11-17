@@ -710,7 +710,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     const zoomButton = control("Zoom", zoomLabel, (button) => options.onZoom?.(button), "quire-button quire-zoom");
     zoomButton.append(icon("chevron"));
     zoomButton.setAttribute("aria-haspopup", "menu");
-    group(tool(zoomButton, FOLDS.zoom, () => [{ label: "Zoom", hint: "›", run: () => options.onZoom?.(moreButton) }]));
+    group(tool(zoomButton, FOLDS.zoom, () => [{ label: "Zoom", icon: "zoom", hint: "›", run: () => options.onZoom?.(moreButton) }]));
 
     // ---- the style ----
     const styles = flowMenu("Style");
@@ -727,7 +727,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     const styleButton = opener(styles, "Style", styleLabel, styleLines);
     styleButton.classList.add("quire-style");
     styleButton.append(icon("chevron"));
-    group(tool(styleButton, FOLDS.style, () => [{ label: "Style", hint: "›", run: () => styles.open(moreButton, styleLines(), true) }]));
+    group(tool(styleButton, FOLDS.style, () => [{ label: "Style", icon: "styles", hint: "›", run: () => styles.open(moreButton, styleLines(), true) }]));
 
     // ---- the typeface ----
     const fonts = flowMenu("Typeface");
@@ -741,7 +741,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     const fontButton = opener(fonts, "Typeface", fontLabel, fontLines);
     fontButton.classList.add("quire-font");
     fontButton.append(icon("chevron"));
-    group(tool(fontButton, FOLDS.font, () => [{ label: "Typeface", hint: "›", run: () => fonts.open(moreButton, fontLines(), true) }], true));
+    group(tool(fontButton, FOLDS.font, () => [{ label: "Typeface", icon: "font", hint: "›", run: () => fonts.open(moreButton, fontLines(), true) }], true));
 
     // ---- the size: a number with minus and plus either side, typed into as well ----
     const sizes = flowMenu("Text size");
@@ -805,7 +805,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         tool(
             cluster(control(named("Smaller", "smaller"), icon("minus"), () => setSize(nextSize(sizeAt(), -1, richOn)), "quire-button quire-size-step"), sizeField, control(named("Larger", "bigger"), icon("plus"), () => setSize(nextSize(sizeAt(), 1, richOn)), "quire-button quire-size-step")),
             FOLDS.size,
-            () => [{ label: "Text size", hint: "›", run: () => sizes.open(moreButton, sizeLines(), true) }],
+            () => [{ label: "Text size", icon: "size", hint: "›", run: () => sizes.open(moreButton, sizeLines(), true) }],
         ),
     );
 
@@ -867,11 +867,11 @@ export function createBar(surface: Surface, options: BarOptions) {
     const highlightButton = opener(highlights, "Highlight", icon("highlight"), highlightGrid);
     highlightButton.classList.add("quire-highlight-button");
     group(
-        tool(press("bold", named("Bold", "bold"), glyph("B", "bold"), doing(toggle("bold"))), FOLDS.bold, () => [{ label: "Bold", hint: "Ctrl+B", run: doing(toggle("bold")) }]),
-        tool(press("italic", named("Italic", "italic"), glyph("I", "italic"), doing(toggle("italic"))), FOLDS.italic, () => [{ label: "Italic", hint: "Ctrl+I", run: doing(toggle("italic")) }]),
-        tool(press("underline", named("Underline", "underline"), glyph("U", "underline"), doing(toggle("underline"))), FOLDS.underline, () => [{ label: "Underline", hint: "Ctrl+U", run: doing(toggle("underline")) }]),
-        tool(press("strike", named("Strikethrough", "strike"), glyph("S", "strike"), doing(toggle("strike"))), FOLDS.strike, () => [{ label: "Strikethrough", hint: "Alt+Shift+5", run: doing(toggle("strike")) }]),
-        tool(opener(colors, "Text color", colorMark, colorGrid), FOLDS.color, () => [{ label: "Text color", hint: "›", run: () => colors.open(moreButton, colorGrid(), true) }]),
+        tool(press("bold", named("Bold", "bold"), glyph("B", "bold"), doing(toggle("bold"))), FOLDS.bold, () => [{ label: "Bold", icon: "bold", hint: "Ctrl+B", run: doing(toggle("bold")) }]),
+        tool(press("italic", named("Italic", "italic"), glyph("I", "italic"), doing(toggle("italic"))), FOLDS.italic, () => [{ label: "Italic", icon: "italic", hint: "Ctrl+I", run: doing(toggle("italic")) }]),
+        tool(press("underline", named("Underline", "underline"), glyph("U", "underline"), doing(toggle("underline"))), FOLDS.underline, () => [{ label: "Underline", icon: "underline", hint: "Ctrl+U", run: doing(toggle("underline")) }]),
+        tool(press("strike", named("Strikethrough", "strike"), glyph("S", "strike"), doing(toggle("strike"))), FOLDS.strike, () => [{ label: "Strikethrough", icon: "strike", hint: "Alt+Shift+5", run: doing(toggle("strike")) }]),
+        tool(opener(colors, "Text color", colorMark, colorGrid), FOLDS.color, () => [{ label: "Text color", icon: "color", hint: "›", run: () => colors.open(moreButton, colorGrid(), true) }]),
         tool(highlightButton, FOLDS.highlight, () => [{ label: "Highlight", icon: "highlight", hint: "›", run: () => highlights.open(moreButton, highlightGrid(), true) }], true),
     );
 
@@ -1269,19 +1269,6 @@ export function createBar(surface: Surface, options: BarOptions) {
     const menus = [styles, fonts, sizes, colors, highlights, spacings, more];
     strip.addEventListener("scroll", () => closeOthers(), { passive: true });
 
-    /**
-     * The bar's button for a tool if it can be seen, or else the three dots it is folded into: a menu is tied to
-     * the control it opens from, and the browser does not draw a menu tied to a control out of sight (folded
-     * away, or scrolled out of the strip on a phone), so the menu was open, and its field focused, unseen.
-     */
-    const seen = (label: string): HTMLElement => {
-        const button = bar.querySelector<HTMLElement>(`[aria-label^="${label}"]`);
-        const box = button?.getBoundingClientRect();
-        if (!button || !box || box.width === 0 || button.closest(".folded, .away")) return moreButton;
-        const room = strip.contains(button) ? strip.getBoundingClientRect() : undefined;
-        return !room || (box.left >= room.left - 1 && box.right <= room.right + 1) ? button : moreButton;
-    };
-
     return {
         element: bar,
         setName(value: string) {
@@ -1307,7 +1294,6 @@ export function createBar(surface: Surface, options: BarOptions) {
             showSize();
         },
         rich: () => richOn,
-        seen,
         /** Makes the text one size larger or smaller, as the plus and minus beside the size do (Ctrl+Shift+. and Ctrl+Shift+,). */
         sizeBy(by: -1 | 1) {
             setSize(nextSize(sizeAt(), by, richOn));
