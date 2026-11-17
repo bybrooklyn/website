@@ -4,10 +4,10 @@
 //! `cargo run --release --example film -- water out.ppm` writes a plain PPM picture. The scenes are
 //! the ones the page was played with: a brush held still over a shelf and a bowl (`water`, `sand`,
 //! `lava`, `oil`), and two hills with a lake between, a wooden house set alight and lava poured into
-//! the lake (`lake`), and a wooden house and a pool of oil set alight (`fire`). Each cell is drawn in its material's color, moved by its shade, as the page
+//! the lake (`lake`), a wooden house and a pool of oil set alight (`fire`), and snow, salt, mud, a cloud and lightning (`weather`). Each cell is drawn in its material's color, moved by its shade, as the page
 //! draws it but without light.
 
-use sand::materials::{DIRT, FIRE, LAVA, MATERIALS, OIL, PALETTE, SAND, STONE, WATER, WOOD};
+use sand::materials::{BOLT, CLOUD, DIRT, FIRE, ICE, LAVA, MATERIALS, MUD, OIL, PALETTE, SALT, SAND, SNOW, STONE, WATER, WOOD};
 use sand::world::{World, material};
 
 /// The ground the page draws the world on.
@@ -39,7 +39,7 @@ fn held(world: &mut World, of: u8, x: i32, y: i32, radius: i32) {
     let area = std::f32::consts::PI * (radius as f32 + 0.5) * (radius as f32 + 0.5);
     let cells = match of {
         LAVA => 36.0,
-        SAND | DIRT => 40.0,
+        SAND | DIRT | SALT => 40.0,
         _ => 2.0 * (2 * radius + 1) as f32,
     };
     world.paint(of, x, y, x, y, radius, (100.0 * cells / area).round().clamp(1.0, 45.0) as u32, false);
@@ -55,6 +55,7 @@ fn main() {
     let (every, count): (usize, usize) = match scene {
         "lake" => (60, 12),
         "fire" => (40, 12),
+        "weather" => (40, 12),
         _ => (15, 12),
     };
     match scene {
@@ -75,6 +76,50 @@ fn main() {
                 if step < 10 {
                     world.paint(FIRE, 280, 400, 292, 400, 4, 45, false);
                     world.paint(FIRE, 60, 388, 70, 388, 3, 45, false);
+                }
+                world.step();
+                if step % every == every - 1 {
+                    frames.push(frame(&world));
+                }
+            }
+        }
+        "weather" => {
+            // a stone floor with a wooden hut, a heap of sand, a pond and a block of ice; snow from the left,
+            // a cloud over the pond, salt on the ice, and lightning on the hut and the sand
+            world.paint(STONE, 0, 415, 519, 415, 4, 100, false);
+            world.paint(WOOD, 60, 405, 60, 350, 4, 100, false);
+            world.paint(WOOD, 110, 405, 110, 350, 4, 100, false);
+            world.paint(WOOD, 52, 350, 118, 350, 4, 100, false);
+            world.paint(STONE, 250, 405, 250, 380, 3, 100, false);
+            world.paint(STONE, 340, 405, 340, 380, 3, 100, false);
+            for y in 388..410 {
+                world.paint(WATER, 256, y, 334, y, 0, 100, false);
+            }
+            for y in 380..410 {
+                world.paint(ICE, 420, y, 470, y, 0, 100, false);
+            }
+            for _ in 0..120 {
+                held(&mut world, SAND, 180, 300, 8);
+                world.step();
+            }
+            for y in 150..175 {
+                world.paint(CLOUD, 240, y, 350, y, 0, 100, false);
+            }
+            for step in 0..every * count {
+                if step < 240 {
+                    world.paint(SNOW, 380 + (step as i32 % 9) * 12, 40, 380 + (step as i32 % 9) * 12, 40, 3, 20, false);
+                }
+                if (120..200).contains(&step) {
+                    held(&mut world, SALT, 445, 330, 8);
+                }
+                if step == 60 || step == 200 {
+                    world.paint(BOLT, 85, 200, 85, 200, 0, 100, false);
+                }
+                if step == 130 || step == 260 {
+                    world.paint(BOLT, 180, 150, 180, 150, 0, 100, false);
+                }
+                if (300..360).contains(&step) {
+                    held(&mut world, MUD, 30, 250, 8);
                 }
                 world.step();
                 if step % every == every - 1 {

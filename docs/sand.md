@@ -1216,6 +1216,45 @@ with a view that is moved and zoomed, and a word that grows the stage to fill th
   shown whole. The floor of stone drawn under the stage is gone: the stage is a view, and the world's
   own floor is its lowest row.
 
+## More of the world: snow, salt, mud, glass, clouds and lightning
+
+Asked for on 17 November 2026. Six more materials the brush pours, and two the reactions make:
+
+- **Snow** (N): a light, cold powder that falls a cell or two a step and drifts to a side as it falls
+  (`drift`, a new column of the table: for a powder, how likely a falling grain is to go down to a side;
+  ash drifts too, less), lies in heaps, floats on water, and melts to water at 28, cell for cell. It
+  passes almost no heat (2), and none while falling, so a snowfall lies as snow in air at room
+  temperature for a good while: after ten seconds on the ground nearly all of it still is.
+- **Salt** (X): a pink powder that dissolves in the water it touches (the water becomes brine and the
+  salt is gone into it), and melts the ice and snow it touches into brine. **Brine** is water with
+  salt in it, heavier than water, so it lies under it; it never freezes; boiled, it leaves its salt
+  and its water goes up as steam. Salt under brine does not dissolve further.
+- **Mud** (U): a thick, heavy liquid: it creeps (48 in 256 a step, two cells along) and rests in a low
+  mound (2,428 cells poured in one place lie 18 high and 200 wide after half a minute), and dries to
+  wet dirt, giving off steam, when it is hot. Dirt under water still only soaks: it does not turn to
+  mud by itself, so a bank of dirt still holds a lake.
+- **Glass** (G): a clear solid. Lava fuses the sand it lies against to glass, now and then (24 in
+  1024 a step: 96 cells under the test's pour), and lightning fuses the sand it strikes. Pride sand
+  fuses as sand does.
+- **Cloud** (Y): a gas that hovers where it is put (`drift` on a gas: it does not rise, and now and
+  then moves a cell to a side) and rains itself away: a cell of it, 6 times in 1024 a step where it has
+  air beside it, becomes a drop of water. Cloud and rain together are always what the cloud was. Steam
+  and smoke rise through it.
+- **Lightning** (H): a new kind of cell, a bolt. It runs down through the air 24 cells a step, a cell
+  aside one time in four so that it is jagged, leaving a flash of light three cells wide that fades in
+  four steps; a gas or flame in its way changes places with it. Where it reaches wood or oil it sets
+  it alight, a cell a step for about six steps; water it boils; ice and snow it melts; and where it
+  reaches sand it runs on into it and leaves a vein of glass three to six grains long. From 226 cells
+  up it has wood alight in eleven steps, and nothing of the bolt or its light is left afterward. The
+  brush pours it as one bolt at the pointer whatever its size, a new one each step while it is held.
+  Clouds do not strike by themselves.
+
+Their keys are a letter of the name where one was free; every letter of salt and of cloud was
+another's, so salt is X and cloud Y. The row is now three rows of seven beside the stage, and the
+column still ends inside the first screen at 1288 by 828 (at 823 of 828). Their colors were chosen to
+be at least 0.085 from every other in OKLab, as the test asks; snow and steam, both white, are left
+out of it, one being a powder that falls and lies and the other a soft gas that rises.
+
 ## The look, as chosen
 
 Three palettes, three kinds of light, water with and without depth, and four stages were shown as

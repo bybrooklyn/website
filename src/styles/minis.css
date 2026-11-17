@@ -117,7 +117,7 @@
 
 /* The column's lines a little closer than the Walker's, so that all of it is in a laptop's first screen. */
 .mini-stage[data-mini="sand"] > .mote-panel.sand-side {
-    row-gap: 0.45rem;
+    row-gap: 0.4rem;
 }
 
 .mini-stage[data-mini="sand"].sand-place {
@@ -157,8 +157,8 @@
     }
 }
 
-/* Each material is a small square of itself, as the engine colors it: two rows of seven, close set
-   beside the stage, where a mouse presses them, and in a target a fingertip can press on a phone. */
+/* Each material is a small square of itself, as the engine colors it: rows of seven, close set beside
+   the stage, where a mouse presses them, and in a target a fingertip can press on a phone. */
 .sand-swatches {
     grid-column: 1 / -1;
     display: grid;
@@ -171,11 +171,11 @@
     }
 
     .mote-panel .sand-swatches .sand-swatch {
-        height: 2.25rem;
+        height: 2rem;
     }
 
     .mote .mote-panel .sand-swatches canvas.sand-grains {
-        outline-offset: 0.125rem;
+        outline-offset: 0.0625rem;
     }
 }
 

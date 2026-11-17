@@ -32,6 +32,8 @@ pub enum Kind {
     Void,
     /// Rises and flickers from side to side, and never spreads.
     Fire,
+    /// Lightning: runs down through the air, jagged, many cells in a step, leaving light behind it.
+    Bolt,
 }
 
 /// One material: how it moves, how heavy it is, how it holds heat, and how it is drawn.
@@ -60,6 +62,10 @@ pub struct Material {
     /// How likely a liquid is to slide or spread in a step, in 256ths; 0 is every step. Lava is
     /// slow: it falls freely but creeps sideways.
     pub pace: u8,
+    /// For a powder, how likely a falling grain is to go down to a side and not straight, in 256ths,
+    /// so that it drifts as it falls, as a flake does. For a gas, more than 0 means it hovers: it does
+    /// not rise, and now and then drifts a cell to a side, as a cloud does.
+    pub drift: u8,
     /// Whether the levelling pass carries it through a connected body (`level.rs`), so that it
     /// finds one level in joined vessels: 0 not, 1 until its surface is level, as water's is. A
     /// thick liquid that spreads under its own weight but stops while still some cells deep is
@@ -145,6 +151,23 @@ pub const BURNING_OIL: u8 = 19;
 /// water, so it sinks in a lake.
 pub const ROCK: u8 = 20;
 
+/// A light, cold powder that drifts as it falls, lies in heaps, floats on water and melts.
+pub const SNOW: u8 = 21;
+/// A powder that dissolves in water, making brine, and melts the ice and snow it touches.
+pub const SALT: u8 = 22;
+/// Water with salt in it: heavier than water, never freezing, and leaving its salt when it boils.
+pub const BRINE: u8 = 23;
+/// A thick, heavy liquid that creeps and rests in a mound, and dries to wet dirt when hot.
+pub const MUD: u8 = 24;
+/// A clear solid: what sand becomes where lava or lightning fuses it.
+pub const GLASS: u8 = 25;
+/// A gas that hovers where it is put and rains itself away.
+pub const CLOUD: u8 = 26;
+/// Lightning: it runs down to what is under it, sets alight what burns, fuses sand and boils water.
+pub const BOLT: u8 = 27;
+/// The light lightning leaves along its way, gone in a few steps.
+pub const FLASH: u8 = 28;
+
 /// The shade a material with `glow` 3 is given picks its color: a stripe's number times 4, with
 /// the lowest two bits a slight shade of its own, so stripes of 64 colors can be poured.
 pub const STRIPE: u8 = 4;
@@ -153,27 +176,35 @@ pub const STRIPES: u8 = 64;
 
 /// Every material, by its number.
 pub const MATERIALS: &[Material] = &[
-    Material { name: "empty", kind: Kind::Empty, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: -1, toward: ROOM, airy: true, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
-    Material { name: "sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 10, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [227, 198, 147, 255], vary: [46, 45, 44], paint: true },
-    Material { name: "water", kind: Kind::Liquid, density: 100, slide: 0, roll: 0, spread: 12, fall: 10, pace: 0, level: 1, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [58, 132, 202, 235], vary: [26, 24, 27], paint: true },
-    Material { name: "stone", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [102, 104, 117, 255], vary: [40, 40, 40], paint: true },
-    Material { name: "dirt", kind: Kind::Powder, density: 150, slide: 2, roll: 0, spread: 0, fall: 10, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [126, 76, 56, 255], vary: [43, 39, 38], paint: true },
-    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 1, conduct: 2, made: 160, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [236, 238, 249, 240], vary: [20, 20, 16], paint: true },
-    Material { name: "wall", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
-    Material { name: "void", kind: Kind::Void, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
-    Material { name: "wood", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [171, 124, 60, 255], vary: [38, 36, 39], paint: true },
-    Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, level: 1, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [102, 44, 107, 240], vary: [23, 23, 23], paint: true },
-    Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 3, fall: 6, pace: 96, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [137, 50, 25, 255], vary: [246, 207, 31], paint: true },
-    Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [146, 223, 242, 245], vary: [20, 20, 20], paint: true },
-    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 2, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [177, 164, 194, 235], vary: [37, 37, 39], paint: true },
-    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 3, pace: 0, level: 0, conduct: 2, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [250, 120, 40, 255], vary: [30, 255, 110], paint: true },
-    Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 10, fall: 10, pace: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [152, 227, 107, 230], vary: [31, 33, 33], paint: true },
-    Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 10, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [75, 44, 33, 255], vary: [27, 25, 25], paint: false },
-    Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [221, 82, 48, 255], vary: [70, 80, 30], paint: false },
-    Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [152, 146, 133, 255], vary: [30, 31, 30], paint: false },
-    Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 10, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [227, 198, 147, 255], vary: [40, 40, 40], paint: true },
-    Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [241, 105, 53, 245], vary: [60, 90, 30], paint: false },
-    Material { name: "rock", kind: Kind::Powder, density: 190, slide: 1, roll: 0, spread: 0, fall: 12, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [69, 78, 91, 255], vary: [31, 32, 33], paint: false },
+    Material { name: "empty", kind: Kind::Empty, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: -1, toward: ROOM, airy: true, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
+    Material { name: "sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [227, 198, 147, 255], vary: [46, 45, 44], paint: true },
+    Material { name: "water", kind: Kind::Liquid, density: 100, slide: 0, roll: 0, spread: 12, fall: 10, pace: 0, drift: 0, level: 1, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [58, 132, 202, 235], vary: [26, 24, 27], paint: true },
+    Material { name: "stone", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [102, 104, 117, 255], vary: [40, 40, 40], paint: true },
+    Material { name: "dirt", kind: Kind::Powder, density: 150, slide: 2, roll: 0, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [126, 76, 56, 255], vary: [43, 39, 38], paint: true },
+    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, drift: 0, level: 1, conduct: 2, made: 160, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [236, 238, 249, 240], vary: [20, 20, 16], paint: true },
+    Material { name: "wall", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
+    Material { name: "void", kind: Kind::Void, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
+    Material { name: "wood", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [171, 124, 60, 255], vary: [38, 36, 39], paint: true },
+    Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, drift: 0, level: 1, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [102, 44, 107, 240], vary: [23, 23, 23], paint: true },
+    Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 3, fall: 6, pace: 96, drift: 0, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [137, 50, 25, 255], vary: [246, 207, 31], paint: true },
+    Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [146, 223, 242, 245], vary: [20, 20, 20], paint: true },
+    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 2, pace: 0, drift: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [177, 164, 194, 235], vary: [37, 37, 39], paint: true },
+    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 3, pace: 0, drift: 0, level: 0, conduct: 2, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [250, 120, 40, 255], vary: [30, 255, 110], paint: true },
+    Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 10, fall: 10, pace: 0, drift: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [152, 227, 107, 230], vary: [31, 33, 33], paint: true },
+    Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [75, 44, 33, 255], vary: [27, 25, 25], paint: false },
+    Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [221, 82, 48, 255], vary: [70, 80, 30], paint: false },
+    Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, drift: 64, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [152, 146, 133, 255], vary: [30, 31, 30], paint: false },
+    Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [227, 198, 147, 255], vary: [40, 40, 40], paint: true },
+    Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, drift: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [241, 105, 53, 245], vary: [60, 90, 30], paint: false },
+    Material { name: "rock", kind: Kind::Powder, density: 190, slide: 1, roll: 0, spread: 0, fall: 12, pace: 0, drift: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [69, 78, 91, 255], vary: [31, 32, 33], paint: false },
+    Material { name: "snow", kind: Kind::Powder, density: 30, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, drift: 96, level: 0, conduct: 2, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [246, 250, 255, 255], vary: [14, 10, 6], paint: true },
+    Material { name: "salt", kind: Kind::Powder, density: 140, slide: 1, roll: 0, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [240, 196, 216, 255], vary: [22, 26, 22], paint: true },
+    Material { name: "brine", kind: Kind::Liquid, density: 106, slide: 0, roll: 0, spread: 12, fall: 10, pace: 0, drift: 0, level: 1, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [72, 170, 150, 235], vary: [22, 24, 24], paint: false },
+    Material { name: "mud", kind: Kind::Liquid, density: 130, slide: 0, roll: 0, spread: 2, fall: 5, pace: 48, drift: 0, level: 6, conduct: 14, made: ROOM, latent: 16, warms: 0, toward: 0, airy: false, glow: 0, color: [116, 108, 56, 255], vary: [26, 24, 20], paint: true },
+    Material { name: "glass", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [176, 240, 196, 120], vary: [18, 14, 18], paint: true },
+    Material { name: "cloud", kind: Kind::Gas, density: 6, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, drift: 1, level: 0, conduct: 2, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [128, 128, 166, 225], vary: [22, 22, 24], paint: true },
+    Material { name: "lightning", kind: Kind::Bolt, density: 255, slide: 0, roll: 0, spread: 0, fall: 24, pace: 0, drift: 0, level: 0, conduct: 0, made: 250, latent: 0, warms: -30, toward: 0, airy: true, glow: 1, color: [252, 252, 174, 255], vary: [0, 0, 0], paint: true },
+    Material { name: "flash", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 0, made: 255, latent: 0, warms: -50, toward: 0, airy: true, glow: 1, color: [252, 252, 174, 255], vary: [0, 0, 0], paint: false },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -275,11 +306,14 @@ pub const REACTIONS: &[Reaction] = &[
     // and burning wood chars the wood it touches, slowly, so a thick beam burns through and not only
     // from its skin
     line(WOOD, EMBER, 0, 255, EMBER, SAME, 12, Heat::Kept, 0),
+    // the light of lightning sets it alight
+    line(WOOD, FLASH, 0, 255, EMBER, SAME, 512, Heat::Kept, 0),
     // oil hot enough, with air beside it, catches fire; so does oil a flame or lava touches, now and
     // then, so a flame may lick a slick a few times before it catches
     line(OIL, OPEN, 85, 255, BURNING_OIL, SAME, 512, Heat::Kept, 200),
     line(OIL, LAVA, 0, 255, BURNING_OIL, SAME, 256, Heat::Kept, 200),
     line(OIL, FIRE, 0, 255, BURNING_OIL, SAME, 192, Heat::Kept, 200),
+    line(OIL, FLASH, 0, 255, BURNING_OIL, SAME, 512, Heat::Kept, 200),
     // water hardens the lava it touches now and then, into loose rock that sinks and settles, and boils
     // away; lava, heavier, sinks through the water as it does
     line(LAVA, WATER, 0, 255, ROCK, STEAM, 64, Heat::Shared, 0),
@@ -288,8 +322,13 @@ pub const REACTIONS: &[Reaction] = &[
     resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0), SOLID_GROUND),
     // on loose ground (molten lava, sand, rock), into loose rock, which floats on lava as a crust
     resting(line(LAVA, ALONE, 0, 100, ROCK, SAME, ALWAYS, Heat::Kept, 0), AFLOAT),
+    // and fuses the sand it lies against to glass, now and then
+    line(LAVA, SAND, 0, 255, SAME, GLASS, 24, Heat::Kept, 0),
+    line(LAVA, PRIDE, 0, 255, SAME, GLASS, 24, Heat::Kept, 0),
     // ice that warms melts
     line(ICE, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
+    // salt melts the ice it touches, into brine, and is used up
+    line(ICE, SALT, 0, 255, BRINE, EMPTY, 48, Heat::Shared, 0),
     // smoke thins to nothing
     line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 24, Heat::Kept, 0),
     // a flame that has cooled dies, some of it to smoke; water puts it out with a hiss of steam
@@ -322,6 +361,29 @@ pub const REACTIONS: &[Reaction] = &[
     line(BURNING_OIL, OIL, 0, 255, SAME, BURNING_OIL, 24, Heat::Kept, 185),
     line(BURNING_OIL, ALONE, 0, 255, SMOKE, SAME, 2, Heat::Kept, 0),
     line(BURNING_OIL, ALONE, 0, 255, EMPTY, SAME, 6, Heat::Kept, 0),
+    // snow that warms melts, and salt melts it sooner
+    line(SNOW, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
+    line(SNOW, SALT, 0, 255, BRINE, EMPTY, 96, Heat::Shared, 0),
+    // salt dissolves in the water it touches: the water is brine, and the salt is gone into it
+    line(SALT, WATER, 0, 255, EMPTY, BRINE, 96, Heat::Kept, 0),
+    // brine that boils leaves its salt, its water going up as steam into the air beside it
+    line(BRINE, EMPTY, 80, 255, SALT, STEAM, 512, Heat::Carried, 0),
+    // mud that is hot dries to wet dirt, as wet dirt dries to dirt
+    line(MUD, EMPTY, 78, 255, WET_DIRT, STEAM, 128, Heat::Carried, 0),
+    // a cloud rains itself away: a cell of it, now and then, is a drop of water in the air beside it
+    line(CLOUD, EMPTY, 0, 255, EMPTY, WATER, 6, Heat::Kept, 0),
+    // lightning that has spent itself is a burst of flame; before that it fuses the sand it has
+    // reached, boils water, lights wood and oil, and melts ice and snow, a cell a step
+    line(BOLT, ALONE, 0, 60, FIRE, SAME, ALWAYS, Heat::Kept, 200),
+    line(BOLT, SAND, 0, 255, SAME, GLASS, 768, Heat::Kept, 0),
+    line(BOLT, PRIDE, 0, 255, SAME, GLASS, 768, Heat::Kept, 0),
+    line(BOLT, WATER, 0, 255, SAME, STEAM, 768, Heat::Kept, 120),
+    line(BOLT, WOOD, 0, 255, SAME, EMBER, 768, Heat::Kept, 200),
+    line(BOLT, OIL, 0, 255, SAME, BURNING_OIL, 768, Heat::Kept, 200),
+    line(BOLT, ICE, 0, 255, SAME, WATER, 768, Heat::Kept, 40),
+    line(BOLT, SNOW, 0, 255, SAME, WATER, 768, Heat::Kept, 40),
+    // the light it leaves is gone as it fades
+    line(FLASH, ALONE, 0, 60, EMPTY, SAME, ALWAYS, Heat::Kept, 0),
 ];
 
 /// The reactions of `a` beside `b` (with `b` a material), in the order they are tried.
@@ -371,6 +433,7 @@ pub(crate) struct Props {
     pub spread: u8,
     pub fall: u8,
     pub pace: u8,
+    pub drift: u8,
     pub level: u8,
     /// Whether a visit has anything to do besides moving it: lines, or a shade that follows heat.
     pub acts: bool,
@@ -387,7 +450,7 @@ pub(crate) struct Props {
 pub(crate) static TABLE: [Props; 256] = table();
 
 const fn table() -> [Props; 256] {
-    let mut out = [Props { kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, acts: false, calm_from: 1, calm_to: 0, glow: 0, airy: false }; 256];
+    let mut out = [Props { kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, acts: false, calm_from: 1, calm_to: 0, glow: 0, airy: false }; 256];
     let mut at = 0;
     while at < MATERIALS.len() {
         let m = &MATERIALS[at];
@@ -395,7 +458,7 @@ const fn table() -> [Props; 256] {
         let glow = if m.glow == 3 { 0 } else { m.glow };
         let acts = LINES[at].1 > LINES[at].0 || glow != 0;
         let (calm_from, calm_to) = if glow != 0 { (1, 0) } else { calm(at) };
-        out[at] = Props { kind: m.kind, density: m.density, slide: m.slide, roll: m.roll, spread: m.spread, fall: m.fall, pace: m.pace, level: m.level, acts, calm_from, calm_to, glow, airy: m.airy };
+        out[at] = Props { kind: m.kind, density: m.density, slide: m.slide, roll: m.roll, spread: m.spread, fall: m.fall, pace: m.pace, drift: m.drift, level: m.level, acts, calm_from, calm_to, glow, airy: m.airy };
         at += 1;
     }
     out
@@ -572,6 +635,14 @@ mod tests {
             (PRIDE, "pride sand"),
             (BURNING_OIL, "burning oil"),
             (ROCK, "rock"),
+            (SNOW, "snow"),
+            (SALT, "salt"),
+            (BRINE, "brine"),
+            (MUD, "mud"),
+            (GLASS, "glass"),
+            (CLOUD, "cloud"),
+            (BOLT, "lightning"),
+            (FLASH, "flash"),
         ];
         for (number, name) in named {
             assert_eq!(MATERIALS[number as usize].name, name);
@@ -698,8 +769,12 @@ mod tests {
     fn pride_sand_is_sand_in_everything_but_its_shade() {
         let (sand, pride) = (&MATERIALS[SAND as usize], &MATERIALS[PRIDE as usize]);
         assert_eq!((pride.kind, pride.density, pride.slide, pride.roll, pride.fall, pride.conduct, pride.made, pride.latent, pride.airy), (sand.kind, sand.density, sand.slide, sand.roll, sand.fall, sand.conduct, sand.made, sand.latent, sand.airy));
-        // no line of the table names either, and anything beside one sees it as it sees sand
-        assert!(REACTIONS.iter().all(|line| ![SAND, PRIDE].contains(&line.a) && ![SAND, PRIDE].contains(&line.b) && ![SAND, PRIDE].contains(&line.a_becomes) && ![SAND, PRIDE].contains(&line.b_becomes)));
+        // neither changes by itself or is made by any line, and anything beside one sees it as it sees
+        // sand: lava and lightning fuse both to glass
+        assert!(REACTIONS.iter().all(|line| ![SAND, PRIDE].contains(&line.a) && ![SAND, PRIDE].contains(&line.a_becomes) && ![SAND, PRIDE].contains(&line.b_becomes)));
+        for line in REACTIONS.iter().filter(|line| line.b == SAND) {
+            assert!(REACTIONS.iter().any(|twin| twin.b == PRIDE && (twin.a, twin.a_becomes, twin.b_becomes, twin.chance) == (line.a, line.a_becomes, line.b_becomes, line.chance)));
+        }
         for m in 0..MATERIALS.len() as u8 {
             assert_eq!(reactions(m, PRIDE).count(), reactions(m, SAND).count());
         }
@@ -754,7 +829,9 @@ mod tests {
         let mut closest = (f64::MAX, 0, 0);
         for (k, &a) in drawn.iter().enumerate() {
             for &b in &drawn[k + 1..] {
-                if lights(a) && lights(b) {
+                // snow and steam are both white: one is a powder that falls and lies, the other a soft
+                // gas that rises
+                if (lights(a) && lights(b)) || (a.min(b), a.max(b)) == (STEAM, SNOW) {
                     continue;
                 }
                 let seen = |m: u8| {

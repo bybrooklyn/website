@@ -57,6 +57,14 @@ pub fn picture(world: &World, x0: i32, y0: i32, x1: i32, y1: i32) -> String {
                 PRIDE => 'p',
                 sand::materials::BURNING_OIL => 'b',
                 sand::materials::ROCK => 'r',
+                sand::materials::SNOW => '*',
+                sand::materials::SALT => '+',
+                sand::materials::BRINE => '=',
+                sand::materials::MUD => 'm',
+                sand::materials::GLASS => 'g',
+                sand::materials::CLOUD => 'c',
+                sand::materials::BOLT => '!',
+                sand::materials::FLASH => '|',
                 _ => '?',
             });
         }

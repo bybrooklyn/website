@@ -5,7 +5,7 @@
 // the page. `bun run wasm` builds the modules; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { engineAddress, fillOf, flagSize, HELD, inRow, keptView, keyAction, KEYS, materials, nextStop, start, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Engine, type Material } from "./grains";
+import { brushCells, engineAddress, fillOf, flagSize, HELD, inRow, keptView, keyAction, KEYS, materials, nextStop, start, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Engine, type Material } from "./grains";
 
 const simd = new URL("../../public/wasm/sand.wasm", import.meta.url);
 const scalar = new URL("../../public/wasm/sand-scalar.wasm", import.meta.url);
@@ -41,7 +41,7 @@ test("both builds are small and need nothing from the page to load", async () =>
 
 test("the busy world comes out to the byte as it does natively, with SIMD and without", async () => {
     // the number sand/tests/unchanged.rs holds the native build to
-    const native: [number, number] = [0x715c4a8b, 0xe2115419];
+    const native: [number, number] = [0x70b648b9, 0x142265d4];
     expect(busy(await load(simd))).toEqual(native);
     expect(busy(await load(scalar))).toEqual(native);
 });
@@ -67,9 +67,9 @@ test("the same world comes out with sleeping off and in the checkerboard order w
 test("the brush is offered every material of the table it should be, and each is poured or laid as it should be", async () => {
     const engine = await load(simd);
     const offered = materials(engine);
-    expect(offered.map((m) => `${m.name} ${m.kind}`)).toEqual(["sand powder", "water liquid", "stone solid", "dirt powder", "steam gas", "wood solid", "oil liquid", "lava liquid", "ice solid", "smoke gas", "fire fire", "acid liquid", "pride sand powder"]);
-    // wet dirt, burning wood and ash are made by reactions, not poured
-    expect(offered.some((m) => ["wet dirt", "ember", "ash"].includes(m.name))).toBe(false);
+    expect(offered.map((m) => `${m.name} ${m.kind}`)).toEqual(["sand powder", "water liquid", "stone solid", "dirt powder", "steam gas", "wood solid", "oil liquid", "lava liquid", "ice solid", "smoke gas", "fire fire", "acid liquid", "pride sand powder", "snow powder", "salt powder", "mud liquid", "glass solid", "cloud gas", "lightning bolt"]);
+    // wet dirt, burning wood, ash, brine and lightning's flash are made by reactions, not poured
+    expect(offered.some((m) => ["wet dirt", "ember", "ash", "brine", "flash"].includes(m.name))).toBe(false);
     const of = (kind: Material["kind"], striped = false, light = false) => ({ kind, striped, light });
     expect(fillOf(of("fire"))).toBeLessThan(100);
     expect(fillOf(of("solid"))).toBe(100);
@@ -86,6 +86,10 @@ test("the brush is offered every material of the table it should be, and each is
     expect(fillOf(of("powder"), true, 0)).toBe(45);
     expect(fillOf(of("liquid"), true, 1)).toBe(45);
     expect(fillOf(of("solid"), true)).toBe(100);
+    // lightning is one bolt at the pointer, whatever the brush's size
+    expect(fillOf(of("bolt", false, true), true, 8)).toBe(100);
+    expect(brushCells(8, of("bolt"))).toBe(0);
+    expect(brushCells(8, of("powder"))).toBe(16);
     // lava drawn along a line is poured thick, fire is not
     expect(fillOf(of("liquid", false, true))).toBe(100);
     expect(fillOf(of("fire", false, true))).toBeLessThan(100);
@@ -196,15 +200,16 @@ test("a key works wherever the keyboard is in the mini: on the canvas, a swatch 
 test("the row of materials puts like things together and every material has its own key", async () => {
     const engine = await load(simd);
     const row = inRow(materials(engine));
-    expect(row.map((m) => m.name)).toEqual(["sand", "dirt", "pride sand", "water", "oil", "lava", "acid", "stone", "wood", "ice", "steam", "smoke", "fire"]);
+    expect(row.map((m) => m.name)).toEqual(["sand", "dirt", "pride sand", "snow", "salt", "water", "oil", "lava", "acid", "mud", "stone", "wood", "ice", "glass", "steam", "smoke", "cloud", "fire", "lightning"]);
     const keys = [...row.map((m) => KEYS[m.name]), KEYS.erase];
     expect(keys.every((key) => key && key.length === 1)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
-    // each a letter of its name
-    for (const m of row) expect(m.name).toContain(KEYS[m.name]!);
-    // pride sand is the striped one, fire and lava give light
+    // each a letter of its name, but for salt and cloud, whose every letter is another's
+    for (const m of row) if (m.name !== "salt" && m.name !== "cloud") expect(m.name).toContain(KEYS[m.name]!);
+    for (const name of ["salt", "cloud"]) expect([...name].every((letter) => keys.includes(letter))).toBe(true);
+    // pride sand is the striped one; fire, lava and lightning give light
     expect(row.filter((m) => m.striped).map((m) => m.name)).toEqual(["pride sand"]);
-    expect(row.filter((m) => m.light).map((m) => m.name)).toEqual(["lava", "fire"]);
+    expect(row.filter((m) => m.light).map((m) => m.name)).toEqual(["lava", "fire", "lightning"]);
 });
 
 test("a whole flag is two high to three wide, grows with the brush, and fits the world", () => {

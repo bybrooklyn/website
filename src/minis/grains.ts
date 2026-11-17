@@ -54,7 +54,7 @@ export async function start(bytes: ArrayBuffer): Promise<Engine> {
 }
 
 /** How a material moves, by the number `kind` gives. */
-export const KINDS = ["empty", "solid", "powder", "liquid", "gas", "void", "fire"] as const;
+export const KINDS = ["empty", "solid", "powder", "liquid", "gas", "void", "fire", "bolt"] as const;
 
 /** A material the brush can pour. */
 export interface Material {
@@ -81,8 +81,8 @@ export function materials(engine: Engine): Material[] {
     return found;
 }
 
-/** The order of the row of materials: powders, liquids, solids, gases, then fire, so like things sit together. */
-const GROUPS: Material["kind"][] = ["powder", "liquid", "solid", "gas", "fire"];
+/** The order of the row of materials: powders, liquids, solids, gases, then fire and lightning, so like things sit together. */
+const GROUPS: Material["kind"][] = ["powder", "liquid", "solid", "gas", "fire", "bolt"];
 
 /** The materials in the row's order, each kind together and in the engine's order within it. */
 export function inRow(offered: Material[]): Material[] {
@@ -92,7 +92,8 @@ export function inRow(offered: Material[]): Material[] {
 
 /**
  * The key that picks each material, a letter of its name, and E for erasing. Where the first letter
- * is taken another of its name is used: oil is I, wood O, ice C, steam M and smoke K.
+ * is taken another of its name is used: oil is I, wood O, ice C, steam M, smoke K, mud U, snow N and
+ * lightning H. Every letter of salt and of cloud is another's, so salt is X and cloud Y.
  */
 export const KEYS: Record<string, string> = {
     sand: "s",
@@ -108,6 +109,12 @@ export const KEYS: Record<string, string> = {
     steam: "m",
     smoke: "k",
     fire: "f",
+    snow: "n",
+    salt: "x",
+    mud: "u",
+    glass: "g",
+    cloud: "y",
+    lightning: "h",
     erase: "e",
 };
 
@@ -145,8 +152,8 @@ export const CELL = 1;
  */
 export const FINER = 2 / CELL;
 
-/** How many cells either side of its line a brush of `size` on the slider pours: its size in the first page's cells, scaled. */
-export const brushCells = (size: number): number => Math.round(size * FINER);
+/** How many cells either side of its line a brush of `size` on the slider pours: its size in the first page's cells, scaled; none for lightning, which is one bolt. */
+export const brushCells = (size: number, of?: Pick<Material, "kind">): number => (of?.kind === "bolt" ? 0 : Math.round(size * FINER));
 
 /**
  * How many cells a brush held still pours in a step: so many grains of powder and cells of lava whatever
@@ -172,7 +179,8 @@ export function fillOf(material: Pick<Material, "kind" | "striped" | "light">, s
     const held = (count: number, most: number) => Math.min(most, (100 * count) / (Math.PI * (radius + 0.5) ** 2));
     const lava = material.kind === "liquid" && material.light;
     if (lava) return still ? held(HELD.lava, 100) : 100;
-    if (material.kind === "solid") return 100;
+    // lightning is one bolt at the pointer, whatever the brush's size (`brushCells`)
+    if (material.kind === "solid" || material.kind === "bolt") return 100;
     if (material.striped && !still) return 100;
     if (still && material.kind === "powder") return held(HELD.powder, 45);
     if (still && material.kind === "liquid") return held(HELD.liquid * (2 * radius + 1), 45);

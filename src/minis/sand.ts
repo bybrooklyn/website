@@ -174,7 +174,7 @@ export default function sand(m: Mote): Scene {
         }
         forgetLink();
         const still = from[0] === to[0] && from[1] === to[1];
-        const cells = brushCells(radius);
+        const cells = brushCells(radius, poured);
         // the engine fills whole cells in 100: what a held brush's share leaves over is carried to its next step
         const share = poured ? fillOf(poured, still, cells) + (still ? carried : 0) : 100;
         const fill = Math.floor(share);
@@ -536,7 +536,7 @@ export default function sand(m: Mote): Scene {
             const y = (at.top / ratio()) + (row - (high >> 1)) * cell;
             m.ctx.rect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(wide * cell) - 1, Math.round(high * cell) - 1);
         } else {
-            m.ctx.arc(m.pointer.x, m.pointer.y, Math.max(2, (brushCells(radius) + 0.5) * cell), 0, Math.PI * 2);
+            m.ctx.arc(m.pointer.x, m.pointer.y, Math.max(2, (brushCells(radius, poured) + 0.5) * cell), 0, Math.PI * 2);
         }
         m.ctx.strokeStyle = m.color("--muted");
         m.ctx.lineWidth = 1;

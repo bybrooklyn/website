@@ -29,7 +29,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::level::Levels;
-use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROLL_ALONG, ROOM, STRIPE, STRIPES, TABLE, VOID, WALL, deepest, widest};
+use crate::materials::{EMPTY, FLASH, Kind, LINES, MATERIALS, Props, REACTIONS, ROLL_ALONG, ROOM, SAME, STRIPE, STRIPES, TABLE, VOID, WALL, deepest, widest};
 
 /// The side of a chunk, in cells.
 pub const CHUNK: i32 = 64;
@@ -561,6 +561,7 @@ impl World {
             Kind::Powder | Kind::Liquid => self.fall(at, x, y, cell, p),
             Kind::Gas => self.rise(at, x, y, p),
             Kind::Fire => self.flicker(at, x, y, cell, p),
+            Kind::Bolt => self.strike(at, x, y, cell, p),
             _ => {}
         }
     }
@@ -629,6 +630,15 @@ impl World {
         // just left, flows out at once and does not drop a cell at a time. So does a grain of
         // powder in a crowded column (`drop` says which).
         let undermined = speed == 0 && material(below) == EMPTY && clock_of(below) == self.clock;
+        // a grain that drifts goes down to a side now and then as it falls, as a flake of snow does
+        if open && p.drift != 0 && p.kind == Kind::Powder {
+            let drift = chance(self.seed ^ 0xd21f7, self.steps, at);
+            let side: isize = if (drift >> 8) & 1 == 0 { -1 } else { 1 };
+            if drift & 255 < p.drift as u32 && self.slides(at, side, 1, p.density, true) {
+                self.swap(at, (at + s).wrapping_add_signed(side), 1, (x, y), (x + side as i32, y + 1));
+                return;
+            }
+        }
         if open && !undermined && self.drop(at, x, y, below, speed, p, true) {
             return;
         }
@@ -825,6 +835,88 @@ impl World {
         self.stay(x, y);
     }
 
+    /// The rule for lightning: down through the air, up to `fall` cells in a step, a cell aside now
+    /// and then so that it is jagged, leaving a flash of light in each empty cell it leaves; a gas or
+    /// a flame in its way changes places with it. While it runs it stays as hot as it was made. Where
+    /// it reaches a powder its lines change, it runs on into it a few grains and is spent; anywhere
+    /// else it can go no further it stays, cooling, for its lines to do their work on what it has
+    /// reached (`REACTIONS`), and is always reached again next step.
+    #[inline(never)]
+    fn strike(&mut self, at: usize, x: i32, y: i32, cell: u32, p: Props) {
+        let s = self.stride;
+        let roll = chance(self.seed ^ 0xb017, self.steps, at);
+        let through = |c: u32| matches!(props(c).kind, Kind::Empty | Kind::Gas | Kind::Fire) && clock_of(c) != self.clock || material(c) == EMPTY;
+        let bolt = with_temperature(with_state(cell, self.clock, 0), MATERIALS[material(cell) as usize].made);
+        let (mut here, mut cx, mut gone) = (at, x, 0);
+        while gone < p.fall as i32 {
+            // two bits of the roll for each cell of the way: one in four goes aside
+            let side: isize = match (roll >> ((gone as u32 % 16) * 2)) & 3 {
+                0 if gone % 2 == 0 => -1,
+                0 => 1,
+                _ => 0,
+            };
+            let straight = self.cells[here + s];
+            if material(straight) == VOID {
+                // out of an open world: it is gone
+                self.cells[here] = AIR | self.clock << 24;
+                self.touch(x.min(cx) - 2, y, x.max(cx) + 2, y + gone);
+                self.warmed(x.min(cx) - 2, y, x.max(cx) + 2, y + gone);
+                return;
+            }
+            let aside = (here + s).wrapping_add_signed(side);
+            let to = if side != 0 && through(self.cells[aside]) && through(self.cells[here.wrapping_add_signed(side)]) {
+                aside
+            } else if through(straight) {
+                here + s
+            } else {
+                break;
+            };
+            let passed = self.cells[to];
+            // a flash where it leaves empty air, and in the empty air either side of it, so the bolt
+            // is three cells thick; a gas or flame it passes comes back to where it was
+            let flash = FLASH as u32 | 255 << 8 | 255 << 16 | self.clock << 24;
+            self.cells[here] = if material(passed) == EMPTY { flash } else { with_state(passed, self.clock, 0) };
+            for beside in [here - 1, here + 1] {
+                if material(self.cells[beside]) == EMPTY && beside != to {
+                    self.cells[beside] = flash;
+                }
+            }
+            self.cells[to] = bolt;
+            if to != here + s {
+                cx += side as i32;
+            }
+            here = to;
+            gone += 1;
+        }
+        // Where it has reached a powder one of its lines changes (sand, which it fuses to glass), it
+        // runs on into it and is spent: the next few grains down, straight or a cell aside, are changed
+        // as the line says, each counted as the line happening, and the bolt itself is a last flash.
+        let under = material(self.cells[here + s]);
+        let (first, last) = LINES[material(cell) as usize];
+        let line = (first as usize..last as usize).find(|&k| REACTIONS[k].b == under && REACTIONS[k].b_becomes != SAME);
+        if let Some(k) = line.filter(|_| props(self.cells[here + s]).kind == Kind::Powder) {
+            let made = REACTIONS[k].b_becomes as u32 | (roll >> 8 & 0xff) << 8 | (REACTIONS[k].hot.max(ROOM) as u32) << 16 | self.clock << 24;
+            let (mut into, mut deep) = (here + s, 0);
+            while deep < 3 + (roll >> 20) % 4 && material(self.cells[into]) == under {
+                self.cells[into] = made;
+                self.fired[k] += 1;
+                deep += 1;
+                let aside = (into + s).wrapping_add_signed(if (roll >> (deep * 3)) & 7 == 0 { -1 } else if (roll >> (deep * 3)) & 7 == 7 { 1 } else { 0 });
+                into = if material(self.cells[aside]) == under { aside } else { into + s };
+            }
+            self.cells[here] = FLASH as u32 | 255 << 8 | 255 << 16 | self.clock << 24;
+            self.touch(x.min(cx) - 3, y, x.max(cx) + 3, y + gone + deep as i32);
+            self.warmed(x.min(cx) - 3, y, x.max(cx) + 3, y + gone + deep as i32);
+            return;
+        }
+        if gone == 0 {
+            self.stay(x, y);
+            return;
+        }
+        self.touch(x.min(cx) - 2, y, x.max(cx) + 2, y + gone);
+        self.warmed(x.min(cx) - 2, y, x.max(cx) + 2, y + gone);
+    }
+
     /// Falls: through empty cells, gathering speed, or one cell through a lighter liquid or gas or
     /// out of an open world. Gives whether it fell.
     ///
@@ -944,6 +1036,17 @@ impl World {
         // a bubble spreads sideways into it for ever and it never comes up.
         if props(above).kind == Kind::Liquid && clock_of(above) != self.clock {
             self.swap(at, at - s, 0, (x, y), (x, y - 1));
+            return;
+        }
+        // A gas that hovers, a cloud, does not rise: now and then it drifts a cell to a side. It could
+        // always have, so it is reached again next step.
+        if p.drift != 0 {
+            let side: isize = if roll & 1 == 0 { -1 } else { 1 };
+            if (roll >> 1) & 31 == 0 && self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) {
+                self.swap(at, at.wrapping_add_signed(side), 0, (x, y), (x + side as i32, y));
+            } else {
+                self.stay(x, y);
+            }
             return;
         }
         let up = self.rises_into(p.density, above);
