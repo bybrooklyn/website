@@ -1456,8 +1456,9 @@
     background-color: color-mix(in oklch, var(--accent) 28%, transparent);
 }
 
-/* every place selected by Select all matching text, drawn as the selection is */
-::highlight(quire-matching) {
+/* every place selected by Select all matching text, and the words a link is being written for, drawn as the selection is */
+::highlight(quire-matching),
+::highlight(quire-held) {
     background-color: color-mix(in oklch, var(--accent), transparent 72%);
 }
 

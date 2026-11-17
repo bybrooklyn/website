@@ -4,7 +4,9 @@
 // the main bar, and shrinks away when the selection collapses. A selection made while the keyboard
 // is elsewhere, as find makes on each match, brings no bar.
 // Its link button turns the same bar into a field for the address: Enter sets it, Escape goes back,
-// and a link already there can be taken off.
+// and a link already there can be taken off. Ctrl+K, Insert, Link and the main bar's Link open the
+// same field there, at the words or the caret, the words kept drawn as selected while the field has
+// the keyboard, so that a link is always made where its words are.
 //
 // When it shows and what it shows pressed is decided by barFor, which is pure and tested; the rest
 // is DOM. Its styles are in src/styles/quire.css.
@@ -16,6 +18,7 @@ import type { Surface } from "./surface";
 import { placeClear, linesAround } from "../core/strips";
 import { control, glyph, icon, mac, make, still } from "../core/ui";
 import { linkForm } from "./link-card";
+import { places } from "./bookmarks";
 
 /** Whether the selection bar shows for a selection, and which of its buttons are pressed. */
 export function barFor(doc: Document, selection: Selection, marks: Mark[]): { show: boolean; pressed: Record<string, boolean> } {
@@ -34,8 +37,8 @@ export function barFor(doc: Document, selection: Selection, marks: Mark[]): { sh
     };
 }
 
-/** Builds the selection bar for a surface. `top` gives how far down the window the main bar reaches, which it keeps clear of; `comment` starts a comment on the selected words, growing from the button pressed. */
-export function createSelectBar(surface: Surface, top: () => number = () => 0, comment?: (from: HTMLElement) => void): { element: HTMLElement; hide(): void } {
+/** Builds the selection bar for a surface. `top` gives how far down the window the main bar reaches, which it keeps clear of; `comment` starts a comment on the selected words, growing from the button pressed. `link` opens its field for a link at the words or the caret. */
+export function createSelectBar(surface: Surface, top: () => number = () => 0, comment?: (from: HTMLElement) => void): { element: HTMLElement; hide(): void; link(): void } {
     const bar = make("div", "quire-select-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Selected text");
@@ -88,11 +91,23 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0, c
         bar.addEventListener("transitionend", () => (bar.style.width = ""), { once: true });
     }
 
+    /** The words the link field is for, drawn as selected while the field has the keyboard and the browser draws no selection. */
+    let held: Range | undefined;
+    const hold = (range: Range | undefined) => {
+        held = range;
+        if (range) CSS.highlights?.set("quire-held", new Highlight(range));
+        else CSS.highlights?.delete("quire-held");
+    };
+
     function openLink() {
-        const selection = saved ?? surface.getSelection();
+        if (held) return;
+        // the bar's own selection while it shows; from elsewhere (a key, a menu) the selection as it is now
+        const selection = shown && saved ? saved : surface.getSelection();
         saved = selection;
-        const current = linkAt(surface.getDocument(), rangeOf(selection).start);
+        const { start, end } = rangeOf(selection);
+        const current = linkAt(surface.getDocument(), collapsed(selection) ? selection.focus : start);
         const back = () => {
+            hold(undefined);
             swap(row);
             surface.setSelection(selection);
             surface.focus();
@@ -107,16 +122,19 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0, c
                 back();
             },
             cancel: back,
-        });
+        }, places(surface.getDocument()));
+        hold(surface.rangeOf(start, end));
         swap(form);
-        place();
+        show();
         form.querySelector("input")?.focus({ preventScroll: true });
     }
 
     function place() {
         const selection = document.getSelection();
-        const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
-        const rect = range && surface.element.contains(range.commonAncestorContainer) ? range.getBoundingClientRect() : undefined;
+        const range = held ?? (selection?.rangeCount ? selection.getRangeAt(0) : undefined);
+        let rect = range && surface.element.contains(range.commonAncestorContainer) ? range.getBoundingClientRect() : undefined;
+        // a caret on an empty line has no box of its own, so its line's is used
+        if (range && rect && !rect.width && !rect.height) rect = (range.startContainer.nodeType === 1 ? (range.startContainer as Element) : range.startContainer.parentElement)?.closest("[data-holder]")?.getBoundingClientRect();
         if (!rect || (!rect.width && !rect.height)) return;
         // one rule for every strip over the writing (strips.ts): never on the selected words nor the line above or below them while there is room
         const limit = top();
@@ -151,6 +169,7 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0, c
         shown = false;
         bar.classList.remove("shown");
         bar.inert = true;
+        hold(undefined);
         if (!row.isConnected) bar.replaceChildren(row);
     }
 
@@ -195,5 +214,5 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0, c
         if (event.key === "Escape") hide();
     });
 
-    return { element: bar, hide };
+    return { element: bar, hide, link: openLink };
 }

@@ -15,7 +15,7 @@
 //
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
-import { addCode, addDivider, addFootnote, addTable, align, aligned, clearFormat, createBar, indentBy, link as linkAction, linkAt, setStyleOf, toggle, toggleList, toggleSubtext, type Action } from "./bar";
+import { addCode, addDivider, addFootnote, addTable, align, aligned, clearFormat, createBar, indentBy, setStyleOf, toggle, toggleList, toggleSubtext, type Action } from "./bar";
 import { headings, type RowActions } from "./menus";
 import { blockAt, blockPaths, countWords, documentOf, lengthOf } from "./document";
 import { createFrame } from "../core/frame";
@@ -29,7 +29,7 @@ import { remember } from "../core/most-used";
 import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
-import { createLinkCard, linkForm } from "./link-card";
+import { createLinkCard } from "./link-card";
 import { boxOf, component, definitionList, drawnBlock } from "./slash";
 import { createSlashMenu, paletteFor } from "./slash-menu";
 import { createEmojiPicker, emojiAtCursor, emojiGrid, putter } from "./emoji-picker";
@@ -69,7 +69,6 @@ import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
 import { listHere } from "./numbering";
 import { createMatching, matchingSpots } from "./matching";
-import { places } from "./bookmarks";
 import { mountSuggestions } from "./suggest-view";
 
 /** What the editor is given by the page. */
@@ -280,30 +279,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     });
     const dictation = createDictation(surface);
 
-    // ---- the link field, from the bar's button or Ctrl+K ----
-    const links = flowMenu("Link");
-    const openLink = (from: HTMLElement) => {
-        if (links.isOpen()) return links.close(true);
-        const selection = surface.getSelection();
-        const current = linkAt(surface.getDocument(), collapsed(selection) ? selection.focus : selection.anchor);
-        const finish = () => {
-            links.close(false);
-            surface.focus();
-        };
-        const form = linkForm(current?.href, {
-            set: (href) => {
-                surface.run((d) => linkAction(href)({ doc: d, selection }).doc);
-                finish();
-            },
-            remove: () => {
-                surface.run((d) => linkAction(null)({ doc: d, selection }).doc);
-                finish();
-            },
-            cancel: finish,
-        }, places(surface.getDocument()));
-        links.open(from, form);
-        form.querySelector("input")?.focus({ preventScroll: true });
-    };
+    // ---- the link field, from the bar's button, Insert or Ctrl+K: the selection bar's, at the words (select-bar.ts) ----
+    const openLink = () => selectBar.link();
 
     // ---- About mdQuire, from Tools and the three dots: something to read, so a dialog grown out of where it was asked for ----
     const showAbout = (from: HTMLElement) => openDialog(from, { title: "About mdQuire", body: [aboutPanel()], action: { label: "done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
@@ -544,7 +521,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         zoom.step(1);
     };
     host.addEventListener("keydown", zoomKey);
-    surface.on("link", () => openLink(bar.seen("Link")));
+    surface.on("link", () => openLink());
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom, (from) => notes.add(from));
     const linkCard = createLinkCard(surface, openLink, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
@@ -729,7 +706,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                     surface.setSelection({ anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(surface.getDocument(), last) } });
                     surface.focus();
                 },
-                link: () => openLink(bar.seen("Link")),
+                link: () => openLink(),
                 outline: () => (toggleOutline()),
                 markdown: () => showMarkdown(!host.classList.contains("markdown")),
                 pageless: () => showView(false),
@@ -1033,7 +1010,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             bar.destroy();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links, zooms]) menu.box.remove();
+            for (const menu of [...bar.menus, zooms]) menu.box.remove();
             selectBar.element.remove();
             linkCard.element.remove();
             slash.destroy();

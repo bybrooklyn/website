@@ -717,7 +717,7 @@ used("Link opens a field that sets a link, and the Insert menu adds code and a f
     await button("Link");
     await tab.wait(500);
     expect(await tab.run("document.activeElement.value")).toBe("/somewhere");
-    await press(".quire-menu.open button", "Remove the link");
+    await press(".quire-select-bar.shown button", "Remove the link");
     expect(await md()).toBe("a word here\n");
 
     await reset("Above\n", [0], 5);
@@ -811,7 +811,7 @@ used("the selection bar never covers a heading over the selection, nor the line 
     expect(overlaps(seen.bar, seen.selection)).toBe(false);
 });
 
-used("Ctrl+K opens a link field that can be seen at every width, from the three dots when the bar's Link button is folded away", async () => {
+used("Ctrl+K opens a link field that can be seen at every width, at the words whether or not the bar's Link button is folded away", async () => {
     try {
         for (const width of [1300, 900, 600, 390]) {
             await tab.resize(width, 900);
@@ -820,7 +820,7 @@ used("Ctrl+K opens a link field that can be seen at every width, from the three 
             await tab.press("k", { ctrl: true });
             await tab.wait(500);
             const seen = await tab.run<{ open: boolean; hit: boolean; focused: boolean }>(`(() => {
-                const menu = [...document.querySelectorAll('.quire-menu')].find((each) => each.matches(':popover-open') && each.querySelector('.quire-link-field'));
+                const menu = [...document.querySelectorAll('.quire-select-bar.shown')].find((each) => each.querySelector('.quire-link-field'));
                 if (!menu) return { open: false, hit: false, focused: false };
                 const box = menu.getBoundingClientRect();
                 return { open: true, hit: menu.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)), focused: document.activeElement?.classList.contains('quire-link-field') };

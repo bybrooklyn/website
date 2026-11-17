@@ -284,6 +284,70 @@ test("find stepping to a match brings no bar over it", async () => {
     expect(await tab.run("!!document.querySelector('.quire-select-bar.shown')")).toBe(false);
 });
 
+test("Ctrl+K opens the link field at the selected words, which stay drawn as selected, and an address typed with no scheme gets https://", async () => {
+    if (skip("the link field at the words")) return;
+    const { tab } = page!;
+    const words = Array.from({ length: 120 }, (_, k) => `word${k}`).join(" ");
+    await page!.reset(`${words}\n`, [0], 0);
+    const start = words.indexOf("word60");
+    await tab.run(`q.select([0], ${start}, [0], ${start + 6})`);
+    await tab.wait(300);
+    await tab.press("k", { ctrl: true });
+    await tab.wait(400);
+    expect(await tab.run("document.activeElement.closest('.quire-select-bar.shown')?.querySelector('.quire-link-field') === document.activeElement")).toBe(true);
+    // beside its words, covering neither them nor the lines round them, and the words still drawn as selected
+    const field = await tab.run<{ x: number; y: number; width: number; height: number }>("q.box('.quire-select-bar.shown')");
+    const chosen = await tab.run<{ left: number; right: number; top: number; bottom: number; line: number }>(`(() => { const box = q.surface.rangeOf({ path: [0], offset: ${start} }, { path: [0], offset: ${start + 6} }).getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, line: parseFloat(getComputedStyle(q.surface.element).lineHeight) }; })()`);
+    expect(covers(field, chosen.top, chosen.bottom, chosen.line - 1)).toBe(false);
+    expect(field.x < chosen.right && field.x + field.width > chosen.left).toBe(true);
+    expect(await tab.run("CSS.highlights.get('quire-held')?.size ?? 0")).toBe(1);
+    await tab.type("example.com");
+    await tab.press("Enter");
+    await tab.wait(200);
+    expect(await page!.md()).toBe(words.replace("word60", "[word60](https://example.com)") + "\n");
+    expect(await keyboard()).toBe("writing");
+    expect(await tab.run("CSS.highlights.has('quire-held')")).toBe(false);
+    // with only a caret in a link, Ctrl+K opens the same field there, holding its address
+    await tab.run(`q.select([0], ${start + 2})`);
+    await tab.press("k", { ctrl: true });
+    await tab.wait(400);
+    expect(await tab.run("document.activeElement.closest('.quire-select-bar.shown') ? document.activeElement.value : ''")).toBe("https://example.com");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await keyboard()).toBe("writing");
+});
+
+test("resting on a link shows a card to open, copy, edit or remove it; an address pasted over words links them, and one pasted alone offers words or a short form", async () => {
+    if (skip("the link card and chip")) return;
+    const { tab } = page!;
+    await page!.reset("One [two](https://example.com/two) three\n", [0], 0);
+    const link = await tab.run<{ x: number; y: number }>("q.at('.quire a')");
+    await tab.move(link.x, link.y + 300);
+    await tab.move(link.x, link.y);
+    await tab.wait(900);
+    expect(await tab.run("[...document.querySelectorAll('.quire-link-card.shown a, .quire-link-card.shown button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Open (Alt+Enter)", "Copy", "Edit (Ctrl+K)", "Remove"]);
+    expect(await tab.run("document.querySelector('.quire-link-card.shown .quire-link-where').textContent")).toBe("https://example.com/two");
+    await page!.press(".quire-link-card.shown button", "Remove");
+    expect(await page!.md()).toBe("One two three\n");
+    await tab.move(link.x, link.y + 300);
+    // a paste as the browser gives one, from the clipboard
+    const paste = (text: string) => tab.run(`(() => { const data = new DataTransfer(); data.setData("text/plain", ${JSON.stringify(text)}); q.surface.element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); })()`);
+    await page!.reset("Four five six\n", [0], 5, [0], 9);
+    await paste("https://example.org/x");
+    await tab.wait(200);
+    expect(await page!.md()).toBe("Four [five](https://example.org/x) six\n");
+    await page!.reset("See\n", [0], 3);
+    await tab.type(" ");
+    await paste("https://github.com/owner/some-repo/issues/12");
+    await tab.wait(400);
+    expect(await tab.run("document.querySelector('.quire-link-card.shown .quire-link-words').value")).toBe("Some repo issue 12");
+    expect(await tab.run("[...document.querySelectorAll('.quire-link-card.shown button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Short form", "Keep address"]);
+    await tab.press("Tab");
+    await tab.press("Enter");
+    await tab.wait(200);
+    expect(await page!.md()).toBe("See [Some repo issue 12](https://github.com/owner/some-repo/issues/12)\n");
+});
+
 test("a table's strip and a picture's strip cover neither their table or picture nor the line before it", async () => {
     if (skip("the table and picture strips' place")) return;
     const { tab } = page!;
