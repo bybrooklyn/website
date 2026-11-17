@@ -703,7 +703,7 @@ used("the Markdown view flows open beside the text, and what is typed in either 
     await tab.wait(300);
 });
 
-used("every line of every menu, and of the bar's three dots on a phone, shows a sign before its words", async () => {
+used("every line of every menu, and of the bar's three dots on a phone, shows a sign before its words, and on a small phone every menu word is whole", async () => {
     await reset("Words\n", [0], 0);
     /** The lines of the menus open now that have no sign, a tick being one. */
     const bare = () => tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].filter((line) => !line.querySelector('svg')).map((line) => line.textContent.trim())");
@@ -716,6 +716,10 @@ used("every line of every menu, and of the bar's three dots on a phone, shows a 
         await tab.wait(300);
     }
     try {
+        // on a small phone every menu word is whole in the window, the last too
+        await tab.resize(360, 780);
+        await tab.wait(400);
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu-row .quire-row-word')].filter((word) => word.getBoundingClientRect().right > document.documentElement.clientWidth).map((word) => word.textContent)")).toEqual([]);
         await tab.resize(390, 844);
         await tab.wait(400);
         await press(".quire-bar button", "More tools");
