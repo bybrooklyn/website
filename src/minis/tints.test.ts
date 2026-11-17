@@ -1,6 +1,6 @@
 // The arithmetic of what the pile of blocks lets a visitor choose. Run with `bun run test`.
 import { expect, test } from "bun:test";
-import { choices, deep, hueAt, kindFor, placeOf, tint, toRemove } from "./tints";
+import { choices, deep, grey, HANDLE, HUES, hues, KINDS, kindFor, ramp, tint, tones, toRemove } from "./tints";
 
 test("a kind chosen is the kind dropped, and any is mostly blocks with a ball or a wedge now and then", () => {
     expect(kindFor("ball", 0.1)).toBe("ball");
@@ -24,15 +24,24 @@ test("at no darkness a piece is the soft color the pile has always had, and dark
     expect(deep(0.8)).toBe(true);
 });
 
-test("the wheel's hue is 0 at the top and grows clockwise, and a hue's place on it reads back as that hue", () => {
-    expect(hueAt(50, 0, 50, 50)).toBe(0);
-    expect(hueAt(100, 50, 50, 50)).toBe(90);
-    expect(hueAt(50, 100, 50, 50)).toBe(180);
-    expect(hueAt(0, 50, 50, 50)).toBe(270);
-    for (const hue of [0, 37, 90, 181, 270, 359]) {
-        const [x, y] = placeOf(hue);
-        expect(hueAt(50 + x * 30, 50 + y * 30, 50, 50)).toBe(hue);
-    }
+test("the bar of hues runs through every hue at the darkness chosen, and the bar of darkness through one hue from light to dark", () => {
+    const row = hues(0.5);
+    expect(row.length).toBe(13);
+    expect(row[0]).toBe(tint(0, 0.5));
+    expect(row[6]).toBe(tint(HUES / 2, 0.5));
+    expect(row[12]).toBe(tint(HUES, 0.5));
+    expect(tones(200)).toEqual([tint(200, 0), tint(200, 0.25), tint(200, 0.5), tint(200, 0.75), tint(200, 1)]);
+    // with a hue by chance for every piece the bar of darkness is the greys, as light and as dark as a piece would be
+    expect(tones(undefined)).toEqual([0, 0.25, 0.5, 0.75, 1].map(grey));
+    expect(grey(0)).toBe("oklch(0.860 0.020 300)");
+    expect(grey(1)).toBe("oklch(0.360 0.020 300)");
+});
+
+test("a bar's colors lie between the two places its handle's middle can reach, so the color under the handle is the one picked", () => {
+    const picture = ramp(["red", "lime", "blue"]);
+    expect(picture).toBe(`linear-gradient(to right, red calc(${HANDLE}rem + (100% - ${HANDLE * 2}rem) * 0.0000), lime calc(${HANDLE}rem + (100% - ${HANDLE * 2}rem) * 0.5000), blue calc(${HANDLE}rem + (100% - ${HANDLE * 2}rem) * 1.0000))`);
+    // the kinds are named on the page by their own words
+    expect(KINDS).toEqual(["any", "block", "ball", "wedge"]);
 });
 
 test("a remove takes the piece held, else the one under the pointer, else the newest, and nothing from an empty pile", () => {

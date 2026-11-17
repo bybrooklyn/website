@@ -235,83 +235,102 @@
     display: none;
 }
 
-/* Blocks' panel is one row: the kind of piece to drop, its color, and a word that takes one away. */
-.mini-stage[data-mini="blocks"] {
-    --panel-room: 8rem;
+/* Blocks: the pile, and beside it a narrow column to choose with, written as the Walker's and Sand's
+   are: the kind of piece under "shape" as round dots, its color under "color" as two bars (every hue in
+   a row, and that hue from light to dark, each with a handle of the color picked), a word for a hue by
+   chance, and a word that takes a piece away. Under the pile on a phone. The list's small pile has no
+   column. */
+.mote[data-mini="blocks"]:not([data-preview]) {
+    --panel-room: 15rem;
 }
 
-.blocks-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem 1.75rem;
-}
-
-.blocks-kinds {
-    display: inline-flex;
-    gap: 0.15rem;
-}
-
-/* a kind is a small picture of itself in a fingertip's target, quiet until it is the one chosen */
-.mote-panel .blocks-kind {
+.mote-panel.blocks-side {
     display: grid;
-    place-items: center;
-    width: 2.75rem;
-    height: 2.75rem;
-    border-radius: 0.5rem;
-    color: var(--muted);
-    text-decoration: none;
-    transition:
-        color 0.15s ease,
-        background-color 0.15s ease,
-        scale 0.2s var(--ease);
+    align-content: start;
+    gap: 0.65rem;
+    padding: 1rem;
 }
 
-.mote-panel .blocks-kind + .blocks-kind {
-    margin-inline-start: 0;
+/* Beside the pile: the pile fills its place whatever the column's height, placed absolutely so that its
+   own size never feeds back into the grid's, and the box is as tall as the taller of the two. */
+@media (min-width: 40.0625rem) {
+    .mote[data-mini="blocks"]:not([data-preview]) {
+        --panel-room: 0rem;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 13.5rem;
+        grid-template-areas: "scene side";
+    }
+
+    .mote[data-mini="blocks"]:not([data-preview]) > canvas {
+        grid-area: scene;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .mote-panel.blocks-side {
+        grid-area: side;
+        border-top: 0;
+        border-left: 0.0625rem solid var(--rule);
+    }
 }
 
-.mote-panel .blocks-kind:hover {
-    color: var(--ink);
-    background: color-mix(in oklch, var(--ink) 8%, transparent);
+/* in the column a word to press starts at its left edge with the rest */
+.mote-panel.blocks-side button {
+    justify-self: start;
 }
 
-.mote-panel .blocks-kind[aria-pressed="true"] {
-    color: var(--accent);
-    background: color-mix(in oklch, var(--accent) 22%, transparent);
-}
-
-.blocks-kind svg {
-    width: 1.5rem;
-    height: 1.5rem;
-    fill: currentColor;
-}
-
-.blocks-color {
-    display: inline-flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-/* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
-.mote .mote-panel canvas.blocks-wheel {
-    display: block;
-    width: 4.5rem;
-    height: 4.5rem;
-    border-radius: 50%;
+/* a bar is its colors from end to end, with a round handle of the color picked standing on it */
+.mote-panel input.blocks-bar {
+    appearance: none;
+    width: 100%;
+    height: 0.8rem;
+    margin-block: 0.2rem;
+    border-radius: 0.4rem;
+    background: var(--bar);
     cursor: pointer;
-    touch-action: none;
 }
 
-.mote .mote-panel canvas.blocks-wheel:focus-visible {
+.blocks-bar::-webkit-slider-thumb {
+    appearance: none;
+    box-sizing: border-box;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 0.125rem solid var(--ink);
+    border-radius: 50%;
+    background: var(--handle);
+    box-shadow: 0 0.0625rem 0.25rem color-mix(in oklch, black 45%, transparent);
+    transition: opacity 0.2s ease;
+}
+
+.blocks-bar::-moz-range-thumb {
+    box-sizing: border-box;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 0.125rem solid var(--ink);
+    border-radius: 50%;
+    background: var(--handle);
+    box-shadow: 0 0.0625rem 0.25rem color-mix(in oklch, black 45%, transparent);
+    transition: opacity 0.2s ease;
+}
+
+.blocks-bar::-moz-range-track {
+    background: none;
+}
+
+/* with a hue by chance for every piece, the bar of hues has no handle */
+.blocks-bar.unset::-webkit-slider-thumb {
+    opacity: 0;
+}
+
+.blocks-bar.unset::-moz-range-thumb {
+    opacity: 0;
+}
+
+.mote-panel input.blocks-bar:focus-visible {
     outline: 0.125rem solid var(--accent);
-    outline-offset: 0.2rem;
-}
-
-.blocks-tones {
-    display: inline-grid;
-    gap: 0.35rem;
-    justify-items: start;
+    outline-offset: 0.25rem;
 }
 
 /* a hue by chance is a word like the rest, plain while it is on and quiet while a hue is picked */
@@ -320,15 +339,11 @@
     text-decoration-color: transparent;
 }
 
-.blocks-dark {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    color: var(--muted);
-}
-
-.blocks-dark input[type="range"] {
-    width: 7rem;
+/* the word that takes a piece away, under a rule of its own */
+.blocks-end {
+    margin-top: 0.2rem;
+    padding-top: 0.75rem;
+    border-top: 0.0625rem solid var(--rule);
 }
 
 /* Comet's panel is one quiet line: which field and the shots on it, and the sound. */
@@ -1624,13 +1639,15 @@
     gap: 0.35rem;
 }
 
-.walker-choices {
+.walker-choices,
+.blocks-choices {
     display: flex;
     flex-wrap: wrap;
     gap: 0.2rem 0.85rem;
 }
 
 .walker-choices label,
+.blocks-choices label,
 .walker-controls > label {
     display: inline-flex;
     align-items: center;
@@ -1698,7 +1715,8 @@
 
 /* The column's groups, each under a small heading with a rule above it. */
 .mote-panel .walker-group,
-.mote-panel .sand-group {
+.mote-panel .sand-group,
+.mote-panel .blocks-group {
     grid-column: 1 / -1;
     margin: 0.55rem 0 -0.15rem;
     padding-top: 0.75rem;
@@ -1710,7 +1728,8 @@
 }
 
 .mote-panel .walker-group:first-of-type,
-.mote-panel .sand-group:first-of-type {
+.mote-panel .sand-group:first-of-type,
+.mote-panel .blocks-group:first-of-type {
     margin-top: 0;
     padding-top: 0;
     border-top: 0;
