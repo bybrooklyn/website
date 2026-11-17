@@ -266,7 +266,10 @@
         grid-template-rows: minmax(12rem, 1fr) minmax(0, 42%);
     }
 
+    /* scrolled to its end, the page's last line stops above the commands button resting in the window's corner
+       (0.75rem from the edge, 2.25rem round, quire-extras.css), which had lain over copy, apply and facts */
     .quire-img-side.quire-bench-side {
+        padding-bottom: 3.75rem;
         border-top: 0.0625rem solid var(--rule);
         border-left: 0;
     }
