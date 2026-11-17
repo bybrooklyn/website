@@ -74,7 +74,7 @@ test("in Chromium, one page shows at a time, Escape and close go back to the fir
     }
 });
 
-test("in Chromium, a page not shown that is taller than the shown one keeps its height while it fades, then lets the column scroll no further than the shown page's end", async () => {
+test("in Chromium, a page not shown that is taller than the shown one keeps its height while it fades all the way out, then lets the column scroll no further than the shown page's end", async () => {
     const page = await corePage(`
         import { sideColumn } from "${quire}/img/side.ts";
         const side = sideColumn({ home: () => tall, back: () => {} });
@@ -100,9 +100,11 @@ test("in Chromium, a page not shown that is taller than the shown one keeps its 
         // while it fades it is as tall as it was
         expect(await tab.run<number>("document.querySelector('[data-page=export]').getBoundingClientRect().height")).toBeGreaterThan(1500);
         await tab.wait(400);
-        const sizes = await tab.run<{ scroll: number; client: number }>("(() => { const column = document.querySelector('.quire-img-side'); return { scroll: column.scrollHeight, client: column.clientHeight }; })()");
+        const sizes = await tab.run<{ scroll: number; client: number; gone: number }>("(() => { const column = document.querySelector('.quire-img-side'); return { scroll: column.scrollHeight, client: column.clientHeight, gone: Number(getComputedStyle(document.querySelector('[data-page=export]')).opacity) }; })()");
         // the column had scrolled on past the short page into the gone page's 1500 pixels of nothing
         expect(sizes.scroll).toBe(sizes.client);
+        // and the page that went faded all the way, where the kit's faint rule for what is inert had held it at 0.4 until it vanished
+        expect(sizes.gone).toBe(0);
     } finally {
         await page.close();
     }

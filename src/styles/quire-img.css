@@ -69,6 +69,11 @@
     transition-behavior: allow-discrete;
 }
 
+/* a page going is inert, which the kit draws faint at 0.4; it fades all the way out, where it had stopped there and then vanished */
+.quire-img-side .quire-img-page:not(.open) {
+    opacity: 0;
+}
+
 .quire-img-page.open {
     position: relative;
     max-height: none;
