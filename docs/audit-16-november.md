@@ -123,13 +123,16 @@ kinds of thing to press (underlined words, plain words, filled round buttons, bo
   the on-page labels of both editors.
 - About, setup and license start at the page's left edge with every other page that has the navigation.
 - A background cut away fades out where it had vanished between two frames.
+- Sand has one look, chosen from pictures of three palettes, three kinds of light and four stages: softened
+  colors leaning to the site's violet with every two materials tellable apart (a test holds how far), light
+  from fire and lava on the grains near them and a glow in the air, water lighter at its surface and darker
+  below, and the materials and controls in a column beside a stage with soft edges and a floor, so that the
+  whole stage and every material are in the first screen at 1288 by 828.
 
 **Decided, being built on the day.**
 - imgQuire keeps its menu bar; under it every tool has its word: crop, resize, mark up, cut out, color, then
   export and more. A picture opens with no tool on. One side panel is always there and holds the controls of
   whatever is on, so nothing floats over the picture and the picture never glides aside.
-- Sand takes softened colors leaning to the site's violet, light and a glow from fire and lava, water with
-  depth, and its materials in a column beside a stage with soft edges and a floor.
 
 ## Left
 
