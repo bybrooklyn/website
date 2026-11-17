@@ -163,7 +163,11 @@ export interface Table {
     pillars: Pillar[];
     /** Builds the run given, changing only the pieces that are new, gone or moved. */
     set(run: Placed[]): void;
-    /** Each hopper lets its waiting marble go, or only those whose numbers are given; the marbles let go. */
+    /**
+     * Each hopper lets its waiting marble go, or only those whose numbers are given; the marbles let go.
+     * A race's lines and gates make way first, and a hopper a race left empty has a marble at its mouth
+     * at once, so that letting go after a race lets one go.
+     */
     letGo(only?: Set<number>): Solid[];
     /** Where each tray catches marbles, in the world, in the run's order. */
     trays(): Box[];
@@ -463,9 +467,16 @@ export function makeTable({ filled = true } = {}): Table {
         },
         letGo(only) {
             const out: Solid[] = [];
+            unGate(() => true);
             for (const piece of table.run) {
                 const hopper = built.get(piece.id)?.hopper;
-                if (!hopper?.waiting || (only && !only.has(piece.id))) continue;
+                if (!hopper || (only && !only.has(piece.id))) continue;
+                if (filled && !hopper.waiting && !hopper.coming) {
+                    hopper.waiting = ball([...hopper.wait]);
+                    numbers.set(hopper.waiting, count++);
+                    space.hold(hopper.waiting);
+                }
+                if (!hopper.waiting) continue;
                 if (marbles.length >= MOST) {
                     const oldest = marbles.find(table.arrived) ?? marbles[0]!;
                     marbles.splice(marbles.indexOf(oldest), 1);

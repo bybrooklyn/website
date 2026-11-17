@@ -11,18 +11,21 @@ function stage(width: number, height: number) {
         set: () => true,
     }) as CanvasRenderingContext2D;
     (globalThis as { getComputedStyle?: unknown }).getComputedStyle = () => ({ borderTopLeftRadius: "0px" });
-    const m = { width, height, time: 0, preview: false, canvas: { parentElement: null }, ctx, pointer: { x: 0, y: 0, down: false, inside: false }, color: () => "#000" } as unknown as Mote;
-    return { m, points };
+    const woken = { count: 0 };
+    const m = { width, height, time: 0, preview: false, canvas: { parentElement: null }, ctx, pointer: { x: 0, y: 0, down: false, inside: false }, color: () => "#000", wake: () => woken.count++ } as unknown as Mote;
+    return { m, points, woken };
 }
 
-test("narrowing the box brings every block inside the new walls, and the pile comes to rest", () => {
-    const { m, points } = stage(800, 400);
+test("narrowing the box brings every block inside the new walls, starts the stage, and the pile comes to rest", () => {
+    const { m, points, woken } = stage(800, 400);
     const scene = blocks(m);
     for (let i = 0; i < 12; i++) scene.double!(40 + i * 64, 60);
     for (let i = 0; i < 900; i++) scene.step!(1 / 120);
-    // a phone turned from landscape to portrait: the box is far narrower
+    // a phone turned from landscape to portrait: the box is far narrower, and the stage is started for the pile to fall into place with no pointer over it
     m.width = 300;
+    const before = woken.count;
     scene.resize!();
+    expect(woken.count).toBeGreaterThan(before);
     let rested = false;
     for (let i = 0; i < 120 * 30 && !rested; i++) {
         scene.step!(1 / 120);

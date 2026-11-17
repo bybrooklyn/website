@@ -238,6 +238,25 @@ export function clicked(chosen: Set<number>, id: number | undefined, adding: boo
 }
 
 /**
+ * The level carried pieces go at as the pointer moves: the level found for them under the pointer, or
+ * over nothing `lift` levels above their own for a group that marbles start from; and on top of either
+ * whatever Page Up and Page Down `raised` them by, so that the pointer's next move keeps it.
+ */
+export function carriedLevel(found: number, own: number, overNothing: boolean, lift: number | undefined, raised: number): number {
+    return (overNothing && lift !== undefined ? own + lift : found) + raised;
+}
+
+/**
+ * Where on the screen carried pieces are held: under the pointer or finger carrying them (its last place,
+ * by its number), or under the mouse for pieces picked up from the box, while it is over the scene; none
+ * for pieces moved by the keys. Read again whenever the view moves, so that they stay under the hand.
+ */
+export function heldAt(hand: number | "hover" | undefined, last: (id: number) => { x: number; y: number } | undefined, mouse: { x: number; y: number; inside: boolean }): { x: number; y: number } | undefined {
+    if (hand === "hover") return mouse.inside ? mouse : undefined;
+    return hand === undefined ? undefined : last(hand);
+}
+
+/**
  * The nearest of the places carried pieces could snap to, by how far each is from where they are on the
  * screen, if within `reach` pixels; once snapped, `held` keeps it until half as far again, so that it
  * does not flicker between snapping and not.

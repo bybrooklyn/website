@@ -310,6 +310,13 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     };
     host.addEventListener("pointerdown", touched, { capture: true });
     host.addEventListener("keydown", touched, { capture: true });
+    // A press in the mini between its controls (a heading, the room round its words, a word that cannot act
+    // now) leaves the keyboard where it was, rather than taking it out to the page and the mini's keys with it.
+    const kept = (event: MouseEvent) => {
+        const control = (event.target as Element).closest("button, input, select, textarea, label, a, [tabindex]");
+        if (!control || !host.contains(control)) event.preventDefault();
+    };
+    host.addEventListener("mousedown", kept);
 
     /** When and where the last press was, to tell a double one. */
     let pressed = { at: -1000, x: 0, y: 0 };
@@ -453,6 +460,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         document.removeEventListener("visibilitychange", shown);
         host.removeEventListener("pointerdown", touched, { capture: true });
         host.removeEventListener("keydown", touched, { capture: true });
+        host.removeEventListener("mousedown", kept);
         scene.destroy?.();
         host.querySelector(".mote-panel")?.remove();
         canvas.remove();

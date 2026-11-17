@@ -192,7 +192,11 @@ export default function blocks(m: Mote): Blocks {
                 drop(m.width * (0.25 + Math.random() * 0.5), SIZE);
             }
         },
-        resize: enclose,
+        // the pile brought inside the new walls falls into place, the stage started for it even with no pointer over it
+        resize() {
+            enclose();
+            m.wake?.();
+        },
         // Whatever is under the pointer is picked up.
         press: (x, y) => void flat.hand.take(x, y),
         // Pressed twice on an empty spot: a new piece there.

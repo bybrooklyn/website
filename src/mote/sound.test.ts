@@ -50,6 +50,37 @@ test.skipIf(!chromium())("with the sound off, a press makes no sound at all", as
     expect((await heard(false)).made).toBe(0);
 }, 30_000);
 
+test.skipIf(!chromium())("the sound word keeps the room of its wider words in a line of the marble run's column, so that the word after it does not move when it is pressed", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "mote-sound-"));
+    const tab = await browser({ width: 400, height: 300 });
+    try {
+        await Bun.write(`${folder}/page.ts`, `
+import { sounds } from "${here}/sound.ts";
+const sound = sounds({ recall: () => false, keep() {} });
+const after = document.createElement("button");
+after.textContent = "keys";
+document.querySelector(".marbles-words").append(sound.button, after);
+window.press = () => sound.button.click();
+window.where = () => after.getBoundingClientRect().left;
+`);
+        const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
+        const css = await Bun.file(`${here}/../styles/minis.css`).text();
+        // in a font of letters all one width, so that which of the two words is wider is plain: "sound: off"
+        await Bun.write(`${folder}/page.html`, `<!doctype html><style>${css} button { font: 16px monospace; }</style><body><div class="marbles-words"></div><script type="module">${await built.outputs[0]!.text()}</script></body>`);
+        await tab.open(`file://${folder}/page.html`);
+        const before = await tab.run<number>("where()");
+        await tab.run("press()");
+        const on = await tab.run<number>("where()");
+        await tab.run("press()");
+        expect(tab.errors).toEqual([]);
+        expect(on).toBe(before);
+        expect(await tab.run<number>("where()")).toBe(before);
+    } finally {
+        await tab.close();
+        await rm(folder, { recursive: true, force: true });
+    }
+}, 30_000);
+
 if (!chromium()) console.warn("sound.test.ts: no Chromium on this machine, so the sound was not heard.");
 
 // The strikes, rendered in headless Chromium by the browser's own offline audio from the same code

@@ -13,6 +13,7 @@ import { browser, chromium } from "../../scripts/browser";
 import { pointsIn } from "./pieces";
 import { RUNS } from "./runs";
 import { jointsOf, read, type Placed } from "./run";
+import { makeRace } from "./race";
 import { makeTable, type Table } from "./table";
 import type { Solid } from "../mote/space";
 import type { V3 } from "../mote/solids";
@@ -105,6 +106,23 @@ test("a hopper holds a marble at its mouth, lets it go, and another comes out of
     expect(table.letGo().length).toBe(1);
     table.clear();
     expect(table.marbles.length).toBe(0);
+});
+
+test("after a race, and in the middle of one, letting go lets a marble go from the hopper at once, its line and gate gone", () => {
+    for (const steps of [Infinity, 200]) {
+        const table = makeTable();
+        table.set(read(RUNS[0]!.text));
+        const race = makeRace(table, 4, 7);
+        for (let step = 0; step < steps && !race.done; step++) race.step(1 / 120);
+        const before = table.marbles.length;
+        const [one] = table.letGo();
+        expect(one).toBeDefined();
+        expect(table.marbles.length).toBe(before + 1);
+        // only the hopper's own marble on its way out of the box is held now, the line behind the gate gone
+        expect(table.held().length).toBe(1);
+        for (let step = 0; step < 120 * 4; step++) table.step(1 / 120);
+        expect(table.arrived(one!)).toBe(true);
+    }
 });
 
 test("only the hoppers asked let their marbles go, and each tray says where it catches", () => {
