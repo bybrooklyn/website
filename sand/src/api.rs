@@ -79,6 +79,17 @@ pub extern "C" fn flag(material: u32, x: i32, y: i32, wide: i32, high: i32, firs
     }
 }
 
+/// Fills the closed space the cell at (x, y) lies in with a material, or with material 0 erases the
+/// body of one material it belongs to. Gives how many cells it changed: 0 when there is nothing to
+/// fill there or the space is larger than `most` cells, which is one that is not closed.
+#[unsafe(no_mangle)]
+pub extern "C" fn flood(material: u32, x: i32, y: i32, most: u32) -> u32 {
+    match world() {
+        Some(world) if (material as usize) < MATERIALS.len() && MATERIALS[material as usize].paint | (material == 0) => world.flood(material as u8, x, y, most as usize) as u32,
+        _ => 0,
+    }
+}
+
 /// The page has written cells into memory itself: each is made one the step can work (a number
 /// with no material, or an edge, becomes air; its clock and speed go back to nothing) and the whole
 /// world is woken and drawn. With `fresh` 1, each is also made as the brush makes it, at its

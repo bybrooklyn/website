@@ -1255,6 +1255,35 @@ column still ends inside the first screen at 1288 by 828 (at 823 of 828). Their 
 be at least 0.085 from every other in OKLab, as the test asks; snow and steam, both white, are left
 out of it, one being a powder that falls and lies and the other a soft gas that rises.
 
+## A line, a box, a fill, and undo
+
+Asked for on 17 November 2026.
+
+- **How the brush draws** is chosen under its size, as round dots with their words, as Blocks' kinds
+  are: free (as before), line (a straight line from the press to where the pointer is let go), box (the
+  four sides of a box between the two), and fill. A line or a box is shown as a thin outline while it
+  is drawn, and is laid in the material and thickness of the brush when the pointer is let go.
+- **Fill** (`flood` in the engine, held by a test) fills the closed space pressed in, every empty cell
+  joined to it by its sides, each laid at rest; with erase chosen it takes away the whole body of one
+  material pressed on. A space of more than 200,000 cells is one that is not closed: nothing is changed,
+  and the stage says "not closed" (or "nothing there", for erasing air) beside where it was pressed, for
+  two and a half seconds.
+- **Undo and redo.** Before each stroke, fill or clear the world is kept, as a link keeps a world (its
+  materials and stripes in runs, not their heat or shades), up to twenty back; undo (Control Z, or the
+  word) puts the last one back and redo (Control Shift Z or Control Y) the one undone. Putting a world
+  back makes each cell as the brush makes it: lava is hot again, and what was burning is not. A new
+  stroke forgets what was undone. "clear" is undone as any stroke is; the word that became "undo clear"
+  is gone.
+- **The column scrolls** where it is longer than the stage is high, never the page: what is used most
+  comes first (materials, the brush and how it draws, then "world": pause, step, clear, undo, redo, then
+  "view"), and the two ways of taking a world out of the page or bringing one in are under "share",
+  below. A soft fade at the column's foot shows that more lies below. On a phone the column is under
+  the stage and as long as it is.
+- **The scene's own drawing lies over the cells.** The brush's outline had never been seen: the canvas
+  it is drawn on lay under the cells' canvas, which is solid. It is now marked to lie over it
+  (`mote-over`, as the marble run's is), and with it the world's edge rule, the word about a fill, and
+  the soft shade at the stage's edges.
+
 ## The look, as chosen
 
 Three palettes, three kinds of light, water with and without depth, and four stages were shown as

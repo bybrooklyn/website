@@ -1244,6 +1244,54 @@ impl World {
         }
     }
 
+    /// Fills the space the cell at (x, y) lies in: with `of`, every empty cell joined to it by its
+    /// sides, each laid at rest as the brush lays a solid; or, when `of` is empty, erases the body of
+    /// one material the cell belongs to. Gives how many cells it changed: none when the cell is not
+    /// one to fill (it holds something, or for erasing nothing), or when the space is more than `most`
+    /// cells, which is a space that is not closed; nothing is changed then.
+    pub fn flood(&mut self, of: u8, x: i32, y: i32, most: usize) -> usize {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return 0;
+        }
+        let start = self.index(x, y);
+        let target = material(self.cells[start]);
+        if (of == EMPTY) == (target == EMPTY) {
+            return 0;
+        }
+        self.strokes += 1;
+        // each cell reached is marked as it is found, by a number no material has, and kept as it was
+        const FOUND: u32 = 255;
+        let mut was: Vec<(u32, u32)> = Vec::new();
+        let mut stack = vec![start as u32];
+        let s = self.stride;
+        while let Some(at) = stack.pop() {
+            let at = at as usize;
+            if material(self.cells[at]) != target || was.len() > most {
+                continue;
+            }
+            was.push((at as u32, self.cells[at]));
+            self.cells[at] = FOUND;
+            stack.extend([at - 1, at + 1, at - s, at + s].map(|next| next as u32));
+        }
+        if was.len() > most {
+            for &(at, cell) in &was {
+                self.cells[at as usize] = cell;
+            }
+            return 0;
+        }
+        let (mut left, mut top, mut right, mut bottom) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+        for &(at, _) in &was {
+            let at = at as usize;
+            let roll = chance(self.seed ^ 0xf100d, self.strokes, at);
+            self.cells[at] = if of == EMPTY { AIR } else { of as u32 | ((roll >> 8) & 0xff) << 8 | (MATERIALS[of as usize].made as u32) << 16 };
+            let (cx, cy) = ((at % s) as i32 - BORDER as i32, (at / s) as i32 - BORDER as i32);
+            (left, top, right, bottom) = (left.min(cx), top.min(cy), right.max(cx), bottom.max(cy));
+        }
+        self.touch(left, top, right, bottom);
+        self.warmed(left, top, right, bottom);
+        was.len()
+    }
+
     /// The page has written cells into the grid itself: a world opened from a link or a file, or
     /// one put back after it was cleared. Every cell is made one the step can work: a number with
     /// no material, or an edge, becomes air, and each cell's clock and speed go back to nothing.
@@ -1439,6 +1487,30 @@ mod tests {
             world.step();
         }
         assert!(world.band_changed(0) && world.band_changed(1) && !world.band_changed(3));
+    }
+
+    #[test]
+    fn a_fill_takes_a_closed_space_and_no_more_and_an_open_one_is_refused() {
+        let mut world = World::new(120, 80, 2);
+        // a cup of stone, open at the top: its inside is joined to all the air of the world
+        world.paint(STONE, 30, 60, 60, 60, 0, 100, false);
+        world.paint(STONE, 30, 40, 30, 60, 0, 100, false);
+        world.paint(STONE, 60, 40, 60, 60, 0, 100, false);
+        let air = world.count(EMPTY);
+        assert_eq!(world.flood(WATER, 45, 50, 2000), 0, "not closed: it is more than the most");
+        assert_eq!(world.count(EMPTY), air, "and nothing is changed");
+        // with a lid it is closed: 29 by 19 cells
+        world.paint(STONE, 30, 40, 60, 40, 0, 100, false);
+        assert_eq!(world.flood(WATER, 45, 50, 2000), 29 * 19);
+        assert_eq!(world.count(WATER), 29 * 19);
+        assert!((41..60).all(|y| (31..60).all(|x| world.at(x, y) == WATER)));
+        // a cell that holds something is not filled over, and erasing takes the whole body of one material
+        assert_eq!(world.flood(SAND, 45, 50, 2000), 0);
+        assert_eq!(world.flood(EMPTY, 45, 50, 2000), 29 * 19);
+        assert_eq!(world.count(WATER), 0);
+        assert_eq!(world.flood(EMPTY, 45, 50, 2000), 0, "nothing there to erase");
+        // past the world's edges there is nothing to fill
+        assert_eq!(world.flood(SAND, -3, 5, 2000), 0);
     }
 
     #[test]

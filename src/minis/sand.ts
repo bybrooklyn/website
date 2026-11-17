@@ -18,7 +18,7 @@ import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { colorRow, FLAGS, place as stripesOf } from "./flags";
 import { brushCells, CELL, engineAddress, fillOf, flagSize, inRow, keptView, keyAction, KEYS, materials, nextStop, start, STEPS_PER_SECOND, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Engine, type Frame, type Material, type View } from "./grains";
-import { LINK_MOST, MOST_TEXT, pack, tokensOf, unpack, writeTokens, type Opened } from "./worlds";
+import { decode, encode, LINK_MOST, MOST_TEXT, pack, tokensOf, unpack, writeTokens, type Opened } from "./worlds";
 
 export const label = "A box of sand, water, fire, lava and more, poured with the pointer.";
 
@@ -32,6 +32,11 @@ const SAID = 2500;
 const MOVES = { speed: 720, glide: 0.18, notch: 60 };
 /** How long the stage takes to grow to fill the window and to come back, in milliseconds. */
 const GROWS = 260;
+/** How the brush draws: freely, a straight line, a box, or a closed space filled. */
+const SHAPES = ["free", "line", "box", "fill"] as const;
+/** How many strokes back the world is kept, to be undone; and the most cells a fill takes, past which a space is not closed. */
+const KEPT = 20;
+const FILL_MOST = 200_000;
 /** Which way each arrow key moves the view. */
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
@@ -41,6 +46,8 @@ export default function sand(m: Mote): Scene {
     under.className = "mote-gl";
     const grid = cells(under);
     if (grid) m.canvas.parentElement!.insertBefore(under, m.canvas);
+    // what the scene draws itself (the brush's outline, the world's edges, a word about a fill) lies over the cells
+    m.canvas.classList.add("mote-over");
 
     let engine: Engine | undefined;
     let bytes: Uint8Array | undefined;
@@ -64,8 +71,12 @@ export default function sand(m: Mote): Scene {
     let owed = 0;
     /** Every row is sent on the next draw: the grid was placed anew. */
     let fresh = true;
-    /** The world as it was before it was cleared, until the next stroke: what "undo clear" puts back. */
-    let cleared: Uint8Array | undefined;
+    /** How the brush draws, and where a line or a box being drawn began. */
+    let shape: (typeof SHAPES)[number] = "free";
+    let anchor: [number, number] | undefined;
+    /** The world as it was before each of the last strokes, and before each undone, kept as a link keeps a world: its materials, not their heat. */
+    const past: Uint8Array[] = [];
+    const future: Uint8Array[] = [];
     /** The pointers held on the stage now; which of them pours; and what kind the last to press or move was. */
     const hands = new Map<number, Hand>();
     let pouring: number | undefined;
@@ -86,6 +97,8 @@ export default function sand(m: Mote): Scene {
     let render = () => {};
     /** Says in the column what the view can still do. */
     let seen = () => {};
+    /** What a fill could not do, said on the stage where it was pressed, until the mini's clock reaches `until`. */
+    let note: { words: string; x: number; y: number; until: number } | undefined;
     const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     /** Device pixels to a CSS pixel, as Mote sized its canvas. */
@@ -144,7 +157,6 @@ export default function sand(m: Mote): Scene {
         palette.set(new Uint8Array(made.memory.buffer, made.palette(), 2048));
         palette.set(colorRow(), 2048);
         grid?.palette(palette);
-        cleared = undefined;
         fresh = true;
         glide = undefined;
         // a new world is seen from its floor, in the middle, a CSS pixel to a cell
@@ -156,6 +168,7 @@ export default function sand(m: Mote): Scene {
     /** The world opened from a link or a file: made at its size, with its cells, and paused, so it is seen as it was sent. */
     const open = (opened: Opened) => {
         if (!engine || !begin(engine, opened.width, opened.height)) return;
+        past.length = future.length = 0;
         writeTokens(opened, bytes!, engine.stride(), engine.border());
         engine.rewritten(1);
         // all of it at once, as it was sent
@@ -166,12 +179,35 @@ export default function sand(m: Mote): Scene {
     };
 
     const striped = () => offered.find((material) => material.striped);
+    /** The world as it is, as a link keeps one. */
+    const kept = (): Uint8Array | undefined => {
+        if (!engine || !bytes) return undefined;
+        const stripes = striped()?.number ?? 0;
+        return encode(tokensOf(bytes, engine.stride(), engine.border(), engine.width(), engine.height(), stripes), engine.width(), engine.height(), stripes);
+    };
+    /** Keeps the world as it is before a stroke changes it, so the stroke can be undone. */
+    const keep = () => {
+        const now = kept();
+        if (!now) return;
+        past.push(now);
+        if (past.length > KEPT) past.shift();
+        future.length = 0;
+        render();
+    };
+    /** Takes the world back to the last one kept in `from`, keeping this one in `to`: undo, and redo the other way round. */
+    const back = (from: Uint8Array[], to: Uint8Array[]) => {
+        const [now, then] = [kept(), from.pop()];
+        const opened = then && decode(then);
+        if (!engine || !now || !opened || opened.width !== engine.width() || opened.height !== engine.height()) return;
+        to.push(now);
+        forgetLink();
+        writeTokens(opened, bytes!, engine.stride(), engine.border());
+        engine.rewritten(1);
+        render();
+        m.wake();
+    };
     const stroke = (from: [number, number], to: [number, number]) => {
         if (!engine) return;
-        if (cleared) {
-            cleared = undefined;
-            render();
-        }
         forgetLink();
         const still = from[0] === to[0] && from[1] === to[1];
         const cells = brushCells(radius, poured);
@@ -255,7 +291,10 @@ export default function sand(m: Mote): Scene {
                 button.setAttribute("aria-pressed", String(on));
                 button.classList.toggle("quiet", !on);
             });
-            empty.textContent = cleared ? "undo clear" : "clear";
+            for (const [button, can] of [[undone, past.length > 0], [redone, future.length > 0]] as const) {
+                button.inert = !can;
+                button.classList.toggle("faint", !can);
+            }
         };
         const picks = el("div", { class: "sand-swatches" });
         picks.setAttribute("role", "group");
@@ -331,20 +370,23 @@ export default function sand(m: Mote): Scene {
             class: "quiet",
             textContent: "clear",
             onclick: () => {
-                if (!engine || !bytes) return;
+                if (!engine) return;
+                keep();
                 forgetLink();
-                if (cleared) {
-                    bytes.set(cleared);
-                    cleared = undefined;
-                    engine.rewritten(0);
-                } else {
-                    cleared = bytes.slice();
-                    engine.clear();
-                }
-                render();
+                engine.clear();
                 m.wake();
             },
         });
+        const undone = el("button", { type: "button", class: "quiet", textContent: "undo", title: "undo (Control Z)", onclick: () => back(past, future) });
+        const redone = el("button", { type: "button", class: "quiet", textContent: "redo", title: "redo (Control Shift Z)", onclick: () => back(future, past) });
+        // how the brush draws, as round dots with their words, as Blocks' kinds are
+        const shapes = el("div", { class: "sand-choices" });
+        shapes.setAttribute("role", "radiogroup");
+        shapes.setAttribute("aria-label", "the brush draws");
+        for (const one of SHAPES) {
+            const input = el("input", { type: "radio", name: "sand-shape", value: one, checked: one === shape, onchange: () => input.checked && ((shape = one), (anchor = undefined), m.wake()) });
+            shapes.append(el("label", {}, input, one));
+        }
         const say = (button: HTMLButtonElement, words: string, rest: string) => {
             button.style.minWidth = `${button.offsetWidth}px`;
             button.textContent = words;
@@ -386,7 +428,12 @@ export default function sand(m: Mote): Scene {
         });
 
         // the brush's size is a line of the materials it pours, so that the whole column is in a laptop's first screen
-        box.append(group("materials"), picks, flags, ...line("brush", size), group("view"), el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow, group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty), share, opener, chooser);
+        // what is used most comes first: where the column is longer than the stage is high it scrolls, and
+        // shows by a fade at its foot that more lies below
+        box.append(group("materials"), picks, flags, ...line("brush", size), shapes, group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), group("view"), el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow, group("share"), share, opener, chooser);
+        const below = () => box.classList.toggle("more-below", box.scrollTop + box.clientHeight < box.scrollHeight - 2);
+        box.addEventListener("scroll", below, { passive: true });
+        new ResizeObserver(below).observe(box);
         // the swatches are drawn once they have their size
         requestAnimationFrame(() => {
             for (const one of swatches) paint(one.canvas, one.material);
@@ -421,9 +468,17 @@ export default function sand(m: Mote): Scene {
     // whole world, and Escape brings the stage back from filling the window.
     const host = m.canvas.parentElement!;
     host.addEventListener("keydown", (event) => {
-        if (event.metaKey || event.ctrlKey || event.altKey || m.preview) return;
+        if (m.preview) return;
         const target = event.target as HTMLElement;
-        const on = target === m.canvas ? "canvas" : target instanceof HTMLInputElement ? (target.type === "range" ? "slider" : "text") : "button";
+        const on = target === m.canvas ? "canvas" : target instanceof HTMLInputElement ? (target.type === "range" ? "slider" : target.type === "radio" ? "button" : "text") : "button";
+        // Control with Z undoes a stroke, with Shift as well or with Y redoes it
+        if ((event.ctrlKey || event.metaKey) && !event.altKey && on !== "text" && ["z", "y"].includes(event.key.toLowerCase())) {
+            const redo = event.key.toLowerCase() === "y" || event.shiftKey;
+            back(redo ? future : past, redo ? past : future);
+            event.preventDefault();
+            return;
+        }
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
         if (event.key in ARROWS && on !== "slider" && on !== "text") {
             moving.add(event.key);
             m.wake();
@@ -538,6 +593,15 @@ export default function sand(m: Mote): Scene {
         } else {
             m.ctx.arc(m.pointer.x, m.pointer.y, Math.max(2, (brushCells(radius, poured) + 0.5) * cell), 0, Math.PI * 2);
         }
+        if (anchor) {
+            // from where a line or a box began to the pointer
+            const [x, y] = [(at.left + (anchor[0] + 0.5) * at.scale) / ratio(), (at.top + (anchor[1] + 0.5) * at.scale) / ratio()];
+            if (shape === "box") m.ctx.rect(Math.min(x, m.pointer.x), Math.min(y, m.pointer.y), Math.abs(m.pointer.x - x), Math.abs(m.pointer.y - y));
+            else {
+                m.ctx.moveTo(x, y);
+                m.ctx.lineTo(m.pointer.x, m.pointer.y);
+            }
+        }
         m.ctx.strokeStyle = m.color("--muted");
         m.ctx.lineWidth = 1;
         m.ctx.stroke();
@@ -574,6 +638,7 @@ export default function sand(m: Mote): Scene {
                 const [across, down] = [...moving].reduce(([x, y], key) => [x + ARROWS[key]![0], y + ARROWS[key]![1]], [0, 0]);
                 look({ ...view, x: view.x + by * across, y: view.y + by * down });
             }
+            if (note && m.time >= note.until) note = undefined;
             if (!engine || paused) return;
             owed += dt;
             while (owed >= 1 / STEPS_PER_SECOND - 1e-6) {
@@ -606,6 +671,13 @@ export default function sand(m: Mote): Scene {
             }
             edges();
             outline();
+            if (note) {
+                // beside where it was pressed, and kept inside the stage
+                m.ctx.font = `0.85rem ${getComputedStyle(m.canvas).fontFamily}`;
+                m.ctx.fillStyle = m.color("--ink");
+                m.ctx.textAlign = note.x > m.width - 96 ? "right" : "left";
+                m.ctx.fillText(note.words, note.x + (note.x > m.width - 96 ? -12 : 12), Math.max(16, note.y - 10));
+            }
             if (!grid) {
                 m.ctx.fillStyle = m.color("--muted");
                 m.ctx.textAlign = "center";
@@ -631,9 +703,30 @@ export default function sand(m: Mote): Scene {
                 return;
             }
             if (pouring !== undefined || dragged) return;
+            const cell = cellUnder(hand.x, hand.y, at, ratio());
+            keep();
+            if (shape === "fill") {
+                // a closed space, filled at a press; one not closed is left as it is, and says so
+                forgetLink();
+                const filled = engine!.flood(poured?.number ?? 0, cell[0], cell[1], FILL_MOST);
+                // the fill may have grown the engine's memory: the cells are looked at anew
+                bytes = new Uint8Array(engine!.memory.buffer, engine!.cells(), engine!.stride() * (engine!.height() + 2 * engine!.border()) * 4);
+                if (!filled) {
+                    past.pop();
+                    render();
+                    note = { words: poured ? "not closed" : "nothing there", x: hand.x, y: hand.y, until: m.time + SAID / 1000 };
+                }
+                m.wake();
+                return;
+            }
             pouring = hand.id;
             laid = false;
-            held = cellUnder(hand.x, hand.y, at, ratio());
+            if (shape !== "free") {
+                // a line or a box is drawn from here to where the pointer is let go
+                anchor = cell;
+                return;
+            }
+            held = cell;
             stroke(held, held);
         },
         slide(hand) {
@@ -645,7 +738,7 @@ export default function sand(m: Mote): Scene {
             const two = between();
             if (pinch && two) return look(viewWith((pinch.zoom * two.apart) / pinch.apart, pinch.at, ...pixels(two), size));
             if (pouring !== hand.id || !held) {
-                // nothing is poured, but the brush's outline follows the pointer
+                // nothing is poured, but the brush's outline, and a line or a box being drawn, follow the pointer
                 m.wake();
                 return;
             }
@@ -658,7 +751,15 @@ export default function sand(m: Mote): Scene {
         up(hand) {
             hands.delete(hand.id);
             if (dragged?.id === hand.id) dragged = undefined;
-            if (pouring === hand.id) pouring = held = undefined;
+            if (pouring === hand.id) {
+                if (anchor && at) {
+                    // the line, or the four sides of the box, from where it began to here
+                    const [a, b] = [anchor, cellUnder(hand.x, hand.y, at, ratio())];
+                    const sides: [[number, number], [number, number]][] = shape === "box" ? [[a, [b[0], a[1]]], [[b[0], a[1]], b], [b, [a[0], b[1]]], [[a[0], b[1]], a]] : [[a, b]];
+                    for (const [from, to] of sides) stroke(from, to);
+                }
+                pouring = held = anchor = undefined;
+            }
             const size = frame();
             if (pinch && !between() && size) {
                 pinch = undefined;
@@ -672,7 +773,7 @@ export default function sand(m: Mote): Scene {
         keydown(name) {
             if (name === "action") setPaused(!paused);
         },
-        resting: () => !engine || (pouring === undefined && !glide && moving.size === 0 && (paused || engine.awake() === 0)),
+        resting: () => !engine || (pouring === undefined && !glide && !note && moving.size === 0 && (paused || engine.awake() === 0)),
         debug: () => (engine ? [`steps ${engine.steps()}`, `awake chunks ${engine.awake()}`, `world ${engine.width()} by ${engine.height()}`, `a cell is ${view.zoom.toFixed(2)} pixels`] : []),
         destroy() {
             window.removeEventListener("hashchange", followed);

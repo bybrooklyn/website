@@ -13,6 +13,7 @@ export interface Engine {
     paint(material: number, x0: number, y0: number, x1: number, y1: number, radius: number, fill: number, replace: number): void;
     paint_striped(material: number, x0: number, y0: number, x1: number, y1: number, radius: number, fill: number, first: number, count: number): void;
     flag(material: number, x: number, y: number, wide: number, high: number, first: number, count: number): void;
+    flood(material: number, x: number, y: number, most: number): number;
     rewritten(fresh: number): void;
     clear(): void;
     cells(): number;

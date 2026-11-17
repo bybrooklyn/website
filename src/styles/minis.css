@@ -67,8 +67,12 @@
    bring one in, each on a line of its own. */
 .mote-panel .sand-across {
     grid-column: 1 / -1;
-    /* the words are a step apart already (a button after a button), so three of them fit a line */
+    /* the words are a step apart already (a button after a button), so five short ones fit a line */
     gap: 0.35rem 0;
+}
+
+.mote-panel .sand-across button + button {
+    margin-inline-start: 0.8rem;
 }
 
 .mote-panel .sand-link {
@@ -118,6 +122,36 @@
 /* The column's lines a little closer than the Walker's, so that all of it is in a laptop's first screen. */
 .mini-stage[data-mini="sand"] > .mote-panel.sand-side {
     row-gap: 0.4rem;
+    /* what does not fit beside the stage is reached by scrolling the column, never by a longer page */
+    max-height: calc(clamp(16rem, calc(100svh - 24.75rem), 40rem) + 2 * var(--frame));
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+/* a soft fade at its foot where more lies below */
+.mini-stage[data-mini="sand"] > .mote-panel.sand-side.more-below {
+    mask-image: linear-gradient(to bottom, var(--ink) calc(100% - 2.25rem), transparent);
+}
+
+.mini-stage[data-mini="sand"].filled > .mote-panel.sand-side {
+    max-height: 100svh;
+}
+
+/* under the stage, on a phone, the column is as long as it is */
+@media (max-width: 46rem) {
+    .mini-stage[data-mini="sand"] > .mote-panel.sand-side,
+    .mini-stage[data-mini="sand"] > .mote-panel.sand-side.more-below {
+        max-height: none;
+        overflow-y: visible;
+        mask-image: none;
+    }
+}
+
+/* how the brush draws, across the column under its size */
+.mote-panel .sand-choices {
+    grid-column: 1 / -1;
+    gap: 0.2rem 0.7rem;
+    font-size: 0.85rem;
 }
 
 .mini-stage[data-mini="sand"].sand-place {
@@ -1583,7 +1617,8 @@
 }
 
 .walker-choices,
-.blocks-choices {
+.blocks-choices,
+.sand-choices {
     display: flex;
     flex-wrap: wrap;
     gap: 0.2rem 0.85rem;
@@ -1591,6 +1626,7 @@
 
 .walker-choices label,
 .blocks-choices label,
+.sand-choices label,
 .walker-controls > label {
     display: inline-flex;
     align-items: center;
