@@ -73,3 +73,37 @@ test("in Chromium, one page shows at a time, Escape and close go back to the fir
         await page.close();
     }
 });
+
+test("in Chromium, a page not shown that is taller than the shown one keeps its height while it fades, then lets the column scroll no further than the shown page's end", async () => {
+    const page = await corePage(`
+        import { sideColumn } from "${quire}/img/side.ts";
+        const side = sideColumn({ home: () => tall, back: () => {} });
+        side.element.style.height = "300px";
+        document.querySelector("#host").append(side.element);
+        const tall = side.page("export");
+        const short = side.page("crop");
+        const filler = document.createElement("div");
+        filler.style.height = "1500px";
+        tall.body.append(filler);
+        const line = document.createElement("div");
+        line.style.height = "100px";
+        short.body.append(line);
+        tall.open();
+        window.side = side; window.tall = tall; window.short = short;
+        window.ready = true;
+    `);
+    if (!page) return;
+    const { tab } = page;
+    try {
+        for (let waited = 0; waited < 100 && !(await tab.run<boolean>("window.ready === true")); waited++) await tab.wait(100);
+        await tab.run("window.short.open()");
+        // while it fades it is as tall as it was
+        expect(await tab.run<number>("document.querySelector('[data-page=export]').getBoundingClientRect().height")).toBeGreaterThan(1500);
+        await tab.wait(400);
+        const sizes = await tab.run<{ scroll: number; client: number }>("(() => { const column = document.querySelector('.quire-img-side'); return { scroll: column.scrollHeight, client: column.clientHeight }; })()");
+        // the column had scrolled on past the short page into the gone page's 1500 pixels of nothing
+        expect(sizes.scroll).toBe(sizes.client);
+    } finally {
+        await page.close();
+    }
+});

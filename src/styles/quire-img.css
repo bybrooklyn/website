@@ -49,10 +49,14 @@
     position: relative;
 }
 
-/* one page shows; the one going fades out where it was, over the top, while the one coming fades in, quickly */
+/* one page shows; the one going fades out where it was, over the top, while the one coming fades in, quickly.
+   Once it has faded, a page not shown is held to the shown one's height: taller, it had let the panel scroll on
+   into empty space below a short page */
 .quire-img-page {
     position: absolute;
     inset: 0 0 auto;
+    max-height: 100%;
+    overflow: hidden;
     opacity: 0;
     translate: 0 0.3rem;
     visibility: hidden;
@@ -60,11 +64,15 @@
     transition:
         opacity 0.16s ease,
         translate 0.2s var(--ease),
-        visibility 0s linear 0.16s;
+        visibility 0s linear 0.16s,
+        max-height 0s linear 0.16s;
+    transition-behavior: allow-discrete;
 }
 
 .quire-img-page.open {
     position: relative;
+    max-height: none;
+    overflow: visible;
     opacity: 1;
     translate: 0 0;
     visibility: visible;
