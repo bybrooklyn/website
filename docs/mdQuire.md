@@ -305,7 +305,8 @@ under a control. No surface says in a sentence what its label already says.
 
 **The menus** (`menus.ts`, shown by the core's `core/menu-row.ts`, `flowMenu` in `core/ui.ts`). Every command is in the menu row by name with its
 shortcut, in Google Docs' menus, order and words wherever mdQuire has the thing, so that hands that know Docs
-know them. Every line has an icon in the editor's own line style, groups have rules between them, and a line
+know them. Every line has an icon in the editor's own line style (Tools' lines from checking, dictation
+and suggestions, and a tool folded into the bar's three dots, too), groups have rules between them, and a line
 that is on shows a tick in its icon's place, never a colour alone. Each thing is in one menu only. A menu is
 the browser's popover, anchored to its word: the word stays in the row, lit, and the menu grows from under
 it, covering nothing above. A long menu is folded into groups as Docs folds it: a line ending in an arrow
@@ -388,9 +389,10 @@ away in the editor only, never saved, and a caret that lands inside unfolds it; 
 the choice of its own written to the file, and a new section starts in its summary. A table has a menu
 from a right-click, the menu key or its strip's dots: rows above and below, columns left and right,
 removing the row, the column or the table, the sorts and the alignments, with what cannot act there
-dimmed (`tables.ts`). A right-click on words opens cut, copy, link, comment, bold, italic and underline
-(`text-menu.ts`), with a misspelled word's spellings, Add to dictionary and Ignore in this document above
-them; Shift with it leaves the browser's. The selection bar, a table's strip and a picture's
+dimmed (`tables.ts`); opened in a cell, cut, copy, paste and paste without formatting come first, as
+in the text's. A right-click on words opens cut, copy, paste and paste without formatting, then link,
+comment, bold, italic and underline (`text-menu.ts`), with a misspelled word's spellings, Add to
+dictionary and Ignore in this document above them; Shift with it leaves the browser's. The selection bar, a table's strip and a picture's
 are placed by one rule (`core/strips.ts`): never over what they belong to nor the line above or below it
 while the window has room. The selection bar does not come for a selection made while the keyboard is
 elsewhere, as find makes. Escape in a footnote goes back to just after its mark. A table of contents
@@ -420,7 +422,13 @@ typing, Backspace and Format commands change all of them (`matching.ts`). Insert
 heading, which is a place to link to already) writes an empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).
 
-**Links** (`link-card.ts`). A web address pasted over selected words makes them the link, in one undo
+**Links** (`link-card.ts`). There is one link field, the selection bar's (`select-bar.ts`): its Link
+button, Ctrl+K, Insert, Link and the main bar's Link all turn the bar over the words (or over the caret)
+into the field, placed by the strips' rule, with the words still drawn as selected while the field has
+the keyboard; with the caret in a link it holds that link's address and offers to remove it. An
+address typed there with no scheme gets `https://` when it names a site (`withScheme`): `example.com`
+links to example.com, while `/blog`, `#a-heading`, `./notes.md` and a word with no dot are kept as typed.
+A web address pasted over selected words makes them the link, in one undo
 step, as Docs and GitHub do. What counts is one http, https or mailto address and nothing else around it
 (`webAddress`); `javascript:` and every other scheme are pasted as text, and Ctrl+Shift+V always pastes the
 text. An address pasted with nothing selected goes in as it is (a bare address is a link to any reader
