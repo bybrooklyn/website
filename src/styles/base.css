@@ -368,7 +368,7 @@ h1 + .lede,
  * (minis.css) and the type tester's text (type.css). They draw the same ring just inside their edge.
  */
 a:focus-visible,
-:where(button, summary, [role="button"], input, select, pre, video):focus-visible,
+:where(button, summary, [role="button"], input, select, textarea, pre, video):focus-visible,
 [data-zoom]:focus-visible,
 .flag:focus-visible,
 .strip:focus-visible .strip-button,
