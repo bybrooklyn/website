@@ -267,47 +267,26 @@ export function mirrorLine(run: Placed[], ids: number[], turn: number): { across
     return { across: "z", twice: Math.round((2 * middle[2]) / CELL) };
 }
 
-/** Which of a family's own numbers its knob changes; the others it keeps (a curve's quarters, a spiral's turns). A lift's height, a hoist's length, how many marbles tip a seesaw, a spinner's arms and a chime bar's note are set the same way. */
+/** Which of a family's own numbers make it longer or shorter, the first of them first; the others it keeps (a curve's quarters, a spiral's turns). A lift's height, a hoist's length, how many marbles tip a seesaw, a spinner's arms and a chime bar's note are set the same way. */
 export const RESIZABLE: Partial<Record<Family, number[]>> = { s: [0], c: [0], d: [0, 1], z: [0, 1], v: [0], x: [1], u: [0], y: [0], e: [0], o: [0], m: [0] };
 
-/** Where a piece's knob is in its own place: past its far joint, or where the piece says (a seesaw's weights, a spinner's axle, a chime bar's end). */
-export function knobAt(kind: Kind): V3 {
-    const shape = shapeOf(kind);
-    return shape.knob ?? shape.joints[1]!.at;
-}
-
-/** Whether a piece can be made longer or shorter by its end. */
-export const resizable = (kind: Kind) => RESIZABLE[kind.family] !== undefined;
-
 /**
- * The piece of the same family, made by changing only the numbers its knob changes, whose knob would
- * be nearest `wanted` (a point in the piece's own place): a straight dragged by its end grows and
- * shrinks by cells, a slope by cells along and levels down, a curve between tight and wide, a chime
- * bar by its end from one note to the next, a lift by its top from one level to the next.
+ * A piece's next or last setting, by the first of its numbers that make it longer (a straight's or a
+ * slope's length, a curve's radius, a drop's or a spiral's height, a chime bar's note, a lift's height):
+ * the next number a piece is made with, its bend kept where it can be. None past its limits, or for a
+ * piece that has no such number (a hopper, a tray).
  */
-export function resized(kind: Kind, wanted: V3): Kind {
-    const which = RESIZABLE[kind.family];
-    if (!which || !resizable(kind)) return kind;
-    // the far joint is where it is whatever the bend, so the forms are compared as made
-    let best = { kind: withBend(kind), d: Infinity };
-    const tryIt = (sizes: number[]) => {
-        if (!allowed(kind.family, sizes)) return;
-        const made: Kind = { family: kind.family, sizes, mirror: kind.mirror };
-        const end = knobAt(made);
-        const d = Math.hypot(end[0] - wanted[0], (end[1] - wanted[1]) * 2, end[2] - wanted[2]);
-        if (d < best.d - 1e-9) best = { kind: made, d };
-    };
-    const limits = SIZES[kind.family as Family];
-    const grow = (index: number, sizes: number[]) => {
-        if (index === which.length) return tryIt(sizes);
-        const at = which[index]!;
-        for (let size = limits[at]![0]; size <= limits[at]![1]; size++) grow(index + 1, sizes.map((one, i) => (i === at ? size : one)));
-    };
-    grow(0, [...kind.sizes]);
-    return sameSize(best.kind, kind) ? kind : rebent(kind, best.kind);
+export function stepped(kind: Kind, by: number): Kind | undefined {
+    const index = RESIZABLE[kind.family]?.[0];
+    if (index === undefined) return undefined;
+    const [least, most] = SIZES[kind.family][index]!;
+    const sizesAt = (size: number) => kind.sizes.map((one, i) => (i === index ? size : one));
+    let size = kind.sizes[index]!;
+    do size += by;
+    while (size >= least && size <= most && !allowed(kind.family, sizesAt(size)));
+    if (size < least || size > most) return undefined;
+    return rebent(kind, { family: kind.family, sizes: sizesAt(size), mirror: kind.mirror });
 }
-
-const sameSize = (a: Kind, b: Kind) => a.family === b.family && a.sizes.join() === b.sizes.join();
 
 /**
  * A bent piece made longer or shorter, still bent: its bend is read at the new piece's points, as far

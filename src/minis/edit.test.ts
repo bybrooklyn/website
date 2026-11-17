@@ -1,15 +1,15 @@
 // The marble run's editing is held to what it says: a group turned about a corner keeps its joints
 // joined and comes back after four turns; a group mirrored is exactly the reflection of what it was,
 // joint for joint and box for box, bent ones point for point and along their track, and mirrored twice
-// is itself; a group fitted by any open joint meets the joint it is fitted to; a straight's end dragged
-// makes it longer by whole cells, a bent one staying bent where it can; a run read back keeps the
+// is itself; a group fitted by any open joint meets the joint it is fitted to; a piece made longer goes
+// to its next setting, a bent one staying bent where it can; a run read back keeps the
 // numbers of the pieces it shares with the run before, bend and all; and pieces pressed in the box one
 // after another make a run marbles go down to its tray, never joined so that it climbs, and refused,
 // saying why, where they cannot go on. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
 import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
-import { START, about, asOwn, groupFits, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, resized, then } from "./edit";
+import { START, about, asOwn, groupFits, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, stepped, then } from "./edit";
 import { makeTable } from "./table";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -89,16 +89,14 @@ test("a bent group mirrored is the reflection of what it was, point for point an
 
 test("a bent piece made longer stays bent where it can, read at its new points from the old; where it cannot, it is made straight", () => {
     const bowed = withBend(kind("s", [2]), [20, 0, 20, 0]);
-    const longer = resized(bowed, [32, 0, 4]);
+    const longer = rebent(bowed, kind("s", [4]));
     expect(longer.sizes).toEqual([4]);
     // three points now, at a quarter, a half and three quarters: a bow still, highest in the middle
     expect(longer.bend!.length).toBe(6);
     expect(longer.bend![2]).toBeGreaterThanOrEqual(longer.bend![0]!);
     expect(brokenBy(longer)).toBeUndefined();
-    // dragged to where it already is, it keeps its bend exactly
-    expect(resized(bowed, [16, 0, 4])).toBe(bowed);
     // a bow of 28 mm on two cells cannot be built on one: the piece of one cell is as made
-    const short = resized(withBend(kind("s", [2]), [28, 0, 28, 0]), [8, 0, 4]);
+    const short = rebent(withBend(kind("s", [2]), [28, 0, 28, 0]), kind("s", [1]));
     expect(short.sizes).toEqual([1]);
     expect(short.bend).toBeUndefined();
     expect(rebent(bowed, kind("s", [2]))).toEqual(bowed);
@@ -148,19 +146,22 @@ test("a group fitted by any of its open joints meets the joint it is fitted to, 
     expect(new Set(found.map((snap) => `${snap.joint.id} ${snap.joint.joint}`)).size).toBe(2);
 });
 
-test("a straight dragged by its end grows and shrinks by whole cells; a slope by cells and levels; a curve between tight and wide", () => {
-    const straight = kind("s", [1]);
-    expect(resized(straight, [3 * CELL + 2, 0, 4]).sizes).toEqual([3]);
-    expect(resized(straight, [-40, 0, 4]).sizes).toEqual([1]);
-    expect(resized(straight, [400, 0, 4]).sizes).toEqual([6]);
-    expect(resized(kind("d", [2, 1]), [4 * CELL, -6, 4]).sizes).toEqual([4, 3]);
-    expect(resized(kind("c", [1, 1]), [12, 0, 16]).sizes).toEqual([3, 1]);
-    expect(resized(kind("c", [3, 1], true), [4, 0, -4]).sizes).toEqual([1, 1]);
-    // the first joint never moves, so a piece joined by it stays joined
-    for (const entry of BOX) expect(shapeOf(resized(entry.kind, [50, -10, 30])).joints[0]!.at).toEqual([0, 0, 4]);
-    // a hopper has no size
-    expect(resized(kind("h"), [50, 0, 4])).toEqual(kind("h"));
+test("a piece made longer or shorter goes to the next setting it is made with, and no further than its limits; its first joint stays put", () => {
+    expect(stepped(kind("s", [1]), 1)!.sizes).toEqual([2]);
+    expect(stepped(kind("s", [1]), -1)).toBeUndefined();
+    expect(stepped(kind("d", [2, 1]), 1)!.sizes).toEqual([3, 1]);
+    expect(stepped(kind("c", [1, 1], true), 1)!.mirror).toBe(true);
+    // a hopper and a tray have no length
+    expect(stepped(kind("h"), 1)).toBeUndefined();
+    expect(stepped(kind("t"), -1)).toBeUndefined();
+    // a bent straight made longer keeps its bow
+    expect(stepped(withBend(kind("s", [2]), [20, 0, 20, 0]), 1)!.bend!.length).toBe(4);
+    for (const entry of BOX) {
+        const longer = stepped(entry.kind, 1);
+        if (longer) expect(shapeOf(longer).joints[0]!.at).toEqual([0, 0, 4]);
+    }
 });
+
 
 test("a piece of one's own is kept with its middle at the corner and its lowest part on the ground", () => {
     const group = run.slice(4, 9);

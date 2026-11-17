@@ -11,7 +11,7 @@
 // colors, and a run shared as a link or a file, with the scene's own small menu for pasting.
 //
 // What it stands on: pieces.ts (the box) and parts.ts (its moving and sounding pieces), run.ts (a run as data), edit.ts (groups moved, turned,
-// mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the handles),
+// mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the points a piece is bent by),
 // table.ts (Mote's physics for a run), supports.ts (pillars), checks.ts (open ends), orbit.ts (the
 // camera) and camera.ts (riding, gliding, touring), race.ts (races), share.ts (links and files),
 // runs.ts (made runs), toolbar.ts (the icons and the bar).
@@ -30,15 +30,15 @@ import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { STILL as NO_MOVE, about, asOwn, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move, type Refused } from "./edit";
+import { STILL as NO_MOVE, about, asOwn, groupFits, groupMisfit, groupSnaps, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, placing, rotated, stepped, then, type GroupSnap, type Move, type Refused } from "./edit";
 import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
 import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
 import { DRAWN, OUT_WORDS, RACE, RACERS, drawnOf, inLine, makeRace, progress, standing, timeOf, type Race } from "./race";
 import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
-import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
+import { AXES, ARROW, across, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, stripPlace, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, type Grip, type Orbit } from "./orbit";
-import { BOX, CELL, FURTHEST, LEVEL, RADIUS, SIZES, allowed, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
+import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
 import { fits, jointsOf, links, open, read, roomOf, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
@@ -245,7 +245,7 @@ interface Pose {
 }
 
 /**
- * Pieces being carried, one or many, as one: by a finger or the mouse, by the keys, by a handle, or
+ * Pieces being carried, one or many, as one: by a finger or the mouse, by the keys, or
  * following the pointer after a paste. `home` is where they were (in the run, or as made); `move` is
  * the move that takes them to where they would go, in whole cells, levels and quarter turns.
  */
@@ -272,10 +272,6 @@ interface Carried {
     grab: [number, number];
     /** Which pointer carries them: none for the keys, `hover` for a paste that follows the mouse. */
     hand?: number | "hover";
-    /** A handle being dragged, where its drag began on the screen, and the handles' middle then. */
-    handle?: Handle;
-    press?: { x: number; y: number };
-    origin?: V3;
     /** Turning one piece at the joint it hangs from: the ways it fits there, and which it is in. */
     cycle?: { snaps: GroupSnap[]; at: number };
     /** How many joints join them to the rest now, to click when one more meets. */
@@ -310,12 +306,12 @@ interface Held {
     last: { x: number; y: number };
     /** When it went down, in seconds of the scene's time: for a long press. */
     since: number;
-    mode: "press" | "turn" | "pan" | "carry" | "pinch" | "handle" | "box" | "done" | "gizmo" | "bend" | "loose";
+    mode: "press" | "turn" | "pan" | "carry" | "pinch" | "box" | "done" | "gizmo" | "bend" | "loose";
     /** The piece pressed, before the press is known to be a drag. */
     piece?: Placed;
     /** The way of the little axes in the corner that was pressed. */
     gizmo?: Way;
-    /** The handle under the press, taken if it moves. */
+    /** The point of a bent piece under the press, taken if it moves. */
     handle?: Handle;
     /** What a pan holds under the pointer, taken where it was pressed. */
     grip?: Grip;
@@ -516,21 +512,9 @@ export default function marbles(m: Mote): Scene {
     };
     makeTableTop([]);
 
-    /** The handles, made once and shown on what is chosen: drawn over everything, so that nothing hides them. */
-    const handleParts = view && !m.preview
-        ? {
-              x: view.add(arrowMesh("x"), { color: colors.x, over: true, gloss: 0.2 }),
-              y: view.add(arrowMesh("y"), { color: colors.y, over: true, gloss: 0.2 }),
-              z: view.add(arrowMesh("z"), { color: colors.z, over: true, gloss: 0.2 }),
-              ring: view.add(ringMesh(), { color: colors.accent, over: true, gloss: 0.2 }),
-              knob: view.add(ball(0.11, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-              // the points a piece is bent by, as many as any piece has
-              point0: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-              point1: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-              point2: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
-          }
-        : undefined;
-    if (handleParts) for (const part of Object.values(handleParts)) part.hidden = true;
+    /** The points a piece is bent by, as many as any piece has, made once and shown while it is bent: drawn over everything, so that nothing hides them. */
+    const pointParts = view && !m.preview ? [0, 1, 2].map(() => view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 })) : [];
+    for (const part of pointParts) part.hidden = true;
 
     /** Whether a piece of the run is being carried now, and so is out of the table and drawn apart. */
     const isCarried = (id: number) => Boolean(carried?.inRun && carried.home.some((piece) => piece.id === id));
@@ -1140,7 +1124,7 @@ export default function marbles(m: Mote): Scene {
             for (const piece of placed) chosen.add(piece.id);
             end = open(run).find((joint) => ids.has(joint.id)) ?? end;
             each((_, index) => placeOf(placed[index]!));
-            if (!one.snap && one.handle === undefined) sound?.knock(0.35, 1300);
+            if (!one.snap) sound?.knock(0.35, 1300);
         } else if (one.inRun) {
             // back where they came from, as they were, saying why
             each((_, index) => placeOf(one.original[index]!));
@@ -1219,72 +1203,23 @@ export default function marbles(m: Mote): Scene {
     const namedOf = (pieces: Placed[]): string => (pieces.length === 1 ? (BOX.find((entry) => keyOf(entry.kind) === keyOf(pieces[0]!.kind))?.name ?? "a piece") : `${pieces.length} pieces`);
     const fromBox = (kind: Kind): Placed[] => [{ id: nextId++, kind: { ...kind, sizes: [...kind.sizes] }, place: { x: 0, z: 0, y: -shapeOf(kind).low, turn: 0 } }];
 
-    // ---- the handles ----
-    /** The handles' middle: over the middle of what is chosen, at its lowest joint and a little above. */
+    // ---- the points of a bent piece ----
+    /** Over the middle of what is chosen, at its lowest joint and a little above: where the keyboard's menu opens. */
     const handleMiddle = (pieces: Placed[]): V3 => {
         const middle = middleOf(pieces);
         return [middle[0], middle[1] + 1, middle[2]];
     };
-    /** Where the knob is: past the far end of one chosen piece that can be resized. */
-    const knobOf = (pieces: Placed[]): V3 | undefined => {
-        if (pieces.length !== 1 || !resizable(pieces[0]!.kind)) return undefined;
-        const piece = pieces[0]!;
-        const shape = shapeOf(piece.kind);
-        // a moving or sounding piece says where its knob is: a seesaw's weights, a spinner's axle, a chime bar's end
-        if (shape.knob) return toWorld(piece.place, shape.knob);
-        const joint = shape.joints[1];
-        if (!joint) return undefined;
-        const at = toWorld(piece.place, joint.at);
-        const way = wayToWorld(piece.place, joint.way);
-        return [at[0] + way[0] * 1.5, at[1] + 1.5, at[2] + way[2] * 1.5];
-    };
-    /** How far pieces reach on the screen from a point, in pixels: their boxes of room, each with a block's half width round it. */
-    const reachOn = (pieces: Placed[], middle: V3): number => {
-        const centre = onScreen(middle);
-        if (!centre) return 0;
+    /** Where the points of the piece being bent are on the screen, if one is. */
+    const pointsNow = (): Shown | undefined => {
+        const bent = !m.preview && !carried ? bentPiece() : undefined;
+        if (!bent) return undefined;
         const { orbit: seen, degrees } = cam();
-        const half = 2.2 / across(seen, degrees, m.height, middle);
-        let most = 0;
-        for (const piece of pieces) {
-            for (const box of shapeOf(piece.kind).room) {
-                const at = onScreen(boxToWorld(piece.place, box).at);
-                if (at) most = Math.max(most, Math.hypot(at.x - centre.x, at.y - centre.y) + half);
-            }
-        }
-        return most;
+        return pointsLayout(seen, degrees, m.width, m.height, pointsIn(bent.kind, bent.place).map((point) => point.at));
     };
-    /** How far the handles stand off from what they are on, in pixels: worked out each frame from what is chosen, and kept while a handle is dragged, so that the handles do not breathe under the pointer. */
-    let stand = 0;
-    const standFor = (pieces: Placed[]) => {
-        stand = standOff(reachOn(pieces, handleMiddle(pieces)), m.width, m.height);
-    };
-    /** Where the handles are on the screen now, if any are shown. */
-    const handlesNow = (): Shown | undefined => {
-        if (m.preview || (carried && carried.handle === undefined)) return undefined;
-        const pieces = carried ? placedOf(carried) : chosenPieces();
-        if (!pieces.length) return undefined;
-        const { orbit: seen, degrees } = cam();
-        // while a piece is bent, its points are its only handles
-        const bent = bentPiece();
-        if (bent && !carried) return pointsLayout(seen, degrees, m.width, m.height, pointsIn(bent.kind, bent.place).map((point) => point.at));
-        const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-        if (!carried) standFor(pieces);
-        return layout(seen, degrees, m.width, m.height, middle, carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces), stand);
-    };
-    /**
-     * The handle a press at (x, y) would take once it moves, if any. Never one over the body of a chosen
-     * piece: a press there carries what is chosen, wherever the handles are, and the handles stand off
-     * from a small selection so that both have room. Shift and the select tool are for choosing, so no
-     * handle takes their press.
-     */
+    /** The point of a bent piece a press at (x, y) would take once it moves, if any: over the piece too, since a point sits on its track. */
     const handleUnder = (x: number, y: number, kind: "touch" | "mouse", shift = false): Handle | undefined => {
-        const shown = !carried && chosen.size && !shift && !selecting ? handlesNow() : undefined;
-        const handle = shown && which(shown, x, y, kind);
-        if (!handle) return undefined;
-        // a point sits on its piece's track, so it is taken over the piece too: while it is bent, that is what a press near a point means
-        if (pointOf(handle) !== undefined) return handle;
-        const body = pieceAt(x, y, 0.2);
-        return body && chosen.has(body.id) ? undefined : handle;
+        const shown = !shift && !selecting ? pointsNow() : undefined;
+        return shown && which(shown, x, y, kind);
     };
     /** Turning one piece at the joint it hangs from: the ways it fits there, if it hangs from exactly one. */
     const cycleOf = (piece: Placed): Carried["cycle"] => {
@@ -1298,79 +1233,6 @@ export default function marbles(m: Mote): Scene {
         const at = ways.findIndex((snap) => snap.move.turn === 0 && snap.move.x === 0 && snap.move.z === 0 && snap.move.y === 0);
         return { snaps: ways, at: Math.max(0, at) };
     };
-    const startHandle = (handle: Handle, hand: Hand) => {
-        const pieces = chosenPieces();
-        if (!pieces.length) return;
-        startCarry(pieces, true, pieces[0]!.id, hand.id);
-        const one = carried;
-        if (!one) return;
-        one.handle = handle;
-        one.press = { x: hand.x, y: hand.y };
-        one.origin = handleMiddle(pieces);
-        if (handle === "ring" && pieces.length === 1) one.cycle = cycleOf(pieces[0]!);
-        sound?.knock(0.2, 1600);
-    };
-    const dragHandle = (x: number, y: number) => {
-        const one = carried;
-        if (!one?.handle || !one.press || !one.origin) return;
-        const { orbit: seen, degrees } = cam();
-        if (one.handle === "x" || one.handle === "y" || one.handle === "z") {
-            const d = along(seen, degrees, aspect(), one.origin, AXES[one.handle], toPicture(one.press.x, one.press.y), toPicture(x, y));
-            const n = Math.round(d / (one.handle === "y" ? LEVEL : CELL));
-            one.move = { turn: 0, x: one.handle === "x" ? n : 0, y: one.handle === "y" ? n : 0, z: one.handle === "z" ? n : 0 };
-        } else if (one.handle === "ring") {
-            const middle = onScreen(one.origin);
-            if (!middle) return;
-            const quarters = turnedBy(middle, one.press, { x, y });
-            if (one.cycle) one.move = { ...one.cycle.snaps[(((one.cycle.at + quarters) % one.cycle.snaps.length) + one.cycle.snaps.length) % one.cycle.snaps.length]!.move };
-            else one.move = about(pivotOf(one.home), quarters);
-        } else if (one.handle === "knob") {
-            const piece = one.home[0]!;
-            const wanted = ownPoint(piece, lineAt(x, y));
-            if (wanted) {
-                const kind = resized(piece.kind, wanted);
-                if (keyOf(kind) !== keyOf(piece.kind)) {
-                    one.home = [{ ...piece, kind }];
-                    for (const { part } of one.parts.get(piece.id) ?? []) view?.remove(part);
-                    one.parts.set(piece.id, partsOf(kind, woodSeed(piece.id), colors.accent));
-                    // a chime bar sounds its new note, so that a tune can be set by ear
-                    if (kind.family === "m") sound?.strike("chime", 0.55, NOTES[kind.sizes[0]!]);
-                    else sound?.knock(0.3, 1700);
-                }
-            }
-        }
-        one.fits = groupFits(run, placedOf(one));
-        const joins = joinsOf(placedOf(one));
-        // joints part and rejoin as the pieces pass open ends: a click when one more meets
-        if (one.fits && joins > one.joins) sound?.knock(0.55, 2100);
-        one.joins = joins;
-        paintCarried();
-        m.wake();
-    };
-    /**
-     * Where the pointer's line meets the plane a piece is resized in, in the piece's own place: the
-     * level of its knob for those that grow along or aside (and a chime bar, a spinner), and the upright
-     * plane along it for those that grow down or up (a slope, a drop, a spiral, a lift, a hoist, a
-     * seesaw's weights).
-     */
-    const ownPoint = (piece: Placed, line: ReturnType<typeof lineAt>): V3 | undefined => {
-        const far = toWorld(piece.place, knobAt(piece.kind));
-        let hit: V3 | undefined;
-        // those that grow up or down are dragged in the upright plane along them: a lift's height, a hoist's length, a seesaw's weights
-        if ("dvxuye".includes(piece.kind.family)) {
-            const n = wayToWorld(piece.place, [0, 0, 1]);
-            const facing = line.way[0] * n[0] + line.way[2] * n[2];
-            if (Math.abs(facing) > 0.08) {
-                const t = ((far[0] - line.from[0]) * n[0] + (far[2] - line.from[2]) * n[2]) / facing;
-                if (t > 0) hit = [line.from[0] + line.way[0] * t, line.from[1] + line.way[1] * t, line.from[2] + line.way[2] * t];
-            }
-        }
-        hit ??= ground(line, far[1]);
-        if (!hit) return undefined;
-        const [x, z] = rotated(hit[0] - piece.place.x * CELL, hit[2] - piece.place.z * CELL, -piece.place.turn);
-        return [x, hit[1] - piece.place.y * LEVEL, z];
-    };
-
     // ---- bending ----
     // One piece chosen that bends can be bent: its points are then its only handles. A point is dragged
     // in the plane of up and aside where the view sees both, staying under the pointer, or along the one
@@ -1913,6 +1775,20 @@ export default function marbles(m: Mote): Scene {
         chosen.add(next.id);
         chosenChanged();
     };
+    /** What is chosen raised or lowered a level, where it fits; else a small no, saying why. */
+    const raiseChosen = (by: number) => {
+        const pieces = chosenPieces();
+        if (!pieces.length) return refuse();
+        const raised = pieces.map((piece) => moved(piece, { turn: 0, x: 0, z: 0, y: by }));
+        const why = groupMisfit(run, raised);
+        if (why) {
+            refuse();
+            return say(REFUSED[why]);
+        }
+        run = run.map((piece) => raised.find((one) => one.id === piece.id) ?? piece);
+        sound?.knock(0.3, by > 0 ? 1800 : 1400);
+        changed();
+    };
     /** The keys' way of carrying: lift what is chosen and move it a cell or a level, the way the view looks; Enter puts it down. */
     const nudge = (dx: number, dz: number, dy: number) => {
         if (!carried) {
@@ -1937,23 +1813,20 @@ export default function marbles(m: Mote): Scene {
         m.wake();
     };
     /**
-     * The next or last setting of the one piece chosen, by its knob's number: a chime bar's note, a
-     * lift's height, a hoist's length, a spinner's arms, how many marbles tip a seesaw, and a straight's
-     * length or a drop's height as the knob would make them. A small no if it has none or would not fit.
+     * The one piece chosen made longer or shorter, its next or last setting (`stepped`, edit.ts): a
+     * straight's or a slope's length, a drop's height, a chime bar's note, a lift's height, a hoist's
+     * length, a spinner's arms, how many marbles tip a seesaw. A small no if it has none or would not fit.
      */
     const stepSetting = (by: number) => {
         const pieces = chosenPieces();
         const piece = pieces.length === 1 ? pieces[0]! : undefined;
-        const which = piece && RESIZABLE[piece.kind.family];
-        if (!piece || !which || which.length !== 1) return refuse();
-        const index = which[0]!;
-        const [least, most] = SIZES[piece.kind.family][index]!;
-        let size = piece.kind.sizes[index]!;
-        do size += by;
-        while (size >= least && size <= most && !allowed(piece.kind.family, piece.kind.sizes.map((one, i) => (i === index ? size : one))));
-        if (size < least || size > most) return refuse();
-        const kind = rebent(piece.kind, { family: piece.kind.family, sizes: piece.kind.sizes.map((one, i) => (i === index ? size : one)), mirror: piece.kind.mirror });
-        if (!groupFits(run, [{ ...piece, kind }])) return refuse();
+        const kind = piece && stepped(piece.kind, by);
+        if (!piece || !kind) return refuse();
+        const why = groupMisfit(run, [{ ...piece, kind }]);
+        if (why) {
+            refuse();
+            return say(REFUSED[why]);
+        }
         run = run.map((one) => (one.id === piece.id ? { ...one, kind } : one));
         if (kind.family === "m") sound?.strike("chime", 0.55, NOTES[kind.sizes[0]!]);
         else sound?.knock(0.3, 1700);
@@ -2911,7 +2784,7 @@ export default function marbles(m: Mote): Scene {
                 if (!piece) return [];
                 return shapeOf(piece.kind).room.map((box) => onScreen(boxToWorld(piece.place, box).at)).filter((p): p is { x: number; y: number } => Boolean(p) && pieceAt(p!.x, p!.y)?.id === id);
             },
-            handles: () => handlesNow(),
+            handles: () => pointsNow(),
             pressed: () => pressed,
             /** The handle a press there would take, if any. */
             handleAt: (x: number, y: number, kind: "touch" | "mouse") => handleUnder(x, y, kind),
@@ -2926,7 +2799,7 @@ export default function marbles(m: Mote): Scene {
             texts: () => [...steps.texts],
             ghost: () => ({ done: ghost.done, paths: ghost.paths.map((path) => ({ ending: path.ending, last: path.last, length: path.places.length, end: onScreen(path.places.at(-1)!) })) }),
             owns: () => owns.map((one) => one.name),
-            carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, handle: carried.handle, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
+            carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
             marbles: () => ({ all: table.marbles.length, arrived: table.marbles.filter(table.arrived).length, asleep: table.marbles.filter((one) => one.rest).length, places: table.marbles.map((one) => ({ at: [...one.p], piece: table.pieceAt(one.p) ?? null, asleep: Boolean(one.rest) })) }),
             /** Every moving part: its piece, its family, a hinge's angle or a driven part's seconds, and where its first solid is on the screen. */
             parts: () => {
@@ -3121,10 +2994,6 @@ export default function marbles(m: Mote): Scene {
                     one.mode = "bend";
                     startBend(point, { ...hand, x: one.start.x, y: one.start.y });
                     dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
-                } else if (one.handle) {
-                    one.mode = "handle";
-                    startHandle(one.handle, { ...hand, x: one.start.x, y: one.start.y });
-                    dragHandle(hand.x, hand.y);
                 } else if (one.piece) {
                     one.mode = "carry";
                     // a piece of the choice carries all of it; another piece, itself alone
@@ -3145,7 +3014,6 @@ export default function marbles(m: Mote): Scene {
                 }
             } else if (one.mode === "carry") follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
             else if (one.mode === "bend") dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
-            else if (one.mode === "handle") dragHandle(hand.x, hand.y);
             else if (one.mode === "box" && boxing) boxing.to = { x: hand.x, y: hand.y };
             else if (one.mode === "turn") orbit = kept({ ...orbit, turn: orbit.turn - dx * 0.008, tip: orbit.tip + dy * 0.006 }, orbit);
             else if (one.mode === "pan" && (dx || dy)) {
@@ -3165,7 +3033,7 @@ export default function marbles(m: Mote): Scene {
                 for (const other of held.values()) if (other.mode === "pinch") other.mode = "turn";
                 pinch = undefined;
                 pinchGrip = undefined;
-            } else if (one.mode === "carry" || one.mode === "handle") {
+            } else if (one.mode === "carry") {
                 if (cancelled) cancel();
                 else drop();
             } else if (one.mode === "bend") {
@@ -3350,47 +3218,18 @@ export default function marbles(m: Mote): Scene {
                 one.drawn.part.hidden = drawn.get(one.id)?.parts[0]?.part.hidden ?? false;
             }
             drawGhost(dt);
-            // the handles, a fingertip's size at any distance, on what is chosen, or on what a handle carries
-            if (handleParts) {
-                const shown = handlesNow();
-                const pieces = carried ? placedOf(carried) : chosenPieces();
-                for (const part of Object.values(handleParts)) part.hidden = true;
-                const bent = !carried ? bentPiece() : undefined;
-                if (bent) {
-                    // the points, on the track, a fingertip's size; the one the keys move, or the one dragged, lit
-                    pointsIn(bent.kind, bent.place).forEach((point, i) => {
-                        const part = handleParts[`point${i}` as "point0"];
-                        if (!part) return;
-                        part.hidden = false;
-                        part.at = point.at;
-                        part.scale = across(seen, degrees, m.height, point.at) * ARROW;
-                        const lit = bendDrag ? bendDrag.point === i : hovered === `point${i}` || bendPoint === i;
-                        part.emit = lit ? 0.4 : 0;
-                    });
-                } else if (shown && pieces.length) {
-                    const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-                    const pixel = across(seen, degrees, m.height, middle);
-                    const size = pixel * ARROW;
-                    const lit = carried?.handle ?? hovered;
-                    for (const name of ["x", "y", "z", "ring"] as const) {
-                        const part = handleParts[name];
-                        // while one is dragged, only it is shown
-                        part.hidden = (name === "ring" ? false : !shown.arrows[name]) || (carried?.handle !== undefined && carried.handle !== name);
-                        // stood off from what is chosen: each arrow moved out along itself, the ring made wider
-                        const out = name === "ring" ? 0 : stand * pixel;
-                        const axis = name === "ring" ? AXES.x : AXES[name];
-                        part.at = [middle[0] + axis[0] * out, middle[1] + axis[1] * out, middle[2] + axis[2] * out];
-                        part.scale = name === "ring" ? size * ((RING + stand) / RING) : size;
-                        part.emit = lit === name ? 0.35 : 0;
-                    }
-                    const knob = carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces);
-                    if (knob) {
-                        handleParts.knob.hidden = false;
-                        handleParts.knob.at = knob;
-                        handleParts.knob.scale = size;
-                        handleParts.knob.emit = lit === "knob" ? 0.35 : 0;
-                    }
-                }
+            // the points of a bent piece, on its track, a fingertip's size at any distance; the one the keys move, or the one dragged, lit
+            for (const part of pointParts) part.hidden = true;
+            const bent = !carried ? bentPiece() : undefined;
+            if (bent) {
+                pointsIn(bent.kind, bent.place).forEach((point, i) => {
+                    const part = pointParts[i];
+                    if (!part) return;
+                    part.hidden = false;
+                    part.at = point.at;
+                    part.scale = across(seen, degrees, m.height, point.at) * ARROW;
+                    part.emit = (bendDrag ? bendDrag.point === i : hovered === `point${i}` || bendPoint === i) ? 0.4 : 0;
+                });
             }
             // the grid on the table comes up while a piece is carried or bent, and fades back, never at once
             const gridGoal = building() ? GRID.building : GRID.rolling;
@@ -3511,10 +3350,7 @@ export default function marbles(m: Mote): Scene {
                     }
                 }
             }
-            const handles = handlesNow();
-            const points = [...(handles?.ring ?? []), ...Object.values(handles?.arrows ?? {}).map((arrow) => arrow.to), ...(handles?.knob ? [handles.knob] : [])];
-            const kept: Rect | undefined = points.length ? { left: Math.min(...points.map((p) => p.x - 12)), right: Math.max(...points.map((p) => p.x + 12)), top: Math.min(...points.map((p) => p.y - 12)), bottom: Math.max(...points.map((p) => p.y + 12)) } : undefined;
-            if (Number.isFinite(chosenRect.left)) place = stripPlace(chosenRect, kept, { w: strip.offsetWidth, h: strip.offsetHeight }, m.width, m.height);
+            if (Number.isFinite(chosenRect.left)) place = stripPlace(chosenRect, undefined, { w: strip.offsetWidth, h: strip.offsetHeight }, m.width, m.height);
         }
         strip.classList.toggle("shown", Boolean(place));
         strip.inert = !place;

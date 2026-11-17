@@ -236,8 +236,6 @@ export interface Shape {
     clear?: Box[];
     /** Walls a marble meets that are drawn as glass, so that a moving part inside them is seen working. */
     panes?: Box[];
-    /** Where the knob that sets a piece's number is, if not past its far joint. */
-    knob?: V3;
 }
 
 const unit = (a: V3): V3 => scaled(a, 1 / (Math.sqrt(dot(a, a)) || 1));
