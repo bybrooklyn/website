@@ -103,8 +103,19 @@ the owner's word the world is four times the grains, one CSS pixel a cell. Left:
 flames that never touch it, and embers keep burning where the water beside them boils away. See
 [sand.md](sand.md).
 
-**Marbles.** Panning went the wrong way, the drag handed to the camera with its sign turned. Fixed, with a
-test that holds the direction.
+**Marbles, thirteen findings from a tester of its own.** Panning had gone the wrong way, the drag handed to
+the camera with its sign turned; fixed first. Then, each with a test where arithmetic could hold it: the keys
+work wherever the keyboard is in the mini (after a button was pressed, Space pressed it again and R, Delete,
+Home and Ctrl+Z did nothing); a run built by pressing pieces flows downhill from a hopper that starts high,
+where it had climbed or been refused (27 of 29 presses on the first run); a pan keeps the point of the table
+under the pointer within a pixel, where it had been 13 to 35 in 100 off, and works up and down in the front
+and side views; the look goes plain by itself on a slow machine; what the mini says is said aloud to a screen
+reader; a damaged link says it could not be read; the race's line box shows the line that was run; a refused
+piece says why. The rest were the page's layout and the feel of its controls, which the owner then chose
+anew (below).
+
+**Blocks.** The row of choices under the pile, built two days before from a visitor's letter, was not what
+had been meant: a ring of hues read from a phrase that meant a game's color bars. Asked, and rebuilt (below).
 
 ## Design and layout
 
@@ -130,6 +141,18 @@ kinds of thing to press (underlined words, plain words, filled round buttons, bo
   picture, the resize popover, the marks menu and the sliding panels are gone. What is outside the four jobs
   (reading text, repairing a JPEG, the way of enlarging, adding pictures, the facts) is under more. See
   [imgQuire.md](imgQuire.md).
+- Marbles is laid out as the Walker is and controlled as a game's build mode is. The scene has the row of
+  pieces straight under it and the tools beside it as words under small headings (run, build, view, share,
+  piece), all in the first screen at 1288 by 828; the 18 unlabeled icons and the strip that floated over a
+  chosen piece are gone, the piece's words faint until one is chosen. The left button is only for pieces (a
+  click chooses, a drag carries, a drag on the table draws a box, a click on the table lets go, a piece of
+  the box follows the pointer until it is clicked down), the right button turns the view, the middle button
+  and W, A, S, D move it, the wheel zooms toward the pointer, and a click on the hopper's box lets a marble
+  go. The arrows, ring and knob on a chosen piece are taken away. That part ended 413 lines shorter than it
+  began. See [marbles.md](marbles.md).
+- Blocks is chosen for in a column beside the pile: the kind of piece as round dots with words, its color on
+  two bars (every hue in a row, and that hue from light to dark), a word for a hue by chance and a word that
+  takes a piece away.
 - Sand has one look, chosen from pictures of three palettes, three kinds of light and four stages: softened
   colors leaning to the site's violet with every two materials tellable apart (a test holds how far), light
   from fire and lava on the grains near them and a glow in the air, water lighter at its surface and darker

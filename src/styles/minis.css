@@ -586,6 +586,10 @@
 
 /* a word whose words change (stream: off and on, pause and play) keeps the room of its widest, so that
    nothing beside or under it moves when it changes */
+.marbles-words button[data-widest] {
+    text-align: start;
+}
+
 .marbles-words button[data-widest]::after {
     content: attr(data-widest);
     display: block;
