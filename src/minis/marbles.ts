@@ -44,7 +44,7 @@ import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { NOTES, type Body, type Moving } from "./parts";
 import { chainAt, chainLength, makeTable, type Table } from "./table";
-import { fold, icon, stacking, swap, tool } from "./toolbar";
+import { fold, icon, keyHeard, keyPlace, stacking, swap, tool } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
 
@@ -2059,8 +2059,9 @@ export default function marbles(m: Mote): Scene {
                     event.stopPropagation();
                     away();
                 });
+                // Enter presses it, as it does a button; Space lets a marble go from here too
                 unkeep.addEventListener("keydown", (event) => {
-                    if (event.key === "Enter" || event.key === " ") {
+                    if (event.key === "Enter") {
                         event.preventDefault();
                         away();
                     }
@@ -2161,7 +2162,8 @@ export default function marbles(m: Mote): Scene {
                     setSpots(spots.filter((__, i) => i !== index));
                 };
                 away.addEventListener("click", forget);
-                away.addEventListener("keydown", (event) => (event.key === "Enter" || event.key === " ") && forget(event));
+                // Enter presses it, as it does a button; Space lets a marble go from here too
+                away.addEventListener("keydown", (event) => event.key === "Enter" && forget(event));
                 button.append(away);
                 return button;
             }));
@@ -2520,9 +2522,15 @@ export default function marbles(m: Mote): Scene {
     /** A paste by Control and V: the system's clipboard if it holds a run, else what was copied here. */
     let pasting: ReturnType<typeof setTimeout> | undefined;
     if (!m.preview) {
-        m.canvas.addEventListener("keydown", (event) => {
+        // The keys are heard wherever the keyboard is in the mini, on the scene or on a button just pressed,
+        // so that pressing one does not leave them dead; a box of text keeps its own (keyHeard, toolbar.ts).
+        const host = m.canvas.parentElement!;
+        host.addEventListener("keydown", (event) => {
             const key = event.key;
             const lower = key.toLowerCase();
+            const on = keyPlace(event.target, m.canvas);
+            // a key a control has already taken is its own; on the scene, Mote has taken Space and Enter first, for nothing
+            if (!keyHeard(key, on) || (event.defaultPrevented && on !== "canvas")) return;
             if (key === "Escape" && closeMenu()) {
                 event.preventDefault();
                 return;
@@ -2658,17 +2666,19 @@ export default function marbles(m: Mote): Scene {
             event.preventDefault();
             m.wake();
         });
-        m.canvas.addEventListener("copy", (event) => {
-            if (!clip || !chosen.size) return;
+        // copying, cutting and pasting reach the mini from wherever the keyboard is in it, but not from a box of text
+        host.addEventListener("copy", (event) => {
+            if (keyPlace(event.target, m.canvas) === "text" || !clip || !chosen.size) return;
             event.clipboardData?.setData("text/plain", clip);
             event.preventDefault();
         });
-        m.canvas.addEventListener("cut", (event) => {
-            if (!clip) return;
+        host.addEventListener("cut", (event) => {
+            if (keyPlace(event.target, m.canvas) === "text" || !clip) return;
             event.clipboardData?.setData("text/plain", clip);
             event.preventDefault();
         });
-        m.canvas.addEventListener("paste", (event) => {
+        host.addEventListener("paste", (event) => {
+            if (keyPlace(event.target, m.canvas) === "text") return;
             const text = event.clipboardData?.getData("text/plain")?.trim() ?? "";
             // a whole run, as a link to it or a file's text, opens that run; a run's text alone is pieces to paste
             if (text.includes(LINKED) || text.startsWith("marbles 1")) {

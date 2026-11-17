@@ -85,6 +85,28 @@ export function swap(button: HTMLButtonElement, name: string, label: string, key
     button.setAttribute("aria-label", label);
 }
 
+/** Where the keyboard is in the mini when a key is pressed: on the scene, on a button (or anything else that is pressed), or in a box of text. */
+export type KeyPlace = "canvas" | "button" | "text";
+
+/** Where the keyboard is, from the element that has it: a box of text or number is typed into; anything else but the scene is pressed. */
+export function keyPlace(target: EventTarget | null, canvas: HTMLElement): KeyPlace {
+    if (target === canvas) return "canvas";
+    if (target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return "text";
+    if (target instanceof HTMLInputElement) return ["button", "checkbox", "radio", "range", "file", "submit", "reset"].includes(target.type) ? "button" : "text";
+    return "button";
+}
+
+/**
+ * Whether a key pressed inside the mini is the scene's, so that pressing a button does not leave the
+ * keys dead: every key is, wherever the keyboard is, but for what a box of text keeps to be typed with
+ * (all of it), and what a button keeps (Enter and Tab, the keyboard's way to press it and to move on).
+ * Space from a button lets a marble go, as it does on the scene, and does not press the button again.
+ */
+export function keyHeard(key: string, on: KeyPlace): boolean {
+    if (on === "text" || key === "Tab") return false;
+    return on === "canvas" || key !== "Enter";
+}
+
 /**
  * Keeps a bar of groups in one row while they fit there; otherwise two groups to a row, in two columns
  * (the class `paired`), while that fits; and otherwise stacks them, one group to a row (the class
