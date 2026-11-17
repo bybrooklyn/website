@@ -1128,6 +1128,46 @@ test allows a core of lava sealed deep inside the rock it made, under one part i
 poured, since heat that differs by no more than two between neighbors does not move (a weak spot
 already listed) and the pool, spreading wider and lying deeper, now keeps one.
 
+## Reworked toward a livelier world: fire, lava and water that look the part
+
+Played on the page on 17 November 2026 with the new movement, a burning house showed a line of orange
+one grain wide along the wood and a few dots rising, lava poured into a lake stood in it as a flat
+orange egg, and water was one flat blue. What was changed, in the engine and in how Mote draws the grid:
+
+- **A fire has a body.** A flame still hot (180 or more) spreads into the air beside it 160 times in
+  1024 a step, the new flame made at 150, so flames from one place swell and are drawn out into tongues;
+  a flame rises one to three cells a step by chance (`fall` 3; it was one), and now and then, once in 96
+  steps while it is over 150, leaps three to seven cells up and up to three aside as a spark. Burning
+  wood gives off flames 320 times in 1024 a step (it was 128) and burning oil the same (it was 160). One
+  flame poured alone, with what it spreads into, is 2.1 flames, lives 24 to 37 steps and rises about 60
+  cells; a little over a quarter end as smoke. Smoke rises two cells a step and thins twice as fast (24
+  in 1024), so a fire has a column over it that does not fill the world.
+- **Wood burns through.** Burning wood chars the wood it touches 12 times in 1024 a step, air or no air,
+  and burns away two and a half times as fast (to smoke 10 and to ash 5 in 1024), so a beam thirteen
+  cells thick is gone in seconds, not most of a minute. The forest of the test, lit at one end, is out
+  after 2,579 steps (43 seconds) with a third of it left as ash.
+- **A flame is drawn soft as well as bright** (`DRAW_LIGHT | DRAW_SOFT`): it adds to the haze that smoke
+  and steam are spread by, two and a half times as much as they do, so flames a few cells apart are one
+  body of fire and not a scatter of dots. Its color runs from yellow at 230 through orange to red as it
+  dies.
+- **A wide halo.** The light of fire and lava, already gathered at half the grid's size and blurred, is
+  blurred once more at an eighth of the grid's size and added again (`HALO` in `cells.ts`): the near
+  glow reaches about twelve cells, the halo about sixty, faintly, on air and grains alike.
+- **Lava shows its heat.** Its color runs from a dark red-brown as it nears hardening (100) to a bright
+  orange as poured (250), where it had only gone from orange to a lighter orange, so a pool is bright at
+  its middle and dark at its crusting edges, and with its light and halo a pour is the brightest thing
+  in the world. Poured lava is kept a deeper orange than sand: the test that keeps every two materials'
+  colors apart now takes a material that gives light at the color it is made at.
+- **Water splashes and foams.** A liquid that lands at five cells a step or more throws half its cells
+  up, as high as they were fast at most and up to three aside, to fall back (`SPLASH_FROM`). Water is
+  drawn paler the faster it is falling (`DRAW_SPRAY`, the speed in a cell's fourth byte): a stream, a
+  waterfall and a splash are pale spray, and still water is the deep blue it was. What pours over an
+  edge leaves at a speed of its own, one to three, so it comes apart into drops.
+
+Measured natively on the full world of the speed example (1024 by 576, a forest lit all along): about
+13 ms a step on a busy machine against about 21 at the commit before, the forest now burning out
+sooner; falling sand 2.4 ms, water falling and levelling 4.7 ms.
+
 ## The look, as chosen
 
 Three palettes, three kinds of light, water with and without depth, and four stages were shown as

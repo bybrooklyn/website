@@ -12,8 +12,11 @@
 // picked by its second byte (stripes of a flag that a grain keeps as it falls). A cell can give light,
 // as bright as its third byte says (fire, lava): the light of every such cell is gathered at half the
 // grid's size, blurred across and down, and added over the grid as a soft glow around it, so that the
-// cells themselves stay sharp. A cell can be soft (smoke, steam): it is drawn faint and spread a little
-// into the air around it by the same blur.
+// cells themselves stay sharp; blurred once more at an eighth of the grid's size, it is added again as
+// a wide, faint halo, the light a fire throws on what is round it. A cell can be soft (smoke, steam, a
+// flame): it is drawn faint and spread a little into the air around it by the same blur, so that cells
+// of it near each other read as one body. A cell can be deep (water: lighter at its surface, darker
+// below), and can be spray: paler the faster it is falling, by the speed in its fourth byte's high half.
 
 /** Where a grid sits on its canvas, in the canvas's own pixels: how many pixels a side each cell is, and its top left corner. */
 export interface Place {
@@ -51,12 +54,23 @@ export const SOFT = 4;
 
 /** It is drawn with depth: lighter in its top cell, darker the deeper below its surface. */
 export const DEEP = 8;
+/** It is drawn paler the faster it is falling: the high half of its fourth byte is its speed. */
+export const SPRAY = 16;
+
+/** The speed at which spray is as pale as it gets, and how far toward white that is. */
+const FOAM = { speed: 9, pale: 0.55 };
 
 /** How many cells below its surface a deep cell darkens through, and how much lighter its top cell is drawn. */
 const DEPTH = { cells: 12, top: 1.3, step: 0.03 };
 
 /** How much more strongly light shows in empty air than on a grain: the glow round flames and lava. */
 export const GLOW_AIR = 1.2;
+
+/** How strongly the wide halo is added, and how many times smaller than the near glow's picture its picture is each way. */
+export const HALO = { strength: 2.2, smaller: 4 };
+
+/** How many times more a flame adds to the haze than smoke or steam does. */
+const FLAME_HAZE = 2.5;
 
 /** How strongly a soft cell is drawn itself, from 0 to 1; the rest of it is the haze spread around it. */
 export const SOFT_SHARP = 0.7;
@@ -86,7 +100,7 @@ export interface Cells {
      * The colors: 2048 or 3072 bytes, two or three rows of 256. The first row is a color for each
      * value of a cell's first byte, red, green, blue and opacity, for a cell of middle shade; the
      * second is how far the second byte, from 0 to 255, moves red, green and blue, from darker to
-     * lighter, and how it is drawn (`STRIPED`, `LIGHT`, `SOFT`, added together). The third row is
+     * lighter, and how it is drawn (`STRIPED`, `LIGHT`, `SOFT`, `DEEP`, `SPRAY`, added together). The third row is
      * the colors a striped cell picks from: its second byte over 4 is which, and its lowest two bits
      * a step of lightness, toward black or white by up to the second row's red.
      */
@@ -158,25 +172,29 @@ void main() {
                 float eased = t * t * (3.0 - 2.0 * t);
                 shine += color.rgb * eased * eased;
             }
-            if ((mode & 4u) != 0u) haze += vec4(color.rgb * color.a, color.a);
+            // a flame is soft and gives light: its haze counts for more, so that flames a few cells
+            // apart are one body of fire
+            if ((mode & 4u) != 0u) haze += vec4(color.rgb * color.a, color.a) * ((mode & 2u) != 0u ? ${FLAME_HAZE.toFixed(1)} : 1.0);
         }
     }
     light = vec4(shine * 0.25, 1.0);
-    soft = haze * 0.25;
+    soft = min(haze * 0.25, 1.0);
 }`;
 
-/** Blurs both half-sized pictures one way, across or down, by the weights of `blurred`. */
+/** Blurs both pictures one way, across or down, by the weights of `blurred`, into pictures of size `target`. */
 const BLUR = (taps: number) => `#version 300 es
 precision highp float;
 uniform sampler2D light;
 uniform sampler2D soft;
 uniform vec2 step;
+uniform vec2 target;
 uniform float offsets[${taps}];
 uniform float weights[${taps}];
 layout(location = 0) out vec4 lightOut;
 layout(location = 1) out vec4 softOut;
 void main() {
-    vec2 texel = 1.0 / vec2(textureSize(light, 0));
+    // by the size of the picture drawn into, so the same blur makes a smaller, wider one from a larger
+    vec2 texel = 1.0 / target;
     vec2 uv = gl_FragCoord.xy * texel;
     vec2 way = step * texel;
     vec4 l = texture(light, uv) * weights[0];
@@ -197,6 +215,7 @@ precision highp usampler2D;
 ${COLOR}
 uniform sampler2D light;
 uniform sampler2D soft;
+uniform sampler2D far;
 uniform vec2 origin;
 uniform float scale;
 uniform int rows;
@@ -219,6 +238,11 @@ void main() {
         }
         cell.rgb = clamp(cell.rgb * (over == 0 ? ${DEPTH.top.toFixed(2)} : 1.06 - ${DEPTH.step.toFixed(3)} * float(over)), 0.0, 1.0);
     }
+    if ((mode & 16u) != 0u) {
+        // spray: paler the faster it falls
+        float fast = min(float(raw.a >> 4u) / ${FOAM.speed.toFixed(1)}, 1.0);
+        cell.rgb = mix(cell.rgb, vec3(0.86, 0.93, 1.0), fast * ${FOAM.pale.toFixed(2)});
+    }
     vec4 sharp = vec4(cell.rgb * cell.a, cell.a);
     // a soft cell is fainter itself, the rest of it in the haze around it; strong enough that a wisp of
     // steam reads as light and not as a grey grain
@@ -228,6 +252,8 @@ void main() {
     vec4 out4 = sharp + haze * (1.0 - sharp.a);
     // the light falls on the grains near fire and lava, and glows more strongly in the air round them
     vec3 lit = texture(light, uv).rgb * glow * (1.0 + ${GLOW_AIR.toFixed(2)} * (1.0 - sharp.a));
+    // and, far wider and fainter, on everything round a fire
+    lit += texture(far, uv).rgb * glow * ${HALO.strength.toFixed(2)};
     out4.rgb = min(out4.rgb + lit, 1.0);
     // light over empty cells is kept a color the page can blend: as opaque as it is bright
     out4.a = max(out4.a, max(out4.r, max(out4.g, out4.b)));
@@ -290,14 +316,17 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
         frame: WebGLFramebuffer;
     }
     let pairs: [Pair, Pair] | undefined;
+    /** Two more pairs, smaller again, for the wide halo. */
+    let fars: [Pair, Pair] | undefined;
     const half = () => [Math.max(1, Math.ceil(at.columns / 2)), Math.max(1, Math.ceil(at.rows / 2))] as const;
+    const small = () => [Math.max(1, Math.ceil(half()[0] / HALO.smaller)), Math.max(1, Math.ceil(half()[1] / HALO.smaller))] as const;
     const makePairs = () => {
-        for (const pair of pairs ?? []) {
+        for (const pair of [...(pairs ?? []), ...(fars ?? [])]) {
             g.deleteTexture(pair.light);
             g.deleteTexture(pair.soft);
             g.deleteFramebuffer(pair.frame);
         }
-        const [wide, high] = half();
+        let [wide, high] = half();
         const one = (): Pair => {
             const light = texture(2, true);
             g.texStorage2D(g.TEXTURE_2D, 1, g.RGBA8, wide, high);
@@ -312,6 +341,8 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
             return { light, soft, frame };
         };
         pairs = [one(), one()];
+        [wide, high] = small();
+        fars = [one(), one()];
     };
     const bind = (unit: number, made: WebGLTexture) => {
         g.activeTexture(g.TEXTURE0 + unit);
@@ -342,7 +373,7 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
             stale = true;
         },
         draw(bytes, stride, border, from, to) {
-            if (!grid || !pairs) return;
+            if (!grid || !pairs || !fars) return;
             from = Math.max(0, from);
             to = Math.min(at.rows - 1, to);
             if (to < from && !stale) return;
@@ -375,11 +406,15 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
                 g.uniform1i(blur.at("soft"), 3);
                 g.uniform1fv(blur.at("offsets"), offsets);
                 g.uniform1fv(blur.at("weights"), weights);
-                for (const [source, target, way] of [[pairs[0], pairs[1], [1, 0]], [pairs[1], pairs[0], [0, 1]]] as const) {
+                const [less, lower] = small();
+                // across and down at half size, then the blurred light across and down again at the halo's size
+                for (const [source, target, way, size] of [[pairs[0], pairs[1], [1, 0], [wide, high]], [pairs[1], pairs[0], [0, 1], [wide, high]], [pairs[0], fars[1], [1, 0], [less, lower]], [fars[1], fars[0], [0, 1], [less, lower]]] as const) {
+                    g.viewport(0, 0, size[0], size[1]);
                     g.bindFramebuffer(g.FRAMEBUFFER, target.frame);
                     bind(2, source.light);
                     bind(3, source.soft);
                     g.uniform2f(blur.at("step"), way[0], way[1]);
+                    g.uniform2f(blur.at("target"), size[0], size[1]);
                     g.drawArrays(g.TRIANGLES, 0, 3);
                 }
                 g.bindFramebuffer(g.FRAMEBUFFER, null);
@@ -399,16 +434,18 @@ export function cells(canvas: HTMLCanvasElement): Cells | undefined {
             g.uniform1i(drawn.at("rows"), at.rows);
             // the half-sized pictures cover a whole number of texels, a cell more than the grid when it is odd
             g.uniform2f(drawn.at("grid"), wide * 2, high * 2);
+            g.uniform1i(drawn.at("far"), 4);
             g.uniform1f(drawn.at("glow"), effects ? 1 : 0);
             bind(0, grid);
             bind(1, colors);
             bind(2, pairs[0].light);
             bind(3, pairs[0].soft);
+            bind(4, fars[0].light);
             g.drawArrays(g.TRIANGLES, 0, 3);
         },
         dispose() {
             if (grid) g.deleteTexture(grid);
-            for (const pair of pairs ?? []) {
+            for (const pair of [...(pairs ?? []), ...(fars ?? [])]) {
                 g.deleteTexture(pair.light);
                 g.deleteTexture(pair.soft);
                 g.deleteFramebuffer(pair.frame);

@@ -163,10 +163,10 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "void", kind: Kind::Void, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
     Material { name: "wood", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [171, 124, 60, 255], vary: [38, 36, 39], paint: true },
     Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, level: 1, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [102, 44, 107, 240], vary: [23, 23, 23], paint: true },
-    Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 3, fall: 6, pace: 96, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [252, 107, 51, 255], vary: [58, 110, 40], paint: true },
+    Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 3, fall: 6, pace: 96, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [137, 50, 25, 255], vary: [246, 207, 31], paint: true },
     Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [146, 223, 242, 245], vary: [20, 20, 20], paint: true },
-    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [177, 164, 194, 235], vary: [37, 37, 39], paint: true },
-    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: 0, conduct: 1, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [255, 160, 52, 255], vary: [40, 200, 80], paint: true },
+    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 2, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [177, 164, 194, 235], vary: [37, 37, 39], paint: true },
+    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 3, pace: 0, level: 0, conduct: 2, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [250, 120, 40, 255], vary: [30, 255, 110], paint: true },
     Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 10, fall: 10, pace: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [152, 227, 107, 230], vary: [31, 33, 33], paint: true },
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 10, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [75, 44, 33, 255], vary: [27, 25, 25], paint: false },
     Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [221, 82, 48, 255], vary: [70, 80, 30], paint: false },
@@ -272,6 +272,9 @@ pub const REACTIONS: &[Reaction] = &[
     line(WOOD, LAVA, 0, 255, EMBER, SAME, 64, Heat::Kept, 0),
     // a flame licking wood lights it now and then, however cool the wood still is
     line(WOOD, FIRE, 0, 255, EMBER, SAME, 192, Heat::Kept, 0),
+    // and burning wood chars the wood it touches, slowly, so a thick beam burns through and not only
+    // from its skin
+    line(WOOD, EMBER, 0, 255, EMBER, SAME, 12, Heat::Kept, 0),
     // oil hot enough, with air beside it, catches fire; so does oil a flame or lava touches, now and
     // then, so a flame may lick a slick a few times before it catches
     line(OIL, OPEN, 85, 255, BURNING_OIL, SAME, 512, Heat::Kept, 200),
@@ -288,11 +291,14 @@ pub const REACTIONS: &[Reaction] = &[
     // ice that warms melts
     line(ICE, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
     // smoke thins to nothing
-    line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 12, Heat::Kept, 0),
+    line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 24, Heat::Kept, 0),
     // a flame that has cooled dies, some of it to smoke; water puts it out with a hiss of steam
     line(FIRE, ALONE, 0, 60, EMPTY, SAME, ALWAYS, Heat::Kept, 0),
     line(FIRE, ALONE, 0, 90, SMOKE, SAME, 40, Heat::Kept, 0),
     line(FIRE, WATER, 0, 255, EMPTY, STEAM, 640, Heat::Shared, 0),
+    // a flame still hot spreads into the air beside it, so flames from one place swell into a body of
+    // fire and are drawn out into tongues, rather than rising as a thread of single sparks
+    line(FIRE, EMPTY, 180, 255, SAME, FIRE, 160, Heat::Kept, 150),
     // acid eats stone, wood and dirt, a cell for a cell, and goes up in fumes
     line(ACID, STONE, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
     line(ACID, ROCK, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
@@ -307,12 +313,12 @@ pub const REACTIONS: &[Reaction] = &[
     // burning wood gives off flames into the air beside it, burns away to smoke and now and then
     // to ash, and is put out by water
     line(EMBER, WATER, 0, 255, WOOD, STEAM, 512, Heat::Shared, 0),
-    line(EMBER, ALONE, 0, 255, SMOKE, SAME, 4, Heat::Kept, 0),
-    line(EMBER, ALONE, 0, 255, ASH, SAME, 2, Heat::Kept, 0),
-    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 128, Heat::Kept, 230),
+    line(EMBER, ALONE, 0, 255, SMOKE, SAME, 10, Heat::Kept, 0),
+    line(EMBER, ALONE, 0, 255, ASH, SAME, 5, Heat::Kept, 0),
+    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 320, Heat::Kept, 230),
     // burning oil gives off flames into the air above and beside it for a few seconds, its heat
     // and creeping into the oil beside it, and burns away to nothing or now and then to smoke
-    line(BURNING_OIL, EMPTY, 0, 255, SAME, FIRE, 160, Heat::Kept, 230),
+    line(BURNING_OIL, EMPTY, 0, 255, SAME, FIRE, 320, Heat::Kept, 230),
     line(BURNING_OIL, OIL, 0, 255, SAME, BURNING_OIL, 24, Heat::Kept, 185),
     line(BURNING_OIL, ALONE, 0, 255, SMOKE, SAME, 2, Heat::Kept, 0),
     line(BURNING_OIL, ALONE, 0, 255, EMPTY, SAME, 6, Heat::Kept, 0),
@@ -502,10 +508,12 @@ pub const DRAW_LIGHT: u8 = 2;
 pub const DRAW_SOFT: u8 = 4;
 /// It is drawn with depth: lighter at its surface and darker the deeper below it (water).
 pub const DRAW_DEEP: u8 = 8;
+/// It is drawn paler the faster it is falling, as spray is (water).
+pub const DRAW_SPRAY: u8 = 16;
 
 /// The colors the page draws with: 256 materials of red, green, blue and opacity, then 256 of how
 /// far the shade moves red, green and blue and how the material is drawn (`DRAW_STRIPED`,
-/// `DRAW_LIGHT`, `DRAW_SOFT`), as two rows of a picture.
+/// `DRAW_LIGHT`, `DRAW_SOFT`, `DRAW_DEEP`, `DRAW_SPRAY`, added together), as two rows of a picture.
 pub static PALETTE: [u8; 2048] = palette();
 
 const fn palette() -> [u8; 2048] {
@@ -523,10 +531,12 @@ const fn palette() -> [u8; 2048] {
         }
         out[1024 + at * 4 + 3] = match (m.glow, m.kind) {
             (3, _) => DRAW_STRIPED,
+            // a flame gives light and is soft as well, so that flames near each other are one body of fire
+            (1 | 2, Kind::Fire) => DRAW_LIGHT | DRAW_SOFT,
             (1 | 2, _) => DRAW_LIGHT,
             (_, Kind::Gas) => DRAW_SOFT,
-            // water, the one clear liquid deep enough to show it
-            _ if at == WATER as usize => DRAW_DEEP,
+            // water, the one clear liquid deep enough to show it, and the one that foams
+            _ if at == WATER as usize => DRAW_DEEP | DRAW_SPRAY,
             _ => 0,
         };
         at += 1;
@@ -697,11 +707,11 @@ mod tests {
         let p = TABLE[PRIDE as usize];
         assert!(!p.acts && p.glow == 0);
         assert_eq!(PALETTE[1024 + PRIDE as usize * 4 + 3], DRAW_STRIPED);
-        assert_eq!(PALETTE[1024 + FIRE as usize * 4 + 3], DRAW_LIGHT);
+        assert_eq!(PALETTE[1024 + FIRE as usize * 4 + 3], DRAW_LIGHT | DRAW_SOFT);
         assert_eq!(PALETTE[1024 + EMBER as usize * 4 + 3], DRAW_LIGHT);
         assert_eq!(PALETTE[1024 + SMOKE as usize * 4 + 3], DRAW_SOFT);
         assert_eq!(PALETTE[1024 + SAND as usize * 4 + 3], 0);
-        assert_eq!(PALETTE[1024 + WATER as usize * 4 + 3], DRAW_DEEP);
+        assert_eq!(PALETTE[1024 + WATER as usize * 4 + 3], DRAW_DEEP | DRAW_SPRAY);
     }
 
     #[test]
@@ -736,7 +746,8 @@ mod tests {
     fn every_two_materials_are_told_apart_by_their_colors() {
         // Every pair of materials drawn, but two that both give light (their shade is their heat, so
         // they are told apart by how they move and glow), at least this far apart in OKLab: stone and
-        // smoke, water and stone, dirt and wood, oil and either, can never drift together again.
+        // smoke, water and stone, dirt and wood, oil and either, can never drift together again. One
+        // that gives light is taken at the color it has when it is made, as hot as the brush makes it.
         const APART: f64 = 0.085;
         let drawn: Vec<u8> = (1..MATERIALS.len() as u8).filter(|&m| MATERIALS[m as usize].color[3] > 0 && MATERIALS[m as usize].glow != 3).collect();
         let lights = |m: u8| matches!(MATERIALS[m as usize].glow, 1 | 2);
@@ -746,7 +757,13 @@ mod tests {
                 if lights(a) && lights(b) {
                     continue;
                 }
-                let (pa, pb) = (oklab(MATERIALS[a as usize].color), oklab(MATERIALS[b as usize].color));
+                let seen = |m: u8| {
+                    let of = &MATERIALS[m as usize];
+                    let by = if lights(m) { of.made as f64 / 255.0 - 0.5 } else { 0.0 };
+                    let channel = |k: usize| (of.color[k] as f64 + by * of.vary[k] as f64).clamp(0.0, 255.0) as u8;
+                    [channel(0), channel(1), channel(2), of.color[3]]
+                };
+                let (pa, pb) = (oklab(seen(a)), oklab(seen(b)));
                 let d = ((pa[0] - pb[0]).powi(2) + (pa[1] - pb[1]).powi(2) + (pa[2] - pb[2]).powi(2)).sqrt();
                 if d < closest.0 {
                     closest = (d, a, b);

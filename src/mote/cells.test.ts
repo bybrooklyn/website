@@ -106,12 +106,13 @@ test("the blur's weights add up to one, and each pair of texels is read once bet
     expect(offsets[3]!).toBeGreaterThan(5);
 });
 
-// A grid of 32 by 32, a pixel a cell: a striped cell taking its color from the third row, a block of
-// hot cells that give light, and far from it a cold one of the same kind.
+// A grid of 256 by 256, a pixel a cell: a striped cell taking its color from the third row, a block of
+// hot cells that give light, and far from it, past where the halo reaches, a cold one of the same kind.
 const lit = `
 import { cells, fitted, STRIPED, LIGHT } from "${here}/cells.ts";
+const N = 256;
 const canvas = document.querySelector("canvas");
-canvas.width = 32; canvas.height = 32;
+canvas.width = N; canvas.height = N;
 const grid = cells(canvas);
 const colors = new Uint8Array(3072);
 colors.set([10, 10, 10, 255], 4);           // 1 is striped
@@ -120,18 +121,18 @@ colors.set([0, 200, 100, 255], 2048 + 5 * 4); // stripe 5 is green
 colors.set([255, 160, 40, 255], 8);         // 2 gives light
 colors.set([0, 0, 0, LIGHT], 1024 + 8);
 grid.palette(colors);
-grid.place(fitted(32, 32, 32, 32));
-const bytes = new Uint8Array(32 * 32 * 4);
-const set = (column, row, material, shade, third) => bytes.set([material, shade, third, 0], (row * 32 + column) * 4);
-set(0, 31, 1, 5 * 4 + 1, 0);
+grid.place(fitted(N, N, N, N));
+const bytes = new Uint8Array(N * N * 4);
+const set = (column, row, material, shade, third) => bytes.set([material, shade, third, 0], (row * N + column) * 4);
+set(0, N - 1, 1, 5 * 4 + 1, 0);
 for (let y = 5; y <= 8; y++) for (let x = 5; x <= 8; x++) set(x, y, 2, 128, 250);
-set(28, 28, 2, 128, 40);
-grid.draw(bytes, 32, 0, 0, 31);
+set(228, 228, 2, 128, 40);
+grid.draw(bytes, N, 0, 0, N - 1);
 const g = canvas.getContext("webgl2");
-const pixels = new Uint8Array(32 * 32 * 4);
-g.readPixels(0, 0, 32, 32, g.RGBA, g.UNSIGNED_BYTE, pixels);
-const at = (x, y) => [...pixels.slice(((31 - y) * 32 + x) * 4, ((31 - y) * 32 + x) * 4 + 4)];
-window.result = { striped: at(0, 31), hot: at(6, 6), near: at(11, 6), coldBeside: at(27, 28), corner: at(31, 0) };
+const pixels = new Uint8Array(N * N * 4);
+g.readPixels(0, 0, N, N, g.RGBA, g.UNSIGNED_BYTE, pixels);
+const at = (x, y) => [...pixels.slice(((N - 1 - y) * N + x) * 4, ((N - 1 - y) * N + x) * 4 + 4)];
+window.result = { striped: at(0, N - 1), hot: at(6, 6), near: at(11, 6), halo: at(36, 6), coldBeside: at(227, 228), corner: at(N - 1, 0) };
 `;
 
 test.skipIf(!chromium())("a striped cell takes its stripe's color, and a hot cell lights the air around it while a cold one does not", async () => {
@@ -140,7 +141,7 @@ test.skipIf(!chromium())("a striped cell takes its stripe's color, and a hot cel
     try {
         await Bun.write(`${folder}/scene.ts`, lit);
         const built = await Bun.build({ entrypoints: [`${folder}/scene.ts`], target: "browser" });
-        await Bun.write(`${folder}/page.html`, `<!doctype html><canvas style="width:32px;height:32px"></canvas><script type="module">${await built.outputs[0]!.text()}</script>`);
+        await Bun.write(`${folder}/page.html`, `<!doctype html><canvas style="width:256px;height:256px"></canvas><script type="module">${await built.outputs[0]!.text()}</script>`);
         await tab.open(`file://${folder}/page.html`);
         expect(tab.errors).toEqual([]);
         const result = await tab.run<Record<string, number[]>>("window.result");
@@ -151,6 +152,10 @@ test.skipIf(!chromium())("a striped cell takes its stripe's color, and a hot cel
         expect(result.near![0]!).toBeGreaterThan(8);
         expect(result.near![0]!).toBeGreaterThan(result.near![2]!);
         expect(result.near![3]!).toBe(Math.max(...result.near!.slice(0, 3)));
+        // thirty cells from them, past the near glow, the air still has their halo, fainter and as warm
+        expect(result.halo![0]!).toBeGreaterThan(0);
+        expect(result.halo![0]!).toBeLessThan(result.near![0]!);
+        expect(result.halo![0]!).toBeGreaterThanOrEqual(result.halo![2]!);
         // the cold one gives none, and the far corner has none of the hot ones'
         expect(result.coldBeside).toEqual([0, 0, 0, 0]);
         expect(result.corner).toEqual([0, 0, 0, 0]);

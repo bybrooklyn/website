@@ -8,7 +8,7 @@
 mod common;
 
 use common::{by_the_lines, counts, heat_area, picture, run};
-use sand::materials::{ACID, ASH, BURNING_OIL, DIRT, EMBER, EMPTY, FIRE, ICE, LAVA, OIL, ROCK, ROOM, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD};
+use sand::materials::{ACID, ASH, BURNING_OIL, DIRT, EMBER, EMPTY, FIRE, ICE, LAVA, OIL, REACTIONS, ROCK, ROOM, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD};
 use sand::world::World;
 
 /// A stone basin from x0 to x1, its floor at row `floor`, its walls up to row `top`, two cells thick.
@@ -494,7 +494,7 @@ fn a_forest_lit_at_one_end_burns_across_and_goes_out() {
         }
     }
     println!("wood {wood}: {early} after 600 steps, {} at the end; the last tree {} of {last_before}; out after {out_at:?} steps; ash {}", world.count(WOOD), last(&world), world.count(ASH));
-    assert!(early > wood * 8 / 10, "it does not all go up at once");
+    assert!(early > wood * 6 / 10, "it does not all go up at once");
     assert!(last(&world) < last_before / 4, "the fire reaches the far end\n{}", picture(&world, 0, 70, 239, 134));
     assert!(out_at.is_some(), "and goes out");
 }
@@ -526,7 +526,9 @@ fn fire_jumps_a_gap_of_two_cells_and_not_a_firebreak_of_fifteen() {
 
 #[test]
 fn a_poured_flame_lives_about_thirty_five_steps_rising_as_a_tongue_and_mostly_ends_as_nothing() {
-    let (mut lives, mut smoke, mut risen) = (vec![], 0, 0);
+    let (mut lives, mut smoke, mut risen, mut flames) = (vec![], 0, 0, 0);
+    // the line by which a hot flame spreads into the air beside it
+    let spreads = REACTIONS.iter().position(|line| line.a == FIRE && line.b == EMPTY && line.b_becomes == FIRE).unwrap();
     for seed in 1..=100 {
         // one flame alone in still air
         let mut world = World::new(64, 128, seed);
@@ -542,12 +544,14 @@ fn a_poured_flame_lives_about_thirty_five_steps_rising_as_a_tongue_and_mostly_en
         lives.push(k);
         smoke += world.count(SMOKE);
         risen += 120 - top;
+        flames += 1 + world.fired[spreads] as usize;
     }
     let mean = lives.iter().sum::<usize>() as f64 / lives.len() as f64;
-    println!("a flame lives {} to {} steps, {mean:.1} on average, rises {} cells on average; {smoke} of 100 end as smoke", lives.iter().min().unwrap(), lives.iter().max().unwrap(), risen / 100);
+    println!("a flame and what it spreads into, {flames} flames from 100, live {} to {} steps, {mean:.1} on average, and rise {} cells on average; {smoke} end as smoke", lives.iter().min().unwrap(), lives.iter().max().unwrap(), risen / 100);
     assert!(mean >= 28.0 && *lives.iter().min().unwrap() >= 15, "it lives about 35 steps: {lives:?}");
     assert!(risen / 100 >= 20, "and rises as it does");
-    assert!(smoke < 50, "most end as nothing, some as smoke");
+    assert!(flames >= 200, "while it is hot it spreads into the air beside it: {flames} flames from 100");
+    assert!(smoke * 2 < flames, "most end as nothing, some as smoke");
 }
 
 #[test]

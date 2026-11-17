@@ -164,7 +164,8 @@ export default function sand(m: Mote): Scene {
             const next = () => ((seed = (seed * 1103515245 + 12345) >>> 0) >>> 16) & 255;
             for (let y = 0; y < GRAINS; y++) {
                 for (let x = 0; x < GRAINS; x++) {
-                    const shade = material.striped ? ((first + Math.floor((y * count) / GRAINS)) << 2) | (next() & 3) : next();
+                    // what gives light is drawn hot, as it is poured: its shade is its heat
+                    const shade = material.striped ? ((first + Math.floor((y * count) / GRAINS)) << 2) | (next() & 3) : material.light ? 150 + ((next() * 105) >> 8) : next();
                     const [r, g, b, a] = swatchColor(palette, material.number, shade);
                     ctx.fillStyle = `rgb(${r} ${g} ${b} / ${(a / 255).toFixed(3)})`;
                     ctx.fillRect(x * grain, y * grain, grain, grain);

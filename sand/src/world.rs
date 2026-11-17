@@ -44,6 +44,11 @@ const MARGIN_Y: i32 = deepest();
 const CLOCK_MOST: u32 = 15;
 /// The fastest a cell's speed can be kept: sixteen cells a step.
 const SPEED_MOST: u32 = 15;
+/// How hot a flame must be to leap clear as a spark, and how seldom it does: once in this many steps.
+const SPARK_FROM: u8 = 150;
+const SPARK_ONE_IN: u32 = 96;
+/// How fast a liquid must land to splash: a cell of it bounces up, as high as it was fast, and to a side.
+const SPLASH_FROM: u32 = 5;
 /// The most cells a grain slides down a slope in one step, however fast it came: a grain that
 /// lands on a heap is slowed by it, so a heap rests at its material's own angle whatever height it
 /// was poured from.
@@ -538,7 +543,7 @@ impl World {
         match p.kind {
             Kind::Powder | Kind::Liquid => self.fall(at, x, y, cell, p),
             Kind::Gas => self.rise(at, x, y, p),
-            Kind::Fire => self.flicker(at, x, y, p),
+            Kind::Fire => self.flicker(at, x, y, cell, p),
             _ => {}
         }
     }
@@ -632,7 +637,9 @@ impl World {
                 };
                 // with nothing under it there it is falling, so that in the air it goes on down and is
                 // not taken for a cell at rest whose support has gone, which steps aside
-                let falls = self.sinks_into(p.density, self.cells[to + s]) as u32;
+                // at a speed of its own, as from the brush, so that what pours over an edge together
+                // comes apart into drops as it falls
+                let falls = if self.sinks_into(p.density, self.cells[to + s]) { 1 + (roll >> 5) % 3 } else { 0 };
                 self.swap(at, to, falls, (x, y), (x + along, y + down));
                 return;
             }
@@ -675,6 +682,19 @@ impl World {
                     // it keeps its speed, so where it next stops it may roll again
                     self.swap(at, at.wrapping_add_signed(side), 1, (x, y), (x + side as i32, y));
                     return;
+                }
+            }
+            // A liquid that lands fast splashes: half its cells bounce up, as high as they were fast at
+            // most, and to a side, and fall back.
+            if p.kind == Kind::Liquid && speed >= SPLASH_FROM && (roll >> 20) & 1 == 0 {
+                let up = 1 + (roll >> 21) as usize % speed as usize;
+                let side = ((roll >> 25) % 7) as isize - 3;
+                if y as usize >= up {
+                    let to = (at - up * s).wrapping_add_signed(side);
+                    if material(self.cells[to]) == EMPTY && material(self.cells[at - s]) == EMPTY {
+                        self.swap(at, to, 0, (x, y), (x + side as i32, y - up as i32));
+                        return;
+                    }
                 }
             }
             self.cells[at] = with_state(cell, clock_of(cell), 0);
@@ -733,12 +753,25 @@ impl World {
         false
     }
 
-    /// The rule for fire: up, or up and to a side by chance, so a flame wavers as it rises; to a
-    /// side now and then when it cannot rise. It is always reached again next step: it is cooling.
+    /// The rule for fire: up, or up and to a side by chance, so a flame wavers as it rises, one to
+    /// `fall` cells in a step, by chance, so a body of flames is drawn out into tongues; to a side now
+    /// and then when it cannot rise. A hot flame now and then leaps clear as a spark, a few cells up
+    /// and to a side. It is always reached again next step: it is cooling.
     #[inline(always)]
-    fn flicker(&mut self, at: usize, x: i32, y: i32, p: Props) {
+    fn flicker(&mut self, at: usize, x: i32, y: i32, cell: u32, p: Props) {
         let s = self.stride;
         let roll = chance(self.seed ^ 0xf1a3e, self.steps, at);
+        if temperature(cell) >= SPARK_FROM && (roll >> 8).is_multiple_of(SPARK_ONE_IN) {
+            let up = 3 + (roll >> 16) as usize % 5;
+            let side = ((roll >> 20) % 7) as isize - 3;
+            if y as usize >= up {
+                let to = (at - up * s).wrapping_add_signed(side);
+                if material(self.cells[to]) == EMPTY {
+                    self.swap(at, to, 0, (x, y), (x + side as i32, y - up as i32));
+                    return;
+                }
+            }
+        }
         let up = |side: isize| {
             let to = (at - s).wrapping_add_signed(side);
             // not between two cells that touch only at their corners
@@ -757,7 +790,14 @@ impl World {
             None
         };
         if let Some(side) = goes {
-            self.swap(at, (at - s).wrapping_add_signed(side), 0, (x, y), (x + side as i32, y - 1));
+            // on up through open air, as far as this step's chance takes it
+            let reach = 1 + (roll >> 12) as usize % p.fall as usize;
+            let (mut to, mut risen) = ((at - s).wrapping_add_signed(side), 1);
+            while risen < reach && material(self.cells[to - s]) == EMPTY {
+                to -= s;
+                risen += 1;
+            }
+            self.swap(at, to, 0, (x, y), (x + side as i32, y - risen as i32));
             return;
         }
         let side: isize = if (roll >> 3) & 1 == 0 { -1 } else { 1 };

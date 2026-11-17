@@ -4,7 +4,7 @@
 //! `cargo run --release --example film -- water out.ppm` writes a plain PPM picture. The scenes are
 //! the ones the page was played with: a brush held still over a shelf and a bowl (`water`, `sand`,
 //! `lava`, `oil`), and two hills with a lake between, a wooden house set alight and lava poured into
-//! the lake (`lake`). Each cell is drawn in its material's color, moved by its shade, as the page
+//! the lake (`lake`), and a wooden house and a pool of oil set alight (`fire`). Each cell is drawn in its material's color, moved by its shade, as the page
 //! draws it but without light.
 
 use sand::materials::{DIRT, FIRE, LAVA, MATERIALS, OIL, PALETTE, SAND, STONE, WATER, WOOD};
@@ -54,9 +54,34 @@ fn main() {
     let mut frames: Vec<Vec<u8>> = vec![];
     let (every, count): (usize, usize) = match scene {
         "lake" => (60, 12),
+        "fire" => (40, 12),
         _ => (15, 12),
     };
     match scene {
+        "fire" => {
+            // a wooden house, a pool of oil beside it, and fire set to both
+            world.paint(STONE, 0, 415, 519, 415, 4, 100, false);
+            world.paint(WOOD, 300, 405, 300, 300, 6, 100, false);
+            world.paint(WOOD, 420, 405, 420, 300, 6, 100, false);
+            world.paint(WOOD, 290, 300, 430, 300, 6, 100, false);
+            world.paint(WOOD, 290, 300, 360, 230, 6, 100, false);
+            world.paint(WOOD, 430, 300, 360, 230, 6, 100, false);
+            world.paint(STONE, 40, 405, 40, 380, 3, 100, false);
+            world.paint(STONE, 200, 405, 200, 380, 3, 100, false);
+            for y in 392..408 {
+                world.paint(OIL, 46, y, 194, y, 0, 100, false);
+            }
+            for step in 0..every * count {
+                if step < 10 {
+                    world.paint(FIRE, 280, 400, 292, 400, 4, 45, false);
+                    world.paint(FIRE, 60, 388, 70, 388, 3, 45, false);
+                }
+                world.step();
+                if step % every == every - 1 {
+                    frames.push(frame(&world));
+                }
+            }
+        }
         "lake" => {
             for x in [130, 370] {
                 for _ in 0..200 {
