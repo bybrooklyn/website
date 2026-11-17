@@ -812,7 +812,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 palette: () => palette.open(),
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
-                tools: () => [{ label: "Personal dictionary", run: () => checking.dictionary(row.words[5]!) }, ...dictation.items(row.words[5]!), ...suggestions.items()],
+                tools: () => [{ label: "Personal dictionary", icon: "dictionary", run: () => checking.dictionary(row.words[5]!) }, ...dictation.items(row.words[5]!), ...suggestions.items()],
                 selectMatching: () => matching.start(),
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)

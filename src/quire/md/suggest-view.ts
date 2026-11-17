@@ -308,6 +308,7 @@ export function mountSuggestions(surface: Surface, frame: HTMLElement, host: Sug
             { label: "Suggest words as I type", pressed: on, run: () => set(!on) },
             {
                 label: "Forget what it learned",
+                icon: "forget",
                 disabled: !on,
                 run: () => {
                     hide();
