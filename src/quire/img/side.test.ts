@@ -2,8 +2,9 @@
 // words joined by dashes; and in Chromium, one page shows at a time and the one before is told it went,
 // giving the keyboard back if it had it; a page's close shows the first page again, and the first page's
 // close does nothing; Escape inside it does what the tool says it does, or else goes back to the first
-// page; a part that answers Escape itself keeps it; and the line over the pages grows in with its words
-// and folds away.
+// page; a part that answers Escape itself keeps it; the line over the pages grows in with its words
+// and folds away; a control switched off while it holds the keyboard gives it back; and a page that went
+// fades all the way and lets the column scroll no further than the page shown.
 
 import { expect, test } from "bun:test";
 import { corePage, quire } from "../../../scripts/core-page";
@@ -69,6 +70,54 @@ test("in Chromium, one page shows at a time, Escape and close go back to the fir
         expect(await tab.run("[document.querySelector('.quire-img-doing').classList.contains('away'), document.querySelector('.quire-img-doing-said').textContent, [...document.querySelectorAll('.quire-img-doing button')].map((each) => each.textContent)]")).toEqual([false, "Repairing 40%", ["stop"]]);
         await tab.run("window.side.say(undefined)");
         expect(await tab.run("[document.querySelector('.quire-img-doing').classList.contains('away'), document.querySelector('.quire-img-doing').inert]")).toEqual([true, true]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("in Chromium, a control of the column switched off or folded away while it holds the keyboard gives it back, and one still on keeps it", async () => {
+    const page = await corePage(`
+        import { sideColumn } from "${quire}/img/side.ts";
+        const back = document.createElement("button");
+        back.className = "back";
+        document.body.append(back);
+        const side = sideColumn({ home: () => first, back: () => back.focus() });
+        document.querySelector("#host").append(side.element);
+        const first = side.page("read text");
+        const hide = document.createElement("button");
+        hide.textContent = "hide all";
+        const fold = document.createElement("div");
+        const order = document.createElement("button");
+        order.textContent = "in order";
+        fold.append(order);
+        first.body.append(hide, fold);
+        first.open();
+        window.side = side; window.hide = hide; window.fold = fold; window.order = order;
+        window.ready = true;
+    `);
+    if (!page) return;
+    const { tab } = page;
+    try {
+        for (let waited = 0; waited < 100 && !(await tab.run<boolean>("window.ready === true")); waited++) await tab.wait(100);
+        // a press on nothing, so that the page has the keyboard and tells where it goes, as it does once a person has used it
+        await tab.click(5, 5);
+        const holder = () => tab.run<string>("document.activeElement.className || document.activeElement.textContent || document.activeElement.tagName");
+        // still on, it keeps the keyboard
+        await tab.run("window.hide.focus()");
+        expect(await tab.run("window.side.keepKeyboard()")).toBe(false);
+        expect(await holder()).toBe("hide all");
+        // hide all once all is hidden: the browser had dropped the keyboard to the page's body
+        await tab.run("window.hide.disabled = true");
+        expect(await tab.run("window.side.keepKeyboard()")).toBe(true);
+        expect(await holder()).toBe("back");
+        // a word folded away
+        await tab.run("window.order.focus(); window.fold.inert = true");
+        await tab.wait(100);
+        expect(await tab.run("window.side.keepKeyboard()")).toBe(true);
+        expect(await holder()).toBe("back");
+        // the keyboard elsewhere is left where it is
+        await tab.run("window.hide.disabled = false; window.hide.focus(); document.querySelector('.back').focus(); window.hide.disabled = true");
+        expect(await tab.run("window.side.keepKeyboard()")).toBe(false);
     } finally {
         await page.close();
     }

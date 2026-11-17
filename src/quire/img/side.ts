@@ -108,6 +108,26 @@ export function sideColumn(hooks: SideHooks) {
         }
     });
 
+    // the control of the column that last held the keyboard
+    let held: HTMLElement | undefined;
+    element.addEventListener("focusin", (event) => {
+        if (event.target instanceof HTMLElement) held = event.target;
+    });
+    /**
+     * Gives the keyboard back when the control holding it was just switched off or folded away (hide all once all is hidden, a
+     * number's in order once it is in order): the browser drops it to the page's body, outside the editor's keys, where Escape and
+     * Ctrl+Z did nothing. True when it was given back.
+     */
+    function keepKeyboard(): boolean {
+        const now = document.activeElement;
+        // the browser lets go of a control switched off only when it next draws: until then the control itself still holds the keyboard
+        const holder = now instanceof HTMLElement && now !== document.body ? (element.contains(now) ? now : undefined) : held;
+        if (!holder || holder.isConnected && !holder.matches(":disabled") && !holder.closest("[inert]")) return false;
+        held = undefined;
+        hooks.back();
+        return true;
+    }
+
     /** Says what is being done now over the page, with its few words to press, or folds the line away when nothing is. */
     function say(said: { words: string; controls?: HTMLElement[] } | undefined) {
         doing.classList.toggle("away", !said);
@@ -121,5 +141,5 @@ export function sideColumn(hooks: SideHooks) {
         if (!still()) for (const control of said.controls ?? []) if (!before.has(control.textContent)) control.classList.add("grows");
     }
 
-    return { element, doing, page, show, say, current: () => current };
+    return { element, doing, page, show, say, keepKeyboard, current: () => current };
 }

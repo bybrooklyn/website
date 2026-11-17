@@ -2536,6 +2536,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         buttons.redo.disabled = !history.canRedo();
         if (picture && !factsWhole) setFacts(factsLine(look(picture), picture.original.bytes, kindOf(picture.original)));
         if (!picture) setFacts("");
+        // a control of the panel switched off while it held the keyboard gives it back to the picture
+        if (has) side.keepKeyboard();
     }
 
     // ---- the menus, as one table, and the keys ----
