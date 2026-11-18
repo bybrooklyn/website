@@ -1376,6 +1376,52 @@ read as it was, since a run's text never named the box; pieces of one's own are 
 a piece is in hand from the box, turn, mirror and delete in the column are live, not only the keys. A piece
 is said by its shape's name either way round ("tight curve placed").
 
+### Play and build apart
+
+The column had 29 words in five groups, 13 of them under piece. One control now switches it between
+playing and building, two round dots with their words, **play** and **build**, at its top, made as Sand's
+brush and Blocks' kinds are (a radio group, `.marbles-choices` beside `.sand-choices` and
+`.blocks-choices` in `minis.css`). The run looked at is the same in both.
+
+**Play** shows what is for watching: run (let a marble go, stream, pause, clear the marbles, race), view
+(ride, spots, tour, fit the run) and share (copy link, sound, keys), 12 words. The box of pieces under the
+scene and the words for building and for a piece are away. A press on a piece neither chooses it nor
+carries it, so a run cannot be knocked apart by chance; a press on a rolling marble rides it and one on a
+hopper's box lets its marble go, as before; a drag with the left button turns the view, as the right
+button's does, since there is nothing to choose with a box; a long press does nothing. Going into play puts
+back what is in hand, ends bending, turns select off, shuts the naming of a piece of one's own and chooses
+nothing. The run's menu offers Ride this marble, Paste run and Copy run, not Paste pieces.
+
+**Build** shows the box, and build (let a marble go, select, undo, redo, paste, start from, keys) and piece
+(the 13 words as before), 20 words: let a marble go is there since a run is tried while it is built, and keys
+since the keys' list is wanted most while building. The list goes under the keys word of the side shown.
+
+**How it opens, chosen.** In play when there is a run to watch, as the page opens on one; in build on an
+empty table. A run opened from a link, a file or a paste opens in play, or in build if it is empty. Start
+from is a word of build, so a made run or an empty table chosen there leaves the column in build. Race them,
+or X, from build goes to play, where the race and its result are.
+
+**The keys.** In both: Space and Shift+Space, P, C, X and Shift+X, V and Shift+V, T, H, G and Shift+G, 7, 1, 3
+and 5, Home and Shift+Home, plus and minus, W, A, S, D and the arrows, Shift with the arrows, M, ?, L,
+Escape, the menu key, and Control with V for a run's link or file. In build only (`isBuildKey` in
+`toolbar.ts`): R and Shift+R, F, N and Shift+N, Page Up and Page Down, Delete and Backspace, comma and full
+stop, J, B, K, Enter, and Control with Z, Y, A, C, X, V (pieces) and D. In play these do nothing.
+
+**Gliding.** Each side's words are in a fold of their own, as the column's other folds are: one shuts as
+the other grows open from the dot pressed, each over its own height, and the box under the scene glides
+shut and open the same way, so nothing below jumps. Asked for less motion, neither glides (and the
+column's folds no longer glided then either, which they did before, the rule that stopped them being the
+weaker).
+
+**The column's type** is the site's again, 16.4 px where it was 14.4: at 1288 by 828 the whole column is in
+the first screen in both, its foot at 689 px in play and 804 in build, the scene's frame ending at 689 and
+the box at 804. On a phone the column is under the box, so the dots move up as the box glides away.
+
+**Words a visitor sees, new or changed:** *play*, *build*, and for a reader *what the column is for*; in
+the keys' list *play, build* and *what the column is for: in play the box and the words and keys that build
+are away, and a click on a piece neither chooses nor moves it*; the box's names *tight curve*, *wide
+curve*, *turn back*, *S bend*; and the mini's controls line.
+
 ## Open
 
 - Its name.

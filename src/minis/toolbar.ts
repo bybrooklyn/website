@@ -81,6 +81,16 @@ export function keyHeard(key: string, on: KeyPlace): boolean {
 }
 
 /**
+ * Whether a key is one that builds: it turns, mirrors, raises, lowers, lengthens, bends or takes away a
+ * piece, chooses pieces, copies, cuts, pastes or duplicates them, or undoes and redoes. In play these do
+ * nothing; every other key (letting marbles go, the view, the race, sound, the keys' list) works in both.
+ */
+export function isBuildKey(key: string, lower: string, ctrl: boolean): boolean {
+    if (ctrl) return ["z", "y", "a", "c", "x", "v", "d"].includes(lower);
+    return ["r", "f", "n", "j", "b", "k"].includes(lower) || ["PageUp", "PageDown", "Delete", "Backspace", ",", ".", "[", "]", "Enter"].includes(key);
+}
+
+/**
  * A fold in the column that grows open from the word that opens it and shrinks back into it: its
  * height from none to what it holds, its scale and its fade, from the button's place. Never hidden.
  */

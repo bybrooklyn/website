@@ -47,7 +47,7 @@ import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { NOTES, type Body, type Moving } from "./parts";
 import { chainAt, chainLength, makeTable, type Table } from "./table";
-import { can, fold, icon, keyHeard, keyPlace, word } from "./toolbar";
+import { can, fold, icon, isBuildKey, keyHeard, keyPlace, word } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
 
@@ -402,6 +402,11 @@ export default function marbles(m: Mote): Scene {
     let streamWait = 0;
     /** The select tool: a drag on the table draws a box, and a tap adds a piece to the choice. */
     let selecting = false;
+    /**
+     * What the column is for: watching the run, or building it. In play the box of pieces and the words for
+     * building are away, and a press on a piece neither chooses it nor carries it; in build they are there.
+     */
+    let mode: "play" | "build" = "build";
     let carried: Carried | undefined;
     /** Bending: the one piece chosen shows the points it is bent by in place of its other handles; and which of them the keys move. */
     let bending = false;
@@ -1561,6 +1566,8 @@ export default function marbles(m: Mote): Scene {
     const openShared = (opened: Opened, from?: HTMLElement, cut = false) => {
         stopRace();
         load(write(opened.run));
+        // a run opened from a link or a file is there to watch; an empty one, to build on
+        setMode(opened.run.length ? "play" : "build", !cut);
         // a race that came with it, ready to run again by its number
         if (opened.race) {
             [raceCount, lineNumber, lastRace] = [opened.race.count, opened.race.drawn, { ...opened.race, text: write(resting()) }];
@@ -1877,6 +1884,10 @@ export default function marbles(m: Mote): Scene {
     // ---- the panel: the row of pieces under the scene, and the column of words beside it ----
     let tell = () => {};
     let toggleKeys = () => {};
+    /** Play or build, chosen: what each shows comes and goes, gliding unless `glide` is false. */
+    let setMode = (next: "play" | "build", _glide = true) => {
+        mode = next;
+    };
     let keepOwn = () => {};
     let showRace = () => {};
     let openMenu = (_x: number, _y: number, _keyboard: boolean) => {};
@@ -2030,6 +2041,9 @@ export default function marbles(m: Mote): Scene {
         const tourTool = word("tour: off", "A tour of the run", "T", () => (camera.kind === "tour" ? toFree() : tourRun()), true);
         const shareTool = word("copy link", "Share: copy a link to this run", "", () => void shareRun(shareTool));
         const keysTool = word("keys", "Keys", "?", () => toggleKeys());
+        // in build, letting a marble go and the keys are there too, as words of their own
+        const goBuild = word("let a marble go", "Let a marble go", "Space", () => letGo());
+        const keysBuild = word("keys", "Keys", "?", () => toggleKeys());
         sound?.button.addEventListener("click", () => tell());
         const heading = (words: string) => el("h3", { class: "marbles-group", textContent: words });
         const line = (...tools: HTMLElement[]) => el("div", { class: "marbles-words" }, ...tools);
@@ -2112,7 +2126,7 @@ export default function marbles(m: Mote): Scene {
 
         // a short word said at the foot of the column, grown from the word pressed and gone after a moment
         const words = el("span", {});
-        const saying = { ...fold("marbles-said", words), from: () => shareTool };
+        const saying = { ...fold("marbles-said", words), from: () => (mode === "play" ? shareTool : goBuild) };
         let hush: ReturnType<typeof setTimeout> | undefined;
         // said aloud too: the fold is hidden from a screen reader whenever it is shut
         const aloud = el("p", { class: "unseen" });
@@ -2128,12 +2142,13 @@ export default function marbles(m: Mote): Scene {
             speak(text);
             words.textContent = text;
             clearTimeout(hush);
-            saying.open(from ?? shareTool, true);
-            hush = setTimeout(() => saying.open(from ?? shareTool, false), 2600);
+            saying.open(from ?? saying.from(), true);
+            hush = setTimeout(() => saying.open(from ?? saying.from(), false), 2600);
         };
 
         // the keys and gestures, a plain list, and the runs to start from, each in a fold in the column
         const KEYS: [string, string][] = [
+            ["play, build", "what the column is for: in play the box and the words and keys that build are away, and a click on a piece neither chooses nor moves it"],
             ["click a piece", "choose it alone; with Shift or Ctrl, add it or take it away"],
             ["click the table", "choose nothing"],
             ["drag a piece", "carry it, and what is chosen with it"],
@@ -2178,8 +2193,8 @@ export default function marbles(m: Mote): Scene {
         ];
         const list = el("dl", { class: "marbles-keys-list" });
         for (const [key, what] of KEYS) list.append(el("dt", { textContent: key }), el("dd", { textContent: what }));
-        const keys = { ...fold("marbles-keys", list), from: () => keysTool };
-        toggleKeys = () => only(keys, keysTool);
+        const keys = { ...fold("marbles-keys", list), from: () => (mode === "play" ? keysTool : keysBuild) };
+        toggleKeys = () => only(keys, keys.from());
         const runList = el("ul", { class: "marbles-runs" });
         for (const one of [...RUNS.filter((made) => made.listed !== false), { name: "an empty table", text: "v1" }]) {
             runList.append(el("li", {}, el("button", { type: "button", textContent: one.name, onclick: () => {
@@ -2299,7 +2314,7 @@ export default function marbles(m: Mote): Scene {
             return true;
         };
         openMenu = (x: number, y: number, keyboard: boolean) => {
-            const piece = pieceAt(x, y, 1.2);
+            const piece = mode === "build" ? pieceAt(x, y, 1.2) : undefined;
             if (piece && !chosen.has(piece.id)) {
                 chosen.clear();
                 chosen.add(piece.id);
@@ -2313,7 +2328,7 @@ export default function marbles(m: Mote): Scene {
             groups.push([
                 { name: "Paste run", key: "Ctrl+V", icon: "paste", act: () => void pasteRun() },
                 { name: "Copy run", key: "", icon: "share", act: () => void copyRun() },
-                ...(clip ? [{ name: "Paste pieces", key: "", icon: "paste", act: () => paste(clip, false) }] : []),
+                ...(clip && mode === "build" ? [{ name: "Paste pieces", key: "", icon: "paste", act: () => paste(clip, false) }] : []),
             ]);
             if (chosen.size) {
                 groups.push([
@@ -2377,28 +2392,75 @@ export default function marbles(m: Mote): Scene {
             if (event.shiftKey) event.stopPropagation();
         }, true);
 
-        const row = el("div", { class: "mote-panel marbles-row" }, box);
+        const row = el("div", { class: "mote-panel marbles-row" }, el("div", { class: "marbles-row-inner" }, box));
         m.canvas.parentElement!.insertBefore(row, panel);
         leaving.push(() => row.remove());
-        panel.append(
-            heading("run"),
-            line(goTool, streamTool, pauseTool, resetTool, raceTool),
-            raceFold.box,
-            heading("build"),
-            line(selectTool, undoTool, redoTool, pasteTool, runsTool),
-            runs.box,
-            heading("view"),
-            line(rideTool, spotsTool, tourTool, fitTool),
-            spotsFold.box,
-            heading("share"),
-            line(shareTool, ...(sound ? [sound.button] : []), keysTool),
-            keys.box,
-            heading("piece"),
-            line(...pieceTools),
-            form.box,
-            saying.box,
-            aloud,
+        // play and build, as round dots with their words, as Sand's brush and Blocks' kinds are; under them
+        // what each shows, in a fold of its own that grows open from the dot pressed as the other shuts
+        const choices = el("div", { class: "marbles-choices" });
+        choices.setAttribute("role", "radiogroup");
+        choices.setAttribute("aria-label", "what the column is for");
+        const dots = (["play", "build"] as const).map((one) => {
+            const input = el("input", { type: "radio", name: "marbles-mode", value: one, checked: one === mode, onchange: () => input.checked && setMode(one) });
+            choices.append(el("label", {}, input, one));
+            return input;
+        });
+        const playLine = line(shareTool, ...(sound ? [sound.button] : []), keysTool);
+        const buildLine = line(goBuild, selectTool, undoTool, redoTool, pasteTool, runsTool, keysBuild);
+        const playing = fold(
+            "marbles-mode",
+            el(
+                "div",
+                { class: "marbles-mode-words" },
+                heading("run"),
+                line(goTool, streamTool, pauseTool, resetTool, raceTool),
+                raceFold.box,
+                heading("view"),
+                line(rideTool, spotsTool, tourTool, fitTool),
+                spotsFold.box,
+                heading("share"),
+                playLine,
+                keys.box,
+            ),
         );
+        const building = fold("marbles-mode", el("div", { class: "marbles-mode-words" }, heading("build"), buildLine, runs.box, heading("piece"), line(...pieceTools), form.box));
+        panel.append(choices, playing.box, building.box, saying.box, aloud);
+        setMode = (next, glide = true) => {
+            const was = mode;
+            mode = next;
+            dots.forEach((dot) => (dot.checked = dot.value === next));
+            if (next === "play") {
+                // nothing is in hand or bent in play, and nothing chosen, so that a run cannot be knocked apart
+                cancel();
+                if (bending) toggleBending(false);
+                if (selecting) toggleSelecting();
+                naming(false);
+                if (chosen.size) {
+                    chosen.clear();
+                    chosenChanged();
+                }
+            }
+            // the keys' list goes under the keys word of the side now shown
+            if (keys.shown()) keys.open(keys.from(), false);
+            (next === "play" ? playLine : buildLine).after(keys.box);
+            const from = choices.querySelectorAll("label")[next === "play" ? 0 : 1] as HTMLElement;
+            if (!glide || was === next) {
+                for (const one of [playing.box, building.box, row]) one.style.transition = "none";
+                void panel.offsetHeight;
+            }
+            playing.open(from, next === "play");
+            building.open(from, next === "build");
+            from.removeAttribute("aria-expanded");
+            row.classList.toggle("away", next !== "build");
+            row.inert = next !== "build";
+            if (!glide || was === next) {
+                void panel.offsetHeight;
+                for (const one of [playing.box, building.box, row]) one.style.transition = "";
+            }
+            tell();
+            m.wake();
+        };
+        setMode(mode, false);
 
         tell = () => {
             const on = (button: HTMLElement, words: string, yes: boolean) => {
@@ -2452,6 +2514,8 @@ export default function marbles(m: Mote): Scene {
         steps = kept && kept.texts[kept.at] === write(run) ? kept : begun(write(run));
         changed(false);
     }
+    // it opens in play when there is a run to watch, and in build on an empty table
+    setMode(run.length ? "play" : "build", false);
     const resize = () => view?.size(m.width, m.height);
     resize();
     fitRun(true);
@@ -2537,6 +2601,8 @@ export default function marbles(m: Mote): Scene {
                 openMenu(middle?.x ?? m.width / 2, middle?.y ?? m.height / 2, true);
                 return;
             }
+            // in play the keys that build do nothing, so that a run cannot be changed by a key pressed by chance
+            if (mode === "play" && isBuildKey(key, lower, event.ctrlKey || event.metaKey)) return;
             if (event.ctrlKey || event.metaKey) {
                 if (lower === "z" && event.shiftKey) redo();
                 else if (lower === "z") undo();
@@ -2652,6 +2718,8 @@ export default function marbles(m: Mote): Scene {
             else if (lower === "h") keepSpot();
             else if (lower === "g") glideStep(event.shiftKey ? -1 : 1);
             else if (lower === "x") {
+                // a race is watched: it is run in play
+                if (mode === "build") setMode("play");
                 showRace();
                 startRace(event.shiftKey ? lineNumber : undefined);
             } else return;
@@ -2687,6 +2755,8 @@ export default function marbles(m: Mote): Scene {
                 void openFromText(text);
                 return;
             }
+            // pieces are pasted only to build
+            if (mode === "play") return;
             try {
                 if (!read(text).length) return;
             } catch {
@@ -2890,6 +2960,11 @@ export default function marbles(m: Mote): Scene {
             texts: () => [...steps.texts],
             ghost: () => ({ done: ghost.done, paths: ghost.paths.map((path) => ({ ending: path.ending, last: path.last, length: path.places.length, end: onScreen(path.places.at(-1)!) })) }),
             owns: () => owns.map((one) => one.name),
+            /** Play or build: what it is, and set if asked. */
+            mode: (set?: "play" | "build") => {
+                if (set) setMode(set);
+                return mode;
+            },
             carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
             marbles: () => ({ all: table.marbles.length, arrived: table.marbles.filter(table.arrived).length, asleep: table.marbles.filter((one) => one.rest).length, places: table.marbles.map((one) => ({ at: [...one.p], piece: table.pieceAt(one.p) ?? null, asleep: Boolean(one.rest) })) }),
             /** Every moving part: its piece, its family, a hinge's angle or a driven part's seconds, and where its first solid is on the screen. */
@@ -3040,6 +3115,7 @@ export default function marbles(m: Mote): Scene {
             }
             // the middle button moves the view; the right turns it, or let go without moving opens the run's menu; the left is for pieces
             if (hand.button === 1) one.mode = "pan";
+            else if (hand.button === 0 && mode === "play") pressed = { x: hand.x, y: hand.y, kind: hand.kind };
             else if (hand.button === 0) {
                 // Shift and the select tool are for choosing, so the points of a bent piece do not take the press
                 one.piece = pieceAt(hand.x, hand.y, 1.2, hand.kind === "touch" ? FINGERTIP : 0);
@@ -3094,8 +3170,8 @@ export default function marbles(m: Mote): Scene {
                     const pieces = chosenPieces();
                     startCarry(pieces, true, one.piece.id, hand.id, one.start);
                     follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
-                } else if (one.hand.button === 2 || (one.hand.kind === "touch" && !selecting)) {
-                    // the right button, or one finger on the table, turns the view
+                } else if (one.hand.button === 2 || (one.hand.kind === "touch" && !selecting) || mode === "play") {
+                    // the right button, or one finger on the table, turns the view; in play, where nothing is built, so does the left
                     one.mode = "turn";
                     free();
                     toFree();
@@ -3151,6 +3227,10 @@ export default function marbles(m: Mote): Scene {
             } else if (one.mode === "press" && !hand.shift && !hand.ctrl && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
                 // a tap or a click on a marble going down the run: the camera rides it
                 rideOn(marbleAt(hand.x, hand.y, hand.kind)!);
+            } else if (one.mode === "press" && mode === "play") {
+                // in play a click on a hopper's box lets its marble go, and on anything else chooses nothing and moves nothing
+                const piece = pieceAt(hand.x, hand.y, 1.2, hand.kind === "touch" ? FINGERTIP : 0);
+                if (piece && onHopperBox(piece, hand.x, hand.y)) letGo(piece.id);
             } else if (one.mode === "press" && one.piece && !hand.shift && !hand.ctrl && !selecting && onHopperBox(one.piece, hand.x, hand.y)) {
                 // a click on a hopper's box, not its chute, lets its marble go
                 letGo(one.piece.id);
@@ -3177,7 +3257,7 @@ export default function marbles(m: Mote): Scene {
             time += dt;
             // a finger held still is a long press: on a piece it adds it to the choice, on the table it starts a box
             for (const one of held.values()) {
-                if (one.mode !== "press" || one.hand.kind !== "touch" || time - one.since < LONG || (one.handle && (!one.piece || pointOf(one.handle) !== undefined))) continue;
+                if (one.mode !== "press" || mode === "play" || one.hand.kind !== "touch" || time - one.since < LONG || (one.handle && (!one.piece || pointOf(one.handle) !== undefined))) continue;
                 if (one.piece) {
                     if (chosen.has(one.piece.id)) chosen.delete(one.piece.id);
                     else chosen.add(one.piece.id);
