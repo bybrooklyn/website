@@ -33,11 +33,11 @@ test("every post and page gets the same verdict from the editor and the linter, 
 });
 
 test("her own pages are hers, by their path in the repository", () => {
-    expect(isHers("src/content/pages/about.mdx")).toBe(true);
-    expect(isHers("/home/someone/site/src/content/pages/about.mdx")).toBe(true);
+    expect(isHers("src/content/pages/bio.mdx")).toBe(true);
+    expect(isHers("/home/someone/site/src/content/pages/bio.mdx")).toBe(true);
     expect(isHers("src/content/blog/about.mdx")).toBe(false);
     expect(isHers(undefined)).toBe(false);
-    expect(pageTells("src/content/pages/about.mdx", "My journey — here.\n")).toEqual([]);
+    expect(pageTells("src/content/pages/bio.mdx", "My journey — here.\n")).toEqual([]);
 });
 
 test("a dash between numbers is a range, a spaced hyphen counts in prose and not in code", () => {

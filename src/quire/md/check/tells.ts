@@ -12,7 +12,7 @@ export interface Stretch {
 }
 
 /** Her own pages, in her own words, which the word rules do not second-guess. */
-export const HERS: readonly string[] = ["src/content/pages/about.mdx"];
+export const HERS: readonly string[] = ["src/content/pages/bio.mdx"];
 
 /** True for a document that is one of her own pages, by its path in the repository. */
 export const isHers = (path: string | undefined) => !!path && HERS.some((page) => path === page || path.endsWith(`/${page}`));

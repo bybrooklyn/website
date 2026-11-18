@@ -1,5 +1,5 @@
 ---
-// A standalone long-form page from src/content/pages: /setup/, /about/.
+// A standalone long-form page from src/content/pages: /setup/, /bio/.
 // It gets the same treatment as a post (contents beside the text)
 // but stays a main page, with the site's navigation.
 import "../styles/content";
@@ -43,9 +43,9 @@ const { Content, headings } = await render(entry);
         <div class="post-body">
             <Contents {title} {headings} />
             <div class="prose">
-                {/* The about page opens with the plain facts about her: what to call her, where she is, how to reach her. */}
+                {/* The bio opens with the plain facts about her: what to call her, where she is, how to reach her. */}
                 {
-                    entry.id === "about" && (
+                    entry.id === "bio" && (
                         <dl class="facts">
                             <div>
                                 <dt>pronouns</dt>

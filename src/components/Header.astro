@@ -10,11 +10,11 @@ import { getResume } from "../lib/resume";
 const here = Astro.url.pathname;
 // Links to pages that are not built are left out.
 const hasResume = (await getResume()) !== undefined;
-const hasAbout = (await getCollection("pages", (page) => page.id === "about" && visible(page))).length > 0;
+const hasBio = (await getCollection("pages", (page) => page.id === "bio" && visible(page))).length > 0;
 const posts = await hasPosts();
 const hidden = new Set([
     ...(hasResume ? [] : ["/resume/"]),
-    ...(hasAbout ? [] : ["/about/"]),
+    ...(hasBio ? [] : ["/bio/"]),
     ...(posts ? [] : ["/blog/"]),
     ...(photos.length > 0 ? [] : ["/photos/"]),
 ]);

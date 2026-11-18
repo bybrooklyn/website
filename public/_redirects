@@ -1,0 +1,4 @@
+# Cloudflare Pages redirects. The page about her was at /about/ until 17 November 2026 and is /bio/
+# now: the old address sends people on, so that links to it from elsewhere still arrive.
+/about /bio/ 301
+/about/ /bio/ 301

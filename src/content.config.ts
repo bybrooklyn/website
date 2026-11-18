@@ -80,7 +80,7 @@ const projects = defineCollection({
             .refine((project) => !project.cover || project.coverAlt, { message: "A project with a cover needs coverAlt." }),
 });
 
-/** Standalone long-form pages: /setup/, /about/. The file name is the address. */
+/** Standalone long-form pages: /setup/, /bio/. The file name is the address. */
 const pages = defineCollection({
     loader: glob({ base: "./src/content/pages", pattern: "*.mdx" }),
     schema: z.object({
