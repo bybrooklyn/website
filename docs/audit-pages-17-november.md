@@ -10,7 +10,8 @@ for the owner, with two or three ways it could go.
 
 - Every kind of page was opened in a headless browser from a dev server at 1288 by 828 and at 390 by
   800, and photographed window by window. The pictures are kept outside the repository, in the session's
-  scratch folder `fit-audit/`; the file named under each finding is there.
+  folder `notes/audit-pages-pictures/`, which is kept on the owner's computer and is not in the
+  repository; the file named under each finding is there.
 - On each page the shared things were read from computed styles and boxes: the title, the line under it,
   section headings, the gap from the head to the content, the widest line, list rows, links, how a
   pressable thing answers hover and the keyboard, the trail, and where the page ends.
