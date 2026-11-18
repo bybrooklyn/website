@@ -7,7 +7,7 @@
 
 import { expect, test } from "bun:test";
 import { MARBLE, join, marbleSpace, type Solid, type Space } from "./space";
-import { cosine, curve, gutter, helix, line, rails, sine, sweep, tube, turned, vee, type Piece, type Section, type Touch } from "./track";
+import { cosine, curve, cut, gutter, helix, line, rails, sine, sweep, tube, turned, vee, type Piece, type Section, type Touch } from "./track";
 import type { V3 } from "./solids";
 
 const G = 981;
@@ -388,5 +388,113 @@ test("the fastest marble a long steep drop gives does not pass through the thinn
                 expect(past).toBe(false);
             }
         }
+    }
+});
+
+// A block with a channel cut into it along a quarter of a circle of 4 about (0, 8), its floor a gutter of
+// 1.5 swept along the same arc, the top 1.5 above the channel's middle line, the outer wall curling over
+// up to 1.2 above it: a tight curve of a wooden marble run.
+const QUARTER = { low: [0, -2, 1.8] as V3, high: [6.2, 1.5, 8] as V3, middle: [0, 0, 8] as V3, radius: 4, from: [0, 0, -1] as V3, angle: Math.PI / 2, half: 1.5, line: 0, curl: 1.2 };
+const arc = (angle: number) => helix([0, 0, 8], 4, 0, angle / (2 * Math.PI), { from: [0, 0, -1] });
+const floorOf = () => sweep(arc(-Math.PI / 2), gutter(1.55, Math.PI, 0.1), { level: true });
+
+test("a block cut by a channel is met at its top, walls and sides where they are, and nowhere over the channel", () => {
+    const block = cut(QUARTER);
+    // over the top, away from the channel: straight down onto it
+    for (const [x, z] of [[0.5, 7.5], [5.8, 2.2], [1, 6], [6, 6]] as const) {
+        const top = touches(block, [x, 3, z]).find((one) => one.part === 0)!;
+        expect(top.at).toEqual([x, 1.5, z]);
+        expect(top.gap).toBeCloseTo(3 - 1.5 - R, 12);
+    }
+    // over the channel the top's nearest place is its edge, the inner wall's top or the outer wall's
+    const over = touches(block, [Math.SQRT1_2 * 4, 3, 8 - Math.SQRT1_2 * 4]).find((one) => one.part === 0)!;
+    const out = Math.hypot(over.at[0], over.at[2] - 8) - 4;
+    expect(Math.abs(out + 1.5) < 1e-9 || Math.abs(out - 1.5 * Math.sqrt(1 - 0.8 * 0.8)) < 1e-9).toBe(true);
+    // the inner wall is upright, 1.5 inside the line
+    const inner = touches(block, [Math.SQRT1_2 * 3, 0.5, 8 - Math.SQRT1_2 * 3]).find((one) => one.part === 1)!;
+    expect(Math.hypot(inner.at[0], inner.at[2] - 8)).toBeCloseTo(2.5, 12);
+    expect(inner.at[1]).toBeCloseTo(0.5, 12);
+    // the outer wall, halfway round, goes on round the floor's circle up to 1.2 and then rises upright
+    const high = touches(block, [Math.SQRT1_2 * 4.6, 1.4, 8 - Math.SQRT1_2 * 4.6]).find((one) => one.part === 2)!;
+    expect(Math.hypot(high.at[0], high.at[2] - 8) - 4).toBeCloseTo(0.9, 9);
+    const low = touches(block, [Math.SQRT1_2 * 4.3, 0.4, 8 - Math.SQRT1_2 * 4.3]).find((one) => one.part === 2)!;
+    expect(Math.hypot(Math.hypot(low.at[0], low.at[2] - 8) - 4, low.at[1])).toBeCloseTo(1.5, 9);
+    // at its ends both walls are upright, as the track it joins is: the outer wall there is 1.5 out all the way up
+    const end = touches(block, [0.0001, 1.2, 2.5]).find((one) => one.part === 2)!;
+    expect(Math.hypot(end.at[0], end.at[2] - 8) - 4).toBeCloseTo(1.5, 2);
+    // a side, met square from outside it, but not where the channel comes out through it
+    const side = touches(block, [7, 0, 4]).find((one) => one.part === 4)!;
+    expect(side.at).toEqual([6.2, 0, 4]);
+    expect(side.n).toEqual([1, 0, 0]);
+    const mouth = touches(block, [-1, -0.7, 4]).find((one) => one.part === 3)!;
+    expect(Math.abs(mouth.at[2] - 4)).toBeCloseTo(1.5, 12);
+});
+
+test("marbles dropped onto a cut block rest on its top, or fall into its channel and rest on the floor, or fall off it, as wood would have them", () => {
+    for (const [x, z, where] of [[1, 7, "top"], [5.8, 2.3, "top"], [5.5, 7.5, "top"], [Math.SQRT1_2 * 4, 8 - Math.SQRT1_2 * 4, "floor"], [4 * Math.sin(1.2), 8 - 4 * Math.cos(1.2), "floor"], [7.2, 4, "off"], [3, 1.2, "off"]] as const) {
+        const space = marbleSpace();
+        space.track(cut(QUARTER));
+        space.track(floorOf());
+        const ball = space.ball(R, [x, 6, z], MARBLE);
+        run(space, 3);
+        if (where === "top") {
+            // on the top where it fell, at rest
+            expect(ball.p[1]).toBeCloseTo(1.5 + R, 2);
+            expect({ x, z, moved: Math.hypot(ball.p[0] - x, ball.p[2] - z) < 0.05 }).toEqual({ x, z, moved: true });
+        } else if (where === "floor") {
+            // at the bottom of the channel, on its middle line
+            expect(ball.p[1]).toBeCloseTo(-(1.5 - R), 2);
+            expect(Math.abs(Math.hypot(ball.p[0], ball.p[2] - 8) - 4)).toBeLessThan(0.05);
+        } else {
+            expect(ball.p[1]).toBeLessThan(-3);
+        }
+    }
+});
+
+test("a marble never passes into a cut block, thrown at it from any side, at its top, its walls or its sides", () => {
+    let seed = 7;
+    const next = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+    const block = cut(QUARTER);
+    /** How deep into the wood a place is: less than none outside it. */
+    const into = (p: V3) => {
+        const inside = Math.min(p[0] - 0, 6.2 - p[0], p[2] - 1.8, 8 - p[2], 1.5 - p[1], p[1] + 2);
+        const out = Math.hypot(p[0], p[2] - 8) - 4;
+        const channel = Math.hypot(out, p[1]) < 1.5 || (p[1] > 0 && out > -1.5 && out < 1.5);
+        return channel ? -1 : inside;
+    };
+    for (let shot = 0; shot < 120; shot++) {
+        const space = marbleSpace();
+        space.sleeps = false;
+        space.track(block);
+        space.track(floorOf());
+        const aim: V3 = [0.5 + next() * 5.2, -1.5 + next() * 2.8, 2.3 + next() * 5.2];
+        const angle = next() * 2 * Math.PI;
+        const tilt = (next() - 0.3) * 1.2;
+        const way: V3 = [Math.cos(angle) * Math.cos(tilt), -Math.sin(tilt), Math.sin(angle) * Math.cos(tilt)];
+        const ball = space.ball(R, [aim[0] - way[0] * 12, aim[1] - way[1] * 12, aim[2] - way[2] * 12], MARBLE);
+        const speed = 50 + next() * 250;
+        ball.v = [way[0] * speed, way[1] * speed, way[2] * speed];
+        let deepest = -Infinity;
+        run(space, 0.25, () => (deepest = Math.max(deepest, into(ball.p))));
+        // its middle is never in the wood, which a marble's half a width short of it would be
+        expect(deepest).toBeLessThan(0);
+    }
+});
+
+test("a marble comes round a cut quarter turn at any speed a run gives it, from a straight groove into the channel and out onto the next", () => {
+    for (const speed of [40, 80, 120, 160]) {
+        const space = marbleSpace();
+        space.sleeps = false;
+        const section = gutter(1.55, Math.PI, 0.1);
+        space.track(sweep(line([-20, 0, 4], [0, 0, 4]), section, { level: true }));
+        space.track(cut(QUARTER));
+        space.track(floorOf());
+        space.track(sweep(line([4, 0, 8], [4, 0, 28]), section, { level: true }));
+        const ball = space.ball(R, [-12, -0.7, 4], MARBLE);
+        ball.v = [speed, 0, 0];
+        ball.w = [0, 0, -speed / R];
+        let through = false;
+        run(space, 1, () => (through ||= ball.p[2] > 14 && Math.abs(ball.p[0] - 4) < 0.6 && Math.abs(ball.p[1] + 0.7) < 0.3));
+        expect({ speed, through }).toEqual({ speed, through: true });
     }
 });

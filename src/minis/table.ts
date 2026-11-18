@@ -358,6 +358,7 @@ export function makeTable({ filled = true } = {}): Table {
         }
         const solids = lengths.map((length) => length.solid);
         if (world.bowl) solids.push(space.track(world.bowl, BOWL));
+        if (world.cut) solids.push(space.track(world.cut, WOOD));
         for (const [box, pane] of [...shape.boxes.map((one) => [one, false] as const), ...(shape.panes ?? []).map((one) => [one, true] as const)]) {
             const placed = boxToWorld(piece.place, box);
             // the walls of a moving or sounding piece, and glass, are smooth, so that a marble pressed against one by a part or by others slides down it and is not held up by it

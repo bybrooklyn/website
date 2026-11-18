@@ -61,9 +61,10 @@ test("the ghost ends where a marble does: off an open end, stopped on a stretch 
     expect(ghostMarks(stopped, [])).toEqual([{ id: stopped[0]!.last!, why: "shallow" }]);
     const guessed = checks(level).find((mark) => mark.why === "shallow")!;
     expect(Math.abs(guessed.id - stopped[0]!.last!)).toBeLessThanOrEqual(1);
-    // too steep: it is thrown off, the run marked where it leaves the track, not where it lands
+    // too steep: it is thrown off, the run marked where it leaves the track, not where it lands (a wide curve,
+    // whose banked groove has no walls over it: a tight turn's channel holds a marble even that fast)
     const steep = Array.from({ length: 8 }, () => kind("d", [2, 2]));
-    const fast = chain(40, [...steep, kind("c", [1, 1]), kind("s", [1]), kind("t")]);
+    const fast = chain(40, [...steep, kind("c", [3, 1]), kind("s", [1]), kind("t")]);
     const thrown = followed(fast);
     expect(thrown[0]!.ending).toBe("fell");
     const marked = ghostMarks(thrown, []);

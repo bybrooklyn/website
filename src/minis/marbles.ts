@@ -41,7 +41,7 @@ import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, 
 import { AXES, ARROW, across, boxed, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, walked, zoomedAt, type Grip, type Orbit } from "./orbit";
-import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
+import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, cutOf, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
 import { fits, jointsOf, links, open, read, roomOf, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
@@ -145,7 +145,11 @@ function drawingOf(kind: Kind): Drawing {
     const shape = shapeOf(kind);
     const wood: { mesh: Mesh }[] = [];
     const glass: { mesh: Mesh }[] = [];
+    // a tight turn is its block, drawn from the numbers a marble meets, the grain along its longest side
+    const block = cutOf(shape, { x: 0, z: 0, y: 0, turn: 0 });
+    if (block) wood.push({ mesh: grained(block.mesh()) });
     shape.lengths.forEach((length, index) => {
+        if (block) return;
         const piece = sweepOf(length);
         if (length.section === "tube") {
             // a tube's edges are its outline, seen by the glass itself: no places in the pattern to find edges by

@@ -6,7 +6,7 @@
 // of its points, changes its curve smoothly all along, and is held to its limits. Run with `bun run test`.
 
 import { describe, expect, test } from "bun:test";
-import { BOX, CELL, GROOVE, LEVEL, STEEPEST, TIGHTEST, WARN_STEEP, WARN_TIGHT, bendAllowed, blockMesh, brokenBy, isBent, keyOf, made, pathOf, pointsAt, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, triangles, warned, wayToWorld, withBend, type Kind, type Place } from "./pieces";
+import { BOX, CELL, DEEP, GROOVE, LEVEL, RISE, STEEPEST, TIGHTEST, WARN_STEEP, WARN_TIGHT, bendAllowed, blockMesh, brokenBy, isBent, keyOf, made, pathOf, pointsAt, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, triangles, warned, wayToWorld, WIDE, withBend, type Kind, type Place } from "./pieces";
 import { isPart } from "./parts";
 import type { V3 } from "../mote/solids";
 
@@ -61,8 +61,36 @@ test("a mirrored piece is the piece reflected: a left curve ends where a right o
     expect(right.joints[1]!.at).toEqual([4, 0, 8]);
     expect(left.joints[1]!.at).toEqual([4, 0, 0]);
     expect(left.joints[1]!.way).toEqual([0, 0, -1]);
-    // and the lean of its bank is the other way
-    expect(left.lengths[0]!.bank!.map((lean) => 0 - lean)).toEqual(right.lengths[0]!.bank!);
+    // and its block is the other's reflected, turning the other way
+    expect(left.cut!.box).toEqual({ at: [right.cut!.box.at[0], right.cut!.box.at[1], 8 - right.cut!.box.at[2]], half: right.cut!.box.half });
+    expect(left.cut!.angle).toBe(-right.cut!.angle);
+    // a wide curve's bank leans the other way
+    const [wideRight, wideLeft] = [false, true].map((mirror) => shapeOf({ family: "c", sizes: [3, 1], mirror }));
+    expect(wideLeft!.lengths[0]!.bank!.map((lean) => 0 - lean)).toEqual(wideRight!.lengths[0]!.bank!);
+});
+
+test("a tight turn is a square block with its channel cut level into it: its ends where they were, flush outside with the track it joins, filling the inside of the turn", () => {
+    for (const quarters of [1, 2]) {
+        const shape = shapeOf({ family: "c", sizes: [1, quarters], mirror: false });
+        // the ends where they always were, so that every run made before still fits
+        expect(shape.joints.map((joint) => joint.at)).toEqual([[0, 0, 4], quarters === 1 ? [4, 0, 8] : [0, 0, 12]]);
+        // not banked: the channel's floor is level across, as a groove cut into a level block
+        expect(shape.lengths[0]!.bank).toBeUndefined();
+        const { box, middle, radius } = shape.cut!;
+        expect(middle).toEqual([0, 0, 8]);
+        expect(radius).toBe(4);
+        // from the joints' face out to the track's outer side, and from the outer side across to the turn's middle, or to the far side of a turn back
+        const low = box.at.map((v, axis) => v - box.half[axis]!);
+        const high = box.at.map((v, axis) => v + box.half[axis]!);
+        const round = (list: number[]) => list.map((v) => Math.round(v * 1e9) / 1e9);
+        expect(round(low)).toEqual(round([0, -DEEP, 4 - WIDE / 2]));
+        expect(round(high)).toEqual(round([4 + WIDE / 2, RISE, quarters === 1 ? 8 : 12 + WIDE / 2]));
+        // and in no cell more than it took before
+        expect(shape.cells.map((cell) => `${cell.x} ${cell.z}`).sort()).toEqual(quarters === 1 ? ["0 0"] : ["0 0", "0 1"]);
+    }
+    // a wide curve, and a bent tight curve, are track as before
+    expect(shapeOf({ family: "c", sizes: [3, 1], mirror: false }).cut).toBeUndefined();
+    expect(shapeOf({ family: "c", sizes: [1, 1], mirror: false, bend: [10, 0] }).cut).toBeUndefined();
 });
 
 test("a straight takes up the cells it runs through, its block below and room for a marble above", () => {

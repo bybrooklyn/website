@@ -15,7 +15,7 @@
 // from the marble to the eye shortens at once and lengthens again slowly, so the eye never goes into a
 // piece and the marble is never hidden.
 
-import { CELL, DEEP, WIDE, boxToWorld, made, shapeOf, type Box } from "./pieces";
+import { CELL, DEEP, GROOVE, WIDE, boxToWorld, made, shapeOf, toWorld, wayToWorld, type Box, type Shape } from "./pieces";
 import { enters, eyeOf, nearest, type Orbit } from "./orbit";
 import type { Placed } from "./run";
 import { PILLAR, pillars } from "./supports";
@@ -203,6 +203,42 @@ const local = (one: Obstacle, p: V3): V3 => {
 export const within = (one: Obstacle, p: V3, room = 0): boolean => local(one, p).every((v, axis) => Math.abs(v) <= one.half[axis]! + room);
 
 /**
+ * A tight turn's block of wood either side of its channel, as obstacles: for every centimetre round the
+ * channel's middle line, a box turned that way from the turn's middle out to the inner wall, and one from
+ * the outer wall out to the block's side, each from the block's foot to its top. Not the block whole,
+ * which a marble in the channel is within, and so would be left out of what is in the way of riding with it.
+ */
+function blockOf(cut: NonNullable<Shape["cut"]>, piece: Placed): Obstacle[] {
+    const box = boxToWorld(piece.place, cut.box);
+    const middle = toWorld(piece.place, cut.middle);
+    const from = wayToWorld(piece.place, cut.from);
+    const turning = cut.angle < 0 ? -1 : 1;
+    const [low, high] = [box.at.map((v, axis) => v - box.half[axis]!), box.at.map((v, axis) => v + box.half[axis]!)];
+    const whole = Math.abs(cut.angle);
+    const count = Math.max(2, Math.ceil(whole * cut.radius));
+    const found: Obstacle[] = [];
+    for (let i = 0; i < count; i++) {
+        const a = (whole * (i + 0.5)) / count;
+        const out: V3 = [from[0] * Math.cos(a) - from[2] * turning * Math.sin(a), 0, from[2] * Math.cos(a) + from[0] * turning * Math.sin(a)];
+        const along: V3 = [-out[2], 0, out[0]];
+        // how far out the block's side is this way
+        let side = Infinity;
+        for (const axis of [0, 2]) {
+            if (out[axis]! > 1e-9) side = Math.min(side, (high[axis]! - middle[axis]!) / out[axis]!);
+            if (out[axis]! < -1e-9) side = Math.min(side, (low[axis]! - middle[axis]!) / out[axis]!);
+        }
+        for (const [near, far] of [[0, cut.radius - GROOVE], [cut.radius + GROOVE, side]] as const) {
+            if (far <= near) continue;
+            const mid = (near + far) / 2;
+            // long enough along at its far edge to meet the next
+            const long = (far * whole) / count;
+            found.push({ at: [middle[0] + out[0] * mid, box.at[1], middle[2] + out[2] * mid], axes: [along, [0, 1, 0], out], half: [long / 2 + 0.05, box.half[1], (far - near) / 2] });
+        }
+    }
+    return found;
+}
+
+/**
  * What is in the way of the eye: every piece's solid wood, its blocks cut at the groove's top, a box
  * turned along the track for every centimetre of it, so that one fits a slope or a bend closely, and a
  * glass tube's square round it; its boxes, stands and glass; the pillars; and the table.
@@ -225,6 +261,7 @@ export function obstaclesOf(run: Placed[]): Obstacle[] {
                 found.push({ at: [f.p[0] - f.up[0] * down, f.p[1] - f.up[1] * down, f.p[2] - f.up[2] * down], axes: [f.along, f.up, f.across], half: [long / 2 + 0.05, block ? DEEP / 2 : 1.4, block ? WIDE / 2 : 1.4], glass: !block });
             }
         }
+        if (shape.cut) found.push(...blockOf(shape.cut, piece));
         for (const box of [...shape.boxes, ...shape.stands]) found.push(level(boxToWorld(piece.place, box)));
         for (const box of shape.panes ?? []) found.push({ ...level(boxToWorld(piece.place, box)), glass: true });
     }

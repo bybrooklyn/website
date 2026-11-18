@@ -104,6 +104,8 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 7. Cameras, races, sharing, and the runs to start from. **Built**, waiting to be looked at (see below).
 8. Controls as in a game's build mode, and the tools in a column beside the scene. **Built**, waiting to be
    looked at (see below).
+9. The pieces and the column looked at again: tight turns as blocks, the box drawn from above, one piece per
+   shape, play and build apart. **Built** on 17 November 2026, waiting to be looked at (see below).
 
 ## Stage 1, built
 
@@ -1273,6 +1275,79 @@ own, delete, longer, shorter, raise, lower). A word that cannot act now is faint
 hidden; one that is on or off says which. The race, the spots, the keys and the runs to start from open in
 folds under their group, one at a time; the race's line box is a thin underline, and its count and list are
 words. What the mini says is said at the foot of the column, and aloud.
+
+## The pieces and the column looked at again, built
+
+On 17 November 2026 the mini was played and found odd: the pieces were strangely modelled (the tight turns
+most), and the whole was confusing. Four changes were chosen, and built in this order.
+
+### Tight turns are blocks
+
+The tight curve and the turn back (`c`, radius 1, one or two quarter turns) were bent track: the middle
+line turned so tightly that the block's inner side had almost no radius left, the bank of 0.35 rad tipped
+it into a point, and lifted the outer side into a bulge. Each is now a square block of wood with its channel
+cut down into it, as in a wooden marble run (`cut` in `pieces.ts`'s shape, Mote's `cut` in `track.ts`).
+
+**The block.** Its sides are upright and its top level. Outside, it is flush with the blocks of the track it
+joins: from the joints' face out to the track's outer side, 6.2 cm, and from the outer side across to the
+turn's middle (a square 6.2 cm each way for the tight curve), or across to the far side of a turn back
+(6.2 by 12.4). It fills the inside of the turn. Its foot is the track's, 2 cm below the line, and its top is
+1.5 cm above the line (`RISE`), so it stands 1.5 cm above the track it joins. It takes no cell it did not
+take before. The joints are exactly where they were, so every run, link and file made before fits as it
+did. A bent tight turn is bent track as before, bank and all: a bent channel no longer follows the block's
+circle.
+
+**The channel.** Its floor is the groove the track has, a gutter of 1.5 cm swept along the same quarter or
+half circle, not banked: a groove cut into a level block is level across. The walls rise from the groove's
+rim to the top: the inner wall upright, the outer wall going on round the groove's circle, over the channel,
+up to 1.2 cm above the line, and then upright to the top (`CURL`). The curl is full along most of the turn
+and eases to none at each end (from a tenth of the way into a quarter turn, a third into a turn back), so
+that at the joints both walls are upright and meet the track as it is. From above, the channel's opening is
+narrower on the outside along the middle of the turn: 2.4 cm across there, wider than a marble.
+
+**What is drawn is what is met.** Mote's `cut` is what a marble meets of the block besides the floor: the
+top, everywhere but over the channel; the inner wall; the outer wall, round and then upright; and the four
+sides, but where the channel comes out. It is worked out by formula from + - * / and square roots, as all
+of Mote's track is, so a run is the same to the bit in every browser. A marble above the top meets only the
+top and one below it only the walls and sides, so that an edge is never struck twice by two surfaces at
+once. The block is drawn from the same numbers (`mesh`): the cross-section at many ways out from the turn's
+middle and at each corner, swept round, the two ends closed. The grain runs along its longest side.
+
+**Banking, chosen.** Not banked, since a channel cut into a level block has a level floor and a banked
+groove is the same circle anyway: what the bank did was tilt the block's top. Without a bank and with no
+walls over the groove, a marble coming at 83 cm/s was thrown up its outer wall and out (`a first run` comes
+into its second tight curve at 85). Upright walls 1 cm high held one to 111 cm/s; at 106 the marble of
+every kind of piece climbed over them. The outer wall curling over turns a marble thrown up it back down.
+Curled the whole way round, a marble came out of the turn sloshing from side to side and stopped on the
+level track after it; eased in and out at the ends it comes out in the groove.
+
+**Measured** in Bun: a straight, steep slopes to give speed, the turn, then a straight; the speed coming in,
+and 0.2 s after coming out onto the straight in its groove, or thrown out.
+
+| Coming in, cm/s | 83 | 111 | 133 | 150 | 159 | 185 | 189 |
+|---|---|---|---|---|---|---|---|
+| tight curve as bent track, banked | 52 | out | out | out | 111 | out | 129 |
+| tight curve as a block | 45 | 57 | 64 | 70 | 93 | 106 | 139 |
+| turn back as bent track, banked | 46 | out | out | out | out | out | out |
+| turn back as a block | 48 | 50 | 42 | 39 | 40 | out | out |
+
+The banked track that got round from 159 and 189 did so by being thrown up onto its tipped top and falling
+back; a block carries every marble to 189 round a quarter turn and to 159 round a turn back. The made runs
+bring marbles into tight turns at 31 to 106 cm/s. Marbles dropped onto a block rest on its top where they
+fall, or fall into the channel and come to rest on its floor, or fall past it; thrown at it from every side
+at up to 300 cm/s, none goes into the wood (`track.test.ts`).
+
+**Twenty pieces.** The made run kept for the tests (not offered to start from) had a second spiral before its
+funnel that brought marbles in at 110 cm/s, faster than the bowl holds; they reached the tray only by flying
+over the bowl, and once tight turns were blocks they flew elsewhere. Its last stretch to the funnel is now a
+level straight of three cells: they come into the bowl at 38 cm/s, circle it and drop through, every one.
+Still twenty pieces. The test of a run too steep for its turn throws the marble from a wide curve now, since
+a tight turn's channel holds it.
+
+**Weak, said plainly.** The block stands 1.5 cm above the track it joins, a step at each joint. The curl's
+opening narrows in the turn's first tenth, so its edge bends there quickly. Its edges are sharp, where the
+track's are rounded a little to catch the light. The walls were chosen by trying, against marbles on the
+made runs and in the table above, not by a theory.
 
 ## Open
 
