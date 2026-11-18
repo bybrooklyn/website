@@ -475,6 +475,14 @@ a:focus-visible,
     text-wrap: pretty;
 }
 
+/* her line at the foot of the home page, asking whoever read this far to write: set apart from the lists
+   above it, in the body's own size */
+.home .reach {
+    margin: 0;
+    max-width: 38rem;
+    color: var(--muted);
+}
+
 .home-halves {
     display: grid;
     gap: calc(var(--line) * 2.5) clamp(2rem, 4vw, 4rem);
