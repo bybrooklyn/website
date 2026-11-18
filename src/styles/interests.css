@@ -1,118 +1,93 @@
-/* /interests/: tiles of what she likes, and the sheet a tile swells into (src/pages/interests/). */
+/* /interests/: what she likes. The list is rows as the projects are (projects.css), and a thing opened is
+   a page as a project's is (blog.css): this file holds only what is its own. The sheet at the end is
+   kept until the owner has chosen between it and the site's panel (docs/interests.md). */
 
-/* ---- the parts of the page ---- */
+/* ---- the list ---- */
 
-.likes + .likes {
+/* The note for comparing the two ways to open, while the page is a draft. */
+.interest-compare {
+    margin: calc(var(--line) * -1) 0 calc(var(--line) * 2);
+}
+
+.interest-part + .interest-part {
     margin-top: calc(var(--line) * 3);
 }
 
-.likes-words {
+/* Her few words about a part, between its label and its list. */
+.interest-words {
     max-width: var(--measure);
+    margin-bottom: var(--line);
 }
 
-.likes-words > :last-child {
+.interest-words > :last-child {
     margin-bottom: 0;
 }
 
 /* These are a few plain lines, not an article: the first is set as the rest are. */
-.likes-words.prose > p:first-child {
+.interest-words.prose > p:first-child {
     font-size: inherit;
     line-height: inherit;
-    color: inherit;
+}
+
+/* A cover is tall where a project's picture is wide: the column for it is narrower, and the whole
+   cover shows in its own shape. */
+.interest-list a {
+    grid-template-columns: clamp(3.75rem, 12vw, 5.5rem) 1fr;
+}
+
+.interest-list .project-thumb {
+    aspect-ratio: auto;
 }
 
 /* Whose the pictures are, at the foot of the page. */
-.likes-credit {
+.interest-credit {
     max-width: var(--measure);
     margin: calc(var(--line) * 3) 0 0;
 }
 
-/* Movies and shows are one part with two rows of tiles, each under its own small heading. */
-.likes-group {
-    margin: calc(var(--line) * 1.5) 0 0;
-    font: inherit;
-    color: var(--muted);
+/* ---- a thing opened ---- */
+
+/* The cover stands where a project's picture does, at its own shape and no taller than the window likes. */
+.interest-play {
+    margin-bottom: calc(var(--line) * 1.75);
 }
 
-/* ---- tiles: a cover, and its name in words under it ---- */
-
-.tiles {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(8.25rem, 1fr));
-    gap: var(--line) 1.125rem;
-    margin: var(--line) 0 0;
-    padding: 0;
-    list-style: none;
+.interest-cover {
+    width: auto;
+    max-width: min(100%, var(--measure));
+    max-height: min(30rem, 62vh);
+    margin-bottom: 0;
 }
 
-.likes-group + .tiles {
-    margin-top: calc(var(--line) * 0.5);
-}
-
-/* On a phone, three to a row. */
-@media (max-width: 30rem) {
-    .tiles {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: calc(var(--line) * 0.75) 0.75rem;
-    }
-
-    .tile-name {
-        font-size: 0.9em;
-    }
-}
-
-.tile a {
-    display: block;
-    color: inherit;
-    text-decoration: none;
-}
-
-.tile-cover {
+/* The trailer, in the cover's place once asked for. */
+.interest-video {
     display: block;
     width: 100%;
+    max-width: var(--measure);
     height: auto;
-    aspect-ratio: 2 / 3;
-    object-fit: cover;
+    aspect-ratio: 16 / 9;
     border: 0.0625rem solid var(--rule);
-    border-radius: var(--radius);
+    border-radius: 1.25rem;
     background: var(--surface);
-    transition: border-color 0.15s ease;
 }
 
-.tiles.square .tile-cover {
-    aspect-ratio: 1;
+/* A word that cannot act is faint and inert: no copy of the trailer here, or a browser that cannot play it. */
+.play-button:disabled {
+    color: var(--muted);
+    text-decoration: none;
+    opacity: 0.6;
+    cursor: default;
 }
 
-/* A tile can be pressed, and says so the way a project's picture does: its border takes the accent. */
-.tile a:is(:hover, :focus-visible) .tile-cover {
-    border-color: var(--accent);
+.play-button:disabled::before {
+    border-left-color: var(--muted);
 }
 
-.tile-name {
-    display: block;
-    margin-top: 0.5rem;
-    line-height: 1.3;
+.play-here:has(.play-button:disabled) .play-still {
+    cursor: auto;
 }
 
-.tile a:is(:hover, :focus-visible) .tile-name {
-    color: var(--accent);
-}
-
-.tile-rank {
-    display: block;
-}
-
-/* A favorite: twice the size, taking the place of four. */
-.tile.big {
-    grid-column: span 2;
-    grid-row: span 2;
-}
-
-.tile.big .tile-name {
-    font-size: 1.2em;
-}
-
-/* ---- the sheet a tile swells into ---- */
+/* ---- the sheet, kept for comparing ---- */
 
 .sheet {
     position: fixed;
@@ -144,11 +119,6 @@
 
 .sheet.shown::backdrop {
     background: oklch(0.1 0.03 300 / 0.88);
-}
-
-/* On a screen's own address, before any script has run, the sheet is open with nothing behind it to dim the page: it dims it itself. */
-.sheet[open]:not(:modal) {
-    box-shadow: 0 0 0 100vmax oklch(0.1 0.03 300 / 0.88);
 }
 
 @media (max-width: 40rem) {
@@ -236,7 +206,7 @@
     border-color: var(--accent);
 }
 
-.sheet .stage iframe {
+.sheet .stage video {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -260,13 +230,13 @@
 }
 
 .screen-head h2 {
-    margin: 0;
+    margin: 0.35rem 0 0;
     font-size: clamp(1.9rem, 5vw, 2.6rem);
     line-height: 1.1;
 }
 
-.screen-rank {
-    margin: 0.35rem 0 0;
+.screen-head .post-meta {
+    margin: 0;
 }
 
 /* Her words on the left, the facts beside them; one under the other where there is no room. */
@@ -292,7 +262,7 @@
     margin-bottom: 0;
 }
 
-.screen-words h3,
+.screen-words h2,
 .screen-facts h3 {
     margin: calc(var(--line) * 1.25) 0 calc(var(--line) * 0.4);
     font-size: 1.15rem;

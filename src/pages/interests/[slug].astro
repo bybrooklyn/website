@@ -1,0 +1,156 @@
+---
+// One thing she likes, opened: /interests/<name>/. It is laid out as a project's page is: a small line
+// saying what it is, its name, one line of hers, its cover with a line under it that plays the trailer,
+// the links, the facts as a table, then her words, with the contents beside them.
+//
+// The trailer is a copy kept on the site (see videoOf in src/lib/interests.ts): it is fetched only
+// when the line or the cover is pressed, and plays in the browser's own player in the cover's place.
+import "../../styles/content";
+import type { GetStaticPaths } from "astro";
+import { render } from "astro:content";
+import "../../styles/blog.css";
+import "../../styles/projects.css";
+import "../../styles/interests.css";
+import Contents from "../../components/Contents.astro";
+import Picture from "../../components/Picture.astro";
+import PrevNext from "../../components/PrevNext.astro";
+import Opened from "../../layouts/Opened.astro";
+import { getInterests, metaOf, videoOf, type Interest } from "../../lib/interests";
+
+// None at all while the page is a draft that is not being shown.
+export const getStaticPaths = (async () => {
+    const all = await getInterests();
+    return all.map((interest, index) => ({ params: { slug: interest.id }, props: { interest, previous: all[index - 1], next: all[index + 1] } }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+    interest: Interest;
+    previous?: Interest;
+    next?: Interest;
+}
+
+const { interest, previous, next } = Astro.props;
+const { name, summary, cover, coverAlt, video, listen, facts, links } = interest.data;
+const { Content, headings } = await render(interest);
+const copy = videoOf(interest);
+const page = (other: Interest) => `/interests/${other.id}/`;
+---
+
+<Opened title={name} description={`${name}: ${summary}`} back={{ href: "/interests/", label: "interests" }}>
+    <article class="post">
+        <header class="post-header">
+            <p class="post-meta">
+                {metaOf(interest).map((word) => (
+                    <span>{word}</span>
+                ))}
+            </p>
+            <h1>{name}</h1>
+            <p class="lede">{summary}</p>
+        </header>
+
+        <div class="play-here interest-play" data-video={copy} data-video-title={video ? `${name}: ${video.what}` : undefined}>
+            <div class="play-still">
+                <Picture class="post-cover interest-cover" src={cover} alt={coverAlt} widths={[480, 800]} sizes="(min-width: 60rem) 22rem, 70vw" loading="eager" fetchpriority="high" />
+            </div>
+            {
+                video && (
+                    <p class="play-line">
+                        {/* With no copy made, the word is there and cannot act: faint and inert, never hidden. */}
+                        <button type="button" class="play-button" disabled={!copy}>
+                            play {video.what}
+                        </button>
+                        <span class="note">
+                            <span class="play-can">A copy kept on this site.</span>
+                            <span class="play-cannot" hidden>
+                                This video is AV1, which this browser cannot play. Stop using Safari.
+                            </span>{" "}
+                            The original is on <a href={video.source.href}>{video.source.label}</a>.
+                        </span>
+                    </p>
+                )
+            }
+        </div>
+
+        <div class="post-body">
+            <Contents title={name} {headings} />
+            <div class="prose">
+                {
+                    (listen || links.length > 0) && (
+                        <p class="get">
+                            {listen && <a href={listen.href}>listen to {listen.what}</a>}
+                            {links.map((link) => (
+                                <a href={link.href}>{link.label}</a>
+                            ))}
+                        </p>
+                    )
+                }
+                <dl class="facts">
+                    {
+                        facts.map((fact) => (
+                            <div>
+                                <dt>{fact.label}</dt>
+                                <dd>{fact.value}</dd>
+                            </div>
+                        ))
+                    }
+                </dl>
+
+                <Content />
+            </div>
+        </div>
+
+        <PrevNext
+            label="More interests"
+            previous={previous && { href: page(previous), note: "previous", title: previous.data.name }}
+            next={next ? { href: page(next), note: "next", title: next.data.name } : { href: "/interests/", note: "back to the list", title: "all interests" }}
+        />
+    </article>
+</Opened>
+
+<script>
+    // The trailer: a copy on the site, asked for only when the line under the cover (or the cover) is
+    // pressed. It takes the cover's place in the browser's own player, and the box grows from the
+    // cover's size to the video's.
+    import { EASE, still } from "../../scripts/opening";
+
+    /** The copies are AV1. A browser that cannot play it is told so, and the word to press goes faint. */
+    const able = document.createElement("video").canPlayType('video/mp4; codecs="av01.0.05M.10"') !== "";
+
+    for (const place of document.querySelectorAll<HTMLElement>(".interest-play[data-video]")) {
+        const button = place.querySelector<HTMLButtonElement>(".play-button");
+        const box = place.querySelector<HTMLElement>(".play-still");
+        if (!button || !box) continue;
+        if (!able) {
+            button.disabled = true;
+            place.querySelector<HTMLElement>(".play-can")?.setAttribute("hidden", "");
+            place.querySelector<HTMLElement>(".play-cannot")?.removeAttribute("hidden");
+            continue;
+        }
+        const play = () => {
+            if (place.classList.contains("playing") || !place.dataset.video) return;
+            const before = box.getBoundingClientRect();
+            const video = document.createElement("video");
+            video.className = "interest-video";
+            video.src = place.dataset.video;
+            video.title = place.dataset.videoTitle ?? "";
+            video.controls = true;
+            video.autoplay = true;
+            video.playsInline = true;
+            box.replaceChildren(video);
+            place.classList.add("playing");
+            const after = box.getBoundingClientRect();
+            if (!still.matches) {
+                video.animate(
+                    [
+                        { width: `${before.width}px`, height: `${before.height}px` },
+                        { width: `${after.width}px`, height: `${after.height}px` },
+                    ],
+                    { duration: 420, easing: EASE },
+                );
+            }
+            video.focus({ preventScroll: true });
+        };
+        button.addEventListener("click", play);
+        box.addEventListener("click", play);
+    }
+</script>

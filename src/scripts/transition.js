@@ -13,7 +13,7 @@
     const path = (url) => new URL(url).pathname;
     // A few pages open like a project without being under /projects/; <html> lists them.
     const elsewhere = (document.documentElement.dataset.opened || "").split(" ").filter(Boolean);
-    const opened = (url) => /^\/(blog|projects|minis)\/[^/]+\/$/.test(path(url)) || elsewhere.includes(path(url));
+    const opened = (url) => /^\/(blog|projects|minis|interests)\/[^/]+\/$/.test(path(url)) || elsewhere.includes(path(url));
     const place = (url) => order.findLastIndex((href) => (href === "/" ? path(url) === "/" : path(url).startsWith(href)));
     const kinds = (from, to) => {
         const kind = opened(to) ? (opened(from) ? "swap" : "open") : opened(from) ? "close" : "move";

@@ -104,12 +104,10 @@ export default defineConfig({
                 // else at Google. Signing in needs nothing here: it is a window of its own at accounts.google.com, which
                 // sends the window back to /mdquire/drive/, a page of the site (src/quire/core/google-sign-in.ts).
                 "connect-src 'self' blob: https://api.github.com https://huggingface.co https://*.hf.co https://www.googleapis.com",
-                // The two things the site frames, each only once the visitor presses for it: Playmatter's demo,
-                // from itch.io (PlayHere.astro), and on /interests/ a maker's own video, from YouTube's host
-                // that sets no cookies until the video is played (src/scripts/interests.ts). The game itself
-                // is a frame inside itch.io's page, which itch.io's own policy governs, not this one.
+                // The one thing the site frames: Playmatter's demo, from itch.io (PlayHere.astro). The game
+                // itself is a frame inside itch.io's page, which itch.io's own policy governs, not this one.
                 // A new embed from somewhere else needs its host added here, or it is blocked.
-                "frame-src https://itch.io https://www.youtube-nocookie.com",
+                "frame-src https://itch.io",
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",

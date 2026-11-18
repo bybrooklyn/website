@@ -27,14 +27,14 @@
     text-decoration: none;
 }
 
-.project-list h2 {
+.project-list :is(h2, h3) {
     margin: 0;
     font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
     line-height: 1.15;
     transition: color 0.15s ease;
 }
 
-.project-list a:hover h2 {
+.project-list a:hover :is(h2, h3) {
     color: var(--accent);
 }
 

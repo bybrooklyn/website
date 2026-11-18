@@ -1,13 +1,15 @@
-// The interests page: a tile pressed swells into its screen, a sheet over the page, and the sheet
-// shrinks back into the tile when it is closed with the word close, Escape, a press outside it, or the
-// browser's Back. Each screen has an address of its own, which the address bar shows while it is open.
+// The interests list, opening a thing in a sheet: one of two ways being compared, used only when the
+// list's address ends in ?sheet (without it a row is a plain link to the thing's page, which opens in
+// the site's panel). A row pressed swells into its screen, a sheet over the page, and the sheet shrinks
+// back into the row's cover when it is closed with the word close, Escape, a press outside it, or the
+// browser's Back. The address bar shows the thing's own address while its sheet is open.
 //
 // It is one thing growing, not a second one fading in: the sheet is laid out at its open place, then
-// drawn so small and so far off that its cover lies exactly on the tile's and nothing else of it
-// shows, and let go from there. Closing is the same run backwards, to wherever the tile is by then.
+// drawn so small and so far off that its cover lies exactly on the row's and nothing else of it
+// shows, and let go from there. Closing is the same run backwards, to wherever the row is by then.
 //
-// The video at the top of a screen is its maker's own, on YouTube. Nothing is asked of YouTube until
-// the line under the cover (or the cover) is pressed, and closing the screen takes the video away.
+// The video at the top of a screen is the site's own copy of the trailer, fetched only when the line
+// under the cover (or the cover) is pressed; closing the screen takes it away.
 
 import { EASE, boxOf, still, type Box } from "./opening";
 
@@ -15,7 +17,7 @@ const OPEN = 460;
 const SHUT = 360;
 
 const found = document.querySelector<HTMLDialogElement>("#sheet");
-if (found) run(found);
+if (found && new URLSearchParams(location.search).has("sheet")) run(found);
 
 function run(sheet: HTMLDialogElement): void {
     /** The screen that is open, by the last part of its address. */
@@ -33,7 +35,7 @@ function run(sheet: HTMLDialogElement): void {
 
     /** Takes a screen's video away and puts its cover back. */
     const stop = (screen: HTMLElement) => {
-        screen.querySelector("iframe")?.remove();
+        screen.querySelector(".stage video")?.remove();
         screen.querySelector(".play-here")?.classList.remove("playing");
     };
 
@@ -166,7 +168,7 @@ function run(sheet: HTMLDialogElement): void {
         // Opened from the list on this visit: Back is the way it came. Arrived at directly: the list is a step on.
         if (steps() > 0) history.go(-steps());
         else {
-            history.pushState({}, "", "/interests/");
+            history.pushState({}, "", "/interests/?sheet");
             close();
         }
     };
@@ -234,39 +236,27 @@ function run(sheet: HTMLDialogElement): void {
         else if (!id && current) close();
     });
 
-    // The video: its maker's own, from YouTube, once asked for.
-    for (const place of sheet.querySelectorAll<HTMLElement>(".play-here")) {
+    // The video: the site's copy of the trailer, once asked for, in the browser's own player.
+    for (const place of sheet.querySelectorAll<HTMLElement>(".play-here[data-video]")) {
         const stage = place.querySelector<HTMLElement>(".stage");
         const button = place.querySelector<HTMLButtonElement>(".play-button");
         if (!stage || !button) continue;
         const play = () => {
             if (place.classList.contains("playing") || !place.dataset.video) return;
-            const frame = document.createElement("iframe");
-            frame.src = `https://www.youtube-nocookie.com/embed/${place.dataset.video}?autoplay=1&rel=0`;
-            frame.title = place.dataset.videoTitle ?? "";
-            frame.allow = "autoplay; fullscreen; encrypted-media; picture-in-picture";
-            frame.allowFullscreen = true;
-            // The player may run its scripts and open a link in a new tab, and may not move this page
-            // somewhere else. YouTube refuses to play for a page that will not say where it is, so the
-            // frame is told the site's name and nothing of the address after it.
-            frame.sandbox.add("allow-scripts", "allow-same-origin", "allow-popups", "allow-popups-to-escape-sandbox", "allow-presentation");
-            frame.referrerPolicy = "strict-origin-when-cross-origin";
+            const video = document.createElement("video");
+            video.src = place.dataset.video;
+            video.title = place.dataset.videoTitle ?? "";
+            video.controls = true;
+            video.autoplay = true;
+            video.playsInline = true;
             // The stage grows from the height it has to the video's own shape.
             const before = stage.getBoundingClientRect().height;
-            stage.append(frame);
+            stage.append(video);
             place.classList.add("playing");
             const after = stage.getBoundingClientRect().height;
             if (!still.matches && Math.abs(after - before) > 1) stage.animate([{ height: `${before}px` }, { height: `${after}px` }], { duration: 420, easing: EASE });
         };
         button.addEventListener("click", play);
         stage.addEventListener("click", play);
-    }
-
-    // Arrived at a screen's own address: it is open already, without a flight, and its tile is brought
-    // to the middle of the page under it, so that closing has somewhere near to go back to.
-    const first = idAt(location.pathname);
-    if (first) {
-        open(first, false);
-        tileOf(first)?.scrollIntoView({ block: "center" });
     }
 }

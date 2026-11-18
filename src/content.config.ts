@@ -125,23 +125,35 @@ const interests = defineCollection({
     schema: ({ image }) =>
         z.object({
             name: z.string(),
+            /** One line of hers, for the list and the top of its page. */
+            summary: z.string(),
             section: z.enum(["games", "movies", "shows", "music"]),
+            /** What it is, in a word, for the small line above its name: game, film, show, artist. */
+            kind: z.string(),
+            /** When it came out or ran, for the same small line. Left out for an artist. */
+            when: z.string().optional(),
             /** Position in its section, lowest first: the order she listed them in. */
             order: z.number(),
-            /** A favorite's tile is twice the size and comes first in its section; an honorable mention comes last. */
+            /** A favorite comes first in its section and says so in its small line; an honorable mention comes last. */
             rank: z.enum(["favorite", "honorable mention"]).optional(),
             /** The game's cover, the film's poster, the album's sleeve. */
             cover: image(),
             /** What the cover shows, for people who cannot see it. */
             coverAlt: z.string(),
-            /** Its maker's own video on YouTube, by the eleven letters of its address. Nothing is loaded from YouTube until it is pressed. */
-            video: z.object({
-                id: z.string().regex(/^[\w-]{11}$/, "The eleven letters after watch?v= in the video's address."),
-                /** What the video is, in a few words that finish "Loads …": "the launch trailer", or a song's name. */
-                what: z.string(),
-                /** Where it plays from, in words that finish "It plays from …": "the channel Playstack". */
-                from: z.string(),
-            }),
+            /**
+             * Its trailer. A copy plays on the page when one has been made: the copies are kept on the
+             * owner's computer in public/videos/interests/<name>.mp4 and are not in the repository.
+             */
+            video: z
+                .object({
+                    /** What the video is, in words that finish "play …": "the launch trailer". */
+                    what: z.string(),
+                    /** Where the original is, linked under the player. The label finishes "The original is on …". */
+                    source: z.object({ href: z.url(), label: z.string() }),
+                })
+                .optional(),
+            /** For music: where a piece of it can be heard, in its maker's own place. */
+            listen: z.object({ what: z.string(), href: z.url(), label: z.string() }).optional(),
             /** Who made it, when, where it runs or aired, each a label and what it is. */
             facts: z.array(z.object({ label: z.string(), value: z.string() })).default([]),
             /** Where to find it: its store page, the artist's own page. */

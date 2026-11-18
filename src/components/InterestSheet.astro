@@ -1,0 +1,85 @@
+---
+// The sheet a thing on /interests/ once opened in: a box over the list that grows from the row pressed
+// and shrinks back into it. It is kept beside the site's own opened panel only until the owner has
+// compared the two and chosen (docs/interests.md): it is used when the list's address ends in ?sheet,
+// and src/scripts/interests.ts runs it. One <dialog> holds every thing's screen; only the open one shows.
+import type { AstroComponentFactory } from "astro/runtime/server/index.js";
+import Picture from "./Picture.astro";
+import { metaOf, videoOf, type Interest } from "../lib/interests";
+
+interface Props {
+    screens: { interest: Interest; Words: AstroComponentFactory }[];
+    /** The list page's own title, put back when a screen closes. */
+    listTitle: string;
+    /** The title a screen gives the page while it is open. */
+    titleOf: (interest: Interest) => string;
+}
+
+const { screens, listTitle, titleOf } = Astro.props;
+---
+
+<dialog class="sheet" id="sheet" data-list-title={listTitle}>
+    <div class="sheet-top">
+        <p class="sheet-trail">
+            <a href="/interests/?sheet" data-close>interests</a>
+            <span aria-hidden="true">/</span>
+            <span class="sheet-here" aria-hidden="true"></span>
+        </p>
+        <a class="sheet-close" href="/interests/?sheet" data-close>close</a>
+    </div>
+    {
+        screens.map(({ interest, Words }) => (
+            <article class="screen" data-screen={interest.id} data-name={interest.data.name} data-title={titleOf(interest)} hidden>
+                <div class="play-here" data-video={videoOf(interest)} data-video-title={`${interest.data.name}: ${interest.data.video?.what ?? ""}`}>
+                    <div class="stage">
+                        <Picture class="stage-back" src={interest.data.cover} alt="" width={48} loading="lazy" aria-hidden="true" />
+                        <Picture class="stage-cover" src={interest.data.cover} alt={interest.data.coverAlt} widths={[400, 800]} sizes="(max-width: 40rem) 40vw, 22rem" loading="lazy" />
+                    </div>
+                    {interest.data.video && (
+                        <p class="play-line">
+                            <button type="button" class="play-button" disabled={!videoOf(interest)}>
+                                play {interest.data.video.what}
+                            </button>
+                            <span class="note">
+                                A copy kept on this site. The original is on <a href={interest.data.video.source.href}>{interest.data.video.source.label}</a>.
+                            </span>
+                        </p>
+                    )}
+                </div>
+                <div class="screen-head">
+                    <p class="post-meta">
+                        {metaOf(interest).map((word) => (
+                            <span>{word}</span>
+                        ))}
+                    </p>
+                    <h2 id={`screen-${interest.id}`}>{interest.data.name}</h2>
+                </div>
+                <div class="screen-body">
+                    <div class="screen-words prose">
+                        <Words />
+                    </div>
+                    <aside class="screen-facts">
+                        <h3>the facts</h3>
+                        <dl>
+                            {interest.data.facts.map((fact) => (
+                                <div>
+                                    <dt>{fact.label}</dt>
+                                    <dd>{fact.value}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                        {interest.data.links.length > 0 && (
+                            <ul class="screen-links">
+                                {interest.data.links.map((link) => (
+                                    <li>
+                                        <a href={link.href}>{link.label}</a>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </aside>
+                </div>
+            </article>
+        ))
+    }
+</dialog>
