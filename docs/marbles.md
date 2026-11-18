@@ -1349,6 +1349,19 @@ opening narrows in the turn's first tenth, so its edge bends there quickly. Its 
 track's are rounded a little to catch the light. The walls were chosen by trying, against marbles on the
 made runs and in the table above, not by a theory.
 
+### The box drawn from above
+
+Each picture in the box was drawn from one slanted corner (turned 0.6, tipped 0.62), so that a tight curve
+left looked like a crown and a tight curve right like a lump, and the two did not look like one piece
+mirrored. Each is now drawn from above, as its plan (`BOX_VIEW` in `marbles.ts`): its way in on the left, so
+that it goes on to the right, a right turn bending down the picture and a left turn up it, and a piece and
+its mirror are mirror images top to bottom. The same wood, lamp and framing as before.
+
+**Not quite straight down, chosen.** Tipped 1.2 rad, a fifth of a quarter turn short of straight down,
+toward the front of the picture. Straight down, a slope is a straight with its far end a little narrower,
+and a hopper, a drop or a chime bar is a square; tipped so, a slope's front edge is seen to fall to the
+right, and what stands up stands up. A curve is still an arc and a straight a bar.
+
 ## Open
 
 - Its name.

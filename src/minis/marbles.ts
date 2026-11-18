@@ -3427,6 +3427,14 @@ export default function marbles(m: Mote): Scene {
     }
 }
 
+/**
+ * How the box's pictures look at a piece: from above, its way in on the left so that it goes on to the
+ * right, a right turn bending down the picture and a left one up. Tipped a fifth of a quarter turn toward
+ * the front of the picture, not straight down, so that a slope is seen to run down to the right and a
+ * hopper's box, a drop's tube and a chime's bar stand up: straight down, a slope is a straight.
+ */
+const BOX_VIEW = { turn: 0, tip: 1.2 };
+
 /** Small pictures of groups of pieces, drawn by the same code and in the same look as the scene, oak and glass under the lamp, each on a canvas of its own. */
 function paintBox(view: View | undefined, colors: { glass: Color }, groups: Placed[][]): HTMLCanvasElement[] {
     const size = 128;
@@ -3460,8 +3468,8 @@ function paintBox(view: View | undefined, colors: { glass: Color }, groups: Plac
                 }
             }
         }
-        // framed from the same corner for every piece, so that their sizes can be told apart
-        const framed = framing({ at: [0, 0, 0], turn: 0.6, tip: 0.62, far: 100 }, 30, 1, low, high);
+        // seen from above as its plan, the way it goes from left to right, so that its shape is read at a glance
+        const framed = framing({ at: [0, 0, 0], turn: BOX_VIEW.turn, tip: BOX_VIEW.tip, far: 100 }, 30, 1, low, high);
         own.look(eyeOf(framed), framed.at, 30);
         own.light(lampAt(low, high), low, high, LAMP.sun, LAMP.sky * 2.5, LAMP.ground * 2);
         own.draw();
