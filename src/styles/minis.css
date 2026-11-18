@@ -473,8 +473,27 @@
 
 .mote-panel.marbles-row {
     grid-area: row;
+    display: grid;
+    grid-template-rows: 1fr;
     min-width: 0;
     padding: 0.4rem 0 0.2rem;
+    transition:
+        grid-template-rows 0.35s var(--ease),
+        padding 0.35s var(--ease),
+        opacity 0.2s ease;
+}
+
+/* The row is there only to build: in play it glides shut over its own height, and opens again the same way. */
+.marbles-row-inner {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.mote-panel.marbles-row.away {
+    grid-template-rows: 0fr;
+    padding-block: 0;
+    opacity: 0;
 }
 
 /* The row of pieces scrolls sideways, a piece at a time; a soft fade at an edge says more lies beyond
@@ -627,7 +646,6 @@
     row-gap: 0.3rem;
     padding: 0.7rem 1rem 0.5rem;
     align-items: start;
-    font-size: 0.88rem;
     line-height: 1.3;
     position: relative;
 }
@@ -716,6 +734,20 @@
 .marbles-fold-inner {
     min-height: 0;
     overflow: hidden;
+}
+
+/* Play and build, as round dots at the top of the column; under them what each shows, in a fold of its
+   own, one shutting as the other grows open from the dot pressed. */
+.mote-panel .marbles-choices {
+    grid-column: 1 / -1;
+}
+
+.marbles-mode-words {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    row-gap: 0.3rem;
+    padding-top: 0.3rem;
 }
 
 .marbles-keys-list {
@@ -1007,6 +1039,8 @@
 
 @media (prefers-reduced-motion: reduce) {
     .marbles-fold,
+    .mote-panel.marbles-side .marbles-fold,
+    .mote-panel.marbles-row,
     .mote-panel .marbles-own,
     .marbles-menu-box,
     .marbles-menu-box.shown,
@@ -1622,6 +1656,7 @@
 }
 
 .walker-choices,
+.marbles-choices,
 .blocks-choices,
 .sand-choices {
     display: flex;
@@ -1630,6 +1665,7 @@
 }
 
 .walker-choices label,
+.marbles-choices label,
 .blocks-choices label,
 .sand-choices label,
 .walker-controls > label {

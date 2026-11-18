@@ -15,7 +15,7 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 | `stage.ts` | The canvas, a loop in fixed steps of 1/120 s, mouse, fingers and keys (several pointers by id, and the wheel, for a scene that asks), the page's colours, a panel for buttons, a little kept between visits, the address. Runs only while seen and stops when the scene rests. |
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, walls, pins, rods, ropes, a motor, a hand to grab with. |
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor; balls that roll; islands that sleep together; for a marble run's moving parts, solids on a hinge, driven solids and fixed solids of any shape, met by balls only. |
-| `track.ts` | Fixed track for balls, worked out by formula: sections swept along curves and helices, and profiles turned into funnels. |
+| `track.ts` | Fixed track for balls, worked out by formula: sections swept along curves and helices, profiles turned into funnels, and blocks with a channel cut along an arc. |
 | `grid.ts` | The broad phase both physics use: which pairs of bodies are near enough to be worth a closer look. |
 | `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow; and parts with a pattern drawn by the shader (oak, glass, glass marbles, metal, a skin, a cloth) under a lamp, with shadows that soften with distance and where things touch, many of a kind in one call. |
 | `cells.ts` | A grid of cells drawn in whole pixels on WebGL 2: four bytes a cell read straight from where they are kept into one texture, colored from a palette and a shade, only changed rows sent. The sand mini draws with it. |
@@ -161,7 +161,13 @@ unless a scene asks for them.
   a degree or so off square where it twists (round a level spiral), smoothly. Where two pieces meet end to
   end with the same section, facing on the same way and up the same way, Mote joins them itself and a ball
   feels one surface: a gutter cut into eight runs a ball exactly as one piece does. Each piece draws itself
-  (`piece.mesh()`) from the same numbers.
+  (`piece.mesh()`) from the same numbers. And a block with a channel cut down into it along a level arc
+  (`cut`, a wooden marble run's tight turn, since 17 November 2026): its level top but over the channel, its
+  inner wall upright, its outer wall going on round the floor's circle over the channel and then upright,
+  easing to upright at the ends, and its four sides but where the channel comes out; the floor is a gutter
+  swept along the same arc. Met in the upright half plane through the arc's middle and the ball, the top
+  only by a ball above it and the walls and sides only by one below, so that an edge is never struck by two
+  surfaces at once.
 - **Landing on the surface.** A ball against track is pushed, each part of a step, square to the surface
   where it is and just enough to land on it at the end of the part (the rule molecular dynamics calls SHAKE).
   Aimed anywhere else, a push leans along the ball's path: aimed where it was at the step's start, a ball

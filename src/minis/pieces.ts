@@ -1,7 +1,7 @@
 // The box of the marble run: every kind of piece, worked out in its own place before it is put in a
 // run. A piece is one or more lengths of track (a groove cut in a wooden block, or a tube), with a joint
 // at each end where it meets another, and for a few kinds something more: the funnel's bowl, the tray's
-// floor and walls, the hopper's box, the spiral's post.
+// floor and walls, the hopper's box, the spiral's post, the square block a tight turn's channel is cut into.
 //
 //   const shape = shapeOf({ family: "c", sizes: [1, 1], mirror: false });   // a tight curve to the right
 //   shape.joints;                      // where it meets others, in its own place
@@ -19,7 +19,7 @@
 // In centimetres, under real gravity, as Mote's marble space is. Making a piece uses only the sine and
 // cosine of track.ts, so a run is the same to the bit in every browser.
 
-import { cosine, curve, gutter, helix, sine, sweep, turned, type Along, type Path, type Piece, type Section, type V2 } from "../mote/track";
+import { cosine, curve, cut, gutter, helix, sine, sweep, turned, type Along, type Path, type Piece, type Section, type V2 } from "../mote/track";
 import { cross, dot3 as dot, minus, plus, scaled, type Mesh, type V3 } from "../mote/solids";
 import { PART_SIZES, designPart, isPart, type Moving, type PartFamily, type Struck } from "./parts";
 
@@ -56,6 +56,16 @@ export const BLOCK: Section = [
 ];
 /** A tube whose inside is the groove's circle, so that its floor and the groove's are one surface where they meet. */
 export const TUBE: Section = [{ middle: [0, 0], radius: GROOVE + SKIN / 2, from: -Math.PI, to: Math.PI, thick: SKIN }];
+
+/**
+ * A tight turn's block: how far its top is above the line its track is made along, and how high above
+ * that line its channel's outer wall goes on round the groove's circle, over the channel, before it rises
+ * upright to the top (Mote's `cut`), in centimetres. Round a turn this tight a level groove throws a
+ * marble coming at 80 cm/s up and out over its outer wall; with these walls one at 189 cm/s gets round a
+ * tight curve and one at 159 round a turn back (docs/marbles.md, 17 November 2026).
+ */
+export const RISE = 1.5;
+export const CURL = 1.2;
 
 /** The loop's radius, to the line its track is made along. */
 export const LOOP = 4.5;
@@ -125,25 +135,25 @@ export interface Entry {
     kind: Kind;
 }
 
-const entry = (name: string, family: Family, sizes: number[] = [], mirror = false): Entry => ({ name, kind: { family, sizes, mirror } });
+const entry = (name: string, family: Family, sizes: number[] = []): Entry => ({ name, kind: { family, sizes, mirror: false } });
 
-/** The box, in the order it is shown. Left and right are the same piece mirrored. */
+/**
+ * The box, in the order it is shown: one piece for each shape. A piece that turns one way is the box's
+ * as it turns right (a curve, a turn back, an S bend) and is mirrored to turn left; until 17 November
+ * 2026 the box held both, a left and a right of each.
+ */
 export const BOX: Entry[] = [
     entry("hopper", "h"),
     entry("straight", "s", [1]),
     entry("long straight", "s", [2]),
     entry("longer straight", "s", [3]),
-    entry("tight curve left", "c", [1, 1], true),
-    entry("tight curve right", "c", [1, 1]),
-    entry("wide curve left", "c", [3, 1], true),
-    entry("wide curve right", "c", [3, 1]),
-    entry("turn back left", "c", [1, 2], true),
-    entry("turn back right", "c", [1, 2]),
+    entry("tight curve", "c", [1, 1]),
+    entry("wide curve", "c", [3, 1]),
+    entry("turn back", "c", [1, 2]),
     entry("gentle slope", "d", [2, 1]),
     entry("steep slope", "d", [2, 2]),
     entry("drop", "v", [4]),
-    entry("S bend left", "z", [2, 1], true),
-    entry("S bend right", "z", [2, 1]),
+    entry("S bend", "z", [2, 1]),
     entry("spiral", "x", [2, 6]),
     entry("funnel", "f"),
     entry("loop", "l"),
@@ -159,6 +169,15 @@ export const BOX: Entry[] = [
     entry("bell", "n"),
     entry("drum", "q"),
 ];
+
+/** The families whose pieces are not the same mirrored: a curve, an S bend, a spiral, the funnel, whose way out is a cell aside, and the loop. */
+export const HANDED = new Set<Family>(["c", "z", "x", "f", "l"]);
+
+/** Every piece the box gives, each way round: a piece of a handed family mirrored too, as mirror makes it. */
+export const EVERY: Entry[] = BOX.flatMap((one) => (HANDED.has(one.kind.family) ? [one, { name: `${one.name} mirrored`, kind: { ...one.kind, mirror: true } }] : [one]));
+
+/** The name of the box's piece a kind is, either way round, bent or not; none for a kind the box does not give. */
+export const nameOf = (kind: Kind): string | undefined => BOX.find((one) => one.kind.family === kind.family && one.kind.sizes.join() === kind.sizes.join())?.name;
 
 // ---- a piece in its own place ----
 
@@ -236,6 +255,11 @@ export interface Shape {
     clear?: Box[];
     /** Walls a marble meets that are drawn as glass, so that a moving part inside them is seen working. */
     panes?: Box[];
+    /**
+     * For a tight turn as made: the square block of wood its channel is cut down into, and the circle the
+     * channel's middle follows, at the level of its joints. Its top is `RISE` above the joints' line.
+     */
+    cut?: { box: Box; middle: V3; radius: number; from: V3; angle: number };
 }
 
 const unit = (a: V3): V3 => scaled(a, 1 / (Math.sqrt(dot(a, a)) || 1));
@@ -313,7 +337,13 @@ function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" |
             const end: V3 = quarters === 1 ? [r, 0, 4 + r] : [0, 0, 4 + 2 * r];
             const way: V3 = quarters === 1 ? [0, 0, 1] : [-1, 0, 0];
             const length: Length = { section: "block", path: { middle: [0, 0, 4 + r], radius: r, rise: 0, turns: -quarters / 4, axis: [0, 1, 0], from: [0, 0, -1] }, level: true, joints: [0, 1] };
-            return { joints: [J0, joint(end, way)], lengths: [length], ...none };
+            if (r > 4) return { joints: [J0, joint(end, way)], lengths: [length], ...none };
+            // a tight turn is a block of wood with the channel cut down into it: square outside, its outer
+            // sides flush with the blocks of the track it joins, filling the inside of the turn to its middle
+            const far = quarters === 1 ? 4 + r : 4 + 2 * r + WIDE / 2;
+            const [x1, z0] = [r + WIDE / 2, 4 - WIDE / 2];
+            const box: Box = { at: [x1 / 2, (RISE - DEEP) / 2, (z0 + far) / 2], half: [x1 / 2, (RISE + DEEP) / 2, (far - z0) / 2] };
+            return { joints: [J0, joint(end, way)], lengths: [length], ...none, cut: { box, middle: [0, 0, 4 + r], radius: r, from: [0, 0, -1], angle: (quarters * Math.PI) / 2 } };
         }
         case "d": {
             const [long, drop] = [sizes[0]! * CELL, sizes[1]! * LEVEL];
@@ -496,10 +526,14 @@ export function shapeOf(kind: Kind): Shape {
     // a block under its lowest joint, at the least: a slope, a drop or a spiral goes down by its own drop
     const lowest = Math.min(...made.joints.map((joint) => Math.round(joint.at[1] / LEVEL)));
     const shape: Shape = { kind, ...made, cells: [], room: [], low: Math.min(made.low ?? -1, lowest - 1) };
-    if (isBent(kind)) shape.lengths[0] = bentLength(shape.lengths[0]!, kind);
+    if (isBent(kind)) {
+        shape.lengths[0] = bentLength(shape.lengths[0]!, kind);
+        // a bent channel no longer runs round its block's circle: a bent tight turn is bent track, as other pieces are
+        delete shape.cut;
+    }
     if (kind.mirror) mirrored(shape);
     for (const length of shape.lengths) {
-        if (length.level && !length.loop && !length.plain && length.section === "block") length.bank = banked(pathOf(length));
+        if (length.level && !length.loop && !length.plain && length.section === "block" && !shape.cut) length.bank = banked(pathOf(length));
     }
     // the cells it takes up and the room it needs, from its track and its boxes
     const cells = new Map<string, Cell>();
@@ -521,6 +555,10 @@ export function shapeOf(kind: Kind): Shape {
     for (const box of [...shape.boxes, ...(shape.panes ?? []), ...shape.stands, ...(shape.clear ?? []), ...(shape.struck ? [struckBox(shape.struck)] : [])]) {
         shape.room.push(box);
         cellsOf(box, cells);
+    }
+    if (shape.cut) {
+        shape.room.push(shape.cut.box);
+        cellsOf(shape.cut.box, cells);
     }
     if (shape.catches) cellsOf(shape.catches, cells);
     shape.cells = [...cells.values()];
@@ -560,6 +598,7 @@ function mirrored(shape: Shape): void {
     shape.holds = shape.holds.map(reflect);
     if (shape.bowl) shape.bowl = { ...shape.bowl, at: reflect(shape.bowl.at) };
     if (shape.catches) shape.catches = box(shape.catches);
+    if (shape.cut) shape.cut = { ...shape.cut, box: box(shape.cut.box), middle: reflect(shape.cut.middle), from: flip(shape.cut.from), angle: -shape.cut.angle };
     if (shape.wait) shape.wait = reflect(shape.wait);
     if (shape.inside) shape.inside = reflect(shape.inside);
 }
@@ -614,14 +653,22 @@ export function sweepOf(length: Length) {
     return sweep(path, length.section === "block" ? BLOCK : TUBE, alongOf(length, path));
 }
 
-/** A piece's track in the world as Mote's pieces: its lengths, and its bowl if it has one; each with which of the piece's joints its ends are. */
-export function made(shape: Shape, place: Place): { lengths: { piece: ReturnType<typeof sweepOf>; length: Length }[]; bowl?: Piece } {
+/** A tight turn's block in the world, as what Mote meets of it besides its channel's floor. */
+export function cutOf(shape: Shape, place: Place): Piece | undefined {
+    if (!shape.cut) return undefined;
+    const box = boxToWorld(place, shape.cut.box);
+    const middle = toWorld(place, shape.cut.middle);
+    return cut({ low: minus(box.at, box.half), high: plus(box.at, box.half), middle, radius: shape.cut.radius, from: wayToWorld(place, shape.cut.from), angle: shape.cut.angle, half: GROOVE, line: middle[1], curl: CURL });
+}
+
+/** A piece's track in the world as Mote's pieces: its lengths, each with which of the piece's joints its ends are, and its bowl or its block if it has one. */
+export function made(shape: Shape, place: Place): { lengths: { piece: ReturnType<typeof sweepOf>; length: Length }[]; bowl?: Piece; cut?: Piece } {
     const lengths = shape.lengths.map((length) => {
         const world = lengthToWorld(place, length);
         return { piece: sweepOf(world), length: world };
     });
     const bowl = shape.bowl && turned(toWorld(place, shape.bowl.at), shape.bowl.profile, shape.bowl.thick);
-    return { lengths, bowl };
+    return { lengths, bowl, cut: cutOf(shape, place) };
 }
 
 // ---- drawing a block ----

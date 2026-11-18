@@ -104,6 +104,8 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 7. Cameras, races, sharing, and the runs to start from. **Built**, waiting to be looked at (see below).
 8. Controls as in a game's build mode, and the tools in a column beside the scene. **Built**, waiting to be
    looked at (see below).
+9. The pieces and the column looked at again: tight turns as blocks, the box drawn from above, one piece per
+   shape, play and build apart. **Built** on 17 November 2026, waiting to be looked at (see below).
 
 ## Stage 1, built
 
@@ -1273,6 +1275,152 @@ own, delete, longer, shorter, raise, lower). A word that cannot act now is faint
 hidden; one that is on or off says which. The race, the spots, the keys and the runs to start from open in
 folds under their group, one at a time; the race's line box is a thin underline, and its count and list are
 words. What the mini says is said at the foot of the column, and aloud.
+
+## The pieces and the column looked at again, built
+
+On 17 November 2026 the mini was played and found odd: the pieces were strangely modelled (the tight turns
+most), and the whole was confusing. Four changes were chosen, and built in this order.
+
+### Tight turns are blocks
+
+The tight curve and the turn back (`c`, radius 1, one or two quarter turns) were bent track: the middle
+line turned so tightly that the block's inner side had almost no radius left, the bank of 0.35 rad tipped
+it into a point, and lifted the outer side into a bulge. Each is now a square block of wood with its channel
+cut down into it, as in a wooden marble run (`cut` in `pieces.ts`'s shape, Mote's `cut` in `track.ts`).
+
+**The block.** Its sides are upright and its top level. Outside, it is flush with the blocks of the track it
+joins: from the joints' face out to the track's outer side, 6.2 cm, and from the outer side across to the
+turn's middle (a square 6.2 cm each way for the tight curve), or across to the far side of a turn back
+(6.2 by 12.4). It fills the inside of the turn. Its foot is the track's, 2 cm below the line, and its top is
+1.5 cm above the line (`RISE`), so it stands 1.5 cm above the track it joins. It takes no cell it did not
+take before. The joints are exactly where they were, so every run, link and file made before fits as it
+did. A bent tight turn is bent track as before, bank and all: a bent channel no longer follows the block's
+circle.
+
+**The channel.** Its floor is the groove the track has, a gutter of 1.5 cm swept along the same quarter or
+half circle, not banked: a groove cut into a level block is level across. The walls rise from the groove's
+rim to the top: the inner wall upright, the outer wall going on round the groove's circle, over the channel,
+up to 1.2 cm above the line, and then upright to the top (`CURL`). The curl is full along most of the turn
+and eases to none at each end (from a tenth of the way into a quarter turn, a third into a turn back), so
+that at the joints both walls are upright and meet the track as it is. From above, the channel's opening is
+narrower on the outside along the middle of the turn: 2.4 cm across there, wider than a marble.
+
+**What is drawn is what is met.** Mote's `cut` is what a marble meets of the block besides the floor: the
+top, everywhere but over the channel; the inner wall; the outer wall, round and then upright; and the four
+sides, but where the channel comes out. It is worked out by formula from + - * / and square roots, as all
+of Mote's track is, so a run is the same to the bit in every browser. A marble above the top meets only the
+top and one below it only the walls and sides, so that an edge is never struck twice by two surfaces at
+once. The block is drawn from the same numbers (`mesh`): the cross-section at many ways out from the turn's
+middle and at each corner, swept round, the two ends closed. The grain runs along its longest side.
+
+**Banking, chosen.** Not banked, since a channel cut into a level block has a level floor and a banked
+groove is the same circle anyway: what the bank did was tilt the block's top. Without a bank and with no
+walls over the groove, a marble coming at 83 cm/s was thrown up its outer wall and out (`a first run` comes
+into its second tight curve at 85). Upright walls 1 cm high held one to 111 cm/s; at 106 the marble of
+every kind of piece climbed over them. The outer wall curling over turns a marble thrown up it back down.
+Curled the whole way round, a marble came out of the turn sloshing from side to side and stopped on the
+level track after it; eased in and out at the ends it comes out in the groove.
+
+**Measured** in Bun: a straight, steep slopes to give speed, the turn, then a straight; the speed coming in,
+and 0.2 s after coming out onto the straight in its groove, or thrown out.
+
+| Coming in, cm/s | 83 | 111 | 133 | 150 | 159 | 185 | 189 |
+|---|---|---|---|---|---|---|---|
+| tight curve as bent track, banked | 52 | out | out | out | 111 | out | 129 |
+| tight curve as a block | 45 | 57 | 64 | 70 | 93 | 106 | 139 |
+| turn back as bent track, banked | 46 | out | out | out | out | out | out |
+| turn back as a block | 48 | 50 | 42 | 39 | 40 | out | out |
+
+The banked track that got round from 159 and 189 did so by being thrown up onto its tipped top and falling
+back; a block carries every marble to 189 round a quarter turn and to 159 round a turn back. The made runs
+bring marbles into tight turns at 31 to 106 cm/s. Marbles dropped onto a block rest on its top where they
+fall, or fall into the channel and come to rest on its floor, or fall past it; thrown at it from every side
+at up to 300 cm/s, none goes into the wood (`track.test.ts`).
+
+**Twenty pieces.** The made run kept for the tests (not offered to start from) had a second spiral before its
+funnel that brought marbles in at 110 cm/s, faster than the bowl holds; they reached the tray only by flying
+over the bowl, and once tight turns were blocks they flew elsewhere. Its last stretch to the funnel is now a
+level straight of three cells: they come into the bowl at 38 cm/s, circle it and drop through, every one.
+Still twenty pieces. The test of a run too steep for its turn throws the marble from a wide curve now, since
+a tight turn's channel holds it.
+
+**Weak, said plainly.** The block stands 1.5 cm above the track it joins, a step at each joint. The curl's
+opening narrows in the turn's first tenth, so its edge bends there quickly. Its edges are sharp, where the
+track's are rounded a little to catch the light. The walls were chosen by trying, against marbles on the
+made runs and in the table above, not by a theory.
+
+### The box drawn from above
+
+Each picture in the box was drawn from one slanted corner (turned 0.6, tipped 0.62), so that a tight curve
+left looked like a crown and a tight curve right like a lump, and the two did not look like one piece
+mirrored. Each is now drawn from above, as its plan (`BOX_VIEW` in `marbles.ts`): its way in on the left, so
+that it goes on to the right, a right turn bending down the picture and a left turn up it, and a piece and
+its mirror are mirror images top to bottom. The same wood, lamp and framing as before.
+
+**Not quite straight down, chosen.** Tipped 1.2 rad, a fifth of a quarter turn short of straight down,
+toward the front of the picture. Straight down, a slope is a straight with its far end a little narrower,
+and a hopper, a drop or a chime bar is a square; tipped so, a slope's front edge is seen to fall to the
+right, and what stands up stands up. A curve is still an arc and a straight a bar.
+
+### One piece per shape
+
+The box held 29 pieces, a left and a right of the tight curve, the wide curve, the turn back and the S
+bend. It holds 25, one of each shape (`BOX` in `pieces.ts`): the four twins are each one piece, the one
+that turns right, and mirror (F, or the word in the column) makes it turn left, in hand or once placed.
+Their names lose their left and right: **tight curve**, **wide curve**, **turn back**, **S bend**. The
+spiral, the funnel and the loop were one piece each already.
+
+Nothing is lost. Every piece the box held is one of these or one mirrored (`EVERY` lists them all, each
+way round, and the tests that went through the box go through it); a run written with mirrored pieces is
+read as it was, since a run's text never named the box; pieces of one's own are kept as they were. While
+a piece is in hand from the box, turn, mirror and delete in the column are live, not only the keys. A piece
+is said by its shape's name either way round ("tight curve placed").
+
+### Play and build apart
+
+The column had 29 words in five groups, 13 of them under piece. One control now switches it between
+playing and building, two round dots with their words, **play** and **build**, at its top, made as Sand's
+brush and Blocks' kinds are (a radio group, `.marbles-choices` beside `.sand-choices` and
+`.blocks-choices` in `minis.css`). The run looked at is the same in both.
+
+**Play** shows what is for watching: run (let a marble go, stream, pause, clear the marbles, race), view
+(ride, spots, tour, fit the run) and share (copy link, sound, keys), 12 words. The box of pieces under the
+scene and the words for building and for a piece are away. A press on a piece neither chooses it nor
+carries it, so a run cannot be knocked apart by chance; a press on a rolling marble rides it and one on a
+hopper's box lets its marble go, as before; a drag with the left button turns the view, as the right
+button's does, since there is nothing to choose with a box; a long press does nothing. Going into play puts
+back what is in hand, ends bending, turns select off, shuts the naming of a piece of one's own and chooses
+nothing. The run's menu offers Ride this marble, Paste run and Copy run, not Paste pieces.
+
+**Build** shows the box, and build (let a marble go, select, undo, redo, paste, start from, keys) and piece
+(the 13 words as before), 20 words: let a marble go is there since a run is tried while it is built, and keys
+since the keys' list is wanted most while building. The list goes under the keys word of the side shown.
+
+**How it opens, chosen.** In play when there is a run to watch, as the page opens on one; in build on an
+empty table. A run opened from a link, a file or a paste opens in play, or in build if it is empty. Start
+from is a word of build, so a made run or an empty table chosen there leaves the column in build. Race them,
+or X, from build goes to play, where the race and its result are.
+
+**The keys.** In both: Space and Shift+Space, P, C, X and Shift+X, V and Shift+V, T, H, G and Shift+G, 7, 1, 3
+and 5, Home and Shift+Home, plus and minus, W, A, S, D and the arrows, Shift with the arrows, M, ?, L,
+Escape, the menu key, and Control with V for a run's link or file. In build only (`isBuildKey` in
+`toolbar.ts`): R and Shift+R, F, N and Shift+N, Page Up and Page Down, Delete and Backspace, comma and full
+stop, J, B, K, Enter, and Control with Z, Y, A, C, X, V (pieces) and D. In play these do nothing.
+
+**Gliding.** Each side's words are in a fold of their own, as the column's other folds are: one shuts as
+the other grows open from the dot pressed, each over its own height, and the box under the scene glides
+shut and open the same way, so nothing below jumps. Asked for less motion, neither glides (and the
+column's folds no longer glided then either, which they did before, the rule that stopped them being the
+weaker).
+
+**The column's type** is the site's again, 16.4 px where it was 14.4: at 1288 by 828 the whole column is in
+the first screen in both, its foot at 689 px in play and 804 in build, the scene's frame ending at 689 and
+the box at 804. On a phone the column is under the box, so the dots move up as the box glides away.
+
+**Words a visitor sees, new or changed:** *play*, *build*, and for a reader *what the column is for*; in
+the keys' list *play, build* and *what the column is for: in play the box and the words and keys that build
+are away, and a click on a piece neither chooses nor moves it*; the box's names *tight curve*, *wide
+curve*, *turn back*, *S bend*; and the mini's controls line.
 
 ## Open
 
