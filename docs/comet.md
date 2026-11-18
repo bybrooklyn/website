@@ -9,6 +9,13 @@ walls, rocks, sparks, pushers, wormholes, glows, labels and hints) and found it 
 looked generated and did not feel good. She settled the remake: one thing done beautifully; almost nothing
 to look at, like a diagram; fields made by a generator from a seed.
 
+On 17 Nov 2026 she played the remake and found it too empty, and missed a sight of the flight while
+aiming. Two choices of 13 Nov were reversed: the field is now worth looking at, and the first stretch
+of the path is shown. She chose four things and only these: the first second of the path as dots; planets
+with color, shading and a glow as wide as their pull; a still sky of stars; a comet with a tail, and a
+hole that draws light in. More in each field (moons, busier fields sooner) was offered and not chosen.
+The rules, the fields, the flight and the sounds did not change.
+
 ## Where the code is
 
 - `src/minis/comet.ts`: the scene: drawing, the pull, the arrival and the move to the next field.
@@ -16,22 +23,50 @@ to look at, like a diagram; fields made by a generator from a seed.
   machine for the same field and launch.
 - `src/minis/fields.ts`: making fields from a seed and a level, and the search that proves each can be won.
   `fields.test.ts` prints the difficulty table and how long a field takes to make.
+- `src/minis/sky.ts`: what is drawn besides the game, worked out without a canvas: the path ahead, the
+  planets' colors, the stars and the way the tail streams. `sky.test.ts` holds it.
 - `src/content/minis/comet.mdx`: its words; marked `draft: true`.
 - `src/styles/minis.css`: its one line under the canvas.
 
 ## What is on screen, and why
 
-- **The sky**: the site's own ground. Nothing drawn on it.
-- **Planets**: flat circles in one dim color. The bigger, the stronger the pull; size says nothing else.
-- **The hole**: a thin ring in the accent, the only colored thing. Its size is exactly where a comet
-  counts as arrived, so the mark and the rule are the same.
-- **The comet**: a point. **Its trail**: a thin line that fades toward its tail, the only decoration.
-- **While aiming**: the line of the pull, from the comet back the way it is pulled. No path ahead is shown.
+As of 17 Nov 2026:
+
+- **The sky**: the site's own ground, with faint still stars over the whole canvas, about one for every
+  1500 square pixels, and one in seventeen brighter with a small halo. They come from the seed, so a
+  run keeps its sky from field to field. The nearer ones drift a few pixels against the comet as it
+  moves, at most about 5, and settle when it stops, which gives the field depth. Nothing to play with.
+- **Planets**: each its own color, lit from the top left of the screen (on a tall screen too), shaded
+  to dark at the far side. The bigger, the stronger the pull. Each has a soft glow in its own color as
+  wide as its pull reaches, 6 radii, faint to its very edge, so it is seen how far each one bends the
+  comet. The colors are taken from eight soft ones (terracotta, ochre, sand, sage, teal, ice, slate blue,
+  rose), in an order the seed and level shuffle, no two of a field near in hue, each nudged a little.
+  None is near the violet of the ring, and evenly spread hues were not used, since they gave a chart's
+  red, green and blue.
+- **The hole**: a thin ring in the accent. Its size is exactly where a comet counts as arrived, so the
+  mark and the rule are the same. Inside it is a little darker. Round it a faint glow in the accent is
+  as wide as its own pull, 160 units, and streaks of light fall along three arms from that edge to the
+  ring, turning as they fall and quicker as they near, one fall taking about 7 seconds.
+- **The comet**: a bright point with a glow round it, and a tail of soft puffs that streams away from
+  the planets: each planet counts by its size over its distance squared, so the nearest has the most
+  say and the tail turns smoothly from one to the next. Near a planet the tail is longer and brighter,
+  up to about 54 pixels. **Its trail**: a thin line that fades toward its end.
+- **While aiming**: the line of the pull, from the comet back the way it is pulled, and dots along the
+  first second of the flight that pull would give, 11 pixels apart, fading and shrinking toward the
+  end. They are the flight's own first 120 steps, run by the same `advance`, so they are exactly where
+  the comet goes, and they follow the pull by pointer and by the arrow keys. The launch and the first
+  bend are seen; the rest is judged. A flight that strikes within the second shows its dots ending there.
 - **Missed shots**: the last three stay, faint and fainter, so each shot is aimed against the last.
 - **Under the canvas**: one quiet line, "Field 4, 2 shots.", and the sound switch.
 
 There is no text over the field, no score panel and no tutorial. Field 1 is one planet with the hole
 behind it, so a straight shot strikes the planet and the first lesson is to curve.
+
+The stars' drift and the swirl move only while the stage runs for the game (aiming, a flight, an
+arrival, the move); when it comes to rest they are drawn as they stand, and the stage stops. With less
+motion asked for, the stars do not drift and the swirl stands still; the dots, colors, glows and tail
+still show. Glows add light on a dark ground; on a light one they are laid over it, and the comet, its
+dots and the stars are drawn in the page's ink.
 
 ## The feel
 
@@ -93,8 +128,10 @@ From `fields.test.ts`, six seeds a level:
 ## Decided
 
 - One thing: a comet, planets, one hole. No other kind of body, nothing that moves, nothing that pushes.
-  After forty fields of play nothing was clearly missing, so no second idea was added.
-- Almost nothing to look at; no glow, gradient or icon. The trail is the only decoration.
+  After forty fields of play nothing was clearly missing, so no second idea was added. On 17 Nov 2026
+  moons and busier fields were offered again and not chosen.
+- The look of 17 Nov 2026: the dotted first second, the colored and glowing planets, the stars, the
+  comet's tail and the hole's swirl. Nothing else is drawn: no labels, hints, rings or new bodies.
 - Fields are made by the generator from a seed, and each is proven winnable by the flight itself.
 - One field shape for every screen, turned on its side on a tall one, so a seed is one puzzle everywhere.
 - It stays a draft until the owner has played it.
@@ -104,12 +141,15 @@ From `fields.test.ts`, six seeds a level:
 - The numbers of the feel: the comet's speed, the pull's length and where it starts to resist, the
   spiral's length and turns, the stillness, the move.
 - Three missed trails kept, against one or all.
-- No line showing the path ahead: the old trails are the only aid.
-- The ring in the accent and everything else in greys and white.
+- The choices made without her on 17 Nov 2026: the eight planet colors; the dots 11 pixels apart, for
+  one second; the light from the top left; the tail's puffs and length; the hole's glow, its three arms
+  of falling streaks and its darker inside; the stars' number and drift.
 - The ring's small give as the comet is swallowed.
 - Field 1's way in (5 degrees) and the floor of 2 degrees from field 9: fine with a mouse, close work on a
   phone.
-- The share picture: field 6 of the seed "lumen", most of the way through its winning shot.
+- The share picture: field 6 of the seed "lumen", most of the way through its winning shot. It was
+  made before the look of 17 Nov 2026 and still shows the bare field until `bun run pictures mini-comet`
+  makes it again.
 
 ## How to run and test
 
@@ -117,6 +157,7 @@ From `fields.test.ts`, six seeds a level:
 bun run dev                          # /minis/comet/ (drafts show on the dev server)
 bun test src/minis/flight.test.ts    # the flight's rules, and one flight pinned to the digit
 bun test src/minis/fields.test.ts    # every field winnable, never straight, the table, timing, kept state
+bun test src/minis/sky.test.ts       # the dots are the flight's own first second; colors and stars from the seed
 ```
 
 ## Known weak spots
