@@ -29,6 +29,7 @@ open, how to run and test it, and its known weak spots.
 - [generalist.md](generalist.md): the generalist, a creature that sees and learns, and its long plan.
 - [generalist-plan.md](generalist-plan.md): the Generalist's plan: everything decided for it, in an order to build in.
 - [comet.md](comet.md): Comet, an aim-and-fling gravity game, a draft.
+- [interests.md](interests.md): the interests page, tiles that swell into sheets, a draft until its words are read.
 - [spectrum.md](spectrum.md): Spectrum, the sliders for gender and sexuality, rewritten for the site.
 - [tonetags.md](tonetags.md): the tone tags page.
 

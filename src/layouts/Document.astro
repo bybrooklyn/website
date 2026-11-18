@@ -15,6 +15,7 @@ import transition from "../scripts/transition.js?raw";
 import { accents, theme, type AccentName } from "../data/theme";
 import { hex, themeStyle } from "../lib/color";
 import { hasPosts } from "../lib/posts";
+import { interestsShown } from "../lib/interests";
 import { openedPages } from "../lib/projects";
 import { sharePicture, type Fact } from "../lib/share";
 
@@ -50,7 +51,7 @@ const sharedAlt = imageAlt ?? (image ? `${title}, on ${site.name}'s website.` : 
 const oembed = new URL(`/oembed/${facts.length > 0 ? Astro.url.pathname.replace(/^\/|\/$/g, "") : "site"}.json`, Astro.site);
 const posts = await hasPosts();
 /** The main pages in nav order, home first: the page transition moves along this. */
-const order = ["/", ...nav.map((item) => item.href)];
+const order = ["/", ...nav.map((item) => item.href).filter((href) => href !== "/interests/" || interestsShown)];
 /** Pages that open like a project although they are not under /projects/, such as /spectrum/. */
 const opened = await openedPages();
 ---

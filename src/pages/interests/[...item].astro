@@ -1,0 +1,137 @@
+---
+// /interests/: what she likes. Games, films, shows and music are tiles, each a cover with its name
+// under it; a tile pressed swells into its screen, a sheet over the page with the maker's video at
+// the top, then why she loves it, her history with it, and the facts. Hobbies are words alone.
+//
+// Every screen has its own address, /interests/<name>/, which is this same page built with that
+// screen open, so a screen can be linked and read with scripts off. With scripts on, the address
+// changes as screens open and close and no page is loaded (src/scripts/interests.ts).
+import type { GetStaticPaths } from "astro";
+import { render } from "astro:content";
+import "../../styles/interests.css";
+import Base from "../../layouts/Base.astro";
+import Picture from "../../components/Picture.astro";
+import { site } from "../../data/site";
+import { getInterests, getParts, inSection, type Interest } from "../../lib/interests";
+
+// A rest route: /interests/ itself and one address for each screen, and none of them at all while
+// the page is a draft that is not being shown.
+export const getStaticPaths = (async () => {
+    const all = await getInterests();
+    return all.length > 0 ? [{ params: { item: undefined } }, ...all.map((interest) => ({ params: { item: interest.id } }))] : [];
+}) satisfies GetStaticPaths;
+
+const all = await getInterests();
+const open = all.find((interest) => interest.id === Astro.params.item);
+const parts = await Promise.all((await getParts()).map(async (part) => ({ part, Words: (await render(part)).Content })));
+const screens = await Promise.all(all.map(async (interest) => ({ interest, Words: (await render(interest)).Content })));
+
+const title = (interest?: Interest) => `${interest ? interest.data.name : "interests"} · ${site.name.toLowerCase()}`;
+/** A tile is about nine rem wide and a favorite's about twenty; the browser takes the nearest size. */
+const TILE = { widths: [160, 320, 480], sizes: "(max-width: 30rem) 30vw, 10rem" };
+const BIG = { widths: [320, 480, 800], sizes: "(max-width: 30rem) 62vw, 21rem" };
+---
+
+<Base
+    title={open ? open.data.name : "interests"}
+    description={open ? `${open.data.name}, one of the things Charlotte likes.` : "The games, films, shows and music Charlotte likes, and her hobbies."}
+>
+    <div class="page-head">
+        <h1>interests</h1>
+    </div>
+
+    {
+        parts.map(({ part, Words }) => (
+            <section class="likes" aria-labelledby={`part-${part.id}`}>
+                <h2 id={`part-${part.id}`}>{part.data.title}</h2>
+                <div class="likes-words prose">
+                    <Words />
+                </div>
+                {part.data.groups.map((group) => (
+                    <>
+                        {part.data.groups.length > 1 && <h3 class="likes-group">{group}</h3>}
+                        <ul class:list={["tiles", group === "music" && "square"]}>
+                            {inSection(all, group).map((interest) => {
+                                const big = interest.data.rank === "favorite";
+                                return (
+                                    <li class:list={["tile", big && "big"]}>
+                                        <a href={`/interests/${interest.id}/`} data-open={interest.id}>
+                                            <Picture class="tile-cover" src={interest.data.cover} alt="" {...(big ? BIG : TILE)} data-no-view />
+                                            <span class="tile-name">{interest.data.name}</span>
+                                            {interest.data.rank && <span class="tile-rank note">{interest.data.rank}</span>}
+                                        </a>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </>
+                ))}
+            </section>
+        ))
+    }
+
+    <p class="likes-credit note">The covers, posters and album art belong to the people who made them. The videos play from YouTube, from their makers' own channels where they have one.</p>
+
+    {/* One sheet for every screen: only the open screen is shown in it. On a screen's own address it is open before any script runs. */}
+    <dialog class="sheet" id="sheet" open={Boolean(open)} aria-labelledby={open ? `screen-${open.id}` : undefined} data-list-title={title()}>
+        <div class="sheet-top">
+            <p class="sheet-trail">
+                <a href="/interests/" data-close>interests</a>
+                <span aria-hidden="true">/</span>
+                <span class="sheet-here" aria-hidden="true">{open?.data.name}</span>
+            </p>
+            <a class="sheet-close" href="/interests/" data-close>close</a>
+        </div>
+        {
+            screens.map(({ interest, Words }) => (
+                <article class="screen" data-screen={interest.id} data-name={interest.data.name} data-title={title(interest)} hidden={interest !== open}>
+                    <div class="play-here" data-video={interest.data.video.id} data-video-title={`${interest.data.name}: ${interest.data.video.what}`}>
+                        <div class="stage">
+                            <Picture class="stage-back" src={interest.data.cover} alt="" width={48} loading="lazy" aria-hidden="true" />
+                            <Picture class="stage-cover" src={interest.data.cover} alt={interest.data.coverAlt} widths={[400, 800]} sizes="(max-width: 40rem) 40vw, 22rem" loading="lazy" />
+                        </div>
+                        <p class="play-line">
+                            <button type="button" class="play-button">play the video</button>
+                            <span class="note">
+                                Loads {interest.data.video.what} from YouTube when you press it. It plays from {interest.data.video.from}.
+                            </span>
+                        </p>
+                    </div>
+                    <div class="screen-head">
+                        <h2 id={`screen-${interest.id}`}>{interest.data.name}</h2>
+                        {interest.data.rank && <p class="screen-rank note">{interest.data.rank}</p>}
+                    </div>
+                    <div class="screen-body">
+                        <div class="screen-words prose">
+                            <Words />
+                        </div>
+                        <aside class="screen-facts">
+                            <h3>The facts</h3>
+                            <dl>
+                                {interest.data.facts.map((fact) => (
+                                    <div>
+                                        <dt>{fact.label}</dt>
+                                        <dd>{fact.value}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                            {interest.data.links.length > 0 && (
+                                <ul class="screen-links">
+                                    {interest.data.links.map((link) => (
+                                        <li>
+                                            <a href={link.href}>{link.label}</a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </aside>
+                    </div>
+                </article>
+            ))
+        }
+    </dialog>
+</Base>
+
+<script>
+    import "../../scripts/interests";
+</script>

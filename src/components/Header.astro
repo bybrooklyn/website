@@ -3,6 +3,7 @@ import Flags from "./Flags.astro";
 import { nav, site } from "../data/site";
 import { getCollection } from "astro:content";
 import { visible } from "../lib/drafts";
+import { interestsShown } from "../lib/interests";
 import { photos } from "../lib/photos";
 import { hasPosts } from "../lib/posts";
 import { getResume } from "../lib/resume";
@@ -15,6 +16,7 @@ const posts = await hasPosts();
 const hidden = new Set([
     ...(hasResume ? [] : ["/resume/"]),
     ...(hasBio ? [] : ["/bio/"]),
+    ...(interestsShown ? [] : ["/interests/"]),
     ...(posts ? [] : ["/blog/"]),
     ...(photos.length > 0 ? [] : ["/photos/"]),
 ]);

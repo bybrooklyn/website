@@ -25,6 +25,7 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - Twenty-two places where the tools and minis do not match, each with the ways it could go, and the choices the testers left in imgQuire, Marbles and Blocks: [audit-17-november](docs/audit-17-november.md).
 - The words added that day to Sand's column and its controls line, to be read and approved or reworded.
 - Going live: the live site is as it was on 11 November.
+- The interests page and Novean's project page are drafts until the owner has read their words; the thin sheets want more of the owner's answers ([interests](docs/interests.md#still-open)).
 
 ### The minis and Mote
 

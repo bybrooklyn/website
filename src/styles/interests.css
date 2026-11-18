@@ -1,0 +1,329 @@
+/* /interests/: tiles of what she likes, and the sheet a tile swells into (src/pages/interests/). */
+
+/* ---- the parts of the page ---- */
+
+.likes + .likes {
+    margin-top: calc(var(--line) * 3);
+}
+
+.likes-words {
+    max-width: var(--measure);
+}
+
+.likes-words > :last-child {
+    margin-bottom: 0;
+}
+
+/* These are a few plain lines, not an article: the first is set as the rest are. */
+.likes-words.prose > p:first-child {
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+}
+
+/* Whose the pictures are, at the foot of the page. */
+.likes-credit {
+    max-width: var(--measure);
+    margin: calc(var(--line) * 3) 0 0;
+}
+
+/* Movies and shows are one part with two rows of tiles, each under its own small heading. */
+.likes-group {
+    margin: calc(var(--line) * 1.5) 0 0;
+    font: inherit;
+    color: var(--muted);
+}
+
+/* ---- tiles: a cover, and its name in words under it ---- */
+
+.tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.25rem, 1fr));
+    gap: var(--line) 1.125rem;
+    margin: var(--line) 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.likes-group + .tiles {
+    margin-top: calc(var(--line) * 0.5);
+}
+
+/* On a phone, three to a row. */
+@media (max-width: 30rem) {
+    .tiles {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: calc(var(--line) * 0.75) 0.75rem;
+    }
+
+    .tile-name {
+        font-size: 0.9em;
+    }
+}
+
+.tile a {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+
+.tile-cover {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    transition: border-color 0.15s ease;
+}
+
+.tiles.square .tile-cover {
+    aspect-ratio: 1;
+}
+
+/* A tile can be pressed, and says so the way a project's picture does: its border takes the accent. */
+.tile a:is(:hover, :focus-visible) .tile-cover {
+    border-color: var(--accent);
+}
+
+.tile-name {
+    display: block;
+    margin-top: 0.5rem;
+    line-height: 1.3;
+}
+
+.tile a:is(:hover, :focus-visible) .tile-name {
+    color: var(--accent);
+}
+
+.tile-rank {
+    display: block;
+}
+
+/* A favorite: twice the size, taking the place of four. */
+.tile.big {
+    grid-column: span 2;
+    grid-row: span 2;
+}
+
+.tile.big .tile-name {
+    font-size: 1.2em;
+}
+
+/* ---- the sheet a tile swells into ---- */
+
+.sheet {
+    position: fixed;
+    inset: 0;
+    width: min(60rem, 100vw - 2 * var(--gutter));
+    max-width: none;
+    max-height: calc(100dvh - 2 * var(--line));
+    margin: auto;
+    padding: 0;
+    border: 0.0625rem solid var(--panel-edge);
+    border-radius: calc(var(--radius) * 1.6);
+    background: var(--panel);
+    color: var(--ink);
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    /* The flight is a transform and a cut, both the compositor's work. */
+    will-change: transform, clip-path;
+}
+
+.sheet:not([open]) {
+    display: none;
+}
+
+/* The shade over the page, which comes and goes with the sheet. */
+.sheet::backdrop {
+    background: oklch(0.1 0.03 300 / 0);
+    transition: background-color 0.32s ease-out;
+}
+
+.sheet.shown::backdrop {
+    background: oklch(0.1 0.03 300 / 0.88);
+}
+
+/* On a screen's own address, before any script has run, the sheet is open with nothing behind it to dim the page: it dims it itself. */
+.sheet[open]:not(:modal) {
+    box-shadow: 0 0 0 100vmax oklch(0.1 0.03 300 / 0.88);
+}
+
+@media (max-width: 40rem) {
+    .sheet {
+        width: calc(100vw - 1rem);
+        max-height: calc(100dvh - 1rem);
+    }
+}
+
+/* Where it is and the way back, kept at the top of the sheet however far it is scrolled. */
+.sheet-top {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem clamp(1rem, 3vw, 1.75rem);
+    border-bottom: 0.0625rem solid var(--panel-rule);
+    background: var(--panel);
+}
+
+.sheet-trail {
+    display: flex;
+    gap: 0.5em;
+    min-width: 0;
+    margin: 0;
+    color: var(--muted);
+}
+
+.sheet-here {
+    overflow: hidden;
+    color: var(--ink);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.screen[hidden] {
+    display: none;
+}
+
+/* The top of a screen: its cover standing in front of itself blurred, until the video is asked for. */
+.sheet .stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: clamp(13rem, 42dvh, 23rem);
+    overflow: hidden;
+    background: var(--surface);
+    cursor: pointer;
+}
+
+/* Once the video is asked for, the stage takes the video's shape (the script grows it there). */
+.sheet .playing .stage {
+    height: auto;
+    aspect-ratio: 16 / 9;
+    max-height: calc(100dvh - 9rem);
+    cursor: auto;
+}
+
+.stage-back {
+    position: absolute;
+    inset: -12%;
+    width: 124%;
+    height: 124%;
+    max-width: none;
+    object-fit: cover;
+    filter: blur(1.75rem) saturate(1.15) brightness(0.5);
+}
+
+.stage-cover {
+    position: relative;
+    width: auto;
+    height: 86%;
+    max-width: 86%;
+    border: 0.0625rem solid var(--panel-edge);
+    border-radius: calc(var(--radius) * 0.8);
+    background: center / cover no-repeat;
+    transition: border-color 0.15s ease;
+}
+
+.sheet .play-here:not(.playing):has(.stage:hover, .play-button:hover, .play-button:focus-visible) .stage-cover {
+    border-color: var(--accent);
+}
+
+.sheet .stage iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--surface);
+}
+
+.sheet .play-line {
+    margin: 0;
+    padding: 0.75rem clamp(1rem, 3vw, 1.75rem) 0;
+}
+
+.screen-head,
+.screen-body {
+    padding-inline: clamp(1rem, 3vw, 1.75rem);
+}
+
+.screen-head {
+    margin-top: var(--line);
+}
+
+.screen-head h2 {
+    margin: 0;
+    font-size: clamp(1.9rem, 5vw, 2.6rem);
+    line-height: 1.1;
+}
+
+.screen-rank {
+    margin: 0.35rem 0 0;
+}
+
+/* Her words on the left, the facts beside them; one under the other where there is no room. */
+.screen-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 16rem;
+    gap: var(--line) 2.5rem;
+    margin-top: var(--line);
+    padding-bottom: calc(var(--line) * 1.5);
+}
+
+@media (max-width: 46rem) {
+    .screen-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.screen-words > :first-child {
+    margin-top: 0;
+}
+
+.screen-words > :last-child {
+    margin-bottom: 0;
+}
+
+.screen-words h3,
+.screen-facts h3 {
+    margin: calc(var(--line) * 1.25) 0 calc(var(--line) * 0.4);
+    font-size: 1.15rem;
+}
+
+.screen-facts h3 {
+    margin-top: 0;
+}
+
+.screen-facts dl {
+    margin: 0;
+}
+
+.screen-facts dl > div + div {
+    margin-top: 0.6rem;
+}
+
+.screen-facts dt {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.screen-facts dd {
+    margin: 0;
+}
+
+.screen-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 1.1rem;
+    margin: var(--line) 0 0;
+    padding: 0;
+    list-style: none;
+}

@@ -1,4 +1,4 @@
-// What each kind of content on the site is made of: posts, minis, pages, projects and the resume.
+// What each kind of content on the site is made of: posts, minis, pages, projects, the resume, and what she likes.
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import { z } from "astro/zod";
@@ -115,4 +115,54 @@ const minis = defineCollection({
     }),
 });
 
-export const collections = { blog, minis, pages, projects, resume };
+/**
+ * What she likes, on /interests/: a game, a film, a show, or music. The file name is its address
+ * under /interests/, and the words in the file are hers: why she loves it and her history with it.
+ * The facts are looked up and kept here beside them.
+ */
+const interests = defineCollection({
+    loader: glob({ base: "./src/content/interests", pattern: "*.mdx" }),
+    schema: ({ image }) =>
+        z.object({
+            name: z.string(),
+            section: z.enum(["games", "movies", "shows", "music"]),
+            /** Position in its section, lowest first: the order she listed them in. */
+            order: z.number(),
+            /** A favorite's tile is twice the size and comes first in its section; an honorable mention comes last. */
+            rank: z.enum(["favorite", "honorable mention"]).optional(),
+            /** The game's cover, the film's poster, the album's sleeve. */
+            cover: image(),
+            /** What the cover shows, for people who cannot see it. */
+            coverAlt: z.string(),
+            /** Its maker's own video on YouTube, by the eleven letters of its address. Nothing is loaded from YouTube until it is pressed. */
+            video: z.object({
+                id: z.string().regex(/^[\w-]{11}$/, "The eleven letters after watch?v= in the video's address."),
+                /** What the video is, in a few words that finish "Loads …": "the launch trailer", or a song's name. */
+                what: z.string(),
+                /** Where it plays from, in words that finish "It plays from …": "the channel Playstack". */
+                from: z.string(),
+            }),
+            /** Who made it, when, where it runs or aired, each a label and what it is. */
+            facts: z.array(z.object({ label: z.string(), value: z.string() })).default([]),
+            /** Where to find it: its store page, the artist's own page. */
+            links: z.array(z.object({ href: z.url(), label: z.string() })).default([]),
+        }),
+});
+
+/**
+ * The parts of /interests/: games, movies and shows, music, hobbies. Each file is a heading and, under
+ * it, her own words for that part; a part with `groups` then shows the tiles of those kinds, and one
+ * without (hobbies) is its words alone.
+ */
+const interestParts = defineCollection({
+    loader: glob({ base: "./src/content/interests/parts", pattern: "*.mdx" }),
+    schema: z.object({
+        title: z.string(),
+        /** Position on the page, lowest first. */
+        order: z.number(),
+        /** Which kinds of thing are tiled under the words, in order. With more than one, each is labelled. */
+        groups: z.array(z.enum(["games", "movies", "shows", "music"])).default([]),
+    }),
+});
+
+export const collections = { blog, interestParts, interests, minis, pages, projects, resume };
