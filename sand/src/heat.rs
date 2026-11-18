@@ -59,9 +59,15 @@ impl World {
     pub(crate) fn heat(&mut self) {
         let s = self.stride;
         let b = BORDER as i32;
-        let (seed, steps) = (self.seed ^ 0x4ea7, self.steps);
-        // a side is known by the cell left of it or above it, and which of the two it is
-        let roll = |side: usize| chance(seed, steps, side) >> 24;
+        // A side is known by the cell left of it or above it, and which of the two it is. Its chance
+        // is a small mix of that and a number worked out once a step: every side that carries heat
+        // rolls, four to a cell in a cloud of steam, and the world's full counter for chance, three
+        // long multiplications a roll, was a third of the pass there.
+        let salt = chance(self.seed ^ 0x4ea7, self.steps, 0);
+        let roll = |side: usize| {
+            let mixed = (side as u32 ^ salt).wrapping_mul(0x9e37_79b1);
+            (mixed ^ (mixed >> 15)).wrapping_mul(0x2c1b_3c6d) >> 24
+        };
         // Rows are worked from the top down and written as they go. Each row's cells as they were
         // are kept first, and the row above's too, so every cell reads only temperatures from
         // before the pass: the row below has not been reached yet.

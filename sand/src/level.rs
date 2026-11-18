@@ -20,8 +20,11 @@ use crate::materials::{Kind, TABLE};
 use crate::world::{World, clock_of, material, with_state};
 use alloc::vec::Vec;
 
-/// How many cells a body moves in one pass.
+/// How many cells a body of liquid moves in one pass.
 const PER_BODY: usize = 256;
+/// How many a body of gas moves in one. Nearly every cell of a cloud of steam has air beside it, so
+/// each is weighed for a place among these, and the weighing grows with how many are kept.
+const PER_GAS: usize = 64;
 /// The pass runs one step in this many, over everything that has changed since it last ran. Walking a
 /// whole lake or a whole cloud every step that a drop fell into it was most of a busy step; and a
 /// liquid in the open finds its level cell by cell now (`levels` in `world.rs`), so this is left with
@@ -94,18 +97,18 @@ enum Found {
     Moves([(u32, u32); PER_BODY], usize, u32),
 }
 
-/// Keeps the `PER_BODY` smallest ranks in `list`, smallest first.
-fn keep(list: &mut [(u64, u32)], count: &mut usize, rank: u64, cell: u32) {
-    if *count == PER_BODY && rank >= list[PER_BODY - 1].0 {
+/// Keeps the `most` smallest ranks in `list`, smallest first.
+fn keep(list: &mut [(u64, u32)], count: &mut usize, most: usize, rank: u64, cell: u32) {
+    if *count == most && rank >= list[most - 1].0 {
         return;
     }
-    let mut at = (*count).min(PER_BODY - 1);
+    let mut at = (*count).min(most - 1);
     while at > 0 && list[at - 1].0 > rank {
         list[at] = list[at - 1];
         at -= 1;
     }
     list[at] = (rank, cell);
-    *count = (*count + 1).min(PER_BODY);
+    *count = (*count + 1).min(most);
 }
 
 /// Whether a cell of this kind can move into a cell holding `cell`: a liquid into an empty cell, a
@@ -235,6 +238,7 @@ impl World {
         // `height` how far a row lies that way: the highest top and the lowest place of a liquid,
         // the lowest top and the highest place of a gas.
         let gas = kind == Kind::Gas;
+        let most = if gas { PER_GAS } else { PER_BODY };
         let out = |at: usize| if gas { at + s } else { at - s };
         let under = |at: usize| if gas { at - s } else { at + s };
         // ties go to the left on one step and the right on the next, so nothing drifts
@@ -276,10 +280,10 @@ impl World {
                 let past = out(at);
                 if open(kind, cells[past]) && clock_of(cells[at]) != clock {
                     // a surface cell, and an open place past it
-                    keep(&mut levels.tops, &mut levels.tops_count, ((bottom - height(row)) << 32) | tie(at), at as u32);
+                    keep(&mut levels.tops, &mut levels.tops_count, most, ((bottom - height(row)) << 32) | tie(at), at as u32);
                     if levels.marks[past] != PLACE | id {
                         levels.marks[past] = PLACE | id;
-                        keep(&mut levels.places, &mut levels.places_count, (height(beyond) << 32) | if reference.is_some() { near(past) } else { tie(past) }, past as u32);
+                        keep(&mut levels.places, &mut levels.places_count, most, (height(beyond) << 32) | if reference.is_some() { near(past) } else { tie(past) }, past as u32);
                     }
                 }
             }
@@ -288,7 +292,7 @@ impl World {
                 let rest = cells[under(end)];
                 if open(kind, cells[end]) && !open(kind, rest) && material(rest) != crate::materials::VOID && levels.marks[end] != PLACE | id {
                     levels.marks[end] = PLACE | id;
-                    keep(&mut levels.places, &mut levels.places_count, (height(row) << 32) | if reference.is_some() { near(end) } else { tie(end) }, end as u32);
+                    keep(&mut levels.places, &mut levels.places_count, most, (height(row) << 32) | if reference.is_some() { near(end) } else { tie(end) }, end as u32);
                 }
             }
             // the rows above and below: one start for each run of cells that join
