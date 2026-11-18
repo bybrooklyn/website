@@ -2,8 +2,8 @@
 
 Small things to play with at `/minis/`, each opened in the same kind of panel as a post or a project. Each
 mini is one scene file in `src/minis/` and a few lines of words in `src/content/minis/`, and most run on Mote
-(`mote.md`). This file covers the minis page and the small minis; the Walker, the generalist and Comet have
-files of their own (`walker.md`, `generalist.md`, `comet.md`, `sand.md`).
+(`mote.md`). This file covers the minis page and the small minis; the Walker, the generalist and Sand have
+files of their own (`walker.md`, `generalist.md`, `sand.md`).
 
 ## Where the code is
 
@@ -52,9 +52,12 @@ How to add a mini is in `src/mote/README.md`.
 - **The terminal** (not part of Mote): plays back a recorded run of a command-line program (an asciinema
   `.cast` file) with its timing. Nothing runs. It is used on the mFetchy and Terrustia project pages, and
   opens the way a picture does, on the same opener as the picture viewer.
-- The Walker, the generalist (a draft), Comet (a draft) and Sand (a draft, stage 4 of its plan measured:
+- The Walker, the generalist (a draft) and Sand (a draft, stage 4 of its plan measured:
   the page, with pride sand and its flags laid as poured sand, glow and links to worlds; sand that comes
   down to its angle promptly and lava that pools) are minis too.
+- **Comet** was a draft, an aim-and-fling gravity game built on 16 and 17 November 2026. The owner asked
+  for it to be removed on 18 November, and it was, whole: its page, its scripts and their tests, its
+  picture and its notes. What it was is in the repository's history.
 - **Rolling** was a draft page for watching Mote's marbles roll down a ramp, round a loop, along a banked
   spiral and through a funnel. The owner asked what it was for and chose to remove it on 17 November 2026,
   Marbles having taken its place. Its course is kept without a page (`course.ts`), for `course.test.ts` to

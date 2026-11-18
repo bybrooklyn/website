@@ -28,7 +28,6 @@ open, how to run and test it, and its known weak spots.
 - [walker.md](walker.md): the Walker mini and its Rust engine.
 - [generalist.md](generalist.md): the generalist, a creature that sees and learns, and its long plan.
 - [generalist-plan.md](generalist-plan.md): the Generalist's plan: everything decided for it, in an order to build in.
-- [comet.md](comet.md): Comet, an aim-and-fling gravity game, a draft.
 - [interests.md](interests.md): the interests page, tiles that swell into sheets, a draft until its words are read.
 - [audit-pages-17-november.md](audit-pages-17-november.md): every page measured against the rest for fit: how the interests page departs, and fourteen other mismatches, each with the ways it could go.
 - [spectrum.md](spectrum.md): Spectrum, the sliders for gender and sexuality, rewritten for the site.

@@ -87,10 +87,6 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Culture: each creature watches the last one's best runs.
 - The article: a short story, then a simple technical write-up with the commands to rerun it.
 
-## Comet
-
-- Have it seen and played; decide whether it is what was wanted and when it leaves draft.
-
 ## Sending files between devices (Foxy's idea, rethought)
 
 - After the Quires are good. To be thought through again before anything is built: the existing Rust tool and its specification are not the plan.

@@ -426,24 +426,6 @@
     margin-inline-start: 0.8rem;
 }
 
-/* Comet's panel is one quiet line: which field and the shots on it, and the sound. */
-.mini-stage[data-mini="comet"] {
-    --panel-room: 4.5rem;
-}
-
-.comet-line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.3rem 1.5rem;
-}
-
-.comet-said {
-    margin: 0;
-    color: var(--muted);
-}
-
 /* The marble run's stage, as the Walker's is: the scene on the left with the row of pieces straight under
    it, and the tools in a column on the right, all of it in the first screen of a laptop; on a phone the
    column goes under the row. The scene is as short as that takes. */
