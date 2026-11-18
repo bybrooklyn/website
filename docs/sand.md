@@ -1537,3 +1537,25 @@ well over the ground, steam well over stone.
   the stage; at 390 by 800 the world is 324 by 464, and a finger pours with the page still (`touch-action:
   none`).
 
+## Lag reported on 18 November, and what was measured
+
+The owner found Sand laggy, and water worse, on the night of 17 to 18 November 2026. It was measured the
+same night on the owner's machine and card (an RTX 3070 Ti), in a headless Chromium given the real card
+(`--enable-gpu --ignore-gpu-blocklist --use-angle=gl-egl`; without those the test browser draws in
+software and tells nothing about speed):
+
+- The engine alone, with the biggest water brush held still for ten seconds in the 2400 by 1200 world:
+  about 4 ms a step, worst about 10, so a second's sixty steps take about 0.27 s. Settled within seven
+  seconds of letting go.
+- The page itself, worker and drawing and all, the same brush held for eight seconds: sixty frames a
+  second from the worker and from the page, with the gap between frames 16.7 ms at the median and 17 ms
+  at the 95th.
+- The same in software drawing: about twenty frames a second while there is water. So a browser that has
+  lost the card would show exactly what was reported.
+
+The machine, when the lag was seen, had a load average of 17 on sixteen threads and 22 GB in swap, with
+the browser's own memory mostly swapped out: eight cores were encoding video for another page of the
+site, long test runs had been going through the day, and other work was compiling. Nothing in Sand was
+changed. If lag is reported again, measure the machine first (`uptime`, `free -h`), then the page with the
+card as above, and only then the engine.
+
