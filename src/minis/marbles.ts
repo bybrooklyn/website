@@ -41,7 +41,7 @@ import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, 
 import { AXES, ARROW, across, boxed, dragged, freedomOf, pixelsOf, pointOf, pointsLayout, snapped, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, gripAt, ground, kept, lensed, nearest, pannedTo, project, ray, straightOn, walked, zoomedAt, type Grip, type Orbit } from "./orbit";
-import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, cutOf, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
+import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, cutOf, isBent, keyOf, nameOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
 import { fits, jointsOf, links, open, read, roomOf, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
@@ -1051,6 +1051,7 @@ export default function marbles(m: Mote): Scene {
         carried.joins = joinsOf(home);
         if (inRun) changed(false);
         if (at) follow(at.x, at.y, typeof hand === "number" && held.get(hand)?.hand.kind === "touch" ? "touch" : "mouse", !inRun);
+        tell();
         m.wake();
     };
 
@@ -1229,7 +1230,7 @@ export default function marbles(m: Mote): Scene {
     /** Pieces given new numbers, to be added to the run. */
     const fresh = (pieces: Placed[]) => pieces.map((piece) => ({ ...piece, kind: { ...piece.kind, sizes: [...piece.kind.sizes] }, id: nextId++ }));
     /** What pieces are called, to say so: one by its name in the box, more as so many pieces. */
-    const namedOf = (pieces: Placed[]): string => (pieces.length === 1 ? (BOX.find((entry) => keyOf(entry.kind) === keyOf(pieces[0]!.kind))?.name ?? "a piece") : `${pieces.length} pieces`);
+    const namedOf = (pieces: Placed[]): string => (pieces.length === 1 ? (nameOf(pieces[0]!.kind) ?? "a piece") : `${pieces.length} pieces`);
     const fromBox = (kind: Kind): Placed[] => [{ id: nextId++, kind: { ...kind, sizes: [...kind.sizes] }, place: { x: 0, z: 0, y: -shapeOf(kind).low, turn: 0 } }];
 
     // ---- the points of a bent piece ----
@@ -2425,6 +2426,8 @@ export default function marbles(m: Mote): Scene {
             // what is chosen: the piece's words alive while something is, each as far as it can act
             const one = chosen.size === 1 ? run.find((piece) => chosen.has(piece.id)) : undefined;
             for (const tool of pieceTools) can(tool, chosen.size > 0);
+            // what is in hand, from the box or carried, can be turned, mirrored and put back from here too
+            if (carried) for (const tool of [turnTool, mirrorTool, removeTool]) can(tool, true);
             can(bendTool, Boolean(one && pointsOf(one.kind)));
             can(straightenTool, Boolean(one && isBent(one.kind)));
             can(longerTool, Boolean(one && stepped(one.kind, 1)));
@@ -3457,7 +3460,7 @@ function paintBox(view: View | undefined, colors: { glass: Color }, groups: Plac
                 const part = own.add(mesh, look);
                 part.at = [piece.place.x * CELL, piece.place.y * LEVEL, piece.place.z * CELL];
                 part.turn = turnAbout((piece.place.turn * Math.PI) / 2);
-                part.seed = woodSeed(BOX.findIndex((entry) => keyOf(entry.kind) === keyOf(piece.kind)) + 7);
+                part.seed = woodSeed(BOX.findIndex((entry) => entry.name === nameOf(piece.kind)) + 7);
                 parts.push(part);
             }
             for (const box of shapeOf(piece.kind).room) {

@@ -1362,6 +1362,20 @@ toward the front of the picture. Straight down, a slope is a straight with its f
 and a hopper, a drop or a chime bar is a square; tipped so, a slope's front edge is seen to fall to the
 right, and what stands up stands up. A curve is still an arc and a straight a bar.
 
+### One piece per shape
+
+The box held 29 pieces, a left and a right of the tight curve, the wide curve, the turn back and the S
+bend. It holds 25, one of each shape (`BOX` in `pieces.ts`): the four twins are each one piece, the one
+that turns right, and mirror (F, or the word in the column) makes it turn left, in hand or once placed.
+Their names lose their left and right: **tight curve**, **wide curve**, **turn back**, **S bend**. The
+spiral, the funnel and the loop were one piece each already.
+
+Nothing is lost. Every piece the box held is one of these or one mirrored (`EVERY` lists them all, each
+way round, and the tests that went through the box go through it); a run written with mirrored pieces is
+read as it was, since a run's text never named the box; pieces of one's own are kept as they were. While
+a piece is in hand from the box, turn, mirror and delete in the column are live, not only the keys. A piece
+is said by its shape's name either way round ("tight curve placed").
+
 ## Open
 
 - Its name.

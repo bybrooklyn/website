@@ -8,7 +8,7 @@
 // saying why, where they cannot go on. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
+import { BOX, CELL, EVERY, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
 import { START, about, asOwn, carriedLevel, clicked, follows, groupFits, groupMisfit, groupSnaps, heldAt, isOut, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, placing, rebent, snapNear, stepped, then } from "./edit";
 import { makeTable } from "./table";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
@@ -156,7 +156,7 @@ test("a piece made longer or shorter goes to the next setting it is made with, a
     expect(stepped(kind("t"), -1)).toBeUndefined();
     // a bent straight made longer keeps its bow
     expect(stepped(withBend(kind("s", [2]), [20, 0, 20, 0]), 1)!.bend!.length).toBe(4);
-    for (const entry of BOX) {
+    for (const entry of EVERY) {
         const longer = stepped(entry.kind, 1);
         if (longer) expect(shapeOf(longer).joints[0]!.at).toEqual([0, 0, 4]);
     }
@@ -208,7 +208,7 @@ function pressed(names: string[], start: Placed[] = []): { run: Placed[]; refuse
 }
 
 test("a run built only by pressing the box on an empty table flows down from a hopper put up high, and a marble reaches its tray", () => {
-    const { run: built, refused } = pressed(["hopper", "gentle slope", "steep slope", "tight curve left", "drop", "tray"]);
+    const { run: built, refused } = pressed(["hopper", "gentle slope", "steep slope", "tight curve", "drop", "tray"]);
     expect(refused).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
     expect(built[0]!.place.y).toBe(START);
     // every piece joined to the one before it, its way in to the way out before it, each lower or level
@@ -239,7 +239,7 @@ test("a slope is never joined by its low end so that the run climbs: where it wo
     expect(pressed(["hopper", "hopper"]).refused).toEqual([undefined, "room"]);
     // the first made run, which has no open end: a hopper pressed goes up high in the middle of the view, and the pieces after it go down from it
     const whole = read(RUNS[0]!.text);
-    const after = pressed(["hopper", "straight", "gentle slope", "long straight", "steep slope", "wide curve right", "drop"], whole);
+    const after = pressed(["hopper", "straight", "gentle slope", "long straight", "steep slope", "wide curve", "drop"], whole);
     expect(after.refused).toEqual([undefined, undefined, undefined, undefined, undefined, undefined, undefined]);
     for (const [a, b] of links(after.run.slice(whole.length))) {
         const [from, to] = isOut(after.run.find((piece) => piece.id === a.id)!.kind, a.joint) ? [a, b] : [b, a];

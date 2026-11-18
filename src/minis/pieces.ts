@@ -135,25 +135,25 @@ export interface Entry {
     kind: Kind;
 }
 
-const entry = (name: string, family: Family, sizes: number[] = [], mirror = false): Entry => ({ name, kind: { family, sizes, mirror } });
+const entry = (name: string, family: Family, sizes: number[] = []): Entry => ({ name, kind: { family, sizes, mirror: false } });
 
-/** The box, in the order it is shown. Left and right are the same piece mirrored. */
+/**
+ * The box, in the order it is shown: one piece for each shape. A piece that turns one way is the box's
+ * as it turns right (a curve, a turn back, an S bend) and is mirrored to turn left; until 17 November
+ * 2026 the box held both, a left and a right of each.
+ */
 export const BOX: Entry[] = [
     entry("hopper", "h"),
     entry("straight", "s", [1]),
     entry("long straight", "s", [2]),
     entry("longer straight", "s", [3]),
-    entry("tight curve left", "c", [1, 1], true),
-    entry("tight curve right", "c", [1, 1]),
-    entry("wide curve left", "c", [3, 1], true),
-    entry("wide curve right", "c", [3, 1]),
-    entry("turn back left", "c", [1, 2], true),
-    entry("turn back right", "c", [1, 2]),
+    entry("tight curve", "c", [1, 1]),
+    entry("wide curve", "c", [3, 1]),
+    entry("turn back", "c", [1, 2]),
     entry("gentle slope", "d", [2, 1]),
     entry("steep slope", "d", [2, 2]),
     entry("drop", "v", [4]),
-    entry("S bend left", "z", [2, 1], true),
-    entry("S bend right", "z", [2, 1]),
+    entry("S bend", "z", [2, 1]),
     entry("spiral", "x", [2, 6]),
     entry("funnel", "f"),
     entry("loop", "l"),
@@ -169,6 +169,15 @@ export const BOX: Entry[] = [
     entry("bell", "n"),
     entry("drum", "q"),
 ];
+
+/** The families whose pieces are not the same mirrored: a curve, an S bend, a spiral, the funnel, whose way out is a cell aside, and the loop. */
+export const HANDED = new Set<Family>(["c", "z", "x", "f", "l"]);
+
+/** Every piece the box gives, each way round: a piece of a handed family mirrored too, as mirror makes it. */
+export const EVERY: Entry[] = BOX.flatMap((one) => (HANDED.has(one.kind.family) ? [one, { name: `${one.name} mirrored`, kind: { ...one.kind, mirror: true } }] : [one]));
+
+/** The name of the box's piece a kind is, either way round, bent or not; none for a kind the box does not give. */
+export const nameOf = (kind: Kind): string | undefined => BOX.find((one) => one.kind.family === kind.family && one.kind.sizes.join() === kind.sizes.join())?.name;
 
 // ---- a piece in its own place ----
 

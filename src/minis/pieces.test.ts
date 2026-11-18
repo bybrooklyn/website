@@ -6,7 +6,7 @@
 // of its points, changes its curve smoothly all along, and is held to its limits. Run with `bun run test`.
 
 import { describe, expect, test } from "bun:test";
-import { BOX, CELL, DEEP, GROOVE, LEVEL, RISE, STEEPEST, TIGHTEST, WARN_STEEP, WARN_TIGHT, bendAllowed, blockMesh, brokenBy, isBent, keyOf, made, pathOf, pointsAt, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, triangles, warned, wayToWorld, WIDE, withBend, type Kind, type Place } from "./pieces";
+import { BOX, CELL, DEEP, EVERY, GROOVE, LEVEL, RISE, STEEPEST, TIGHTEST, WARN_STEEP, WARN_TIGHT, bendAllowed, blockMesh, brokenBy, isBent, keyOf, made, pathOf, pointsAt, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, triangles, warned, wayToWorld, WIDE, withBend, type Kind, type Place } from "./pieces";
 import { isPart } from "./parts";
 import type { V3 } from "../mote/solids";
 
@@ -14,7 +14,7 @@ const close = (a: V3, b: V3, by = 1e-9) => Math.abs(a[0] - b[0]) <= by && Math.a
 const places: Place[] = [0, 1, 2, 3].map((turn) => ({ x: turn - 2, z: 3 - turn, y: 12, turn }));
 
 describe("each piece of the box", () => {
-    for (const { name, kind } of BOX) {
+    for (const { name, kind } of EVERY) {
         test(`${name}: joints on the grid, track ending exactly at them, turned and mirrored alike`, () => {
             const shape = shapeOf(kind);
             for (const joint of shape.joints) {
@@ -91,6 +91,18 @@ test("a tight turn is a square block with its channel cut level into it: its end
     // a wide curve, and a bent tight curve, are track as before
     expect(shapeOf({ family: "c", sizes: [3, 1], mirror: false }).cut).toBeUndefined();
     expect(shapeOf({ family: "c", sizes: [1, 1], mirror: false, bend: [10, 0] }).cut).toBeUndefined();
+});
+
+test("the box holds one piece for each shape, and every piece it held, left and right, is one of them or one mirrored", () => {
+    // its names say no left or right
+    expect(BOX.every((one) => !/\b(left|right)\b/.test(one.name))).toBe(true);
+    expect(new Set(BOX.map((one) => one.name)).size).toBe(BOX.length);
+    expect(BOX.length).toBe(25);
+    // the 29 the box held until 17 November 2026, by family, numbers and whether mirrored
+    const held = ["h", "s1", "s2", "s3", "c1.1m", "c1.1", "c3.1m", "c3.1", "c1.2m", "c1.2", "d2.1", "d2.2", "v4", "z2.1m", "z2.1", "x2.6", "f", "l", "t", "g", "w", "e2", "j", "o4", "u8", "y4", "m4", "n", "q"];
+    const every = new Set(EVERY.map((one) => keyOf(one.kind)));
+    for (const key of held) expect({ key, kept: every.has(key) }).toEqual({ key, kept: true });
+    expect(BOX.find((one) => one.name === "tight curve")!.kind).toEqual({ family: "c", sizes: [1, 1], mirror: false });
 });
 
 test("a straight takes up the cells it runs through, its block below and room for a marble above", () => {

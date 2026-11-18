@@ -6,7 +6,7 @@
 // with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { BOX, pointsOf, shapeOf, withBend, type Kind } from "./pieces";
+import { EVERY, pointsOf, shapeOf, withBend, type Kind } from "./pieces";
 import { RUNS } from "./runs";
 import { TABLE, cellsOf, fit, fits, grounded, jointsOf, links, meets, neighbours, open, overlaps, read, snaps, upgraded, write, type Placed } from "./run";
 
@@ -41,7 +41,7 @@ test("two straights end to end are joined, and part when one is moved a cell", (
 
 test("any piece of the box fitted by any of its joints to an open joint facing any way meets it exactly", () => {
     const ways: [number, number, number][] = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
-    for (const { kind: piece } of BOX) {
+    for (const { kind: piece } of EVERY) {
         for (const way of ways) {
             // an open joint in the middle of a cell's edge, facing out across it
             const at: [number, number, number] = way[0] ? [16, 24, 12] : [12, 24, 16];
@@ -85,7 +85,7 @@ test("a run written as text reads back the same, piece for piece, for many runs 
     const random = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
     for (let round = 0; round < 200; round++) {
         const run: Placed[] = Array.from({ length: 1 + Math.floor(random() * 12) }, (_, i) => {
-            const entry = BOX[Math.floor(random() * BOX.length)]!;
+            const entry = EVERY[Math.floor(random() * EVERY.length)]!;
             // half the pieces that bend are bent, by any whole millimetres the text allows
             const points = pointsOf(entry.kind);
             const bend = points && random() < 0.5 ? Array.from({ length: 2 * points }, () => Math.floor(random() * 401) - 200) : undefined;
