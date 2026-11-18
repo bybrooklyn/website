@@ -47,3 +47,7 @@ codecs/rust/target/
 
 # Notes kept for her and not published: answers she gave in interviews, as she gave them.
 /notes/
+
+# Copies of trailers for the interests page: other people's videos, encoded small, kept on this computer and
+# uploaded with a deploy, never committed (docs/interests.md).
+/public/videos/
