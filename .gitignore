@@ -44,3 +44,6 @@ sand/target/
 
 # what cargo leaves beside imgQuire's Rust encoders (codecs/build.sh builds them elsewhere)
 codecs/rust/target/
+
+# Notes kept for her and not published: answers she gave in interviews, as she gave them.
+/notes/
