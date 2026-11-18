@@ -37,7 +37,7 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
 <Opened title={name} description={summary} image={sharePicture("project-tone-tags")} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
     <article class="post tonetags-page">
         <header class="post-header">
-            <h1>{name.toLowerCase()}</h1>
+            <h1>{name}</h1>
             <p class="lede">{summary}</p>
         </header>
 
@@ -54,7 +54,7 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
             {/* the ones seen every day, in a strip; it folds away while something is being looked for */}
             <section class="tonetags-everyday fold open">
                 <div>
-                    <h2>the ones you will see most</h2>
+                    <h2 class="label">the ones you will see most</h2>
                     <ul>
                         {everyday.map(({ tag }) => (
                             <li>

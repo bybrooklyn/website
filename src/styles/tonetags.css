@@ -122,10 +122,9 @@
 }
 
 /* The everyday ones: a tag and its meaning together, one after another, wrapping as words do. */
-.tonetags-everyday h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
-    color: var(--muted);
+/* Its small heading is the site's label (base.css), a little closer to the strip under it. */
+.tonetags-everyday .label {
+    margin-bottom: 0.5rem;
 }
 
 .tonetags-everyday ul {
