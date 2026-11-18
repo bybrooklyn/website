@@ -1467,8 +1467,24 @@ A lighter roll in the heat pass and fewer cells weighed in the gas pass were kep
 little. So a very large cloud still makes the world run slow, but in the worker it no longer makes the
 page slow with it.
 
-**Not yet done from that day's list**: fire's look, and a scene of its own for the small world in the
-list, which is empty until something is poured.
+**A fire is drawn as one body** (`FLAME` in `cells.ts`). The owner's word for the fire was that it was
+bad, and looked at near it was a spray of single orange cells with grey grains of smoke over it: every
+flame was drawn as a cell of its own color with a faint haze round it. The fire burns as it did; only
+its drawing changed. Each flame is gathered, by how hot it is, into the fourth number of the light's
+half-sized picture, and blurred with the light; where the cells are drawn, that field is read at each
+place and a little below it (toward the ground as the cells are kept, since a flame reaches upward)
+and colored by its strength: deep red at the fringe, through orange and gold, to near white at the
+heart. A flame's own cell is still drawn, faintly, as a fleck in the body, and over a grain the body
+shows at four tenths, so burning wood is seen through its flames. A brush of fire held in the air is a
+tapering flame with a white heart; a wooden wall alight has tongues up both its sides.
+
+**Smoke, steam and cloud are soft bodies.** A soft cell is drawn itself at 0.3 of its color (0.7
+before, which read as grains), and the haze gathered from soft cells is brought up where it is thin,
+as 1 - e^(-4.5 x), so that a few cells of smoke far apart are a wisp and a thick cloud is no more solid
+than it was. Flames no longer add to the haze.
+
+**Not yet done from that day's list**: a scene of its own for the small world in the list, which is
+empty until something is poured.
 
 ## The look, as chosen
 

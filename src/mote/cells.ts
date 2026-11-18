@@ -93,11 +93,27 @@ export const HALO = { strength: 2.2, smaller: 4 };
 /** How many cells past what the canvas shows the light and haze are worked out, as far as the halo reaches. */
 const REACH = 96;
 
-/** How many times more a flame adds to the haze than smoke or steam does. */
-const FLAME_HAZE = 2.5;
+/**
+ * A fire is drawn as one body, not flame by flame. Its flames are gathered, by how hot each is, into a
+ * field blurred with the light, and the field is colored by how strong it is at each place: deep red at
+ * its fringe, through orange and gold, to near white at its heart. `gathered` and `gain` are how much a
+ * flame counts for where it is gathered and where it is drawn; `from` and `full` the strengths between
+ * which the body comes in; `reach` how many cells above itself a flame still shows, and how strongly, so
+ * that the body is drawn out upward into tongues; `sharp` how strongly a flame's own cell is still drawn
+ * (a fleck in the body); and `over` how much of the body shows over a grain, so that burning wood is seen
+ * through its flames. Before 17 Nov 2026 each flame was a cell of its own color with a haze round it, and
+ * a fire was a spray of orange dots.
+ */
+export const FLAME = { gathered: 2, gain: 2.6, from: 0.06, full: 0.26, reach: [[2, 0.85], [5, 0.6]] as const, sharp: 0.3, over: 0.4 };
 
-/** How strongly a soft cell is drawn itself, from 0 to 1; the rest of it is the haze spread around it. */
-export const SOFT_SHARP = 0.7;
+/**
+ * How strongly a soft cell is drawn itself, from 0 to 1; the rest of it is the haze spread around it. How
+ * much a soft cell counts for where the haze is gathered; and how the haze is brought up where it is
+ * thin: as 1 - e^(-`thick` x), so that a few cells of smoke far apart read as a wisp of smoke and not
+ * as grey grains, while a thick cloud is no more solid than it was.
+ */
+export const SOFT_SHARP = 0.3;
+const HAZE = { gathered: 0.4, thick: 4.5 };
 
 /**
  * The weights of a blur across `taps` texels either side of the middle, as a bell curve of spread
@@ -196,6 +212,7 @@ void main() {
     ivec2 low = ivec2(gl_FragCoord.xy);
     vec3 shine = vec3(0.0);
     vec4 haze = vec4(0.0);
+    float flame = 0.0;
     for (int dy = 0; dy < 2; dy++) {
         for (int dx = 0; dx < 2; dx++) {
             // counted up from the bottom here, and from the top in the cells
@@ -208,14 +225,14 @@ void main() {
                 float t = clamp((float(cell.b) - 70.0) / 170.0, 0.0, 1.0);
                 float eased = t * t * (3.0 - 2.0 * t);
                 shine += color.rgb * eased * eased;
-            }
-            // a flame is soft and gives light: its haze counts for more, so that flames a few cells
-            // apart are one body of fire
-            if ((mode & 4u) != 0u) haze += vec4(color.rgb * color.a, color.a) * ((mode & 2u) != 0u ? ${FLAME_HAZE.toFixed(1)} : 1.0);
+                // a flame is soft and gives light: it is gathered into the body of the fire, by its heat
+                if ((mode & 4u) != 0u) flame += 0.35 + 0.65 * eased;
+            } else if ((mode & 4u) != 0u) haze += vec4(color.rgb * color.a, color.a);
         }
     }
-    light = vec4(shine * 0.25, 1.0);
-    soft = min(haze * 0.25, 1.0);
+    // the fourth number of the light is the fire's body
+    light = vec4(shine * 0.25, min(flame * 0.25 * ${FLAME.gathered.toFixed(1)}, 1.0));
+    soft = min(haze * ${HAZE.gathered.toFixed(2)}, 1.0);
 }`;
 
 /** Blurs both pictures one way, across or down, by the weights of `blurred`, into pictures of size `target`. */
@@ -299,7 +316,7 @@ vec4 shade(ivec2 at, int depth) {
     vec4 sharp = vec4(cell.rgb * cell.a, cell.a);
     // a soft cell is fainter itself, the rest of it in the haze around it; strong enough that a wisp of
     // steam reads as light and not as a grey grain
-    if ((mode & 4u) != 0u) sharp *= ${SOFT_SHARP.toFixed(2)};
+    if ((mode & 4u) != 0u) sharp *= (mode & 2u) != 0u ? ${FLAME.sharp.toFixed(2)} : ${SOFT_SHARP.toFixed(2)};
     return sharp;
 }
 void main() {
@@ -336,7 +353,21 @@ void main() {
     vec2 held = turn == 1 ? vec2(seen.y, float(size.x) - seen.x) : turn == 2 ? vec2(float(size.x) - seen.x, float(size.y) - seen.y) : turn == 3 ? vec2(float(size.y) - seen.y, seen.x) : seen;
     vec2 uv = vec2(held.x, float(turn == 1 || turn == 3 ? size.x : size.y) - held.y) / grid;
     vec4 haze = texture(soft, uv);
+    // thin haze is brought up, so that scattered cells of a gas are a wisp and not grains
+    if (haze.a > 0.001) haze *= (1.0 - exp(-${HAZE.thick.toFixed(1)} * haze.a)) / haze.a;
     vec4 out4 = sharp + haze * (1.0 - sharp.a);
+    if (glow > 0.0) {
+        // The body of a fire: how strong the gathered flames are here, and a little below here (toward
+        // the ground as the cells are kept), since a flame reaches upward; colored by that strength.
+        vec2 cell = 1.0 / grid;
+        float body = max(texture(light, uv).a, max(${FLAME.reach[0][1].toFixed(2)} * texture(light, uv - vec2(0.0, ${FLAME.reach[0][0].toFixed(1)}) * cell).a, ${FLAME.reach[1][1].toFixed(2)} * texture(light, uv - vec2(0.0, ${FLAME.reach[1][0].toFixed(1)}) * cell).a));
+        float f = clamp(body * ${FLAME.gain.toFixed(2)}, 0.0, 1.0);
+        if (f > 0.02) {
+            vec3 fire = f < 0.3 ? mix(vec3(0.50, 0.05, 0.02), vec3(1.0, 0.36, 0.05), f / 0.3) : f < 0.65 ? mix(vec3(1.0, 0.36, 0.05), vec3(1.0, 0.80, 0.22), (f - 0.3) / 0.35) : mix(vec3(1.0, 0.80, 0.22), vec3(1.0, 0.97, 0.82), (f - 0.65) / 0.35);
+            float cover = smoothstep(${FLAME.from.toFixed(2)}, ${FLAME.full.toFixed(2)}, f) * (1.0 - ${(1 - FLAME.over).toFixed(2)} * out4.a);
+            out4 = vec4(mix(out4.rgb, fire, cover), max(out4.a, cover));
+        }
+    }
     // the light falls on the grains near fire and lava, and glows more strongly in the air round them
     vec3 lit = texture(light, uv).rgb * glow * (1.0 + ${GLOW_AIR.toFixed(2)} * (1.0 - sharp.a));
     // and, far wider and fainter, on everything round a fire
