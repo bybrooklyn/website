@@ -351,7 +351,7 @@ void main() {
 const TAPS = 4;
 
 /** A grid of cells on `canvas`, or undefined where the browser has no WebGL 2. */
-export function cells(canvas: HTMLCanvasElement): Cells | undefined {
+export function cells(canvas: HTMLCanvasElement | OffscreenCanvas): Cells | undefined {
     const g = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: true });
     if (!g) return undefined;
     const shader = (kind: number, source: string) => {

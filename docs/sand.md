@@ -19,7 +19,12 @@ listed.
   with stripe colors, light and soft gases.
 - `src/minis/grains.ts`: what the page needs of the engine (the row's order and keys, how hard each
   material is poured, the world's size, the flag brush's block); `src/minis/sand.ts`: the scene and its
-  panel; `src/minis/flags.ts`: the flags; `src/minis/worlds.ts`: a world as text, for a link or a file.
+  panel, which is the page's side (the pointer, the view, the column, sound); `src/minis/sand-core.ts`:
+  the world's side (the engine, the grid that draws it, the stepping, undo), driven by messages and run
+  in a worker by `src/minis/sand-worker.ts`; `src/minis/flags.ts`: the flags; `src/minis/worlds.ts`: a
+  world as text, for a link or a file.
+- `sand/examples/film.rs`: films a scene frame by frame as one picture, to look at how things fall, flow
+  and burn without the page.
 - `scripts/sand-speed.ts`: the speed in headless Chromium.
 
 ## Decided
@@ -1430,8 +1435,40 @@ too and taken out for the same reason). Measured in the page's built engine, in 
 cells of water: a step while pouring 4.5 ms where it was 6.8, settling 2.7 where it was 5.4, and after
 that 0.9 where it was 3.7.
 
-**Not yet done from that day's list**: the engine still steps on the page's own thread, so a slow
-step is felt by the whole page; gases cost as they did; and fire's look.
+**The engine and its drawing run in a worker** (`sand-core.ts`, `sand-worker.ts`). The owner's point
+was that the rest of the site should not lag because Sand does. The engine stepped on the page's own
+thread, and sent its changed rows to the graphics card from there, so a step of 15 ms or an upload of
+megabytes held up scrolling and every button. Now the world, the stepping, the grid that draws it, the
+brush held still and the worlds kept for undo are one module, the core, that touches nothing of a page
+and is driven only by messages. The scene hands its lower canvas over (`transferControlToOffscreen`)
+and runs the core in a worker; the cells go from the engine's memory to the graphics card inside the
+worker and are never copied between threads. The scene keeps what is the page's: the pointer, the
+view, the column, the brush's outline and the wind's marks on the upper canvas, and sound. It tells the
+core each stroke as it is made, where the grid is placed, and what a held brush goes on doing; and it
+asks for one frame at a time with the time gone by, waiting for the answer before asking again, so a
+world too busy to keep up runs slower and never falls behind in a queue. Each answer carries what the
+world is doing (how much is awake, what would be heard, how many worlds can be undone), which is what
+the column's words, the sound and the stage's rest go by. A world, a turn of gravity and an opened
+link are the core's to make, and the scene's view follows when it says they are made. The small world
+in a list of minis, and any browser that cannot hand a canvas to a worker, run the same core on the
+page's thread; `?thread=page` in the address does so on purpose, to measure.
+
+Measured in headless Chromium, the largest brush of water dragged back and forth for four seconds: the
+time between two frames of the page was 16.7 ms every time with the core in a worker (the longest 16.8),
+and 83 ms typically, 117 at worst, with it on the page's thread. That browser draws in software, which
+is far slower than a graphics card, so the second figure flatters the worker; but the first is the
+point: nothing the world does is felt by the page.
+
+**Tried and not kept for gases**: a cloud of 100,000 cells of steam takes about 15 ms a step, 4.5 of
+it moving the cells, 3.7 the pass that gathers a gas under a lid and 5.5 heat. Working each gas cell
+one step in two, and that pass one step in two, both made steam cool before it could rise; laying a
+gas a third as thick made it rain out within a second, since its cells no longer keep each other warm.
+A lighter roll in the heat pass and fewer cells weighed in the gas pass were kept and were worth
+little. So a very large cloud still makes the world run slow, but in the worker it no longer makes the
+page slow with it.
+
+**Not yet done from that day's list**: fire's look, and a scene of its own for the small world in the
+list, which is empty until something is poured.
 
 ## The look, as chosen
 
