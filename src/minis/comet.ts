@@ -2,12 +2,16 @@
 // The flight is in flight.ts and the fields, each proven winnable, in fields.ts; here they are drawn
 // and played.
 //
-// On screen there is the sky, the planets as flat circles (the bigger, the stronger the pull), the
-// hole as a ring, the comet as a point and its trail. While aiming, a line pulled back from the
-// comet shows the pull. A missed shot leaves its trail, faint, to aim the next one against, and the
-// comet is back at once. Reaching the ring, it is caught, spirals in, and its trail is drawn in after
-// it; after a moment's stillness the comet rises out of the hole and moves to where the next field
-// starts, while the planets of the one shrink away and the next one's grow.
+// On screen there is a sky of faint stars that drift a hair as the comet moves; the planets, each its
+// own color, lit from one side, with a soft glow as wide as their pull reaches; the hole as a ring that
+// draws light inward in a slow swirl; and the comet, glowing, its tail streaming away from the planets,
+// with its trail. While aiming, a line pulled back from the comet shows the pull, and dots show the
+// first second of the flight it would give. A missed shot leaves its trail, faint, to aim the next one
+// against, and the comet is back at once. Reaching the ring, it is caught, spirals in, and its trail is
+// drawn in after it; after a moment's stillness the comet rises out of the hole and moves to where the
+// next field starts, while the planets of the one shrink away and the next one's grow. The stars'
+// drift and the swirl move only while the stage runs for the game, and not at all when less motion is
+// asked for.
 //
 // The field is one shape, fitted whole to the canvas and turned on its side on a tall screen, so a
 // field is the same puzzle on a phone and a desktop. A field is a link: ?seed=…&field=….
@@ -16,7 +20,8 @@ import { sounds } from "../mote/sound";
 import { el, type Mote, type Scene } from "../mote/stage";
 import { wholeText } from "./checked";
 import { LONGEST_SEED, MOST_LEVEL, kept, making, type Made } from "./fields";
-import { CATCH, FASTEST, HIGH, STEP, WEAKEST, WIDE, advance, launch, velocity, nearest, type Comet, type Field } from "./flight";
+import { CATCH, FASTEST, HIGH, HOLE_REACH, REACH, STEP, WEAKEST, WIDE, advance, launch, velocity, nearest, type Comet, type Field } from "./flight";
+import { ahead, along, css, stars, tailward, tints, type Tint } from "./sky";
 
 export const label = "Comet, a game: pull back and let go, and the comet curves round the planets into the hole.";
 
@@ -36,8 +41,15 @@ const MOVE = 0.9;
 const GIVE_TIME = 0.32;
 const GIVE_DEPTH = 0.12;
 
-const PLANET = "oklch(0.33 0.035 290)";
-const COMET = "oklch(0.97 0.015 300)";
+/** How far apart the dots of the path ahead are, on the screen, in pixels. */
+const DOTS = 11;
+/** How far the nearest stars drift for each pixel the comet is from the middle of the canvas, and how quickly they follow it, a second. */
+const DRIFT = 0.012;
+const FOLLOW = 4;
+/** How long light takes to fall from the edge of the hole's pull to its ring, in seconds, and how many streaks fall along each of its arms. */
+const FALL = 7;
+const STREAKS = 14;
+const ARMS = 3;
 
 /** Quick to start and slow to settle, as the site's --ease. */
 const ease = (t: number) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 4;
@@ -89,6 +101,18 @@ export default function comet(m: Mote): Scene {
     let since = -1;
     /** The field before, while the next one comes. */
     let leaving: Field | undefined;
+    /** The stars of this sky, from its seed; and how far they have drifted and are drifting to, in pixels, for the nearest of them. */
+    const sky = stars(place.seed, 900);
+    let drift = { x: 0, y: 0 };
+    let want = { x: 0, y: 0 };
+    let drifted = false;
+    /** Each field's planet colors, worked out once. */
+    const colored = new WeakMap<Field, Tint[]>();
+    const tinted = (field: Field) => {
+        let found = colored.get(field);
+        if (!found) colored.set(field, (found = tints(field.seed, field.level, field.planets.length)));
+        return found;
+    };
 
     // ---- aiming ----
     /** A pull with the pointer: where it was pressed and where it is now, in pixels. */
@@ -230,17 +254,173 @@ export default function comet(m: Mote): Scene {
     tell();
     remember();
 
+    // ---- colors: the page's own, read as numbers once, so that they can be given any opacity ----
+    const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const channels = new Map<string, [number, number, number]>();
+    /** One of the page's colors, such as "--ink", at an opacity. */
+    const page = (property: string, alpha: number) => {
+        let found = channels.get(property);
+        if (!found) {
+            found = [235, 235, 245];
+            if (probe) {
+                probe.clearRect(0, 0, 1, 1);
+                probe.fillStyle = m.color(property);
+                probe.fillRect(0, 0, 1, 1);
+                const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+                found = [r!, g!, b!];
+            }
+            channels.set(property, found);
+        }
+        return `rgb(${found[0]} ${found[1]} ${found[2]} / ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+    };
+    /** Whether the ground is dark, so that glows add light to it; on a light ground they are laid over it instead. */
+    const dark = () => {
+        page("--ground", 1);
+        const [r, g, b] = channels.get("--ground")!;
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+    };
+    const glowing = (ctx: CanvasRenderingContext2D) => (ctx.globalCompositeOperation = dark() ? "lighter" : "source-over");
+
     // ---- drawing, in the field's own units ----
     const ink = (field: number) => field / view.scale;
+    /** Where the comet is now, in the field, for the stars to drift by. */
+    const cometAt = (): [number, number] | undefined => {
+        if (!made) return undefined;
+        const field = made.field;
+        if (phase === "fly" && flying) return [flying.x, flying.y];
+        if (phase === "caught") return [field.hole.x + caught.x, field.hole.y + caught.y];
+        if (phase === "still") return [field.hole.x, field.hole.y];
+        if (phase === "move" && leaving) {
+            const glide = ease(age / MOVE / 0.8);
+            return [leaving.hole.x + (field.start.x - leaving.hole.x) * glide, leaving.hole.y + (field.start.y - leaving.hole.y) * glide];
+        }
+        return [field.start.x, field.start.y];
+    };
+    /** The stars, on the screen and not in the field, so that they fill the canvas: as many as its size asks, the nearer ones drifted against the comet. */
+    const starry = (ctx: CanvasRenderingContext2D) => {
+        const pad = 16;
+        const [wide, high] = [m.width + pad * 2, m.height + pad * 2];
+        const count = Math.min(sky.length, Math.round((m.width * m.height) / 1500));
+        for (let i = 0; i < count; i++) {
+            const star = sky[i]!;
+            const x = ((((star.x * wide - drift.x * star.near) % wide) + wide) % wide) - pad;
+            const y = ((((star.y * high - drift.y * star.near) % high) + high) % high) - pad;
+            if (star.bright > 0.5) {
+                const halo = ctx.createRadialGradient(x, y, 0, x, y, 3.2);
+                halo.addColorStop(0, page("--ink", 0.55 * star.bright));
+                halo.addColorStop(1, page("--ink", 0));
+                ctx.fillStyle = halo;
+                ctx.fillRect(x - 3.2, y - 3.2, 6.4, 6.4);
+                ctx.fillStyle = page("--ink", 0.9 * star.bright);
+                ctx.fillRect(x - 0.6, y - 0.6, 1.2, 1.2);
+            } else {
+                ctx.fillStyle = page("--ink", star.bright * 0.55);
+                ctx.fillRect(x - 0.5, y - 0.5, 1, 1);
+            }
+        }
+    };
+    /** The glow round each planet, as wide as its pull reaches and fading as the pull does. */
+    const glows = (ctx: CanvasRenderingContext2D, field: Field, size: (x: number, y: number) => number) => {
+        const colors = tinted(field);
+        ctx.save();
+        glowing(ctx);
+        field.planets.forEach((planet, at) => {
+            const grown = size(planet.x, planet.y);
+            const r = planet.r * grown;
+            if (r <= 0.2) return;
+            const reach = REACH * r;
+            const glow = ctx.createRadialGradient(planet.x, planet.y, r * 0.8, planet.x, planet.y, reach);
+            for (let i = 0; i <= 8; i++) {
+                const part = i / 8;
+                const out = (0.8 * r + part * (reach - 0.8 * r)) / reach;
+                // faint out to the very edge of the pull, so its reach is seen, and stronger close in
+                const fade = 1 - out * out;
+                glow.addColorStop(part, css(colors[at]!, 0.08, (0.07 * fade + 0.16 * fade ** 10) * grown));
+            }
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(planet.x, planet.y, reach, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.restore();
+    };
+    /** The planets themselves, each its own color, lit from the top left of the screen. */
     const planets = (ctx: CanvasRenderingContext2D, field: Field, size: (x: number, y: number) => number) => {
-        ctx.fillStyle = PLANET;
-        for (const planet of field.planets) {
+        const colors = tinted(field);
+        const [fx, fy] = inField(-1, -1.2);
+        const [lx, ly] = [fx / Math.hypot(fx, fy), fy / Math.hypot(fx, fy)];
+        field.planets.forEach((planet, at) => {
             const r = planet.r * size(planet.x, planet.y);
-            if (r <= 0.2) continue;
+            if (r <= 0.2) return;
+            const tint = colors[at]!;
+            const body = ctx.createRadialGradient(planet.x + lx * r * 0.42, planet.y + ly * r * 0.42, r * 0.05, planet.x + lx * r * 0.15, planet.y + ly * r * 0.15, r * 1.08);
+            body.addColorStop(0, css(tint, 0.17));
+            body.addColorStop(0.45, css(tint, 0.02));
+            body.addColorStop(0.8, css(tint, -0.2));
+            body.addColorStop(1, css(tint, -0.34));
+            ctx.fillStyle = body;
             ctx.beginPath();
             ctx.arc(planet.x, planet.y, r, 0, Math.PI * 2);
             ctx.fill();
+        });
+    };
+    /** The hole: the reach of its pull, faint in the accent; light falling inward along it in a slow swirl; dark at its heart; and the ring, which is where a comet counts as arrived. */
+    const hole = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number, size: number) => {
+        if (size <= 0.01) return;
+        const reach = HOLE_REACH * size;
+        ctx.save();
+        glowing(ctx);
+        const glow = ctx.createRadialGradient(x, y, r, x, y, reach);
+        glow.addColorStop(0, page("--accent", 0.13));
+        glow.addColorStop(0.4, page("--accent", 0.045));
+        glow.addColorStop(1, page("--accent", 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(x, y, reach, 0, Math.PI * 2);
+        ctx.fill();
+        // streaks of light on a few arms, each falling from the edge of the pull to the ring, quicker as it nears, and turning as it falls;
+        // each streak a little apart from the arm, its own length, brightness and pace, so that they do not fall in step
+        const time = reduced ? 0 : m.time;
+        const spot = (part: number, turn: number): [number, number] => {
+            const out = r + (reach - r) * (1 - part) ** 1.6;
+            const angle = turn + 2.4 * Math.log(reach / out) + time * 0.18;
+            return [x + Math.cos(angle) * out, y + Math.sin(angle) * out];
+        };
+        const scatter = (n: number) => {
+            const v = Math.sin(n * 12.9898) * 43758.5453;
+            return v - Math.floor(v);
+        };
+        ctx.lineCap = "round";
+        ctx.lineWidth = ink(1.2);
+        for (let arm = 0; arm < ARMS; arm++) {
+            for (let k = 0; k < STREAKS; k++) {
+                const n = arm * STREAKS + k + 1;
+                const turn = (arm * Math.PI * 2) / ARMS + (scatter(n) - 0.5) * 0.6;
+                const part = (k / STREAKS + (time / FALL) * (0.8 + 0.4 * scatter(n + 0.3)) + arm * 0.37) % 1;
+                const tail = Math.max(0, part - 0.06 - 0.1 * scatter(n + 0.6));
+                const bright = (0.3 + 0.35 * scatter(n + 0.9)) * Math.sin(Math.PI * part) ** 1.5 * size;
+                // brightest at its head, the end nearest the hole, and fading back along it
+                let [px, py] = spot(tail, turn);
+                for (let i = 1; i <= 5; i++) {
+                    const [sx, sy] = spot(tail + ((part - tail) * i) / 5, turn);
+                    ctx.strokeStyle = page("--accent", bright * (i / 5) ** 1.5);
+                    ctx.beginPath();
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(sx, sy);
+                    ctx.stroke();
+                    [px, py] = [sx, sy];
+                }
+            }
         }
+        ctx.restore();
+        const heart = ctx.createRadialGradient(x, y, 0, x, y, r);
+        heart.addColorStop(0, "rgb(0 0 0 / 0.45)");
+        heart.addColorStop(1, "rgb(0 0 0 / 0)");
+        ctx.fillStyle = heart;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ring(ctx, x, y, r);
     };
     const ring = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number) => {
         if (r <= 0.2) return;
@@ -254,7 +434,7 @@ export default function comet(m: Mote): Scene {
     const trail = (ctx: CanvasRenderingContext2D, points: number[], from: number, bright: number, fades: boolean) => {
         const count = points.length / 2;
         if (count - from < 2) return;
-        ctx.strokeStyle = COMET;
+        ctx.strokeStyle = m.color("--ink");
         ctx.lineWidth = ink(1.5);
         ctx.lineJoin = "round";
         if (!fades) {
@@ -280,12 +460,51 @@ export default function comet(m: Mote): Scene {
         }
         ctx.globalAlpha = 1;
     };
-    const head = (ctx: CanvasRenderingContext2D, x: number, y: number, size = 1) => {
+    /** The comet: a glowing point, and its tail streaming away from the planets, longer the nearer they are. `otherwise` is the way the tail lies with no planet near. */
+    const head = (ctx: CanvasRenderingContext2D, field: Field, x: number, y: number, otherwise: readonly [number, number], size = 1) => {
         if (size <= 0.02) return;
-        ctx.fillStyle = COMET;
+        const [tx, ty, near] = tailward(field, x, y, otherwise);
+        ctx.save();
+        glowing(ctx);
+        // the tail: soft puffs along it, wider and fainter going out
+        const long = ink(16 + 38 * near) * size;
+        const puffs = 14;
+        for (let i = puffs; i >= 1; i--) {
+            const part = i / puffs;
+            const [px, py] = [x + tx * long * part, y + ty * long * part];
+            const wide = ink(2 + 5.5 * part) * size;
+            const puff = ctx.createRadialGradient(px, py, 0, px, py, wide);
+            puff.addColorStop(0, page("--ink", 0.3 * (1 - part) ** 1.4 * (0.6 + 0.4 * near)));
+            puff.addColorStop(1, page("--ink", 0));
+            ctx.fillStyle = puff;
+            ctx.fillRect(px - wide, py - wide, wide * 2, wide * 2);
+        }
+        // the glow round it
+        const wide = ink(12) * size;
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, wide);
+        glow.addColorStop(0, page("--ink", 0.5));
+        glow.addColorStop(0.3, page("--ink", 0.14));
+        glow.addColorStop(1, page("--ink", 0));
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - wide, y - wide, wide * 2, wide * 2);
+        ctx.restore();
+        ctx.fillStyle = m.color("--ink");
         ctx.beginPath();
         ctx.arc(x, y, ink(2.6) * size, 0, Math.PI * 2);
         ctx.fill();
+    };
+    /** The path ahead while aiming: dots along the first second of the flight the pull would give, fading toward its end. */
+    const dots = (ctx: CanvasRenderingContext2D, field: Field) => {
+        const sent = launching();
+        if (!sent) return;
+        const placed = along(ahead(field, sent.vx, sent.vy), ink(DOTS));
+        for (let i = 0; i < placed.length; i += 3) {
+            const part = placed[i + 2]!;
+            ctx.fillStyle = page("--ink", 0.85 * (1 - part) ** 1.2);
+            ctx.beginPath();
+            ctx.arc(placed[i]!, placed[i + 1]!, ink(1.7 - 0.6 * part), 0, Math.PI * 2);
+            ctx.fill();
+        }
     };
     /** The pull: a line from the comet back the way it is pulled, as long as the pull. On the screen, not in the field. */
     const line = (ctx: CanvasRenderingContext2D, field: Field) => {
@@ -295,7 +514,7 @@ export default function comet(m: Mote): Scene {
         const long = DEAD + ((sent.power - WEAKEST) / (1 - WEAKEST)) * (longest() - DEAD);
         ctx.save();
         ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
-        ctx.strokeStyle = COMET;
+        ctx.strokeStyle = m.color("--ink");
         ctx.globalAlpha = 0.35 + 0.5 * sent.power;
         ctx.lineWidth = 1.5;
         ctx.lineCap = "round";
@@ -381,8 +600,19 @@ export default function comet(m: Mote): Scene {
                     if (!reduced) [phase, age] = ["move", 0];
                 }
             } else if (phase === "move" && age >= MOVE) [phase, age, leaving] = ["aim", 0, undefined];
+            // the stars follow the comet a little, against its way, and settle where it stops; with less motion asked for they stay put
+            const at = cometAt();
+            if (at && !reduced) {
+                const [sx, sy] = screen(...at);
+                want = { x: (sx - m.width / 2) * DRIFT, y: (sy - m.height / 2) * DRIFT };
+                // the first field opens with them already in place
+                const follow = drifted ? 1 - Math.exp(-FOLLOW * dt) : 1;
+                drifted = true;
+                drift = { x: drift.x + (want.x - drift.x) * follow, y: drift.y + (want.y - drift.y) * follow };
+                if (Math.abs(want.x - drift.x) < 0.02 && Math.abs(want.y - drift.y) < 0.02) drift = { ...want };
+            }
         },
-        resting: () => !m.preview && phase === "aim" && !pulling && !asked && (!next || next.done !== undefined),
+        resting: () => !m.preview && phase === "aim" && !pulling && !asked && (!next || next.done !== undefined) && drift.x === want.x && drift.y === want.y,
         debug: () => (made ? [`field ${place.seed} ${level}: ${made.field.planets.length} planets, ${made.wins} winning launches, ${made.tries} tries`, `a way in: aim ${made.solution.aim}, power ${made.solution.power.toFixed(2)}, ${made.solution.window} degrees, ${(made.solution.steps * STEP).toFixed(2)} s`, `${phase} ${age.toFixed(2)}`] : ["making"]),
         draw() {
             const { ctx } = m;
@@ -390,6 +620,7 @@ export default function comet(m: Mote): Scene {
                 const [sx, sy] = screen(made.field.start.x, made.field.start.y);
                 Object.assign(m.canvas.dataset, { phase, level: String(level), shots: String(shots), aim: String(made.solution.aim), power: String(made.solution.power), start: [sx, sy, longest(), view.upright ? 1 : 0].join(","), toward: String(nearest(made.field.hole.x - made.field.start.x, made.field.hole.y - made.field.start.y)) });
             }
+            starry(ctx);
             if (!made) return;
             const field = made.field;
             ctx.save();
@@ -405,30 +636,35 @@ export default function comet(m: Mote): Scene {
                 const t = age / MOVE;
                 const gone = 1 - ease(t / 0.55);
                 const from = leaving;
-                planets(ctx, from, () => gone);
-                ring(ctx, from.hole.x, from.hole.y, CATCH * gone);
                 const grow = (x: number, y: number) => ease((t - 0.3 - (Math.hypot(x - field.start.x, y - field.start.y) / WIDE) * 0.25) / 0.45);
+                glows(ctx, from, () => gone);
+                glows(ctx, field, grow);
+                hole(ctx, from.hole.x, from.hole.y, CATCH * gone, gone);
+                const opened = grow(field.hole.x, field.hole.y);
+                hole(ctx, field.hole.x, field.hole.y, CATCH * opened, opened);
+                planets(ctx, from, () => gone);
                 planets(ctx, field, grow);
-                ring(ctx, field.hole.x, field.hole.y, CATCH * grow(field.hole.x, field.hole.y));
-                const glide = ease(t / 0.8);
-                head(ctx, from.hole.x + (field.start.x - from.hole.x) * glide, from.hole.y + (field.start.y - from.hole.y) * glide, ease(t / 0.25));
+                const [x, y] = cometAt()!;
+                head(ctx, field, x, y, [from.hole.x - field.start.x, from.hole.y - field.start.y], ease(t / 0.25));
                 ctx.restore();
                 return;
             }
 
-            planets(ctx, field, () => 1);
+            glows(ctx, field, () => 1);
             // the ring takes the comet's weight as it goes in: it gives a little and comes back
             const taken = since >= 0 && !reduced ? Math.sin(Math.PI * Math.min(1, since / GIVE_TIME)) : 0;
-            ring(ctx, field.hole.x, field.hole.y, CATCH * (1 - GIVE_DEPTH * taken));
+            hole(ctx, field.hole.x, field.hole.y, CATCH * (1 - GIVE_DEPTH * taken), 1);
+            planets(ctx, field, () => 1);
             missed.forEach((one, at) => trail(ctx, one, 0, KEPT[at]!, false));
             if (phase === "fly" && flying) {
                 trail(ctx, path, 0, 1, true);
-                head(ctx, flying.x, flying.y);
+                head(ctx, field, flying.x, flying.y, [-flying.vx, -flying.vy]);
             } else if (phase === "caught") {
                 trail(ctx, path, tail, 1, true);
-                if (!caught.gone) head(ctx, field.hole.x + caught.x, field.hole.y + caught.y, 1 - 0.6 * ease(age / SPIRAL));
+                if (!caught.gone) head(ctx, field, field.hole.x + caught.x, field.hole.y + caught.y, [caught.x, caught.y], 1 - 0.6 * ease(age / SPIRAL));
             } else if (phase === "aim") {
-                head(ctx, field.start.x, field.start.y);
+                if (!m.preview) dots(ctx, field);
+                head(ctx, field, field.start.x, field.start.y, [field.start.x - field.hole.x, field.start.y - field.hole.y]);
             }
             ctx.restore();
             if (phase === "aim" && !m.preview) line(ctx, field);
