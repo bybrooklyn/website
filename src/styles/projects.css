@@ -34,7 +34,7 @@
     transition: color 0.15s ease;
 }
 
-.project-list a:hover :is(h2, h3) {
+.project-list a:is(:hover, :focus-visible) :is(h2, h3) {
     color: var(--accent);
 }
 
@@ -62,7 +62,7 @@
     transition: border-color 0.15s ease;
 }
 
-.project-list a:hover .project-thumb {
+.project-list a:is(:hover, :focus-visible) .project-thumb {
     border-color: var(--accent);
 }
 

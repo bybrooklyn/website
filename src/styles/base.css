@@ -453,7 +453,7 @@ a:focus-visible,
     transition: border-color 0.15s ease;
 }
 
-.thing-list a:hover :is(img, svg) {
+.thing-list a:is(:hover, :focus-visible) :is(img, svg) {
     border-color: var(--accent);
 }
 
@@ -464,7 +464,7 @@ a:focus-visible,
     transition: color 0.15s ease;
 }
 
-.thing-list a:hover h3 {
+.thing-list a:is(:hover, :focus-visible) h3 {
     color: var(--accent);
 }
 

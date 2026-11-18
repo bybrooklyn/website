@@ -20,12 +20,12 @@
 
 /* ---- the list ---- */
 
+/* A rule above each row and none under the last, as every list on the site is ruled. */
 .post-list {
     max-width: 52rem;
     margin: 0;
     padding: 0;
     list-style: none;
-    border-top: 0.0625rem solid var(--rule);
 }
 
 .post-year + .post-year {
@@ -36,7 +36,7 @@
     display: grid;
     gap: calc(var(--line) * 0.6) clamp(1.25rem, 3vw, 2rem);
     padding: var(--line) 0;
-    border-bottom: 0.0625rem solid var(--rule);
+    border-top: 0.0625rem solid var(--rule);
     color: var(--ink);
     text-decoration: none;
 }
@@ -50,8 +50,8 @@
     transition: color 0.15s ease;
 }
 
-.post-row a:hover h2,
-.post-row a:hover h3 {
+/* The keyboard lights what the mouse lights, on every list. */
+.post-row a:is(:hover, :focus-visible) :is(h2, h3) {
     color: var(--accent);
 }
 
@@ -137,6 +137,16 @@ body:not(.opened) .post {
 
 .post-header h1 {
     margin-top: calc(var(--line) * 0.75);
+}
+
+/* A title keeps its place whatever is above it. With no small line above it, a main page's title sits
+   where every main page's does, and an opened page's sits where it would under a small line. */
+.post-header > h1:first-child {
+    margin-top: 0;
+}
+
+.opened .post-header > h1:first-child {
+    margin-top: calc(var(--line) * 1.75);
 }
 
 .post-header .lede {
@@ -603,7 +613,7 @@ body:not(.opened) .post {
     text-decoration: none;
 }
 
-.post-nav a:hover {
+.post-nav a:is(:hover, :focus-visible) {
     color: var(--accent);
 }
 
