@@ -1,0 +1,44 @@
+---
+name: Novean
+summary: Multiplayer, a Mods screen and a kit for other mods, for Pronoun Palace.
+language: GDScript
+status: in development
+repo: bybrooklyn/novean
+order: 13.5
+draft: true
+---
+
+## What it is
+
+Novean is a mod for [Pronoun Palace](https://store.steampowered.com/app/3618850/). I wanted multiplayer, so I started modding the game. It is a normal mod that works on the plain game, and it does not change the game install.
+
+It has four parts: multiplayer, a Mods screen, a small kit for other mods, and a loader for developing mods on Linux.
+
+## Multiplayer
+
+Play Pronoun Palace with a friend from anywhere. No launcher, no port numbers. One of you hosts and copies an invite code, the other pastes it, and joining takes about 4 seconds. Both players need the mod.
+
+There are two ways to play.
+
+- **Side by side:** two players against the game's monsters, each on their own board. Both build a word at once, and the words land as two hits. Monsters have twice their health, block from both players is pooled, and if one of you dies the other fights on.
+- **Duel:** two players, turn by turn, best of 3, with 52 HP each. Your word does what it would do to a monster. One turn can never take more than 17 HP.
+
+If someone drops in the middle of a run, the game waits up to 2 minutes and puts them back at the start of that turn. Runs are kept, so you can stop and come back. A duel never touches your saved solo run, stats or achievements.
+
+## The Mods screen
+
+**Mods** on the title screen lists every installed mod with its version and author, each with a box to turn it on or off. Mods can add their own settings to it. When something goes wrong, Novean writes a file with the game's version, its own and your mods, to send with a bug report.
+
+If a game update breaks something the mod hooks, the mod switches itself off and the menu says so, instead of breaking the game.
+
+## The kit for other mods
+
+Another mod can ask Novean to stand a script in for one of the game's, to call it when a screen comes up, to add its settings to the Mods screen, and to send messages to the other player's copy of the same mod.
+
+## The loader for Linux
+
+The launcher is for developing mods on Linux. Players do not need it. It keeps a link to the game beside its own settings and never writes into the install, and a mod can be a plain folder with no packing. A test profile has a blank save and never talks to Steam.
+
+## Not built yet
+
+The co-op spell rule, and duels on one shared board.
