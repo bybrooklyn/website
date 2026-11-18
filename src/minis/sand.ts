@@ -49,6 +49,18 @@ const SHAKE = { steps: 20, by: 3 };
  * count, a step; `thunder` the least time between two claps, in seconds; and the pitch of what pours.
  */
 const SOUND = { hiss: 8, fire: 80, follows: 0.25, thunder: 0.25, powder: 3200, liquid: 1100, lava: 350 };
+/**
+ * What the small world shown in a list pours by itself, in turn and over again: each material for some
+ * seconds, from a place a share of the way across that sways a little, and then a while of nothing
+ * before the world is cleared and it begins again. As Blocks' small pile drops a piece now and then.
+ */
+const SHOW = [
+    { name: "sand", across: 0.3, seconds: 6 },
+    { name: "water", across: 0.68, seconds: 4 },
+    { name: "pride sand", across: 0.5, seconds: 5 },
+    { name: "lava", across: 0.74, seconds: 2.5 },
+    { name: "", across: 0, seconds: 7 },
+];
 /** Which way each arrow key moves the view. */
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
@@ -740,6 +752,32 @@ export default function sand(m: Mote): Scene {
     };
     if (!m.preview) window.addEventListener("hashchange", followed);
 
+    /** Which part of `SHOW` the small world is in, and when it began the round. */
+    let showing = -1;
+    let began = 0;
+    /** The small world in a list pours by itself: the core is told what to hold, a few times a second, as a hand would. */
+    const show = () => {
+        if (!world) return;
+        const round = SHOW.reduce((sum, part) => sum + part.seconds, 0);
+        if (showing < 0 || m.time - began >= round) {
+            began = m.time;
+            showing = -1;
+            tell({ t: "clear" });
+        }
+        let [into, part] = [m.time - began, 0];
+        while (part < SHOW.length - 1 && into >= SHOW[part]!.seconds) into -= SHOW[part++]!.seconds;
+        const material = offered.find((one) => one.name === SHOW[part]!.name);
+        // told afresh four times a second, where it sways to, and at once when the part changes
+        const beat = Math.floor(into * 4);
+        if (part === showing && beat === swayed) return;
+        [showing, swayed] = [part, beat];
+        if (!material) return tell({ t: "hold" });
+        const cells = brushCells(3, material);
+        const { first, count } = stripesOf((Math.floor(began) + part) % FLAGS.length);
+        const x = Math.round(world.columns * (SHOW[part]!.across + 0.05 * Math.sin(into * 1.7)));
+        tell({ t: "hold", hold: { kind: material.striped ? "striped" : "paint", of: material.number, x, y: Math.round(world.rows * 0.12), cells, share: fillOf(material, true, cells), first, count, waits: false, moved: false } });
+    };
+    let swayed = -1;
     /** The outline of the brush at the pointer, so its size is seen before pouring: a circle, or the flag the flag brush lays. */
     const outline = () => {
         if (!at || !world || m.preview || dragged || pinch) return;
@@ -831,6 +869,7 @@ export default function sand(m: Mote): Scene {
             }
             if (note && m.time >= note.until) note = undefined;
             if (!world) return;
+            if (m.preview) show();
             if (held) thunder();
             // The core steps the world and draws it. One frame is asked for at a time, with the time gone
             // by since the last: while its answer is on its way, nothing more is asked.
@@ -952,7 +991,7 @@ export default function sand(m: Mote): Scene {
         keydown(name) {
             if (name === "action") setPaused(!paused);
         },
-        resting: () => !world || (pouring === undefined && !glide && !note && moving.size === 0 && !waiting && !dirty && !single && (paused || (stats.shaking === 0 && stats.awake === 0))),
+        resting: () => !m.preview && (!world || (pouring === undefined && !glide && !note && moving.size === 0 && !waiting && !dirty && !single && (paused || (stats.shaking === 0 && stats.awake === 0)))),
         debug: () => (world ? [`steps ${stats.steps}`, `awake chunks ${stats.awake}`, `world ${world.columns} by ${world.rows}`, `a cell is ${view.zoom.toFixed(2)} pixels`, `a frame of the world took ${stats.took.toFixed(1)} ms${worker ? ", in a worker" : ""}`] : []),
         destroy() {
             window.removeEventListener("hashchange", followed);

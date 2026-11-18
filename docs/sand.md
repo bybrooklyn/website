@@ -1483,8 +1483,10 @@ before, which read as grains), and the haze gathered from soft cells is brought 
 as 1 - e^(-4.5 x), so that a few cells of smoke far apart are a wisp and a thick cloud is no more solid
 than it was. Flames no longer add to the haze.
 
-**Not yet done from that day's list**: a scene of its own for the small world in the list, which is
-empty until something is poured.
+**The small world in the list pours by itself** (`SHOW` in `sand.ts`): sand, water, pride sand and lava
+in turn, each for a few seconds from a place that sways a little, then a while of nothing before it
+is cleared and begins again, as Blocks' small pile drops a piece now and then. Until then the card was
+an empty box, since a world shows nothing until something is poured into it.
 
 ## The look, as chosen
 
