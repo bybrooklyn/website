@@ -1,6 +1,7 @@
 // A marble course for looking at Mote's rolling: a ramp into a loop, a gutter on to a banked spiral,
 // off its end into a funnel, and through the funnel's hole into a tray where the marbles come to
-// rest and sleep. Kept apart from the drawing (rolling.ts) so that it can be run and tested.
+// rest and sleep. No page draws it since the Rolling draft was taken away on 17 November 2026: it is
+// kept as a whole course for course.test.ts to run Mote's rolling over.
 //
 //   const course = makeCourse();
 //   course.release();                  // a marble at the top

@@ -55,10 +55,10 @@ How to add a mini is in `src/mote/README.md`.
 - The Walker, the generalist (a draft), Comet (a draft) and Sand (a draft, stage 4 of its plan measured:
   the page, with pride sand and its flags laid as poured sand, glow and links to worlds; sand that comes
   down to its angle promptly and lava that pools) are minis too.
-- **Rolling** (a draft, 3D; `rolling.ts`, `course.ts`): not a mini of its own but a plain page for watching
-  Mote's marbles roll, made for the marble run ([marbles](marbles.md)). Marbles go down a ramp, round a
-  loop, along a banked spiral and through a funnel into a tray, one after another; a click lets another go
-  and Space rides along with one. It stays a draft.
+- **Rolling** was a draft page for watching Mote's marbles roll down a ramp, round a loop, along a banked
+  spiral and through a funnel. The owner asked what it was for and chose to remove it on 17 November 2026,
+  Marbles having taken its place. Its course is kept without a page (`course.ts`), for `course.test.ts` to
+  run Mote's rolling over.
 - **Marbles** (a draft, 3D; `marbles.ts` on `pieces.ts`, `parts.ts`, `run.ts`, `edit.ts`, `history.ts`,
   `ghost.ts`, `handles.ts`, `table.ts`, `supports.ts`, `checks.ts`, `orbit.ts`, `camera.ts`, `race.ts`, `share.ts`, `runs.ts`, `toolbar.ts`, `look.ts`): the
   marble run, all seven stages of its plan ([marbles](marbles.md)). A box of pieces whose ends snap together, dragged up

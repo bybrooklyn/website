@@ -110,9 +110,9 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 ## Stage 1, built
 
 On 14 November 2026, in Mote (`src/mote/space.ts`, `src/mote/track.ts`; [mote](mote.md) has the detail).
-A draft page, Rolling (`src/minis/rolling.ts` on `src/minis/course.ts`), shows it: a ramp, a loop, a
-banked spiral, a funnel and a tray, marbles let go one after another. It is a draft, seen in `bun run dev`
-and in a build with `SHOW_DRAFTS=1`, and is no part of the mini to come.
+A draft page, Rolling, showed it: a ramp, a loop, a banked spiral, a funnel and a tray, marbles let go
+one after another. The page was removed on 17 November 2026 at the owner's choice, once Marbles could
+be played; its course is kept in `src/minis/course.ts` for the test that runs marbles over it.
 
 **Held to theory, by test.** A marble on a slope rolls at 5/7 of g sin(slope) to within half a percent and
 slides as friction says where it cannot hold the roll; one rocking across a gutter keeps the period of a
@@ -177,7 +177,7 @@ Bun is slower than Chromium by about half again. So a few hundred marbles at onc
 On 14 November 2026: the draft mini Marbles (`src/minis/marbles.ts`, `src/content/minis/marbles.mdx`), on
 `pieces.ts` (the box), `run.ts` (a run as data), `table.ts` (the run as Mote's physics), `supports.ts`
 (pillars), `checks.ts` (the marks), `orbit.ts` (the camera) and `runs.ts` (made runs), each with its
-test. Rolling is left as it was.
+test. Rolling was left as it was then (the page has since been removed).
 
 **The grid.** A cell is 8 cm square and a level 2 cm high, the height of a block of track. Track runs along
 the middle of a row of cells; a joint is in the middle of a cell's edge, at a whole level, pointing along
