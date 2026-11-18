@@ -9,9 +9,8 @@ for the owner, with two or three ways it could go.
 ## How it was done
 
 - Every kind of page was opened in a headless browser from a dev server at 1288 by 828 and at 390 by
-  800, and photographed window by window. The pictures are kept outside the repository, in the session's
-  folder `notes/audit-pages-pictures/`, which is kept on the owner's computer and is not in the
-  repository; the file named under each finding is there.
+  800, and photographed window by window. The pictures are in `notes/audit-pages-pictures/`, a folder on
+  the owner's computer that is not in the repository; the file named under each finding is there.
 - On each page the shared things were read from computed styles and boxes: the title, the line under it,
   section headings, the gap from the head to the content, the widest line, list rows, links, how a
   pressable thing answers hover and the keyboard, the trail, and where the page ends.
@@ -279,6 +278,25 @@ Small, and seen only side by side.
 
 Ways it could go: one corner for every picture, the panel's own larger corner kept for boxes that hold a
 page; or as now.
+
+## What the owner decided, and what is done
+
+Asked by the question tool on 18 November 2026. The questions stopped after the eighth, at the owner's
+word; items 9 to 14 are not decided.
+
+| Item | Decided | State |
+| --- | --- | --- |
+| 1. The editors' frame | Keep their frame; their top line becomes the panel's own, small and muted, with "tools" | Not done: it changes mdQuire's bar, and wants its own tests |
+| 2. List rules | A rule above each row only | Done: the blog list, the tools list and the home page's writing no longer end on a rule |
+| 3. The title 21 lower on bio, setup, license | The same height everywhere | Done: every main page's title is at 134 |
+| 4. Opened pages with no small line | Keep the room when there is no line | Done: tone tags and the Playmatter demo sit at 141.4 with the rest |
+| 5. Names | The project's name in both places | Done for tone tags (its title is "Tone tags"). Not done for Spectrum: its title is translated into every language it speaks, so the change is to be shown first |
+| 6. Hover and the keyboard | The keyboard lights what the mouse lights; nothing lifts | Done on every list; the minis' previews no longer lift |
+| 7. Small headings | One label; the resume keeps its own | Done: tone tags uses the site's label |
+| 8. A line under the title | Leave it | Nothing to do |
+
+The interests page was rebuilt on the site's own pieces the same night ([interests.md](interests.md)), and
+is to be looked at again with the owner.
 
 ## Checked and found consistent
 
