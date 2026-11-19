@@ -159,6 +159,22 @@ test("the settings are kept in, read from and taken out of this browser's storag
     expect(readSettings(storage)).toBeUndefined();
 });
 
+test("where the browser refuses its storage, the settings are simply not there, and nothing is thrown", () => {
+    // a browser with site data blocked throws on the very reading of `localStorage`
+    const was = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get: () => { throw new DOMException("The operation is insecure.", "SecurityError"); } });
+    try {
+        expect(readSettings()).toBeUndefined();
+        // the app passes what it found, which is nothing: that must not fall back to the storage that throws
+        expect(readSettings(undefined)).toBeUndefined();
+        expect(() => keepSettings(SETTINGS)).not.toThrow();
+        expect(() => forgetSettings(undefined)).not.toThrow();
+    } finally {
+        if (was) Object.defineProperty(globalThis, "localStorage", was);
+        else delete (globalThis as { localStorage?: Storage }).localStorage;
+    }
+});
+
 test("a repository is read from owner/name or its address, and folders are made plain", () => {
     expect(repository("someone/site")).toEqual({ owner: "someone", repo: "site" });
     expect(repository("https://github.com/someone/site.git")).toEqual({ owner: "someone", repo: "site" });

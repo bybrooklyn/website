@@ -27,8 +27,21 @@ export interface GithubSettings {
 export const SETTINGS_KEY = "quire-github";
 const API = "https://api.github.com";
 
+/**
+ * The browser's local storage, or nothing where it may not be used: with site data blocked, the very
+ * reading of `localStorage` throws. It is what the three below use when given no storage, and a
+ * caller that found none and passes `undefined` gets this too, so it must not throw either.
+ */
+function local(): Storage | undefined {
+    try {
+        return globalThis.localStorage;
+    } catch {
+        return undefined;
+    }
+}
+
 /** The settings kept in this browser, if there are any. */
-export function readSettings(storage: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): GithubSettings | undefined {
+export function readSettings(storage: Pick<Storage, "getItem"> | undefined = local()): GithubSettings | undefined {
     try {
         const kept = JSON.parse(storage?.getItem(SETTINGS_KEY) ?? "null") as GithubSettings | null;
         return kept && kept.owner && kept.repo && kept.token ? kept : undefined;
@@ -37,14 +50,14 @@ export function readSettings(storage: Pick<Storage, "getItem"> | undefined = glo
     }
 }
 
-/** Keeps the settings in this browser. */
-export function keepSettings(settings: GithubSettings, storage: Pick<Storage, "setItem"> = globalThis.localStorage) {
-    storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+/** Keeps the settings in this browser. Where it keeps nothing, they last as long as the page does. */
+export function keepSettings(settings: GithubSettings, storage: Pick<Storage, "setItem"> | undefined = local()) {
+    storage?.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 /** Takes the settings, token and all, out of this browser. */
-export function forgetSettings(storage: Pick<Storage, "removeItem"> = globalThis.localStorage) {
-    storage.removeItem(SETTINGS_KEY);
+export function forgetSettings(storage: Pick<Storage, "removeItem"> | undefined = local()) {
+    storage?.removeItem(SETTINGS_KEY);
 }
 
 /** Reads `owner/name` (or a github.com address) into its two parts, or undefined if it is not one. */

@@ -110,4 +110,16 @@ describe("keeping the list", () => {
             }),
         ).toBe(false);
     });
+    test("with no storage given, a browser that throws on the very reading of its storage gives an empty list and keeps nothing", () => {
+        // site data blocked: `localStorage` itself cannot be read, which stopped the whole editor from starting
+        const was = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+        Object.defineProperty(globalThis, "localStorage", { configurable: true, get: () => { throw new DOMException("The operation is insecure.", "SecurityError"); } });
+        try {
+            expect(load()).toEqual(nothing());
+            expect(save(nothing())).toBe(false);
+        } finally {
+            if (was) Object.defineProperty(globalThis, "localStorage", was);
+            else delete (globalThis as { localStorage?: Storage }).localStorage;
+        }
+    });
 });

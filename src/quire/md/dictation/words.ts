@@ -124,8 +124,17 @@ const STORAGE_KEY = "mdquire-dictation-words";
 /** A custom list with nothing in it. */
 export const nothing = (): Custom => ({ words: [], shortcuts: [] });
 
+/** The browser's local storage, or nothing where there is none or it may not be used: with site data blocked, the very reading of `localStorage` throws. */
+function local(): Storage | undefined {
+    try {
+        return globalThis.localStorage;
+    } catch {
+        return undefined;
+    }
+}
+
 /** Reads what was kept, or an empty list if there is none, it cannot be read, or it is not what was written. */
-export function load(storage: Pick<Storage, "getItem"> | undefined = typeof localStorage === "undefined" ? undefined : localStorage): Custom {
+export function load(storage: Pick<Storage, "getItem"> | undefined = local()): Custom {
     try {
         const parsed = JSON.parse(storage?.getItem(STORAGE_KEY) ?? "null") as Partial<Custom> | null;
         const words = (parsed?.words ?? []).filter((entry) => entry && typeof entry.word === "string" && entry.word.trim()).map((entry) => ({ word: entry.word.trim(), sounds: (Array.isArray(entry.sounds) ? entry.sounds : []).filter((form) => typeof form === "string" && form.trim()).map((form) => form.trim()) }));
@@ -137,7 +146,7 @@ export function load(storage: Pick<Storage, "getItem"> | undefined = typeof loca
 }
 
 /** Keeps the list. Gives false if the browser would not. */
-export function save(custom: Custom, storage: Pick<Storage, "setItem"> | undefined = typeof localStorage === "undefined" ? undefined : localStorage): boolean {
+export function save(custom: Custom, storage: Pick<Storage, "setItem"> | undefined = local()): boolean {
     try {
         storage?.setItem(STORAGE_KEY, JSON.stringify(custom));
         return !!storage;
