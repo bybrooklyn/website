@@ -1,5 +1,7 @@
 // Run before a deploy: what goes live is what is committed on main, so a deploy from another branch
-// or with changes not yet committed is refused, with the reason said.
+// or with changes not yet committed is refused, with the reason said. `bun run deploy` runs it twice:
+// before the check, and again after the build, since the build adds any pictures waiting in photos/
+// (scripts/photos.ts) and those would otherwise go live without being committed.
 //
 //   bun scripts/guard.ts        // exits 1 and says why, or says nothing
 
