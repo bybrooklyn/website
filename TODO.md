@@ -24,9 +24,18 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 - Twenty-two places where the tools and minis do not match, each with the ways it could go, and the choices the testers left in imgQuire, Marbles and Blocks: [audit-17-november](docs/audit-17-november.md).
 - The words added that day to Sand's column and its controls line, to be read and approved or reworded.
-- Going live: the live site is as it was on 11 November.
+- Going live: the live site was built from the commit of 17 November, 19:58; `main` is ahead of it.
 - The interests page and Novean's project page are drafts until the owner has read their words; the owner found the interests page wrong on 18 November and it is to be worked on again with her ([interests](docs/interests.md#still-open)).
 - The audit of the pages: items 1 (the editors' top line) and 5 for Spectrum are decided and not done; items 9 to 14 are not decided ([audit](docs/audit-pages-17-november.md#what-the-owner-decided-and-what-is-done)).
+
+### From the audit of 19 November
+
+- Four pages made for trying and testing are on the live site (`/mdquire-lab/` and its mock-ups, `/mdquire-kinds/`, `/mdquire-drive-try/`, `/mdquire-dictation/`): leave them, take the lab out, or build the test pages only for tests.
+- The interests page's two scripts are deployed though the page is not: whether the build's pruning takes them.
+- Tests of speed fail on a busy machine: leave them, have them fail only when asked to on a quiet machine, or widen their limits.
+- Every page carries its styles inside it, 72 to 79 KB on a post or project and up to 152 KB on a tool: keep, or move styles into files the browser keeps.
+- Twelve known faults in the build's tools, none in what a visitor is sent: whether to run `bun audit fix` and build.
+- Each with its detail in [the audit](docs/audit-19-november.md#for-the-owner-to-choose).
 
 ### The minis and Mote
 
@@ -46,7 +55,9 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - mdQuire's table of contents: its links against the site's real heading ids.
 - mdQuire: every action on a shelf card, and cut and paste between two documents.
 - Frame rates on a real graphics card. Everything was measured with software drawing.
-- That the live site's headers match `public/_headers`.
+- The tests that drive a browser, and the minis' and Mote's long run, on a quiet machine: not run in the audit of 19 November.
+- Twelve share pictures have no record of what they were made from, so `bun run check` cannot say whether they are out of date; making them again (`bun run pictures`) records it.
+- What the list of minis costs a phone, with five minis running at once.
 
 ## From the audit of 13 November
 
@@ -118,7 +129,7 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 
 ## Minis
 
-- The marble run ([marbles](docs/marbles.md)) and the sand simulator ([sand](docs/sand.md)) are built and are drafts: decide when each is listed.
+- The marble run ([marbles](docs/marbles.md)) is built and is a draft: decide when it is listed. The sand simulator ([sand](docs/sand.md)) is listed and live.
 
 - A post about writing the physics, with a mini at each step.
 - The Blocks demo on the home page.

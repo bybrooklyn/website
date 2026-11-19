@@ -13,14 +13,15 @@ open, how to run and test it, and its known weak spots.
 - [AUDIT.md](AUDIT.md): the audit of 13 November 2026: what was read, found, fixed and left.
 - [audit-16-november.md](audit-16-november.md): the audit of 16 November 2026: how much code there is and what it is for, what testers found in the tools by using them, what was fixed, and what was decided for the design.
 - [audit-17-november.md](audit-17-november.md): the audit of 17 November 2026: what testers found and fixed in imgQuire, Marbles and Blocks after their rebuilding, what of mdQuire's chosen list was still to build, and where the tools and minis do not match, as choices.
+- [audit-19-november.md](audit-19-november.md): the audit of 19 November 2026, for bugs and stability: every built page read and opened, also with storage, WebGL and WebAssembly taken away; three faults fixed; what is left to choose.
 - [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.
-- [imgQuire.md](imgQuire.md): an image editor to sit beside mdQuire; nothing built.
+- [imgQuire.md](imgQuire.md): an image editor beside mdQuire, the hidden page `/imgquire/`; built.
 - [quire-core.md](quire-core.md): the shared core every Quire is built on, in `src/quire/core/`: the interface a kind of document gives it, where things are, and what is still tied to Markdown.
 - [imgQuire-models.md](imgQuire-models.md): the models imgQuire's tools could run in the browser, at three sizes, with their licences.
 - [imgQuire-codecs.md](imgQuire-codecs.md): the Rust crates that could write and read picture formats for imgQuire, built to WebAssembly and measured.
-- [marbles.md](marbles.md): a marble run mini with an editor in three dimensions, as planned; nothing built.
-- [sand.md](sand.md): a sand simulator mini and its Rust engine in `sand/`: the plan, and stage 1 (the engine and its tests) as built, a draft.
-- [cutout.md](cutout.md): a background remover, a page of its own and a tool of imgQuire; nothing built.
+- [marbles.md](marbles.md): a marble run mini with an editor in three dimensions; built, a draft.
+- [sand.md](sand.md): the sand simulator mini and its Rust engine in `sand/`: the plan and what is built; listed and live.
+- [cutout.md](cutout.md): a background remover, the hidden page `/cutout/` and a tool of imgQuire; built.
 - [qr.md](qr.md): a QR code maker and reader, a hidden page of its own at `/qr/`, written with no library; built.
 - [convert.md](convert.md): a file converter for pictures, text and data, sounds and films, a hidden page of its own at `/convert/`, everything in the browser; built.
 - [mote.md](mote.md): the small engine the minis run on, with no third-party libraries.

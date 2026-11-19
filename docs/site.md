@@ -61,16 +61,16 @@ changes not committed (`scripts/guard.ts`), so that what is live is what is comm
 build, which adds any pictures waiting in `photos/`. `bun run edit` has a publish button
 that does the same after showing what is about to go live and asking.
 
-**Caching** (`public/_headers`): built files a year (their names carry a hash); photographs a week;
-ONNX Runtime's files, the clip and poster, and the minis' WebAssembly a day, then checked again; the
-resume's PDF an hour.
+**Caching** (`public/_headers`): built files a year (their names carry a hash); photographs five
+minutes, then checked again, so that a picture taken off the site does not linger in browsers; ONNX Runtime's
+files checked every time; the clip and poster, and the minis' WebAssembly a day, then checked again; the
+resume's PDF an hour. The live site was seen to send these on 19 November 2026.
 
 **Every interface moves the way the rest of the site does**: what opens grows from where it was pressed and
 goes back there, and nothing simply appears (`STYLE.md`).
 
 ## Open
 
-- **Photo caching.** A week made removed pictures linger in visitors' browsers after they were taken off. Proposed: a shorter time for `/photos/*`. Not decided.
 - **Captions for photos.** Waiting.
 - **The 404 page** with blocks that fall (`minis.md`). Waiting.
 - **A public wiki** about the owner's projects and licensing, in the owner's words. Waiting.
@@ -83,8 +83,9 @@ goes back there, and nothing simply appears (`STYLE.md`).
 - **One set of controls.** A single set of buttons, sliders, switches and fields, shown on an unlisted
   `/controls/` page, was made and kept in the git tag `controls-archive`; nothing on `main` uses it.
   Whether to adopt it is open.
-- **An audit of the whole site** for bugs and consistency, including Mote's API and anything that does not
-  move the way the site does. It is being written as `docs/AUDIT.md`.
+- **What the audit of 19 November left to choose**: the four trying and testing pages that are live, the
+  styles carried inside every page, and the known faults in the build's tools
+  ([audit](audit-19-november.md#for-the-owner-to-choose)).
 
 ## How to run and test
 
