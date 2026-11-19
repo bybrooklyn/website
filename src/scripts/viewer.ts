@@ -114,6 +114,9 @@ function menu(picture: HTMLImageElement, address: () => string): { box: HTMLElem
     };
 }
 
+/** The keys that scroll a page. (Space is the other: on the picture it closes it, and in the menu it presses what has the keyboard.) */
+const SCROLLS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End"];
+
 let closeOpen: (() => void) | undefined;
 /** Takes the open picture away at once, with no flight back: for when the page itself is being left. */
 let dropOpen: (() => void) | undefined;
@@ -218,6 +221,8 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
             return round(event, [...viewer.querySelectorAll<HTMLElement>("button, a[href]")].filter((stop) => !stop.closest("[inert]")));
         }
         event.stopPropagation();
+        // nor does the page move: where the page itself scrolls (the photos page), the keys that scroll moved it under the open picture
+        if (SCROLLS.includes(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) return void event.preventDefault();
         const inMenu = more.box.contains(document.activeElement);
         if (event.key === "Escape" && more.shut()) return void more.box.querySelector("button")?.focus({ preventScroll: true });
         if (event.key !== "Escape" && (inMenu || (event.key !== "Enter" && event.key !== " "))) return;
