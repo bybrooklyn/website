@@ -231,6 +231,24 @@ pub extern "C" fn band_changed(band: u32) -> u32 {
     world().map_or(0, |world| world.band_changed(band as usize) as u32)
 }
 
+/// The first column changed in band `band` since `forget_changed`, or -1 when none has.
+#[unsafe(no_mangle)]
+pub extern "C" fn band_from(band: u32) -> i32 {
+    world().map_or(-1, |world| match world.band_columns(band as usize) {
+        (x0, x1) if x0 <= x1 => x0,
+        _ => -1,
+    })
+}
+
+/// The last column changed in band `band` since `forget_changed`, or -1 when none has.
+#[unsafe(no_mangle)]
+pub extern "C" fn band_to(band: u32) -> i32 {
+    world().map_or(-1, |world| match world.band_columns(band as usize) {
+        (x0, x1) if x0 <= x1 => x1,
+        _ => -1,
+    })
+}
+
 /// The page has drawn the rows that changed.
 #[unsafe(no_mangle)]
 pub extern "C" fn forget_changed() {

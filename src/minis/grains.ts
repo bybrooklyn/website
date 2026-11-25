@@ -36,6 +36,9 @@ export interface Engine {
     changed_to(): number;
     band_rows(): number;
     band_changed(band: number): number;
+    /** The first and last column changed in a band since the page last drew, or -1 when none has. */
+    band_from(band: number): number;
+    band_to(band: number): number;
     forget_changed(): void;
     set_sleeping(on: number): void;
     set_order(phases: number): void;

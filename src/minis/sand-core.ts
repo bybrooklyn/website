@@ -190,14 +190,19 @@ export function core(send: (message: FromCore, transfer?: Transferable[]) => voi
         const [stride, border, high] = [of.stride(), of.border(), of.height()];
         if (fresh) grid.send(cellsNow, stride, border, 0, high - 1);
         else {
-            // only the bands of rows that changed, each run of them sent together
+            // only the bands of rows that changed, each run of them sent together, and of them only the
+            // columns that changed: a pour in one corner of the world does not send rows across all of it
             const rows = of.band_rows();
             const bands = Math.ceil(high / rows);
             for (let band = 0; band < bands; band++) {
                 if (!of.band_changed(band)) continue;
-                let last = band;
-                while (last + 1 < bands && of.band_changed(last + 1)) last++;
-                grid.send(cellsNow, stride, border, band * rows, Math.min(high, (last + 1) * rows) - 1);
+                let [last, left, right] = [band, of.band_from(band), of.band_to(band)];
+                while (last + 1 < bands && of.band_changed(last + 1)) {
+                    last++;
+                    left = Math.min(left, of.band_from(last));
+                    right = Math.max(right, of.band_to(last));
+                }
+                grid.send(cellsNow, stride, border, band * rows, Math.min(high, (last + 1) * rows) - 1, left, right);
                 band = last;
             }
         }

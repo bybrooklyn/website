@@ -164,9 +164,11 @@ export interface Cells {
     draw(bytes: Uint8Array, stride: number, border: number, from: number, to: number): void;
     /**
      * Sends rows `from` to `to` to the graphics card and shows nothing yet: for a grid whose changed
-     * rows lie in several runs, each sent by this, then all shown by one `draw` that sends none.
+     * rows lie in several runs, each sent by this, then all shown by one `draw` that sends none. With
+     * `left` and `right`, only those columns of the rows are sent: what changed in one corner of a wide
+     * grid is not sent across the whole of it.
      */
-    send(bytes: Uint8Array, stride: number, border: number, from: number, to: number): void;
+    send(bytes: Uint8Array, stride: number, border: number, from: number, to: number, left?: number, right?: number): void;
     /** Lets go of what is held on the graphics card. */
     dispose(): void;
 }
@@ -469,21 +471,23 @@ export function cells(canvas: HTMLCanvasElement | OffscreenCanvas): Cells | unde
         g.bindTexture(g.TEXTURE_2D, made);
     };
 
-    /** Sends rows `from` to `to` of the cells to the graphics card. */
-    const send: Cells["send"] = (bytes, stride, border, from, to) => {
+    /** Sends rows `from` to `to` of the cells to the graphics card, all their columns or those from `left` to `right`. */
+    const send: Cells["send"] = (bytes, stride, border, from, to, left = 0, right = Infinity) => {
         if (!grid) return;
         from = Math.max(0, from);
         to = Math.min(kept().rows - 1, to);
-        if (to < from) return;
+        left = Math.max(0, left);
+        right = Math.min(kept().columns - 1, right);
+        if (to < from || right < left) return;
         stale = true;
         // read straight out of `bytes`, a row at a time with its frame stepped over
         g.activeTexture(g.TEXTURE0);
         g.bindTexture(g.TEXTURE_2D, grid);
         g.pixelStorei(g.UNPACK_ALIGNMENT, 4);
         g.pixelStorei(g.UNPACK_ROW_LENGTH, stride);
-        g.pixelStorei(g.UNPACK_SKIP_PIXELS, border);
+        g.pixelStorei(g.UNPACK_SKIP_PIXELS, border + left);
         g.pixelStorei(g.UNPACK_SKIP_ROWS, border + from);
-        g.texSubImage2D(g.TEXTURE_2D, 0, 0, from, kept().columns, to - from + 1, g.RGBA_INTEGER, g.UNSIGNED_BYTE, bytes);
+        g.texSubImage2D(g.TEXTURE_2D, 0, left, from, right - left + 1, to - from + 1, g.RGBA_INTEGER, g.UNSIGNED_BYTE, bytes);
     };
 
     return {
