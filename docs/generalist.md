@@ -1,6 +1,7 @@
 # The generalist
 
-A draft mini at `/minis/generalist/`: a creature that sees, learns and gets about a generated world by
+Hidden since 24 November 2026, as the owner chose: no build makes its page (`minis.md`, "Hidden"). A
+draft mini at `/minis/generalist/`: a creature that sees, learns and gets about a generated world by
 itself, in the visitor's browser. It is a second mini on the Walker's Rust engine (`walker.md`), with its own
 module, and the start of a longer piece of work toward a creature that learns general ways of moving and
 doing things, all written from scratch in that engine. An article about it is planned.

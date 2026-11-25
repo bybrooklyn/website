@@ -112,6 +112,8 @@ const minis = defineCollection({
         /** Position in the list, lowest first. */
         order: z.number(),
         draft: z.boolean().default(false),
+        /** Left out of every build, drafts shown or not. Its script must also be left out of src/scripts/mini.ts. */
+        hidden: z.boolean().default(false),
     }),
 });
 

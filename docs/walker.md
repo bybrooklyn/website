@@ -1,6 +1,7 @@
 # Walker
 
-A mini at `/minis/walker/` in which a little creature, seen from the side, learns to walk in the visitor's
+Hidden since 24 November 2026, as the owner chose: no build makes its page (`minis.md`, "Hidden"). A mini
+at `/minis/walker/` in which a little creature, seen from the side, learns to walk in the visitor's
 browser. Its engine is a Rust crate built to plain WebAssembly: a small 2D physics engine, a body of one,
 two or four legs, a small neural network and evolution. The generalist (`generalist.md`) is a second mini on
 the same engine.

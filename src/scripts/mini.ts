@@ -5,8 +5,9 @@
 
 import { mote, type Mote, type Scene } from "../mote/stage";
 
-// the tests beside the minis are not minis, and would otherwise be built and shipped with them
-const minis = import.meta.glob<{ default: (m: Mote) => Scene; label?: string }>(["../minis/*.ts", "!../minis/*.test.ts"]);
+// the tests beside the minis are not minis, and would otherwise be built and shipped with them; nor are
+// the hidden minis (`hidden: true` in src/content/minis/), left out so that nothing of them is built
+const minis = import.meta.glob<{ default: (m: Mote) => Scene; label?: string }>(["../minis/*.ts", "!../minis/*.test.ts", "!../minis/walker.ts", "!../minis/walking.ts", "!../minis/generalist.ts", "!../minis/roaming.ts"]);
 
 const near = new IntersectionObserver(
     (entries) => {

@@ -52,7 +52,11 @@ How to add a mini is in `src/mote/README.md`.
 - **The terminal** (not part of Mote): plays back a recorded run of a command-line program (an asciinema
   `.cast` file) with its timing. Nothing runs. It is used on the mFetchy and Terrustia project pages, and
   opens the way a picture does, on the same opener as the picture viewer.
-- The Walker, the generalist (a draft) and Sand (a draft, stage 4 of its plan measured:
+- **Hidden.** A mini with `hidden: true` in its words is left out of every build, the dev server's too, and
+  its scene file is left out of the list `src/scripts/mini.ts` loads from, so that none of its scripts or
+  engine is built. The Walker and the generalist were hidden on 24 November 2026, as the owner chose; their
+  code, tests and engine stay in the repository. Showing one again is taking out both.
+- The Walker (hidden), the generalist (a draft, hidden) and Sand (a draft, stage 4 of its plan measured:
   the page, with pride sand and its flags laid as poured sand, glow and links to worlds; sand that comes
   down to its angle promptly and lava that pools) are minis too.
 - **Comet** was a draft, an aim-and-fling gravity game built on 16 and 17 November 2026. The owner asked

@@ -3,7 +3,7 @@
 // for the space there is, how hard each material is poured, the order and keys of the row of
 // materials, and how big a flag the flag brush lays. The scene is src/minis/sand.ts.
 
-import { hasSimd } from "./walking";
+import { hasSimd } from "../mote/simd";
 
 /** The functions of public/wasm/sand.wasm. sand/README.md says what each does. */
 export interface Engine {

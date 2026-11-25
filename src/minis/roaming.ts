@@ -3,7 +3,8 @@
 // recipe as the page holds it and as a link carries it, and turning a typed seed into a number.
 // generalist.test.ts holds these to their word, and the engine to the native one's numbers.
 
-import { hasSimd, type Effort, type Machine } from "./walking";
+import { hasSimd } from "../mote/simd";
+import type { Effort, Machine } from "./walking";
 
 /** The functions of public/wasm/generalist.wasm. A function giving a list gives its pointer; `length` then gives how many f32 it holds. */
 export interface Engine {
