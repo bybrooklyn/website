@@ -1524,8 +1524,9 @@ well over the ground, steam well over stone.
 
 ### The stage
 
-- **The world on the site's ground, rounded and softly shaded at its edges, on a floor**, in a frame of
-  the panel's color: the canvas that takes the pointer is rounded, shades its own edges inward, and has a
+- **The world on the site's ground, rounded at its edges, on a floor**, in a frame of the panel's color:
+  the canvas that takes the pointer is rounded (it shaded its edges inward until 24 November 2026, when the
+  owner found that glow to be slop and it was taken out), and has a
   band of stone under it (`--floor`) that the world rests on; the cells' canvas is laid exactly under it
   by the scene (`fit` in `sand.ts`).
 - **The materials and controls in a column beside the stage**, in the Walker's grid, type, spacing and

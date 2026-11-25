@@ -40,8 +40,8 @@
     --panel-room: 24rem;
 }
 
-/* Sand's stage and its column: a view onto the world, on the site's ground with rounded, softly shaded
-   edges, and beside it the materials and the controls in a column, as the Walker has them, so that the
+/* Sand's stage and its column: a view onto the world, on the site's ground with rounded edges (no glow
+   inward from them, which the owner found to be slop on 24 November), and beside it the materials and the controls in a column, as the Walker has them, so that the
    whole stage and every material are in the first screen of a laptop. On a phone the column goes under
    the stage. The grid is laid out from the start, before the column has been made. */
 .mini-stage[data-mini="sand"] {
@@ -88,8 +88,6 @@
     height: clamp(16rem, calc(100svh - 24.75rem), 40rem);
     margin: var(--frame);
     border-radius: 0.9rem;
-    /* the edges shaded softly into the frame, over the view's own edge */
-    box-shadow: inset 0 0 1.5rem 0.2rem color-mix(in oklch, var(--surface) 80%, transparent);
     cursor: crosshair;
 }
 
