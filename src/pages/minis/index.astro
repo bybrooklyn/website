@@ -21,8 +21,8 @@ const minis = await getMinis();
             minis.map((mini) => (
                 <li>
                     <a href={`/minis/${mini.id}/`}>
-                        {/* The mini itself, running small. It cannot be touched here: the whole card is the link. */}
-                        <div class="mote mini-preview" data-mini={mini.id} data-preview aria-hidden="true" />
+                        {/* The mini itself, small, run while it is the one pointed at and otherwise held still. It cannot be touched here: the whole card is the link. */}
+                        <div class="mote mini-preview" data-mini={mini.id} data-preview data-still aria-hidden="true" />
                         <div class="mini-about">
                             <h2>{mini.data.name}</h2>
                             <p class="post-meta">
@@ -40,4 +40,7 @@ const minis = await getMinis();
 
 <script>
     import "../../scripts/mini";
+    import { minisOneAtATime } from "../../scripts/minis-list";
+
+    minisOneAtATime(document.querySelector(".mini-list"));
 </script>

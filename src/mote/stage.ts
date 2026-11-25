@@ -16,7 +16,10 @@
 //
 // A mini only runs while it can be seen, stops when the scene says it has
 // come to rest, and for someone who has asked for reduced motion does not
-// start moving until they touch it.
+// start moving until they touch it. A preview whose host is marked
+// `data-still` runs its first seconds, so that it shows something, and then
+// holds that frame until the mark is taken away (the minis list runs one at
+// a time this way).
 
 export interface Pointer {
     x: number;
@@ -162,6 +165,9 @@ const KEYS: Record<string, Key> = {
 const named = (event: KeyboardEvent): Key | undefined => KEYS[event.key] ?? KEYS[event.code];
 
 /** Puts a mini in `host` and returns a function that takes it away again. */
+/** How long a preview marked still runs before holding its frame, in seconds of the scene's time. */
+export const STILL_AFTER = 2;
+
 export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An interactive demo.", preview = false } = {}): () => void {
     const canvas = document.createElement("canvas");
     if (!preview) canvas.tabIndex = 0;
@@ -178,6 +184,8 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     let owed = 0;
     let visible = false;
     let allowed = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    /** A preview marked still that has run its first seconds holds its frame. */
+    const still = () => preview && host.hasAttribute("data-still") && m.time >= STILL_AFTER;
 
     const m: Mote = {
         canvas,
@@ -275,7 +283,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     };
 
     function start(): void {
-        if (frame || !visible || document.hidden) return;
+        if (frame || !visible || document.hidden || still()) return;
         last = performance.now();
         owed = 0;
         const loop = (now: number) => {
@@ -295,7 +303,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
                 frame = 0;
                 throw problem;
             }
-            if (scene.resting?.()) {
+            if (scene.resting?.() || still()) {
                 frame = 0;
                 return;
             }
@@ -451,12 +459,16 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     watcher.observe(canvas);
     const shown = () => (document.hidden ? stop() : allowed && start());
     document.addEventListener("visibilitychange", shown);
+    // a preview let go of being still runs again at once; one made still stops by itself at its next frame
+    const marked = new MutationObserver(() => allowed && start());
+    if (preview) marked.observe(host, { attributes: true, attributeFilter: ["data-still"] });
 
     draw();
     return () => {
         stop();
         resizer.disconnect();
         watcher.disconnect();
+        marked.disconnect();
         document.removeEventListener("visibilitychange", shown);
         host.removeEventListener("pointerdown", touched, { capture: true });
         host.removeEventListener("keydown", touched, { capture: true });

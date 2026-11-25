@@ -7,8 +7,11 @@ files of their own (`walker.md`, `generalist.md`, `sand.md`).
 
 ## Where the code is
 
-- `src/pages/minis/`: the list and each mini's page. The list shows each mini running, small
-  (`m.preview` in Mote is true there).
+- `src/pages/minis/`: the list and each mini's page. The list shows each mini small (`m.preview` in Mote
+  is true there), one running at a time since 24 November 2026, as the owner chose: the card under the
+  mouse, reached with the keyboard or last touched runs, or else the first in view
+  (`src/scripts/minis-list.ts`); every other card runs its first two seconds and holds that frame
+  (`data-still`, `STILL_AFTER` in `src/mote/stage.ts`).
 - `src/minis/`: one scene per mini, with the logic that can be tested kept in files of its own.
 - `src/content/minis/*.mdx`: each mini's name, summary, `kind` (toy or game), `space` (2D or 3D),
   `controls`, `order`, `panel`, `draft`, and a few words.
