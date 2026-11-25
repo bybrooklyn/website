@@ -25,7 +25,7 @@
 //! chance it did or not, or that changed its own temperature, wakes itself and its neighbors for the
 //! next step; a side whose two cells did not change cannot start to carry heat.
 
-use crate::materials::WARMTH;
+use crate::materials::{MATERIALS, WARMTH};
 use crate::world::{BORDER, CHUNK, World, chance, material, temperature};
 
 /// The largest difference across a side that carries no heat.
@@ -49,8 +49,18 @@ fn across(t: i32, n: i32, k: i32, roll: u32) -> i32 {
 /// side see the same, so heat is still kept.
 #[inline(always)]
 fn conducts(cell: u32) -> i32 {
-    let c = WARMTH[material(cell) as usize].conduct;
+    // SAFETY: a material is a byte, and the table has 256 lines.
+    let c = unsafe { WARMTH.get_unchecked(material(cell) as usize) }.conduct;
     if crate::world::moving(cell) { c >> 2 } else { c }
+}
+
+/// Whether a cell gives light by its heat (fire, lava), so that a change of its temperature alone is
+/// a change to how it is drawn.
+#[inline(always)]
+fn lights(cell: u32) -> bool {
+    // SAFETY: a material is a byte; past the table's end nothing gives light
+    let m = material(cell) as usize;
+    m < MATERIALS.len() && matches!(unsafe { MATERIALS.get_unchecked(m) }.glow, 1 | 2)
 }
 
 impl World {
@@ -92,18 +102,29 @@ impl World {
             let start = self.index(0, y) - b as usize;
             let (from, to) = ((lo - 1 + b) as usize, (hi + 1 + b) as usize);
             here[from..=to].copy_from_slice(&self.cells[start + from..=start + to]);
+            // where in this row a cell that gives light by its heat changed temperature, to be drawn again
+            let (mut lit_from, mut lit_to) = (i32::MAX, i32::MIN);
             for cx in 0..self.across {
                 let rect = self.chunks[(cy * self.across + cx) as usize].warm_now;
                 if !rect.has_row(y) {
                     continue;
                 }
                 let (mut changed_from, mut changed_to) = (i32::MAX, i32::MIN);
+                // Read without bounds checks: every place read is inside the world or its border of
+                // walls, which are as wide as any look here (one cell), so none can fall outside.
+                let cells = self.cells.as_mut_ptr();
                 for x in rect.x0..=rect.x1 {
                     let place = (x + b) as usize;
                     let at = start + place;
-                    let cell = here[place];
+                    // SAFETY: `place` is within the row and `at`, `at - s` and `at + s` within `cells`:
+                    // the world has a border of walls round it as wide as these looks.
+                    let (cell, left, right, up, down) = unsafe {
+                        let up = if (kept_from..=kept_to).contains(&place) { *above.get_unchecked(place) } else { *cells.add(at - s) };
+                        (*here.get_unchecked(place), *here.get_unchecked(place - 1), *here.get_unchecked(place + 1), up, *cells.add(at + s))
+                    };
                     let t = temperature(cell) as i32;
-                    let w = WARMTH[material(cell) as usize];
+                    // SAFETY: a material is a byte, and the table has 256 lines.
+                    let w = unsafe { WARMTH.get_unchecked(material(cell) as usize) };
                     let own = if w.warms > 0 && t < w.toward {
                         w.warms.min(w.toward - t)
                     } else if w.warms < 0 && t > w.toward {
@@ -111,15 +132,31 @@ impl World {
                     } else {
                         0
                     };
-                    let up = if (kept_from..=kept_to).contains(&place) { above[place] } else { self.cells[at - s] };
-                    let (left, right, down) = (here[place - 1], here[place + 1], self.cells[at + s]);
                     let (tl, tr, tu, td) = (temperature(left) as i32, temperature(right) as i32, temperature(up) as i32, temperature(down) as i32);
                     let near = |n: i32| (n - t).abs() <= STILL;
+                    // Most cells a step have every side within STILL: they pass nothing, and only what a
+                    // material does to itself is left (a fifth of a forest fire's cells do anything more).
+                    if near(tl) && near(tr) && near(tu) && near(td) {
+                        if own != 0 {
+                            let next = (t + own).clamp(0, 255);
+                            if next != t {
+                                // SAFETY: as above.
+                                unsafe { *cells.add(at) = (cell & 0xff00_ffff) | (next as u32) << 16 };
+                                if lights(cell) {
+                                    (lit_from, lit_to) = (lit_from.min(x), lit_to.max(x));
+                                }
+                            }
+                            changed_from = changed_from.min(x);
+                            changed_to = changed_to.max(x);
+                        }
+                        continue;
+                    }
                     let mut flow = 0;
                     let mut could = false;
-                    if w.conduct != 0 && !(near(tl) && near(tr) && near(tu) && near(td)) {
+                    if w.conduct != 0 {
+                        let here_conducts = conducts(cell);
                         for (tn, n, side) in [(tl, left, (at - 1) * 2), (tr, right, at * 2)] {
-                            let c = conducts(cell).min(conducts(n));
+                            let c = here_conducts.min(conducts(n));
                             if c > 0 && !near(tn) {
                                 flow += across(t, tn, c, roll(side));
                                 could = true;
@@ -127,10 +164,10 @@ impl World {
                         }
                         // above, this cell is the lower of the two; below, the upper
                         for (tn, n, side, lower_is_here) in [(tu, up, (at - s) * 2 + 1, true), (td, down, at * 2 + 1, false)] {
-                            let nw = WARMTH[material(n) as usize];
-                            let mut c = conducts(cell).min(conducts(n));
+                            let mut c = here_conducts.min(conducts(n));
                             if c > 0 && !near(tn) {
-                                if w.flows && nw.flows {
+                                // SAFETY: as above.
+                                if w.flows && unsafe { WARMTH.get_unchecked(material(n) as usize) }.flows {
                                     let lower_hotter = if lower_is_here { t > tn } else { tn > t };
                                     c = if lower_hotter { (c * 2).min(32) } else { c / 2 };
                                 }
@@ -141,7 +178,11 @@ impl World {
                     }
                     let next = (t + flow + own).clamp(0, 255);
                     if next != t {
-                        self.cells[at] = (cell & 0xff00_ffff) | (next as u32) << 16;
+                        // SAFETY: as above.
+                        unsafe { *cells.add(at) = (cell & 0xff00_ffff) | (next as u32) << 16 };
+                        if lights(cell) {
+                            (lit_from, lit_to) = (lit_from.min(x), lit_to.max(x));
+                        }
                     }
                     if could || own != 0 {
                         changed_from = changed_from.min(x);
@@ -151,6 +192,9 @@ impl World {
                 if changed_from <= changed_to {
                     self.wake(changed_from - 1, y - 1, changed_to + 1, y + 1);
                 }
+            }
+            if lit_from <= lit_to {
+                self.redrawn(lit_from, y, lit_to);
             }
             (kept_from, kept_to) = (from, to);
             core::mem::swap(&mut above, &mut here);

@@ -33,7 +33,7 @@ impl World {
     /// what its line with fire says, at least as hot as that is made. Gives whether it could burn.
     /// For the brush, which lays fire on what is there.
     pub(crate) fn light(&mut self, at: usize, x: i32, y: i32) -> bool {
-        let cell = self.cells[at];
+        let cell = self.cell_at(at);
         let (from, to) = LINES[material(cell) as usize];
         let Some(k) = (from as usize..to as usize).find(|&k| REACTIONS[k].b == FIRE && REACTIONS[k].a_becomes != SAME) else {
             return false;
@@ -88,7 +88,7 @@ impl World {
             for turn in 0..4 {
                 let side = sides[(first + turn) & 3];
                 let there = at.wrapping_add_signed(side);
-                let n = material(self.cells[there]);
+                let n = material(self.cell_at(there));
                 if n == line.b || (line.b == OPEN && TABLE[n as usize].airy) {
                     found = Some((there, side));
                     break;
@@ -116,7 +116,7 @@ impl World {
     /// heavy). Lava sinking through water is held up by neither, so it does not harden hanging in it.
     #[inline]
     fn resting(&self, at: usize, cell: u32, p: Props, ground: u8) -> bool {
-        let under = TABLE[material(self.cells[at + self.stride]) as usize];
+        let under = TABLE[material(self.cell_at(at + self.stride)) as usize];
         let solid = under.kind == Kind::Solid;
         let afloat = under.kind == Kind::Powder || (under.kind == Kind::Liquid && under.density >= p.density);
         !crate::world::moving(cell) && if ground == SOLID_GROUND { solid } else if ground == AFLOAT { afloat } else { solid || afloat }
@@ -129,13 +129,13 @@ impl World {
         let line = &REACTIONS[k];
         self.fired[k] += 1;
         let fresh = chance(self.seed ^ 0x5ade, self.steps, at);
-        let a = self.cells[at];
+        let a = self.cell_at(at);
         let a_to = if line.a_becomes == SAME { material(a) } else { line.a_becomes };
         let latent = |m: u8| LATENT[m as usize] as i32;
         let (ta, tb_and_b) = match there {
             None => (temperature(a) as i32 - (latent(a_to) - latent(material(a))), None),
             Some((there, _, _)) => {
-                let b = self.cells[there];
+                let b = self.cell_at(there);
                 let b_to = if line.b_becomes == SAME { material(b) } else { line.b_becomes };
                 let (ta, tb) = match line.heat {
                     Heat::Kept => (temperature(a) as i32 - (latent(a_to) - latent(material(a))), temperature(b) as i32 - (latent(b_to) - latent(material(b)))),

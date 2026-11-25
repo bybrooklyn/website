@@ -152,7 +152,7 @@ impl World {
             for y in rect.y0..=rect.y1 {
                 for x in rect.x0..=rect.x1 {
                     let at = self.index(x, y);
-                    let cell = self.cells[at];
+                    let cell = self.cell_at(at);
                     let made = &TABLE[material(cell) as usize];
                     if made.level != 0 && (liquids || made.kind == Kind::Gas) && !self.counted(at) {
                         self.body(at);
@@ -165,7 +165,7 @@ impl World {
             for k in 0..self.levels.lengths[b] {
                 let (from, to) = self.levels.moves[b][k];
                 let (from, to) = (from as usize, to as usize);
-                let (here, there) = (self.cells[from], self.cells[to]);
+                let (here, there) = (self.cell_at(from), self.cell_at(to));
                 let (fx, fy) = self.place(from);
                 let kind = TABLE[material(here) as usize].kind;
                 let still = matches!(kind, Kind::Liquid | Kind::Gas) && clock_of(here) != self.clock;
@@ -230,7 +230,7 @@ impl World {
     fn find(&mut self, seed: usize, reference: Option<i64>) -> Found {
         self.levels.body += 1;
         let id = self.levels.body;
-        let liquid = material(self.cells[seed]);
+        let liquid = material(self.cell_at(seed));
         let kind = TABLE[liquid as usize].kind;
         let clock = self.clock;
         let s = self.stride;

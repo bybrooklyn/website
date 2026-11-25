@@ -239,7 +239,10 @@ pub struct World {
     /// Which bands of `CHUNK` rows hold a row changed since the page last drew, so that the page
     /// sends only those to the graphics card: in a large world, a pour at the top and a fire at the
     /// bottom are two bands, not every row between them.
-    bands: Vec<bool>,
+    /// Each band's first and last column changed, so that only that much of it is sent: a pour in
+    /// one corner of a wide world sent whole rows across all of it. A band with nothing changed holds
+    /// `(i32::MAX, i32::MIN)`.
+    bands: Vec<(i32, i32)>,
     pub(crate) levels: Levels,
     /// Two rows of cells as they were before the heat pass, kept while it works down the world.
     pub(crate) rows: Vec<u32>,
@@ -281,7 +284,7 @@ impl World {
             order: Order::Rows,
             edges: Edges::Walled,
             changed: (0, height - 1),
-            bands: vec![true; down as usize],
+            bands: vec![(0, width - 1); down as usize],
             levels: Levels::new(stride * rows),
             rows: vec![0; 2 * stride],
             fired: vec![0; REACTIONS.len()],
@@ -294,6 +297,16 @@ impl World {
         world
     }
 
+    /// The cell at a place in `cells`, read without a bounds check. Every look the rules make is
+    /// within the border of walls round the world, `BORDER` cells deep, so no place they ask for lies
+    /// outside `cells`; the check was a branch on every read, in the hottest loops of the engine.
+    #[inline(always)]
+    pub(crate) fn cell_at(&self, at: usize) -> u32 {
+        debug_assert!(at < self.cells.len());
+        // SAFETY: as above: every place asked for is inside the world or its border.
+        unsafe { *self.cells.get_unchecked(at) }
+    }
+
     /// Where cell (x, y) is in `cells`. x and y may be up to `BORDER` outside the world.
     #[inline(always)]
     pub fn index(&self, x: i32, y: i32) -> usize {
@@ -302,7 +315,7 @@ impl World {
 
     /// The cell at (x, y).
     pub fn get(&self, x: i32, y: i32) -> u32 {
-        self.cells[self.index(x, y)]
+        self.cell_at(self.index(x, y))
     }
 
     /// The material at (x, y).
@@ -340,7 +353,7 @@ impl World {
     /// Sets the temperature at (x, y), as a change that wakes what is near it.
     pub fn set_temperature(&mut self, x: i32, y: i32, t: u8) {
         let at = self.index(x, y);
-        self.cells[at] = with_temperature(self.cells[at], t);
+        self.cells[at] = with_temperature(self.cell_at(at), t);
         self.touch(x, y, x, y);
         self.warmed(x, y, x, y);
     }
@@ -394,13 +407,27 @@ impl World {
     /// The page has drawn what changed.
     pub fn forget_changed(&mut self) {
         self.changed = (i32::MAX, i32::MIN);
-        self.bands.fill(false);
+        self.bands.fill((i32::MAX, i32::MIN));
     }
 
     /// Whether band `band` of `CHUNK` rows, counted from the top, holds a row changed since
     /// `forget_changed`.
     pub fn band_changed(&self, band: usize) -> bool {
-        self.bands.get(band).copied().unwrap_or(false)
+        self.bands.get(band).is_some_and(|&(x0, x1)| x0 <= x1)
+    }
+
+    /// The first and last column changed in band `band` since `forget_changed`, or `(i32::MAX,
+    /// i32::MIN)` when none has.
+    pub fn band_columns(&self, band: usize) -> (i32, i32) {
+        self.bands.get(band).copied().unwrap_or((i32::MAX, i32::MIN))
+    }
+
+    /// Cells from `x0` to `x1` of row `y` look different, though nothing moved (a flame or lava that
+    /// cooled): they are sent to be drawn again, and nothing is woken.
+    pub(crate) fn redrawn(&mut self, x0: i32, y: i32, x1: i32) {
+        self.changed = (self.changed.0.min(y), self.changed.1.max(y));
+        let span = &mut self.bands[(y / CHUNK) as usize];
+        *span = (span.0.min(x0), span.1.max(x1));
     }
 
     /// Something changed in the cells from (x0, y0) to (x1, y1): what they could set moving is
@@ -411,7 +438,8 @@ impl World {
         self.changed.1 = self.changed.1.max(y1.min(self.height - 1));
         if y0 < self.height && y1 >= 0 {
             for band in y0.max(0) / CHUNK..=y1.min(self.height - 1) / CHUNK {
-                self.bands[band as usize] = true;
+                let span = &mut self.bands[band as usize];
+                *span = (span.0.min(x0.max(0)), span.1.max(x1.min(self.width - 1)));
             }
         }
         let ax = (x0 - MARGIN_X).max(0);
@@ -583,7 +611,7 @@ impl World {
     /// has moved or changed this step is left alone.
     #[inline(always)]
     fn visit(&mut self, at: usize, x: i32, y: i32) {
-        let cell = self.cells[at];
+        let cell = self.cell_at(at);
         let p = props(cell);
         if p.kind == Kind::Empty || clock_of(cell) == self.clock {
             return;
@@ -592,7 +620,7 @@ impl World {
         if p.acts && !(p.calm_from <= t && t <= p.calm_to) && self.react(at, x, y, cell, p) {
             return;
         }
-        let cell = self.cells[at];
+        let cell = self.cell_at(at);
         match p.kind {
             Kind::Powder | Kind::Liquid => self.fall(at, x, y, cell, p),
             Kind::Gas => self.rise(at, x, y, p),
@@ -635,8 +663,8 @@ impl World {
     /// room temperature comes in behind it.
     #[inline(always)]
     fn swap(&mut self, from: usize, to: usize, speed: u32, (x, y): (i32, i32), (tx, ty): (i32, i32)) {
-        let mover = with_state(self.cells[from], self.clock, speed);
-        let target = self.cells[to];
+        let mover = with_state(self.cell_at(from), self.clock, speed);
+        let target = self.cell_at(to);
         // an empty cell left behind keeps the clock, so a cell resting on it knows its support
         // has just gone
         if material(target) == VOID {
@@ -659,7 +687,7 @@ impl World {
     fn fall(&mut self, at: usize, x: i32, y: i32, cell: u32, p: Props) {
         let s = self.stride;
         let speed = speed_of(cell);
-        let below = self.cells[at + s];
+        let below = self.cell_at(at + s);
         // What can fall, falls: nothing goes to a side while the way down is open. (Before 17 Nov 2026
         // a cell whose support had only just moved stepped aside instead; in a cloud of drops nearly
         // every cell is in that state, and poured water hung in the air and slid about as sheets.)
@@ -692,7 +720,7 @@ impl World {
                 // gave up one grain a step at its foot, and a pillar stood for seconds.
                 if p.slide > 0 {
                     let aired = |side: isize| {
-                        let beside = self.cells[at.wrapping_add_signed(side)];
+                        let beside = self.cell_at(at.wrapping_add_signed(side));
                         material(beside) == EMPTY && clock_of(beside) != self.clock && self.slides(at, side, p.slide as usize, p.density, false)
                     };
                     let (left, right) = (aired(-1), aired(1));
@@ -713,10 +741,10 @@ impl World {
             // a pool comes apart into it, and does not creep down one cell a step behind its foot (until
             // 24 Nov 2026 it crept). Rain, whose drops fall freely, is left alone: taking every drop that
             // just had its way opened made falling water three times as dear.
-            if p.kind == Kind::Liquid && speed != 0 && material(below) == EMPTY && clock_of(below) == self.clock && material(self.cells[at + 2 * s]) != EMPTY {
+            if p.kind == Kind::Liquid && speed != 0 && material(below) == EMPTY && clock_of(below) == self.clock && material(self.cell_at(at + 2 * s)) != EMPTY {
                 let open = |side: isize| {
                     let beside = at.wrapping_add_signed(side);
-                    material(self.cells[beside]) == EMPTY && material(self.cells[beside + s]) == EMPTY
+                    material(self.cell_at(beside)) == EMPTY && material(self.cell_at(beside + s)) == EMPTY
                 };
                 let (left, right) = (open(-1), open(1));
                 if left || right {
@@ -738,7 +766,7 @@ impl World {
         }
         let roll = chance(self.seed, self.steps, at);
         if p.kind == Kind::Liquid {
-            if material(self.cells[at - s]) == material(cell) {
+            if material(self.cell_at(at - s)) == material(cell) {
                 // Under its own kind it does not go itself: the top of what lies on it goes, to the
                 // open place nearest along this row (`levels`), once it has landed. Were it to go,
                 // everything over it would drop a cell into its place and nothing else of a column
@@ -753,7 +781,7 @@ impl World {
                 // squeezes there.
                 let open = |side: isize| {
                     let beside = at.wrapping_add_signed(side);
-                    self.sinks_into(p.density, self.cells[beside]) && self.sinks_into(p.density, self.cells[beside + s]) && material(self.cells[beside]) != VOID
+                    self.sinks_into(p.density, self.cell_at(beside)) && self.sinks_into(p.density, self.cell_at(beside + s)) && material(self.cell_at(beside)) != VOID
                 };
                 let (left, right) = (open(-1), open(1));
                 if left || right {
@@ -781,7 +809,7 @@ impl World {
                     };
                     // with nothing under it there it is falling, at a speed of its own, as from the
                     // brush, so that what pours over an edge together comes apart into drops
-                    let falls = if self.sinks_into(p.density, self.cells[to + s]) { 1 + (roll >> 5) % 3 } else { 0 };
+                    let falls = if self.sinks_into(p.density, self.cell_at(to + s)) { 1 + (roll >> 5) % 3 } else { 0 };
                     self.swap(at, to, falls, (x, y), (x + along, y + down));
                     return;
                 }
@@ -813,7 +841,7 @@ impl World {
             // of it rolls on by chance, so a heap rests at a gentler angle than a grain at rest
             // could hold.
             if p.roll != 0 && (roll >> 16) & 255 < p.roll as u32 {
-                let open = |k: isize| self.sinks_into(p.density, self.cells[at.wrapping_add_signed(k)]);
+                let open = |k: isize| self.sinks_into(p.density, self.cell_at(at.wrapping_add_signed(k)));
                 let s = s as isize;
                 let step = |side: isize| open(side) && open(2 * side) && open(2 * side + s) && !open(side + s);
                 let (left, right) = (step(-1), step(1));
@@ -832,7 +860,7 @@ impl World {
                 let side = ((roll >> 25) % 5) as isize - 2;
                 if y as usize >= up {
                     let to = (at - up * s).wrapping_add_signed(side);
-                    if material(self.cells[to]) == EMPTY && material(self.cells[at - s]) == EMPTY {
+                    if material(self.cell_at(to)) == EMPTY && material(self.cell_at(at - s)) == EMPTY {
                         self.swap(at, to, 0, (x, y), (x + side as i32, y - up as i32));
                         return;
                     }
@@ -860,7 +888,7 @@ impl World {
         // on down the slope while there is slope under it: where the ground falls away it stops
         // sliding and falls (a grain off the top of a sheer pile was carried out through the air as
         // far as it could slide)
-        while gone < reach && material(self.cells[to]) != VOID && (gone < SLIDE_CLEAR || !self.sinks_into(p.density, self.cells[to + s])) && self.slides(to, side, slide, p.density, false) {
+        while gone < reach && material(self.cell_at(to)) != VOID && (gone < SLIDE_CLEAR || !self.sinks_into(p.density, self.cell_at(to + s))) && self.slides(to, side, slide, p.density, false) {
             to = (to + s).wrapping_add_signed(side);
             gone += 1;
         }
@@ -877,7 +905,7 @@ impl World {
         const ROLL: isize = ROLL_ALONG as isize;
         let s = self.stride as isize;
         let rolls = |side: isize| {
-            let along = |n: isize, down: isize| self.sinks_into(p.density, self.cells[at.wrapping_add_signed(side * n + down * s)]);
+            let along = |n: isize, down: isize| self.sinks_into(p.density, self.cell_at(at.wrapping_add_signed(side * n + down * s)));
             (1..ROLL).all(|n| along(n, 0)) && (0..ROLL).all(|down| along(ROLL, down))
         };
         let (left, right) = (rolls(-1), rolls(1));
@@ -913,7 +941,7 @@ impl World {
             let side = ((roll >> 20) % 7) as isize - 3;
             if y as usize >= up {
                 let to = (at - up * s).wrapping_add_signed(side);
-                if material(self.cells[to]) == EMPTY {
+                if material(self.cell_at(to)) == EMPTY {
                     self.swap(at, to, 0, (x, y), (x + side as i32, y - up as i32));
                     return;
                 }
@@ -922,7 +950,7 @@ impl World {
         let up = |side: isize| {
             let to = (at - s).wrapping_add_signed(side);
             // not between two cells that touch only at their corners
-            self.rises_into(p.density, self.cells[to]) && (side == 0 || self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]))
+            self.rises_into(p.density, self.cell_at(to)) && (side == 0 || self.rises_into(p.density, self.cell_at(at.wrapping_add_signed(side))))
         };
         // a flame leans with the wind: as often as the wind is strong it goes up to that side
         let (right, _) = self.wind(x, y);
@@ -943,7 +971,7 @@ impl World {
             // on up through open air, as far as this step's chance takes it
             let reach = 1 + (roll >> 12) as usize % p.fall as usize;
             let (mut to, mut risen) = ((at - s).wrapping_add_signed(side), 1);
-            while risen < reach && material(self.cells[to - s]) == EMPTY {
+            while risen < reach && material(self.cell_at(to - s)) == EMPTY {
                 to -= s;
                 risen += 1;
             }
@@ -951,7 +979,7 @@ impl World {
             return;
         }
         let side: isize = if (roll >> 3) & 1 == 0 { -1 } else { 1 };
-        if (roll >> 4) & 3 == 0 && self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) {
+        if (roll >> 4) & 3 == 0 && self.rises_into(p.density, self.cell_at(at.wrapping_add_signed(side))) {
             self.swap(at, at.wrapping_add_signed(side), 0, (x, y), (x + side as i32, y));
             return;
         }
@@ -967,7 +995,7 @@ impl World {
         let s = self.stride;
         let roll = chance(self.seed ^ 0xb10e, self.steps, at);
         let light = 255 - p.density as i32;
-        if down < 0 && p.density < LIGHT_POWDER && ((roll >> 16) & 127) as i32 * BLOWN < -down * 127 && material(self.cells[at - s]) == EMPTY {
+        if down < 0 && p.density < LIGHT_POWDER && ((roll >> 16) & 127) as i32 * BLOWN < -down * 127 && material(self.cell_at(at - s)) == EMPTY {
             self.swap(at, at - s, 1, (x, y), (x, y - 1));
             return true;
         }
@@ -976,7 +1004,7 @@ impl World {
         let cells = (far >> 8) + (((roll & 255) as i32) < (far & 255)) as i32;
         let side: isize = if right > 0 { 1 } else { -1 };
         let (mut to, mut gone) = (at, 0);
-        while gone < cells && material(self.cells[to.wrapping_add_signed(side)]) == EMPTY {
+        while gone < cells && material(self.cell_at(to.wrapping_add_signed(side))) == EMPTY {
             to = to.wrapping_add_signed(side);
             gone += 1;
         }
@@ -984,7 +1012,7 @@ impl World {
             return false;
         }
         // and down a cell from there if it can, so that it still falls as it is carried
-        let (to, fell) = if material(self.cells[to + s]) == EMPTY { (to + s, 1) } else { (to, 0) };
+        let (to, fell) = if material(self.cell_at(to + s)) == EMPTY { (to + s, 1) } else { (to, 0) };
         self.swap(at, to, speed_of(cell).max(1), (x, y), (x + gone * side as i32, y + fell));
         true
     }
@@ -1009,7 +1037,7 @@ impl World {
                 0 => 1,
                 _ => 0,
             };
-            let straight = self.cells[here + s];
+            let straight = self.cell_at(here + s);
             if material(straight) == VOID {
                 // out of an open world: it is gone
                 self.cells[here] = AIR | self.clock << 24;
@@ -1018,20 +1046,20 @@ impl World {
                 return;
             }
             let aside = (here + s).wrapping_add_signed(side);
-            let to = if side != 0 && through(self.cells[aside]) && through(self.cells[here.wrapping_add_signed(side)]) {
+            let to = if side != 0 && through(self.cell_at(aside)) && through(self.cell_at(here.wrapping_add_signed(side))) {
                 aside
             } else if through(straight) {
                 here + s
             } else {
                 break;
             };
-            let passed = self.cells[to];
+            let passed = self.cell_at(to);
             // a flash where it leaves empty air, and in the empty air either side of it, so the bolt
             // is three cells thick; a gas or flame it passes comes back to where it was
             let flash = FLASH as u32 | 255 << 8 | 255 << 16 | self.clock << 24;
             self.cells[here] = if material(passed) == EMPTY { flash } else { with_state(passed, self.clock, 0) };
             for beside in [here - 1, here + 1] {
-                if material(self.cells[beside]) == EMPTY && beside != to {
+                if material(self.cell_at(beside)) == EMPTY && beside != to {
                     self.cells[beside] = flash;
                 }
             }
@@ -1045,18 +1073,18 @@ impl World {
         // Where it has reached a powder one of its lines changes (sand, which it fuses to glass), it
         // runs on into it and is spent: the next few grains down, straight or a cell aside, are changed
         // as the line says, each counted as the line happening, and the bolt itself is a last flash.
-        let under = material(self.cells[here + s]);
+        let under = material(self.cell_at(here + s));
         let (first, last) = LINES[material(cell) as usize];
         let line = (first as usize..last as usize).find(|&k| REACTIONS[k].b == under && REACTIONS[k].b_becomes != SAME);
-        if let Some(k) = line.filter(|_| props(self.cells[here + s]).kind == Kind::Powder) {
+        if let Some(k) = line.filter(|_| props(self.cell_at(here + s)).kind == Kind::Powder) {
             let made = REACTIONS[k].b_becomes as u32 | (roll >> 8 & 0xff) << 8 | (REACTIONS[k].hot.max(ROOM) as u32) << 16 | self.clock << 24;
             let (mut into, mut deep) = (here + s, 0);
-            while deep < 3 + (roll >> 20) % 4 && material(self.cells[into]) == under {
+            while deep < 3 + (roll >> 20) % 4 && material(self.cell_at(into)) == under {
                 self.cells[into] = made;
                 self.fired[k] += 1;
                 deep += 1;
                 let aside = (into + s).wrapping_add_signed(if (roll >> (deep * 3)) & 7 == 0 { -1 } else if (roll >> (deep * 3)) & 7 == 7 { 1 } else { 0 });
-                into = if material(self.cells[aside]) == under { aside } else { into + s };
+                into = if material(self.cell_at(aside)) == under { aside } else { into + s };
             }
             self.cells[here] = FLASH as u32 | 255 << 8 | 255 << 16 | self.clock << 24;
             self.touch(x.min(cx) - 3, y, x.max(cx) + 3, y + gone + deep as i32);
@@ -1082,7 +1110,7 @@ impl World {
         }
         let reach = (speed + 1).min(p.fall as u32);
         let (mut to, mut fallen) = (at + s, 1);
-        while fallen < reach && material(self.cells[to + s]) == EMPTY {
+        while fallen < reach && material(self.cell_at(to + s)) == EMPTY {
             to += s;
             fallen += 1;
         }
@@ -1091,7 +1119,7 @@ impl World {
         // it lands on can pass it on at once (`levels`): under a steady pour the top of a pool is
         // always a cell that has just arrived. One in four that land fast keep their speed for a
         // step, and splash.
-        let under = self.cells[to + s];
+        let under = self.cell_at(to + s);
         let moving = speed_of(under) != 0 && matches!(props(under).kind, Kind::Powder | Kind::Liquid);
         if p.kind == Kind::Liquid && !moving && !self.sinks_into(p.density, under) && !(next >= SPLASH_FROM && chance(self.seed ^ 0x51a5, self.steps, to) & 3 == 0) {
             next = 0;
@@ -1108,7 +1136,7 @@ impl World {
     #[inline(never)]
     fn levels(&mut self, at: usize, (x, y): (i32, i32), roll: u32, p: Props) -> bool {
         let s = self.stride;
-        let own = material(self.cells[at]);
+        let own = material(self.cell_at(at));
         // First a few looks, at 1, 2, 4 cells and so on: deep in a body they all find its own kind,
         // and that is all it costs there. Where one does not, every cell as far as that one is
         // looked at in turn, so nothing is ever reached through a wall.
@@ -1118,7 +1146,7 @@ impl World {
             let mut look = 1;
             while look <= PRESS {
                 let reach = look.min(room);
-                if material(self.cells[at.wrapping_add_signed(side * reach as isize)]) != own {
+                if material(self.cell_at(at.wrapping_add_signed(side * reach as isize))) != own {
                     far = reach;
                     break;
                 }
@@ -1128,7 +1156,7 @@ impl World {
                 look *= 2;
             }
             (1..=far as isize).map(|k| (k, at.wrapping_add_signed(side * k))).find_map(|(k, to)| {
-                let there = self.cells[to];
+                let there = self.cell_at(to);
                 // open to it: air, a gas, a flame, or a lighter liquid or ash, which then comes up to
                 // the top in its place, so brine spreads out under water and ash floats
                 if material(there) == own {
@@ -1141,9 +1169,9 @@ impl World {
                     // on a slope stood out over it as a wedge whose rows each held up the one above, growing
                     // a cell a step; the owner saw water jump sideways, hang, and come down slowly.)
                     let before = to.wrapping_add_signed(-side);
-                    let under = self.cells[before + s];
+                    let under = self.cell_at(before + s);
                     let holds = !self.sinks_into(p.density, under) && props(under).kind != Kind::Liquid;
-                    if self.sinks_into(p.density, self.cells[to + s]) && !holds { Some(None) } else { Some(Some((k, to))) }
+                    if self.sinks_into(p.density, self.cell_at(to + s)) && !holds { Some(None) } else { Some(Some((k, to))) }
                 } else {
                     Some(None)
                 }
@@ -1161,16 +1189,16 @@ impl World {
             return true;
         }
         let (mut top, mut high) = (at - s, 1);
-        while high < HEAD && material(self.cells[top - s]) == own {
+        while high < HEAD && material(self.cell_at(top - s)) == own {
             top -= s;
             high += 1;
         }
         // one still coming down is left to, and this cell is reached again
-        if speed_of(self.cells[top]) != 0 {
+        if speed_of(self.cell_at(top)) != 0 {
             self.stay(x, y);
             return true;
         }
-        let falls = if self.sinks_into(p.density, self.cells[to + s]) { 1 } else { 0 };
+        let falls = if self.sinks_into(p.density, self.cell_at(to + s)) { 1 } else { 0 };
         self.swap(top, to, falls, (x, y - high as i32), (x + side * far as i32, y));
         self.levelled += 1;
         true
@@ -1190,17 +1218,17 @@ impl World {
     fn runs(&self, at: usize, side: isize, p: Props) -> Option<(usize, i32, i32)> {
         let s = self.stride;
         let first = at.wrapping_add_signed(side);
-        if matches!(props(self.cells[first]).kind, Kind::Gas | Kind::Powder) && props(self.cells[first - s]).kind == Kind::Liquid {
+        if matches!(props(self.cell_at(first)).kind, Kind::Gas | Kind::Powder) && props(self.cell_at(first - s)).kind == Kind::Liquid {
             return None;
         }
         let (mut to, mut along, mut down) = (at, 0, 0);
         while along < p.spread as i32 {
             let beside = to.wrapping_add_signed(side);
-            let there = self.cells[beside];
+            let there = self.cell_at(beside);
             if !self.sinks_into(p.density, there) {
                 break;
             }
-            if self.sinks_into(p.density, self.cells[beside + s]) {
+            if self.sinks_into(p.density, self.cell_at(beside + s)) {
                 to = beside + s;
                 down += 1;
             } else if props(there).kind != Kind::Liquid && !(material(there) == EMPTY && clock_of(there) == self.clock) {
@@ -1213,7 +1241,7 @@ impl World {
             }
             along += 1;
             // past the edge of an open world it is gone; over a drop it falls from here
-            if material(self.cells[to]) == VOID || self.sinks_into(p.density, self.cells[to + s]) {
+            if material(self.cell_at(to)) == VOID || self.sinks_into(p.density, self.cell_at(to + s)) {
                 break;
             }
         }
@@ -1228,10 +1256,10 @@ impl World {
         let mut farthest = 0;
         for k in 1..=reach {
             let to = at.wrapping_add_signed(side * k);
-            if !open(self.cells[to]) {
+            if !open(self.cell_at(to)) {
                 break;
             }
-            if open(self.cells[to.wrapping_add_signed(beyond)]) {
+            if open(self.cell_at(to.wrapping_add_signed(beyond))) {
                 return k;
             }
             farthest = k;
@@ -1247,11 +1275,11 @@ impl World {
     #[inline(always)]
     fn slides(&self, at: usize, side: isize, depth: usize, density: u8, squeeze: bool) -> bool {
         let beside = at.wrapping_add_signed(side);
-        let there = self.cells[beside];
+        let there = self.cell_at(beside);
         if !((squeeze && matches!(props(there).kind, Kind::Powder | Kind::Liquid)) || self.sinks_into(density, there)) {
             return false;
         }
-        (1..=depth).all(|k| self.sinks_into(density, self.cells[beside + k * self.stride]))
+        (1..=depth).all(|k| self.sinks_into(density, self.cell_at(beside + k * self.stride)))
     }
 
     /// The rule for gases: rise, straight or to a side by chance; or spread sideways toward
@@ -1260,7 +1288,7 @@ impl World {
     fn rise(&mut self, at: usize, x: i32, y: i32, p: Props) {
         let s = self.stride;
         let roll = chance(self.seed, self.steps, at);
-        let above = self.cells[at - s];
+        let above = self.cell_at(at - s);
         // A bubble of gas under a liquid rises through it a cell a step. Without this, water beside
         // a bubble spreads sideways into it for ever and it never comes up.
         if props(above).kind == Kind::Liquid && clock_of(above) != self.clock {
@@ -1273,12 +1301,12 @@ impl World {
         if right != 0 || down != 0 {
             let blow = chance(self.seed ^ 0xb10e, self.steps, at);
             let side: isize = if right > 0 { 1 } else { -1 };
-            if ((blow & 127) as i32) * BLOWN < right.abs() * 127 && self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) {
+            if ((blow & 127) as i32) * BLOWN < right.abs() * 127 && self.rises_into(p.density, self.cell_at(at.wrapping_add_signed(side))) {
                 self.swap(at, at.wrapping_add_signed(side), 0, (x, y), (x + side as i32, y));
                 return;
             }
             if down > 0 && (((blow >> 8) & 127) as i32) * BLOWN < down * 127 {
-                if material(self.cells[at + s]) == EMPTY {
+                if material(self.cell_at(at + s)) == EMPTY {
                     self.swap(at, at + s, 0, (x, y), (x, y + 1));
                 } else {
                     self.stay(x, y);
@@ -1291,7 +1319,7 @@ impl World {
         // always have, so it is reached again next step.
         if p.drift != 0 {
             let side: isize = if roll & 1 == 0 { -1 } else { 1 };
-            if (roll >> 1) & 31 == 0 && self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) {
+            if (roll >> 1) & 31 == 0 && self.rises_into(p.density, self.cell_at(at.wrapping_add_signed(side))) {
                 self.swap(at, at.wrapping_add_signed(side), 0, (x, y), (x + side as i32, y));
             } else {
                 self.stay(x, y);
@@ -1299,7 +1327,7 @@ impl World {
             return;
         }
         let up = self.rises_into(p.density, above);
-        let side_open = |side: isize| self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) && self.rises_into(p.density, self.cells[(at - s).wrapping_add_signed(side)]);
+        let side_open = |side: isize| self.rises_into(p.density, self.cell_at(at.wrapping_add_signed(side))) && self.rises_into(p.density, self.cell_at((at - s).wrapping_add_signed(side)));
         let (left, right) = (side_open(-1), side_open(1));
         if up || left || right {
             // straight up half the time, when it can; otherwise up to whichever side is open
@@ -1316,7 +1344,7 @@ impl World {
             };
             if side == 0 {
                 let (mut to, mut risen) = (at - s, 1);
-                while risen < p.fall as usize && material(self.cells[to]) == EMPTY && material(self.cells[to - s]) == EMPTY {
+                while risen < p.fall as usize && material(self.cell_at(to)) == EMPTY && material(self.cell_at(to - s)) == EMPTY {
                     to -= s;
                     risen += 1;
                 }
@@ -1327,7 +1355,7 @@ impl World {
             return;
         }
         // sideways, as a liquid does but upside down: pushed when there is gas under it
-        let pushed = props(self.cells[at + s]).kind == Kind::Gas;
+        let pushed = props(self.cell_at(at + s)).kind == Kind::Gas;
         let higher = |side: isize| self.sideways(at, side, p.spread as isize, pushed, -(s as isize), |c| self.rises_into(p.density, c));
         let (left, right) = (higher(-1), higher(1));
         if left > 0 || right > 0 {
@@ -1391,7 +1419,7 @@ impl World {
                     continue;
                 }
                 let at = self.index(x, y);
-                let here = self.cells[at];
+                let here = self.cell_at(at);
                 if of == EMPTY {
                     if material(here) != EMPTY {
                         self.cells[at] = AIR;
@@ -1477,7 +1505,7 @@ impl World {
             }
             for row in top..=bottom {
                 let at = self.index(column, row);
-                if material(self.cells[at]) != EMPTY {
+                if material(self.cell_at(at)) != EMPTY {
                     continue;
                 }
                 let roll = chance(self.seed ^ 0xf1a6, self.strokes, at);
@@ -1556,7 +1584,7 @@ impl World {
         for y in 0..high {
             for x in 0..wide {
                 let to = next.index(y, wide - 1 - x);
-                next.cells[to] = self.cells[self.index(x, y)] & 0x00ff_ffff;
+                next.cells[to] = self.cell_at(self.index(x, y)) & 0x00ff_ffff;
             }
         }
         // each block's wind is that of the block its middle came from, turned as the world is: what
@@ -1592,8 +1620,8 @@ impl World {
         for y in 1..self.height {
             for x in 0..self.width {
                 let at = self.index(x, y);
-                let cell = self.cells[at];
-                if !matches!(props(cell).kind, Kind::Powder | Kind::Liquid) || material(self.cells[at - s]) != EMPTY {
+                let cell = self.cell_at(at);
+                if !matches!(props(cell).kind, Kind::Powder | Kind::Liquid) || material(self.cell_at(at - s)) != EMPTY {
                     continue;
                 }
                 let roll = chance(self.seed ^ 0x5ba4e, self.strokes, at);
@@ -1601,7 +1629,7 @@ impl World {
                     continue;
                 }
                 let (mut to, mut up) = (at - s, 1);
-                while up < 1 + (roll >> 1) % by.max(1) && (up as i32) < y && material(self.cells[to - s]) == EMPTY {
+                while up < 1 + (roll >> 1) % by.max(1) && (up as i32) < y && material(self.cell_at(to - s)) == EMPTY {
                     to -= s;
                     up += 1;
                 }
@@ -1611,7 +1639,7 @@ impl World {
                     _ => 0,
                 };
                 let aside = to.wrapping_add_signed(side);
-                let (to, tx) = if side != 0 && material(self.cells[aside]) == EMPTY { (aside, x + side as i32) } else { (to, x) };
+                let (to, tx) = if side != 0 && material(self.cell_at(aside)) == EMPTY { (aside, x + side as i32) } else { (to, x) };
                 self.cells[to] = with_state(cell, 0, 0);
                 self.cells[at] = AIR;
                 self.touch(x.min(tx), y - up as i32, x.max(tx), y);
@@ -1632,7 +1660,7 @@ impl World {
             return 0;
         }
         let start = self.index(x, y);
-        let target = material(self.cells[start]);
+        let target = material(self.cell_at(start));
         if (of == EMPTY) == (target == EMPTY) {
             return 0;
         }
@@ -1644,10 +1672,10 @@ impl World {
         let s = self.stride;
         while let Some(at) = stack.pop() {
             let at = at as usize;
-            if material(self.cells[at]) != target || was.len() > most {
+            if material(self.cell_at(at)) != target || was.len() > most {
                 continue;
             }
-            was.push((at as u32, self.cells[at]));
+            was.push((at as u32, self.cell_at(at)));
             self.cells[at] = FOUND;
             stack.extend([at - 1, at + 1, at - s, at + s].map(|next| next as u32));
         }
@@ -1680,7 +1708,7 @@ impl World {
         for y in 0..self.height {
             for x in 0..self.width {
                 let at = self.index(x, y);
-                let cell = self.cells[at] & 0x00ff_ffff;
+                let cell = self.cell_at(at) & 0x00ff_ffff;
                 let m = material(cell);
                 let real = (m as usize) < MATERIALS.len() && m != WALL && m != VOID;
                 self.cells[at] = if !real || (m == EMPTY && fresh) {
@@ -1703,7 +1731,7 @@ impl World {
         self.touch(0, 0, self.width - 1, self.height - 1);
         self.warmed(0, 0, self.width - 1, self.height - 1);
         self.changed = (0, self.height - 1);
-        self.bands.fill(true);
+        self.bands.fill((0, self.width - 1));
     }
 
     /// Empties the world.
@@ -1716,7 +1744,7 @@ impl World {
             *chunk = Chunk::ASLEEP;
         }
         self.changed = (0, self.height - 1);
-        self.bands.fill(true);
+        self.bands.fill((0, self.width - 1));
     }
 }
 
@@ -1856,6 +1884,10 @@ mod tests {
         world.paint(STONE, 50, 390, 60, 390, 1, 100, false);
         let marked: Vec<usize> = (0..7).filter(|&band| world.band_changed(band)).collect();
         assert_eq!(marked, vec![0, 6]);
+        // and in each, only the columns that changed, not the whole width
+        let (x0, x1) = world.band_columns(0);
+        assert!((45..=50).contains(&x0) && (60..=65).contains(&x1), "{x0} to {x1}");
+        assert_eq!(world.band_columns(3), (i32::MAX, i32::MIN));
         assert_eq!(world.changed(), (9, 391));
         assert!(!world.band_changed(7), "past the last band nothing is");
         // a grain falling marks the bands it passes through
