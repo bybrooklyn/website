@@ -1612,4 +1612,14 @@ next. The machine was at a load of about 28 with 24 GB in swap while this was me
   are warm all along) and took the engine past its 128 KiB, so they were not kept. What would cut the pass
   further is a cheaper test for a stretch of quiet cells, or the pass run on fewer cells by a coarser grid of
   what is warm.
+- **Unsafe reads, allowed by the owner the same evening.** The engine reads cells without bounds checks
+  (`cell_at`), every look being inside the border of walls; the test build keeps a debug check on each read.
+  The heat pass reads its neighbours the same way, looks a cell's conductivity up once, and takes cells with
+  every side within `STILL` (five in six of a fire's) by a short way. Same world to the byte; a fire's step
+  about 5 to 15% cheaper (`examples/fire.rs`, whose low end, p20, is the steadiest figure on a busy machine);
+  the engine 6 KiB smaller.
+- **Sending to the graphics card.** Each changed band of 64 rows was sent across the world's whole width.
+  The engine now keeps each band's first and last changed column (`band_from`, `band_to`) and Mote's grid
+  sends only those (`send` with `left` and `right`). The heat pass marks a cell that gives light by its heat
+  and only changed temperature (`redrawn`), which the whole-width strips had covered by chance.
 
