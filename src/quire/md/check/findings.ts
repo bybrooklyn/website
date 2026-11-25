@@ -104,7 +104,7 @@ export function findingLines(finding: Finding, name: string, act: { fix(fix: Fix
 }
 
 /** What each kind is called in the list and the settings. */
-export const KIND_NAMES: Record<Kind, string> = { spelling: "Spelling", markdown: "Markdown tidiness", link: "Links and pictures", prose: "Writing" };
+export const KIND_NAMES: Record<Kind, string> = { spelling: "Spelling", grammar: "Grammar", markdown: "Markdown tidiness", link: "Links and pictures", prose: "Writing" };
 
 // ---- kept in the browser ----
 
@@ -138,7 +138,7 @@ const writeJson = (keep: Keep | undefined, key: string, value: unknown) => {
  * What a writer who has never set checking starts with: spelling alone, so that a misspelling is
  * underlined from the first document while the other kinds wait until she switches them on.
  */
-export const FIRST_KINDS: Settings["kinds"] = { spelling: true, prose: false, markdown: false, link: false };
+export const FIRST_KINDS: Settings["kinds"] = { spelling: true, grammar: true, prose: false, markdown: false, link: false };
 
 /**
  * Whether checking is on and how it is set, as kept, with anything missing or wrong taken from the

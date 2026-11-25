@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { withoutSpeech } from "../../../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../../../scripts/browser";
 import { settingLabel } from "./view";
+import { underLimit } from "../../../../scripts/speed";
 
 const here = import.meta.dir;
 const root = `${here}/../../../..`;
@@ -57,7 +58,7 @@ window.q = {
         }
         return null;
     },
-    marked: () => Object.fromEntries(["spelling", "markdown", "link", "prose"].map((kind) => [kind, CSS.highlights.get("quire-check-" + kind)?.size ?? 0])),
+    marked: () => Object.fromEntries(["spelling", "grammar", "markdown", "link", "prose"].map((kind) => [kind, CSS.highlights.get("quire-check-" + kind)?.size ?? 0])),
     loaded: () => performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => name.includes("words-en")),
 };
 `;
@@ -155,12 +156,12 @@ test("the settings name each rule in lowercase, names and the X and Y of a frami
     expect(settingLabel("Markdown tidiness")).toBe("Markdown tidiness");
 });
 
-used("a writer who never set checking sees misspellings underlined from the first document, in American, and nothing else", async () => {
+used("a writer who never set checking sees misspellings and grammar underlined from the first document, in American, and nothing else", async () => {
     await tab.run(`q.reset(${JSON.stringify(TEXT + "\nThe colour of it.\n")})`);
-    await until("q.marked().spelling === 3");
+    await until("q.marked().spelling === 3 && q.marked().grammar === 1");
     expect(await tab.run<string[]>("q.loaded()")).toHaveLength(1);
-    expect(await marked()).toEqual({ spelling: 3, markdown: 0, link: 0, prose: 0 });
-    expect(await counted()).toBe("3");
+    expect(await marked()).toEqual({ spelling: 3, grammar: 1, markdown: 0, link: 0, prose: 0 });
+    expect(await counted()).toBe("4");
     // the browser's own spelling marks are off while these are on
     expect(await tab.run("q.surface.element.spellcheck")).toBe(false);
 });
@@ -178,7 +179,7 @@ used("whoever switched checking off keeps it off: nothing of it loads until Tool
     await press(".quire-menu.open .quire-menu-line", "Spelling and grammar");
     await until("q.marked().spelling === 2");
     expect(await tab.run<string[]>("q.loaded()")).toHaveLength(1);
-    expect(await marked()).toEqual({ spelling: 2, markdown: 0, link: 1, prose: 1 });
+    expect(await marked()).toEqual({ spelling: 2, grammar: 1, markdown: 0, link: 1, prose: 0 });
     expect(await counted()).toBe("4");
     expect(await tab.run("q.surface.element.spellcheck")).toBe(false);
     // what was found opened with it, from Tools, as Docs' Spelling and grammar does
@@ -314,7 +315,7 @@ used("Personal dictionary lists her words: one removed is marked again, and a te
 
 used("the count opens the list of everything, which jumps to a finding; F8 goes to the next", async () => {
     await tab.run(`q.reset(${JSON.stringify("A wrod here.\n\nIt was the the best.\n\nAnother wrdo.\n")})`);
-    await until("q.marked().spelling === 2 && q.marked().prose === 1");
+    await until("q.marked().spelling === 2 && q.marked().grammar === 1");
     await press(".quire-check-count");
     await until("!!document.querySelector('.quire-check-list.open')");
     await tab.wait(600);
@@ -322,7 +323,7 @@ used("the count opens the list of everything, which jumps to a finding; F8 goes 
     expect(list).toContain("3 things to look at");
     expect(list).toContain("Reading ease");
     expect(list).toContain("Spelling 2");
-    expect(list).toContain("Writing 1");
+    expect(list).toContain("Grammar 1");
     // each misspelling is a line of its own, as these two differ
     await press(".quire-check-list.open .quire-check-line", "wrdo");
     await until("!!document.querySelector('.quire-check-pop.open')");
@@ -351,19 +352,19 @@ used("a word still being typed is not underlined until the cursor leaves it", as
 
 used("the settings switch a kind off, and it stays off", async () => {
     await tab.run(`q.reset("It was the the best wrod.\\n")`);
-    await until("q.marked().spelling === 1 && q.marked().prose === 1");
+    await until("q.marked().spelling === 1 && q.marked().grammar === 1");
     await press(".quire-check-count");
     await tab.wait(600);
     await press(".quire-check-list.open .quire-menu-line", "Settings");
     // the settings are a dialog
     await until("!!document.querySelector('dialog.quire-check-settings[open]')");
     await tab.wait(600);
-    await press("dialog.quire-check-settings[open] .quire-check-switch", "all of writing");
-    await until("q.marked().prose === 0");
+    await press("dialog.quire-check-settings[open] .quire-check-switch", "all of grammar");
+    await until("q.marked().grammar === 0");
     expect((await marked()).spelling).toBe(1);
-    expect(await tab.run("JSON.parse(localStorage.getItem('quire-check')).settings.kinds.prose")).toBe(false);
-    await press("dialog.quire-check-settings[open] .quire-check-switch", "all of writing");
-    await until("q.marked().prose === 1");
+    expect(await tab.run("JSON.parse(localStorage.getItem('quire-check')).settings.kinds.grammar")).toBe(false);
+    await press("dialog.quire-check-settings[open] .quire-check-switch", "all of grammar");
+    await until("q.marked().grammar === 1");
     await tab.press("Escape");
     await until("!document.querySelector('dialog.quire-check-settings')");
 });
@@ -403,8 +404,8 @@ used("with checking on, a 5,000-line document is checked in idle time and a key 
     const median = sorted[Math.floor(sorted.length / 2)]!;
     const worst = sorted[sorted.length - 1]!;
     console.log(`checking on, 5,000 lines: first full check ${first.toFixed(0)} ms; a key in the middle: median ${median.toFixed(1)} ms, slowest ${worst.toFixed(1)} ms`);
-    expect(median).toBeLessThan(16);
-    expect(worst).toBeLessThan(16);
+    underLimit("the median key with checking on, 5,000 lines", median, 16);
+    underLimit("the slowest key with checking on, 5,000 lines", worst, 16);
     // checked again after typing, the underlines are still there
     expect((await marked()).spelling).toBeGreaterThan(300);
 }, 60_000);

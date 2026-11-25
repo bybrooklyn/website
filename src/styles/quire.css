@@ -159,6 +159,8 @@
    such a field sits on (a raised menu here, the paper's grey on the light paper). */
 :root {
     --quire-faint: oklch(from var(--muted) 0.63 c h);
+    /* grammar's underline, apart from spelling's accent */
+    --quire-grammar: oklch(0.74 0.11 220);
 }
 
 /* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it;
@@ -172,6 +174,7 @@
     /* the browser's own parts on the light sheet (scrollbars of code, checkboxes, fields) are drawn light too */
     color-scheme: light;
     --accent: oklch(0.52 0.19 300);
+    --quire-grammar: oklch(0.5 0.13 235);
     --rule: oklch(0.82 0.025 300);
     --surface: oklch(0.925 0.014 300);
     --ground: var(--paper);
@@ -3601,6 +3604,13 @@ body.quire-app,
 
 ::highlight(quire-check-spelling) {
     text-decoration: underline wavy color-mix(in oklch, var(--accent) 75%, transparent);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 0.22em;
+}
+
+/* grammar: the same wave as spelling, in a colour of its own, so that the two are told apart at a glance */
+::highlight(quire-check-grammar) {
+    text-decoration: underline wavy color-mix(in oklch, var(--quire-grammar) 80%, transparent);
     text-decoration-skip-ink: none;
     text-underline-offset: 0.22em;
 }

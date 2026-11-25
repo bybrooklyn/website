@@ -8,7 +8,8 @@
 // the site's own names (names.ts), and two lists: the words she has added to her own dictionary (kept in the browser) and the words
 // she has said to ignore in this document.
 
-import { replaceWith, type Rule, type Speller } from "./engine";
+import { found, replaceWith, type Finding, type Hit, type Rule, type Speller, type Unit } from "./engine";
+import type { Word } from "./text";
 import type { Dialect, Dictionary } from "./dictionary";
 import { isName } from "./names";
 
@@ -37,6 +38,29 @@ export function pathlike(text: string, from: number, to: number): boolean {
     return /[/\\#@~]/.test(text[from - 1] ?? "") || /[/\\]/.test(text[to] ?? "");
 }
 
+/** A word written with a capital and then small letters (Isaac, Zorblax): the way a name is written. */
+const capitalised = (word: string) => /^\p{Lu}\p{Ll}/u.test(word) && !/\p{Lu}/u.test(word.slice(1));
+
+/** The words of a unit the dictionary does not know, each with where it is: those written as a name wait for the whole document. */
+function unknown(unit: Unit, speller: Speller) {
+    return unit.words.filter((one) => !unchecked(one.word) && !pathlike(unit.read.text, one.from, one.to) && !speller.known(one.word));
+}
+
+/** A misspelled word's hit. */
+const hit = (one: { word: string; from: number; to: number }, speller: Speller): Hit => ({
+    from: one.from,
+    to: one.to,
+    message: `"${one.word}" is not in the dictionary.`,
+    word: one.word,
+    suggest: () => speller.suggest(one.word).slice(0, 5).map((better) => replaceWith(better, better)),
+});
+
+/**
+ * The unknown words of each unit written as names, noted when the unit is checked and kept by its text's
+ * reading (the same when the unit is only moved), so that the whole document's count costs nothing more.
+ */
+const namesIn = new WeakMap<object, Word[]>();
+
 const misspelled: Rule = {
     id: "spelling",
     kind: "spelling",
@@ -47,15 +71,21 @@ const misspelled: Rule = {
     unit(unit, context) {
         const speller = context.speller;
         if (!speller || unit.code) return [];
-        return unit.words
-            .filter((one) => !unchecked(one.word) && !pathlike(unit.read.text, one.from, one.to) && !speller.known(one.word))
-            .map((one) => ({
-                from: one.from,
-                to: one.to,
-                message: `"${one.word}" is not in the dictionary.`,
-                word: one.word,
-                suggest: () => speller.suggest(one.word).slice(0, 5).map((better) => replaceWith(better, better)),
-            }));
+        const found = unknown(unit, speller);
+        // a word written as a name is looked at with the whole document, below
+        namesIn.set(unit.read, found.filter((one) => capitalised(one.word)));
+        return found.filter((one) => !capitalised(one.word)).map((one) => hit(one, speller));
+    },
+    // A word written as a name that the document uses twice or more is taken as a name, the way a story's
+    // people and places are, as the owner chose on 24 November 2026; one written once is marked.
+    document(_doc, units, context) {
+        const speller = context.speller;
+        if (!speller) return [];
+        const count = new Map<string, number>();
+        for (const unit of units) for (const one of namesIn.get(unit.read) ?? []) count.set(one.word, (count.get(one.word) ?? 0) + 1);
+        const out: Finding[] = [];
+        for (const unit of units) for (const one of namesIn.get(unit.read) ?? []) if (count.get(one.word) === 1) out.push(found(misspelled, unit.path, hit(one, speller)));
+        return out;
     },
 };
 

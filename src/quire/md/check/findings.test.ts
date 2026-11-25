@@ -58,9 +58,12 @@ test("findings are grouped by kind in the list's order", () => {
 
 test("settings, her words and what is ignored are kept, and anything kept wrongly is put back", () => {
     const keep = memory();
-    // a writer who never set checking has spelling on, alone, in American
+    // a writer who never set checking has spelling and grammar on, alone, in American
     expect(loadPrefs(keep)).toEqual({ on: true, settings: { ...DEFAULTS, kinds: FIRST_KINDS } });
-    expect(FIRST_KINDS).toEqual({ spelling: true, prose: false, markdown: false, link: false });
+    expect(FIRST_KINDS).toEqual({ spelling: true, grammar: true, prose: false, markdown: false, link: false });
+    // a writer who set checking before grammar was a kind (her settings name the other four) has it on too
+    keep.setItem("quire-check", JSON.stringify({ on: true, settings: { kinds: { spelling: true, prose: true, markdown: false, link: false }, rules: { "writing-dash": false } } }));
+    expect(loadPrefs(keep).settings.kinds.grammar).toBe(true);
     savePrefs(keep, { on: true, settings: { ...DEFAULTS, sentence: 25, dialect: "gb", rules: { "prose-passive": true } } });
     expect(loadPrefs(keep)).toEqual({ on: true, settings: { ...DEFAULTS, sentence: 25, dialect: "gb", rules: { "prose-passive": true } } });
     keep.setItem("quire-check", JSON.stringify({ on: "yes", settings: { sentence: -3, dialect: "fr", kinds: { spelling: "no", prose: false }, rules: { x: 1 } } }));

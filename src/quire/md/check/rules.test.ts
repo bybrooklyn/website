@@ -168,6 +168,17 @@ const TRIGGERS: [string, string, boolean][] = [
     ["stray-mark", "A *stray mark here.", true],
     ["stray-mark", "Code `open here.", true],
     ["prose-filler", "We did it in order to win.", true],
+    ["grammar-dash", "The light flickered - then it went out.", true],
+    ["grammar-past", "The choir sung all night.", true],
+    ["grammar-past", "We had went home by then.", true],
+    ["grammar-this-plural", "We walked this oddly quiet streets for an hour.", true],
+    ["grammar-capitals", "She studied german at school.", true],
+    ["grammar-age", "It was a 9 year old's drawing.", true],
+    ["grammar-two-stops", "It was late.. we left.", true],
+    ["grammar-sounds-alike", "I think your right.", true],
+    ["grammar-sounds-alike", "Try not to loose it.", true],
+    ["grammar-names", "We ate at mcdonalds.", true],
+    ["grammar-numbers", "We saw 3 birds.", true],
     ["prose-repeat", "It was the the best.", true],
     ["prose-stock", "Due to the fact that it rained, we stayed.", true],
     ["prose-two-spellings", "We organise it. They organize it. We organise more.", true],
@@ -185,7 +196,7 @@ test("every rule with a fix has text here that makes it fire", () => {
     }
     // the rules that offer no fix at all, so have nothing to hold to it
     const fixless = RULES.map((rule) => rule.id).filter((id) => !withFixes.has(id));
-    expect(fixless.sort()).toEqual(["footnote-missing", "footnote-unused", "heading-duplicate", "image-alt", "link-missing", "link-no-text", "prose-adverbs", "prose-long-paragraph", "prose-long-sentence", "prose-opener", "prose-passive", "table-ragged"]);
+    expect(fixless.sort()).toEqual(["footnote-missing", "footnote-unused", "grammar-harper", "grammar-harper-strict", "heading-duplicate", "image-alt", "link-missing", "link-no-text", "prose-adverbs", "prose-long-paragraph", "prose-long-sentence", "prose-opener", "prose-passive", "table-ragged"]);
 });
 
 test("every fix, applied where it was offered and in twenty other settings, changes only what it covers, clears its finding and brings no new one", () => {

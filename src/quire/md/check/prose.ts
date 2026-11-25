@@ -28,6 +28,8 @@ const prose = (unit: Unit) => !unit.code && !!unit.runs;
 
 /** Words that are right written twice: "had had", "that that". */
 const TWICE = new Set(["had", "that", "do", "bye", "so", "very", "ha", "no", "go", "really"]);
+/** Words right twice when a verb that takes one meets a place or time that starts with it: "looked at at noon", "turned on on Monday". */
+const PARTICLES = new Set(["at", "on", "in", "up", "out", "off", "over", "by"]);
 /** Words right twice when a verb's object meets the next clause's subject: "I told it it was", "she gave her her book". */
 const OBJECTS = new Set(["it", "you", "her", "him", "them", "us"]);
 /** Words before such a pair that show it is a slip and not an object and a subject: a joining word, an article, the start of a clause. */
@@ -39,6 +41,8 @@ const CLAUSES = new Set(["is", "was"]);
 function meantTwice(unit: Unit, index: number): boolean {
     const word = unit.words[index]!.word.toLowerCase();
     if (TWICE.has(word)) return true;
+    // a particle twice after a verb: the word before the pair ends in -ed or -ing, or is a verb's plain past (looked at at 200%)
+    if (PARTICLES.has(word) && /(?:ed|ing|ok|ut|ame|ent|ot|ew|ept|ound)$/i.test(unit.words[index - 2]?.word ?? "")) return true;
     const before = unit.words[index - 2];
     const sentence = unit.sentences.find((span) => span.from <= unit.words[index]!.from && span.to >= unit.words[index]!.to);
     // the word before the pair must be in the same sentence, with only spaces between
@@ -47,14 +51,15 @@ function meantTwice(unit: Unit, index: number): boolean {
     if (CLAUSES.has(word)) {
         // a clause that ends on the verb opens with a question word: "what it is is", "all it was was"
         const opening = unit.words.slice(0, index - 1).filter((one) => !sentence || one.from >= sentence.from).slice(-4);
-        return opening.some((one) => /^(what|whatever|all|where|how|why|who|whoever)$/i.test(one.word));
+        return opening.some((one) => /^(what|whatever|all|where|how|why|who|whoever|as)$/i.test(one.word));
     }
     return false;
 }
 
 const repeated: Rule = {
     id: "prose-repeat",
-    kind: "prose",
+    // a missing or extra word is grammar: on from the start, with spelling
+    kind: "grammar",
     severity: "mistake",
     label: "A word written twice",
     why: "The same word twice in a row is nearly always a slip made while changing a sentence.",
@@ -356,9 +361,26 @@ const quoteMarks = perUnit((unit): QuoteMark[] => {
 
 // ---- capitals ----
 
+/** Where each run with a mark on it (italic, bold) ends, as offsets into the unit's text: a stop at the end of one ends a quoted label, not the sentence round it. */
+function markedEnds(runs: Unit["runs"]): Set<number> {
+    const ends = new Set<number>();
+    let at = 0;
+    const walk = (list: NonNullable<Unit["runs"]>) => {
+        for (const run of list) {
+            if (run.kind === "link") walk(run.runs);
+            else if (run.kind === "text") {
+                at += run.text.length;
+                if (run.marks.length) ends.add(at);
+            } else at += 1;
+        }
+    };
+    walk(runs ?? []);
+    return ends;
+}
+
 const capital: Rule = {
     id: "prose-capital",
-    kind: "prose",
+    kind: "grammar",
     severity: "mistake",
     label: "A sentence with a small first letter",
     why: "A new sentence starts with a capital letter.",
@@ -370,20 +392,26 @@ const capital: Rule = {
         const out: Hit[] = [];
         // a word the dictionary does not know in small letters is a name written that way on purpose (a command, a user name)
         const known = (word: string) => !context.speller || context.speller.known(word);
-        const capitalize = (from: number, word: string) => out.push({ from, to: from + word.length, message: "A sentence starts with a capital letter.", fixes: [replaceWith(`Use "${word[0]!.toUpperCase()}${word.slice(1)}"`, word[0]!.toUpperCase() + word.slice(1))] });
-        // after a full stop, question or exclamation mark and a space, not after an abbreviation or an ellipsis
-        for (const match of text.matchAll(/[.!?]["'”’)]?\s+(\p{Ll}[\p{L}'’]*)/gu)) {
+        const capitalize = (from: number, word: string) => out.push({ from, to: from + word.length, message: "A sentence should start with a capital letter.", fixes: [replaceWith(`Use "${word[0]!.toUpperCase()}${word.slice(1)}"`, word[0]!.toUpperCase() + word.slice(1))] });
+        const ends = markedEnds(unit.runs);
+        // after a full stop, question or exclamation mark and a space, not after an abbreviation or an ellipsis;
+        // not after one inside quotation marks, brackets or italics ("Draft." in the accent), which closes a quoted
+        // sentence inside this one; and not a file's name (steps.json)
+        for (const match of text.matchAll(/[.!?]\s+(\p{Ll}[\p{L}'’]*)(?![\p{L}'’]|\.\p{L})/gu)) {
             const word = match[1]!;
+            // a stop after a sign (Ctrl+.) is a key or a symbol, not the end of a sentence
+            if (ends.has(match.index + 1) || !/[\p{L}\p{N})\]"'”’]/u.test(text[match.index - 1] ?? "")) continue;
             const before = /([\p{L}.]*)$/u.exec(text.slice(Math.max(0, match.index - 12), match.index))![1]!.toLowerCase();
             // an abbreviation (e.g., Mr.), an initial or an ellipsis does not end a sentence
             if (before.includes(".") || before.length === 1 || /^(etc|vs|cf|approx|mr|mrs|ms|dr|st|no|pp|ca|al)$/.test(before) || text[match.index - 1] === "…") continue;
             if (/\p{Lu}/u.test(word.slice(1)) || !known(word)) continue;
             // the space must be a space in the text, and not code blanked out
-            if (!/^[.!?]["'”’)]?\s+$/.test(unit.read.text.slice(match.index, match.index + match[0].length - word.length))) continue;
+            if (!/^[.!?]\s+$/.test(unit.read.text.slice(match.index, match.index + match[0].length - word.length))) continue;
             capitalize(match.index + match[0].length - word.length, word);
         }
-        const first = /^\s*(\p{Ll}[\p{L}'’]*)/u.exec(text);
-        if (first && !/\p{Lu}/u.test(first[1]!.slice(1)) && known(first[1]!)) capitalize(first[0].length - first[1]!.length, first[1]!);
+        // the paragraph's first word, when nothing comes before it (not code, which starts many a note) and it is not a file's name
+        const first = /^\s*(\p{Ll}[\p{L}'’]*)(?![\p{L}'’]|\.\p{L})/u.exec(text);
+        if (first && /^\s*$/.test(unit.read.text.slice(0, first[0].length - first[1]!.length)) && !/\p{Lu}/u.test(first[1]!.slice(1)) && known(first[1]!)) capitalize(first[0].length - first[1]!.length, first[1]!);
         return out;
     },
 };

@@ -14,10 +14,10 @@ import { deleteText, insertText, type Block, type Document, type Level, type Ran
 import { readRuns, readText, sentences, words, type Read, type Span, type Word } from "./text";
 
 /** What a finding is about. */
-export type Kind = "spelling" | "prose" | "markdown" | "link";
+export type Kind = "spelling" | "grammar" | "prose" | "markdown" | "link";
 
 /** Every kind, in the order the list shows them. */
-export const KINDS: Kind[] = ["spelling", "markdown", "link", "prose"];
+export const KINDS: Kind[] = ["spelling", "grammar", "markdown", "link", "prose"];
 
 /** How much a finding matters: a mistake, or something to think about. */
 export type Severity = "mistake" | "advice";
@@ -84,7 +84,7 @@ export interface Settings {
 }
 
 /** The settings checking starts with. */
-export const DEFAULTS: Settings = { kinds: { spelling: true, prose: true, markdown: true, link: true }, rules: {}, sentence: 35, paragraph: 160, dialect: "us" };
+export const DEFAULTS: Settings = { kinds: { spelling: true, grammar: true, prose: true, markdown: true, link: true }, rules: {}, sentence: 35, paragraph: 160, dialect: "us" };
 
 /** Answers spelling questions; spelling.ts makes one from the dictionary. */
 export interface Speller {
@@ -96,6 +96,22 @@ export interface Speller {
     variant(word: string): string | undefined;
 }
 
+/** One thing found in a stretch of text by grammar worked out elsewhere: where (offsets into the text as sent), the rule that found it and what kind of thing that rule looks for, what it says, and its fixes. */
+export interface Lint {
+    from: number;
+    to: number;
+    rule: string;
+    kind: string;
+    message: string;
+    /** Each a replacement for what the lint covers, or text to put after it. */
+    fixes: { text: string; after?: boolean }[];
+}
+
+/** Grammar worked out elsewhere (Harper, in a worker, harper.ts): what was found in a text, or undefined while that is still being worked out, which asks for it. */
+export interface Grammar {
+    lints(text: string): Lint[] | undefined;
+}
+
 /** What the rules may ask about besides the document. */
 export interface Context {
     settings: Settings;
@@ -104,6 +120,8 @@ export interface Context {
     exists?: (address: string) => boolean | undefined;
     /** Where the document is kept (its path in the site under `bun run edit`), for the rules that leave her own pages alone. */
     document?: string;
+    /** Grammar worked out elsewhere, for the grammar rules that read it. */
+    grammar?: Grammar;
     /** Told when a rule throws: that rule reports nothing for the unit or document, and the others still run. */
     failed?: (rule: string, error: unknown) => void;
 }
@@ -119,6 +137,8 @@ export interface Rule {
     why: string;
     /** Whether it starts switched on. */
     on: boolean;
+    /** Kinds whose findings on the same words this rule's own take the place of: a name written wrong is not also a spelling. */
+    outranks?: Kind[];
     unit?(unit: Unit, context: Context): Hit[];
     /** Works out, for one unit, what the `document` part will need from it, while the units are checked a slice at a time, so that the `document` part is quick. */
     prepare?(unit: Unit, context: Context): void;
@@ -214,6 +234,16 @@ function checkUnit(place: Place, rules: Rule[], context: Context, hash: string):
         if (rule.prepare) guarded(rule, context, () => (rule.prepare!(unit, context), []));
     }
     return { unit, hash, hits };
+}
+
+/** The findings without those another rule's findings outrank: a finding of a kind a rule outranks, overlapping one of that rule's, is left out. */
+export function outranked(findings: Finding[], rules: Rule[]): Finding[] {
+    const over = new Map(rules.filter((rule) => rule.outranks?.length).map((rule) => [rule.id, rule.outranks!]));
+    if (over.size === 0) return findings;
+    const ranking = findings.filter((one) => over.has(one.rule));
+    if (ranking.length === 0) return findings;
+    const key = (path: number[]) => path.join();
+    return findings.filter((one) => !ranking.some((top) => top !== one && over.get(top.rule)!.includes(one.kind) && key(top.range.start.path) === key(one.range.start.path) && top.range.start.offset < one.range.end.offset && one.range.start.offset < top.range.end.offset));
 }
 
 /** Puts findings in reading order. */
@@ -321,7 +351,7 @@ export function createChecker(rules: Rule[]) {
                         for (const one of guarded(rule, context, () => rule.document!(doc, units, context))) findings.push(one);
                     }
                     if (!time()) return undefined;
-                    return inOrder(findings);
+                    return inOrder(outranked(findings, live));
                 },
             };
         },

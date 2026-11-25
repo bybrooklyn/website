@@ -3,10 +3,11 @@
 // that change exactly what they say.
 
 import type { Rule } from "./engine";
+import { GRAMMAR } from "./grammar";
 import { LINKS } from "./links";
 import { MARKDOWN } from "./markdown";
 import { PROSE } from "./prose";
 import { SPELLING } from "./spelling";
 
 /** Every rule, in the order the settings list them. */
-export const RULES: Rule[] = [...SPELLING, ...MARKDOWN, ...LINKS, ...PROSE];
+export const RULES: Rule[] = [...SPELLING, ...GRAMMAR, ...MARKDOWN, ...LINKS, ...PROSE];
