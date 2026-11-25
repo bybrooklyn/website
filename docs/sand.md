@@ -1595,3 +1595,21 @@ and asleep five seconds after the brush is let go. The engine's own speed test p
 fifth that size at 8.5 ms a step (29 ms at its slowest), so fire, heat and reactions are what cost, and are
 next. The machine was at a load of about 28 with 24 GB in swap while this was measured, as on 18 November.
 
+### Lag, 24 November 2026
+
+- **The cause the owner felt.** The page took up to four steps in a frame to catch up when a frame came
+  late. A forest on fire over the page's world takes about 10.6 ms a step in the built engine (11.1 natively:
+  5.2 spreading heat, 4.7 moving and reacting, 1.2 levelling), so one late frame brought three or four steps,
+  which made the next frame later still, and the picture and the brush slowed to a crawl within seconds.
+  Stepping now keeps to a budget (`STEP_BUDGET` in `sand-core.ts`, 9 ms): the first step of a frame always,
+  more only while they fit, the rest of the time let go. A busy world runs a little slower and stays smooth.
+- **Falling water** was made three times as dear (8.7 ms a step on the speed test's world, from 2.7) by a rule
+  added that day that let a drop go past the side whenever its way down had just opened; it now applies only to
+  a drop in a queue, and the cost is back at 2.1 to 2.9 ms.
+- **The heat pass** works every cell of each chunk's warm rectangle; in a forest fire 617,000 cells a step, five
+  in six of them with nothing to pass on. Spans per row within each column of chunks, in place of the
+  rectangle, gave the same cells to the byte but saved only about 5% of the time in that fire (most of its rows
+  are warm all along) and took the engine past its 128 KiB, so they were not kept. What would cut the pass
+  further is a cheaper test for a stretch of quiet cells, or the pass run on fewer cells by a coarser grid of
+  what is warm.
+
