@@ -19,7 +19,8 @@ import type { Position } from "../document";
 import { openDialog, type Dialog } from "../../core/dialog";
 import { lowered } from "../../core/bench";
 import { control, flowMenu, make, menuLine, type MenuItem } from "../../core/ui";
-import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
+import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Grammar, type Job, type Rule, type Unit } from "./engine";
+import { createHarper, type HarperGrammar } from "./harper";
 import { loadDictionary, type Dictionary } from "./dictionary";
 import { around, byKind, findingAt, findingKey, findingLines, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, sameTogether, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Ignored } from "./findings";
 import type { CheckingHost } from "./mount";
@@ -84,8 +85,20 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         return undefined;
     };
 
+    // grammar worked out by Harper, started the first time a rule that reads it is on; not on a connection that asks to save data
+    let harper: HarperGrammar | undefined;
+    const grammar = (): Grammar | undefined => {
+        const wanted = RULES.some((one) => one.id.startsWith("grammar-harper") && ruleOn(one, prefs.settings));
+        const saving = typeof navigator !== "undefined" && (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+        if (!wanted || saving || typeof Worker === "undefined") return undefined;
+        harper ??= createHarper(() => soon(0));
+        harper.dialect(prefs.settings.dialect);
+        return harper;
+    };
+
     const context = (): Context => ({
         settings: prefs.settings,
+        grammar: grammar(),
         speller: dictionary && prefs.settings.kinds.spelling ? createSpeller(dictionary, prefs.settings.dialect, own, new Set(ignored.words)) : undefined,
         exists: host.where().store?.exists ? exists : undefined,
         document: host.where().id,
@@ -626,6 +639,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         findings: () => shown,
         destroy() {
             clearTimeout(timer);
+            harper?.destroy();
             job = undefined;
             prefs = { ...prefs, on: false };
             paint();

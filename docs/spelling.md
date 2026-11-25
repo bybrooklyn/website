@@ -211,3 +211,44 @@ thirty sound-spelled words, keyboard slips made from her blog's words (a neighbo
 letters swapped), her posts and pages through the real reader and the spelling rule (drafts on hold left
 out; words counted outside frontmatter, code fences and imports), the audit's eight stress texts, and
 5,963 two-letter swaps of 1,200 words from her pages for slurs and splits in the first three suggestions.
+
+## Grammar (24 November 2026)
+
+The owner wrote a short story in mdQuire on the live site and found that it let much through and marked
+things that were right. What it marked wrongly were the site's own writing rules (a dash used as
+punctuation, with a full stop offered in its place), which were made to tell writing made by a model and
+were taken out of mdQuire that day; the site's linter keeps them. What it let through was grammar, which
+mdQuire did not check at all: a past tense for a participle, "this" with a plural, a language in small
+letters, an age without its hyphens, two full stops, a spaced hyphen for a dash, a name written wrong.
+
+What she chose, by the question tool:
+
+- **Harper and mdQuire's own rules together.** Harper (harper.js 3.2.0, by Automattic, Apache 2.0) runs in
+  a worker of mdQuire's own (`grammar-worker.ts`), started the first time grammar is checked; its slim
+  engine is 19.4 MiB, about 7 MB sent compressed, then kept by the browser. Harper's own worker is made
+  from a data: address, which the page policy refuses, so its LocalLinter runs in ours. Its answers are
+  kept by each paragraph's exact text (`harper.ts`) and read by two rules over the whole document, so an
+  answer for a paragraph since changed is never shown. On a connection that asks to save data it is not
+  started. Measured on 24 November: on 18 common mistakes Harper caught 11 (their/they're, it's/its,
+  then/than, they was, he don't, a apple, a word written twice, could of, alot, a space before a comma, an unclosed
+  quote) and missed 7, which mdQuire's own rules now take: your/you're, loose/lose, a place gone to
+  without "to", a participle for a past tense, "this" with a plural, a language's capital; "the dogs runs"
+  is still missed.
+- **On from the start, sure things only.** Grammar is a kind of its own, on with spelling for every writer,
+  those who set checking before it existed too. Every rule that starts on was held against the site's own
+  posts, pages and notes (65 files, 7,820 paragraphs), taken as right: two findings are left there, both
+  sentences that leave a word out on purpose. Harper's rules that marked anything there (59 by name, in
+  `NOISY`), and its rules of style, are the stricter rules, off until switched on; rules mdQuire does
+  better (spelling, sentence capitals, a word twice, long sentences) and matters of taste (the Oxford comma,
+  quiet for quite, curses) are never shown.
+- **Its own underline.** The same wave as spelling, in a blue of its own (`--quire-grammar`).
+- **Numbers spelled out only in the stricter rules.**
+- **Names learned.** A word written as a name (a capital, then small letters) that the dictionary does not
+  know is taken as a name when the document uses it twice or more, the way a story's people and places
+  are; written once, it is marked as before.
+
+A sentence's small first letter and a word written twice moved from the writing rules into grammar, so
+they are on from the start; the first no longer marks a word after a full stop inside quotation marks,
+brackets or italics ("Draft." in the accent), a file's name (steps.json), a key (Ctrl+.), or the first
+word after code, and the second leaves "looked at at noon" alone.
+

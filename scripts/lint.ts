@@ -3,7 +3,8 @@
 // the rest is written. STYLE.md says the same things in words.
 //
 //   dependencies   package.json may not gain a library; Mote and the Quires import nothing from outside their folders
-//                  (onnxruntime-web, from src/quire/md/dictation/ only, is the one allowed exception)
+//                  (onnxruntime-web, from src/quire/md/dictation/ only, and harper.js, from mdQuire's grammar worker only,
+//                  are the allowed exceptions)
 //   the core       the Quires' core (src/quire/core/) imports nothing from a kind of document (md/, note/), and no
 //                  kind from another (lint-bounds.ts)
 //   comments       a source file opens by saying what it is; in Mote and mdQuire every exported thing has a sentence
@@ -20,7 +21,7 @@ import { at } from "./lib";
 import { crossing } from "./lint-bounds";
 
 /** The libraries the site has. A new one fails the lint: add it here on purpose or do without it. */
-const LIBRARIES = ["@astrojs/check", "@astrojs/markdown-satteri", "@astrojs/mdx", "@astrojs/rss", "@astrojs/sitemap", "@types/bun", "astro", "onnxruntime-web", "sharp", "simple-icons", "typescript", "wrangler"];
+const LIBRARIES = ["@astrojs/check", "@astrojs/markdown-satteri", "@astrojs/mdx", "@astrojs/rss", "@astrojs/sitemap", "@types/bun", "astro", "harper.js", "onnxruntime-web", "sharp", "simple-icons", "typescript", "wrangler"];
 /**
  * The one exception to the editor importing nothing from outside itself, by the owner's choice:
  * the speech models run on ONNX Runtime, which is not rewritten. Only this package may be imported,
@@ -29,8 +30,15 @@ const LIBRARIES = ["@astrojs/check", "@astrojs/markdown-satteri", "@astrojs/mdx"
  */
 const SPEECH = ["onnxruntime-web"];
 const SPEECH_HOME = "src/quire/md/dictation/";
+/**
+ * The second, by the owner's choice on 24 November 2026: grammar is worked out by Harper, which is not
+ * rewritten. Only harper.js may be imported, and only by the two files of the grammar worker, which is
+ * started the first time grammar is checked (src/quire/md/check/harper.ts).
+ */
+const GRAMMAR = ["harper.js"];
+const GRAMMAR_HOMES = ["src/quire/md/check/grammar-worker.ts", "src/quire/md/check/grammar-lint.ts"];
 /** Files that only wire a browser feature (a worker, an audio worklet) to code that is tested; they cannot be loaded outside a browser, so their test is the browser test. */
-const SHELLS = ["src/quire/md/dictation/engine-worker.ts", "src/quire/md/dictation/capture-worklet.ts", "src/quire/md/dictation/capture.ts", "src/quire/md/dictation/engine.ts", "src/quire/md/dictation/page.ts"];
+const SHELLS = ["src/quire/md/dictation/engine-worker.ts", "src/quire/md/dictation/capture-worklet.ts", "src/quire/md/dictation/capture.ts", "src/quire/md/dictation/engine.ts", "src/quire/md/dictation/page.ts", "src/quire/md/check/grammar-worker.ts"];
 /** Folders whose code stands alone: nothing in them imports from outside them. */
 const ALONE = ["src/mote/", "src/quire/"];
 /** Logic files that had no test when this rule was made. Do not add to it: write the test. */
@@ -84,7 +92,8 @@ for (const file of sources) {
         // `from "x"`, `import "x"` (for its effect alone), `import("x")` and `require("x")`, in either kind of quotes
         const path = /\b(?:from|import|require)(?:\s+|\s*\(\s*)["']([^"']+)["']/.exec(line)?.[1];
         const speech = path !== undefined && SPEECH.some((name) => path === name || path.startsWith(`${name}/`)) && file.startsWith(SPEECH_HOME);
-        if (alone && path && !test && !speech) {
+        const grammar = path !== undefined && GRAMMAR.some((name) => path === name || path.startsWith(`${name}/`)) && GRAMMAR_HOMES.includes(file);
+        if (alone && path && !test && !speech && !grammar) {
             const depth = file.slice(alone.length).split("/").length - 1;
             const leaves = (path.match(/\.\.\//g) ?? []).length > depth;
             if (!path.startsWith(".") || leaves) say(file, number, `imports ${path}, from outside ${alone}`);
