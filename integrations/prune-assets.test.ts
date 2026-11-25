@@ -1,3 +1,5 @@
+// The pruning after a build: which files may be taken out, and that a file named only by another that
+// is itself taken out goes on the next round.
 import { describe, expect, test } from "bun:test";
 import { prunable, unused } from "./prune-assets";
 
