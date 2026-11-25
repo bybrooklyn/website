@@ -4,6 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { highlight, LANGUAGES, languageOf, type TokenKind } from "./highlight";
+import { underLimit } from "../../../scripts/speed";
 
 const kinds = (code: string, info: string) => highlight(code, info).filter((token) => token.kind !== "plain" && token.text.trim()).map((token) => [token.kind, token.text] as [TokenKind, string]);
 const has = (code: string, info: string, kind: TokenKind, text: string) => expect(kinds(code, info)).toContainEqual([kind, text]);
@@ -121,5 +122,5 @@ test("a block of two thousand lines is cut in well under a frame's time", () => 
     const took = performance.now() - start;
     expect(tokens.map((token) => token.text).join("")).toBe(code);
     console.log(`highlighting ${code.length} characters of TypeScript took ${took.toFixed(1)} ms`);
-    expect(took).toBeLessThan(40);
+    underLimit("highlighting 1,900 lines of TypeScript", took, 40);
 });

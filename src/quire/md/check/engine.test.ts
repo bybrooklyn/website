@@ -11,6 +11,7 @@ import { check, createChecker, DEFAULTS, replaceWith, ruleOn, type Rule } from "
 import { unpackDictionary } from "./dictionary";
 import { RULES } from "./rules";
 import { createSpeller } from "./spelling";
+import { underLimit } from "../../../../scripts/speed";
 
 let looked = 0;
 /** A rule that flags every "bad", and counts the units it was asked about. */
@@ -139,7 +140,7 @@ test("every rule over 124,000 words, in slices of 8 ms: slices keep to their bud
     console.info(`124,000 words: cold ${cold.total.toFixed(0)} ms in ${cold.slices.length} slices, longest ${cold.longest.toFixed(1)} ms; one block edited ${edited.total.toFixed(1)} ms, longest slice ${edited.longest.toFixed(1)} ms`);
     // nearly every slice inside its 8 ms; none, on a busy machine, as long as a frame
     const over = cold.slices.filter((one) => one > 8).length;
-    expect(over / cold.slices.length).toBeLessThan(0.1);
-    expect(cold.longest).toBeLessThan(16);
-    expect(edited.total).toBeLessThan(12);
+    underLimit("slices over 8 ms, in hundredths", (100 * over) / cold.slices.length, 10);
+    underLimit("the longest slice of a cold check", cold.longest, 16);
+    underLimit("checking again after one block is edited", edited.total, 12);
 }, 30_000);

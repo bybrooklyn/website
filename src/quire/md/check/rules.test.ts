@@ -15,6 +15,7 @@ import { unpackDictionary } from "./dictionary";
 import { RULES } from "./rules";
 import { inlines } from "./markdown";
 import { createSpeller } from "./spelling";
+import { underLimit } from "../../../../scripts/speed";
 
 const root = new URL("../../../../", import.meta.url).pathname;
 const words = await unpackDictionary(await Bun.file(`${root}public/quire/words-en.dat`).arrayBuffer());
@@ -82,7 +83,7 @@ test("no rule throws out of a run, nothing a finding offers throws, and no docum
         expect([seed, failed]).toEqual([seed, []]);
     }
     console.info(`3,000 hostile documents, ${findings} findings, slowest ${slowest.toFixed(1)} ms`);
-    expect(slowest).toBeLessThan(100);
+    underLimit("the slowest hostile document", slowest, 100);
 }, 120_000);
 
 test("a malformed percent sign in a link or picture is read as written, and checking goes on", () => {

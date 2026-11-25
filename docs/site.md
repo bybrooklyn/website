@@ -93,7 +93,9 @@ goes back there, and nothing simply appears (`STYLE.md`).
 bun run dev # the dev server, drafts included
 bun run check      # astro check, the share pictures, and the lint
 bun run test       # every test under src and scripts
+STRICT_SPEED=1 bun run test  # the same, holding tests of speed to their limits
 bun run build      # dist/, with the resume PDF printed and the policy checked
+bun run build:test # the same, with the pages the browser tests open (src/lib/test-pages.ts)
 ```
 
 ## Known weak spots

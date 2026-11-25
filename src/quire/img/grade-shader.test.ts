@@ -10,6 +10,7 @@ import { plan, weight, type Pass } from "./draw";
 import { gradeOne, lutData, neutral, prepare, space, type Grade } from "./grade";
 import { maskReader, pack, ROW } from "./grade-shader";
 import { look, type Look } from "./steps";
+import { underLimit } from "../../../scripts/speed";
 
 const original = { name: "pictures/a.png", width: 300, height: 200, type: "image/png", bytes: 1 };
 
@@ -235,7 +236,7 @@ test("in Chromium on the graphics card, a grade's slider dragged on a 12 megapix
             const ms = await page.tab.run<number>(`window.slide(${width}, ${height}, ${software ? 6 : 60})`);
             const megapixels = Math.round((width * height) / 1e6);
             console.log(`${megapixels} megapixels, a grade's slider dragged on ${renderer}: each frame graded, drawn and finished in ${ms} ms`);
-            if (megapixels === 12 && !software) expect(ms).toBeLessThan(16);
+            if (megapixels === 12 && !software) underLimit("a 12-megapixel frame graded on the card", ms, 16);
         }
         if (software) console.log("there is no graphics card here, so the frame's time was printed and not held");
     } finally {

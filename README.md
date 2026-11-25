@@ -8,7 +8,9 @@ bun run dev      # http://localhost:4321, drafts included
 bun run check    # astro check, the share pictures (pictures --check) and the lint
 bun run lint     # the lint alone: scripts/lint.ts, the habits in STYLE.md
 bun run build    # writes dist/
-bun run test     # every test; build first, as some open the built site
+bun run build:test  # dist/ with the test pages too, which some browser tests open
+bun run test     # every test; build:test first, as some open the built site
+STRICT_SPEED=1 bun run test  # the same, with tests of speed held to their limits (a quiet machine)
 bun run edit     # write and edit in the browser, then publish
 bun run deploy          # check, build, deploy to bybrooklyn.dev
 bun run deploy:preview  # the same, to the preview address

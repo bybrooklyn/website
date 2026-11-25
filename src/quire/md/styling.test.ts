@@ -7,6 +7,7 @@ import { expect, test } from "bun:test";
 import { blockAt, markdownOnly, setAlign, setStyle, setSubtitle, type Document, type Paragraph, type TextRun } from "./document";
 import { read } from "./read";
 import { collect, hash, readStyle, restore } from "./styling";
+import { underLimit } from "../../../scripts/speed";
 
 const at = (path: number[], offset: number) => ({ path, offset });
 const range = (path: number[], from: number, to: number) => ({ start: at(path, from), end: at(path, to) });
@@ -98,7 +99,7 @@ test("a long styled document is collected and restored quickly, as saving it aft
     const took = performance.now() - started;
     expect(collect(back).style.runs.length).toBe(500);
     console.log(`5,000 lines with 500 styles: collected, read and restored in ${took.toFixed(0)} ms`);
-    expect(took).toBeLessThan(400);
+    underLimit("collecting, reading and restoring 500 styles", took, 400);
 });
 
 test("page setup is kept in style.json", () => {

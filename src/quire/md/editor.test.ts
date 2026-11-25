@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { withoutSpeech } from "../../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../../scripts/browser";
 import sharp from "sharp";
+import { underLimit } from "../../../scripts/speed";
 
 const here = import.meta.dir;
 const styles = `${here}/../../styles`;
@@ -1112,11 +1113,11 @@ async function speed(mode: "no page" | "light paper" | "page view") {
     const median = sorted[Math.floor(sorted.length / 2)]!;
     const worst = sorted[sorted.length - 1]!;
     console.log(`5,000 lines, ${mode}: opened in ${opened.open.toFixed(0)} ms; a key in the middle: median ${median.toFixed(1)} ms, slowest ${worst.toFixed(1)} ms`);
-    expect(opened.open).toBeLessThan(1000);
-    expect(median).toBeLessThan(16);
+    underLimit(`opening 5,000 lines, ${mode}`, opened.open, 1000);
+    underLimit(`the median key, ${mode}`, median, 16);
     // in page view the slowest key sits at the 16 ms line on a busy machine (16 to 20 ms measured on
     // 12 Nov 2026 at a load of 9), the sheets' layout being heavier: held to 24 ms there until that is made lighter
-    expect(worst).toBeLessThan(mode === "page view" ? 24 : 16);
+    underLimit(`the slowest key, ${mode}`, worst, mode === "page view" ? 24 : 16);
 }
 
 /** The speed test in a mode, leaving a short document in the usual look behind it however it ends. */
@@ -1191,9 +1192,9 @@ async function shaped(mode: "no page" | "page view") {
 const reshaped = (mode: "no page" | "page view") => async () => {
     try {
         for (const each of Object.values(await shaped(mode))) {
-            expect(each.median).toBeLessThan(16);
+            underLimit(`the median changed shape, ${mode}`, each.median, 16);
             // the slowest in page view as a key's is held there (speed, above)
-            expect(each.worst).toBeLessThan(mode === "page view" ? 24 : 16);
+            underLimit(`the slowest changed shape, ${mode}`, each.worst, mode === "page view" ? 24 : 16);
         }
     } finally {
         await reset("Text\n");
