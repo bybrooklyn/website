@@ -1,8 +1,9 @@
 # The interests page
 
 `/interests/` lists what the owner likes: games, movies, shows, music, and hobbies. It was asked for on
-17 November 2026, together with renaming the about page to bio. It is a draft: no ordinary build makes
-it, and the menu does not link to it, until the owner has read every word on it.
+17 November 2026, together with renaming the about page to bio. It is a draft, and since 24 November it is
+also hidden, as the owner chose: no build makes it, not even the dev server or a drafts build, and the menu
+does not link to it, until the owner says so. Its words are still to be read by her before it goes out.
 
 ## Built twice
 
@@ -61,7 +62,7 @@ All by the question tool, on 17 and 18 November 2026.
   project's links row and facts table, the contents beside the words, and previous and next at the foot.
   The page-change script and the layout know `/interests/<name>/` as an opened page, so it opens and
   closes as a project does.
-- `src/lib/interests.ts` holds the draft switch (`DRAFT`), the small line (`metaOf`) and `videoOf`, which
+- `src/lib/interests.ts` holds the two switches, `HIDDEN` (built nowhere) and `DRAFT` (built only where drafts show), the small line (`metaOf`) and `videoOf`, which
   says whether a copy of a thing's trailer exists.
 
 ### The trailers
