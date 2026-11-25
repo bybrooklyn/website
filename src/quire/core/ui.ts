@@ -1,6 +1,6 @@
 // The pieces mdQuire's controls are made of: buttons with their icons, the keys that move along a
 // toolbar, where a floating thing goes so that it stays in the window, and the one kind of menu
-// every control opens, as the lab chose it (src/pages/mdquire-lab.astro): it drops below what was
+// every control opens, as the lab chose it (design/mdquire/): it drops below what was
 // pressed and covers nothing, growing out from under it on a slight spring, its lines arriving one
 // after another; closing, it draws back onto the control plainly. Nothing here simply appears.
 //

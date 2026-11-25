@@ -21,14 +21,16 @@ site's first editor. It is hidden for now: its project page (`src/content/projec
 - `src/quire/md/dictation/`: dictation, with the speech recognizer in `dictation/parakeet/` and notes on the
   models in `dictation/MODELS.md` and `dictation/parakeet/RUNTIME.md`.
 - `src/pages/mdquire.astro` and `src/scripts/mdquire.ts`: the public page, whose shelf it shares with imgQuire's
-  (`src/scripts/quire-page.ts`), listing picture documents among its own ([imgQuire](imgQuire.md)). `src/pages/mdquire-dictation.astro`
-  is dictation's test page; `src/pages/mdquire-kinds.astro` has mdQuire and the core's plain note on one
-  shelf.
+  (`src/scripts/quire-page.ts`), listing picture documents among its own ([imgQuire](imgQuire.md)). `src/pages/mdquire-dictation/`
+  is dictation's test page; `src/pages/mdquire-kinds/` has mdQuire and the core's plain note on one
+  shelf. These two and `/mdquire-drive-try/` are built on the dev server and by `bun run build:test`, for
+  the browser tests, and never by the build that is deployed (`src/lib/test-pages.ts`).
 - `src/styles/quire.css`, `quire-markdown.css`, `quire-extras.css`: the look.
 - `scripts/write.ts` and `scripts/editor/`: `bun run edit`, the local server that opens mdQuire on the
   site's own posts and pages.
-- `design/mdquire/`: the audit of writing tools, three mock-ups and a lab (`/mdquire-lab/`) from which the
-  look was chosen. `AUDIT.md` there explains it.
+- `design/mdquire/`: the audit of writing tools, three mock-ups and a lab from which the
+  look was chosen. The lab's page was taken off the site on 24 November 2026, as the owner chose; it is in
+  the history before that day. `AUDIT.md` there explains it.
 - `public/quire/words-en.dat`: the spelling dictionary, made from SCOWL by `scripts/dictionary.ts`.
 
 Each file opens with a comment saying what it does; that is the place to start for any one part.

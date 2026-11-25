@@ -2,12 +2,17 @@
 // A page for trying dictation on its own: a plain editing surface and the microphone control, with
 // none of mdQuire's layout around them. Unlisted, and out of search and the sitemap, as /mdquire/ is.
 // Add ?fake to the address for the made-up engine the browser tests use.
-import Document from "../layouts/Document.astro";
-import Flags from "../components/Flags.astro";
-import { site } from "../data/site";
-import "../styles/quire.css";
-import "../styles/quire-markdown.css";
-import "../styles/quire-extras.css";
+import Document from "../../layouts/Document.astro";
+import Flags from "../../components/Flags.astro";
+import { site } from "../../data/site";
+import "../../styles/quire.css";
+import "../../styles/quire-markdown.css";
+import "../../styles/quire-extras.css";
+import type { GetStaticPaths } from "astro";
+import { testPages } from "../../lib/test-pages";
+
+// built only where the test pages are (src/lib/test-pages.ts)
+export const getStaticPaths = (() => (testPages ? [{ params: { index: undefined } }] : [])) satisfies GetStaticPaths;
 ---
 
 <Document title="Dictation" description="Trying dictation in mdQuire." unlisted bodyClass="quire-app">
@@ -34,5 +39,5 @@ import "../styles/quire-extras.css";
 </Document>
 
 <script>
-    import "../quire/md/dictation/page";
+    import "../../quire/md/dictation/page";
 </script>

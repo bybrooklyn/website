@@ -2,8 +2,9 @@
 
 For choosing before anything is built. Nothing in `src/quire/` or `src/styles/quire.css` was changed.
 
-- The lab: `/mdquire-lab/` (src/pages/mdquire-lab.astro, design/mdquire/lab.ts and lab.css).
-- The mock-ups: `/mdquire-lab/a.html`, `b.html`, `c.html` (design/mdquire/a.html and so on; each also opens from the disk).
+- The lab: design/mdquire/lab.ts and lab.css. Its page, `/mdquire-lab/`, which also served the mock-ups,
+  was taken off the site on 24 November 2026; it is in the history before that day.
+- The mock-ups: design/mdquire/a.html, b.html, c.html, each opened from the disk.
 - Pictures of each at 2560, 1765, 1300 and 390 wide, and one sheet per width with the three side by side, were made in a scratch folder; they are not in the repository.
 
 Sizes below are in rem and px. The site's rem grows with the window: 16px at 390 wide, 16.4px at 1300, 18.26px at 1765, 18.88px from about 2000 up.

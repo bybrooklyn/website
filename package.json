@@ -5,6 +5,7 @@
     "scripts": {
         "dev": "bun scripts/photos.ts && astro dev",
         "build": "bun scripts/photos.ts && astro build",
+        "build:test": "TEST_PAGES=1 bun run build",
         "preview": "astro preview",
         "check": "astro check && bun scripts/pictures.ts --check && bun scripts/lint.ts",
         "lint": "bun scripts/lint.ts",

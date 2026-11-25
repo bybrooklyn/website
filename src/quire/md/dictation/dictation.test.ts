@@ -2,7 +2,7 @@
 // and microphone (`/mdquire-dictation/?fake`): no model is downloaded and no sound is recorded.
 // Checks the control's states, the first launch's dialog before a download, provisional words that are not
 // in the document, settled text as undo steps, stopping itself after quiet, the spoken commands,
-// custom words, the shortcut, and that nothing appears without a transition. Needs `bun run build`
+// custom words, the shortcut, and that nothing appears without a transition. Needs `bun run build:test`
 // and a Chromium; skipped, with a notice, without either. It starts `astro preview` on port 4393
 // (stopping first a preview of this checkout's left running there), and stops it again.
 
@@ -29,7 +29,7 @@ async function heard(answering: boolean, ms: number) {
 const stopPreview = () => spawnSync("bunx", ["astro", "preview", "stop"], { cwd: at("."), stdio: "ignore" });
 
 beforeAll(async () => {
-    if (!ready) return console.warn("dictation browser test skipped: needs `bun run build` and a Chromium");
+    if (!ready) return console.warn("dictation browser test skipped: needs `bun run build:test` and a Chromium");
     // Astro's preview carries on as a service of its own after the command that started it is gone. One
     // left from an earlier run serves the build of then, not of now, so it is stopped before starting afresh.
     if (await answers()) {

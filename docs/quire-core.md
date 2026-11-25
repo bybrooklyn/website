@@ -16,7 +16,7 @@ the third.
   editor takes a picture through `Editing.take`, and its `.quire` keeps its text in `steps.json` (`Kind.main`).
 - `src/pages/imgquire.astro` and `/mdquire/` mount the app with both mdQuire and imgQuire, over one database
   (`src/scripts/quire-page.ts`), so the two pages show one shelf.
-- `src/pages/mdquire-kinds.astro` and `src/scripts/mdquire-kinds.ts`: a hidden page with both kinds on one
+- `src/pages/mdquire-kinds/` and `src/scripts/mdquire-kinds.ts`: a test page, built only for tests (`src/lib/test-pages.ts`), with both kinds on one
   shelf, its documents in a database of its own.
 - `scripts/core-page.ts`: the page the core's browser tests open.
 

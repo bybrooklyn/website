@@ -3,12 +3,17 @@
 // (src/quire/note/note.ts), the smallest kind the core takes. It is here to show that the core is a
 // frame any kind fills, and for its browser test; it is not a product. Its documents are kept in a
 // database of its own, apart from /mdquire/'s. Unlisted, and out of search and the sitemap.
-import Document from "../layouts/Document.astro";
-import Flags from "../components/Flags.astro";
-import { site } from "../data/site";
-import "../styles/quire.css";
-import "../styles/quire-markdown.css";
-import "../styles/quire-extras.css";
+import Document from "../../layouts/Document.astro";
+import Flags from "../../components/Flags.astro";
+import { site } from "../../data/site";
+import "../../styles/quire.css";
+import "../../styles/quire-markdown.css";
+import "../../styles/quire-extras.css";
+import type { GetStaticPaths } from "astro";
+import { testPages } from "../../lib/test-pages";
+
+// built only where the test pages are (src/lib/test-pages.ts)
+export const getStaticPaths = (() => (testPages ? [{ params: { index: undefined } }] : [])) satisfies GetStaticPaths;
 ---
 
 <Document title="Quire" description="Two kinds of document on one shelf." unlisted bodyClass="quire-app" icon="/mdquire/icon.svg">
@@ -37,5 +42,5 @@ import "../styles/quire-extras.css";
 </Document>
 
 <script>
-    import "../scripts/mdquire-kinds";
+    import "../../scripts/mdquire-kinds";
 </script>

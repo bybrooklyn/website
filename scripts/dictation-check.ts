@@ -1,5 +1,5 @@
 // Runs the real speech models end to end in headless Chromium, on the built site served with its
-// headers (`bun run build`, then a server that applies public/_headers on port 4401). Chromium is
+// headers (`bun run build:test`, which builds the test pages, then a server that applies public/_headers on port 4401). Chromium is
 // started with a fake microphone that plays a spoken WAV file once; for each model it downloads
 // the files (cold start), listens to the file until dictation switches itself off, then loads
 // again from the browser's storage (warm start) and listens again. It prints what was written, the
