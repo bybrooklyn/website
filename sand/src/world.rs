@@ -1099,7 +1099,14 @@ impl World {
                 if material(there) == own {
                     None
                 } else if self.sinks_into(p.density, there) {
-                    Some(Some((k, to)))
+                    // Open over a drop, it is taken only from the cell before it held up by something: the
+                    // edge of a pool pours over the edge of what holds it, but a cell already out in the air
+                    // is not part of the pool to press through. (Until 24 Nov 2026 it was, and a pool on a
+                    // shelf pushed rows of water out into the air, which fell as long flat dashes; the owner
+                    // saw water jump sideways and hang.)
+                    let before = to.wrapping_add_signed(-side);
+                    let over_drop = self.sinks_into(p.density, self.cells[to + s]);
+                    if over_drop && self.sinks_into(p.density, self.cells[before + s]) { Some(None) } else { Some(Some((k, to))) }
                 } else {
                     Some(None)
                 }

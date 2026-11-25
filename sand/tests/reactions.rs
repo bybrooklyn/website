@@ -94,7 +94,9 @@ fn lava_poured_in_one_place_makes_a_molten_pool_with_a_crust_and_not_a_pillar() 
         let (lava, stone) = (world.count(LAVA), world.count(STONE) + world.count(ROCK));
         println!("seed {seed}: poured {poured}, {lava} lava and {stone} stone and rock, {high} high");
         assert_eq!(lava + stone, poured, "every cell poured is lava, stone or rock");
-        assert!(high <= 40, "a pool, not a pillar: {high} high\n{}", picture(&world, 40, 20, 200, 119));
+        // 35 and 36 high until 24 Nov 2026, when a pool stopped pressing cells out into the air beside it;
+        // since then 39 and 44, still a flat pool over the floor with the heap where the stream lands on it
+        assert!(high <= 48, "a pool, not a pillar: {high} high\n{}", picture(&world, 40, 20, 200, 119));
         assert!(lava > stone, "mostly molten\n{}", picture(&world, 40, 20, 200, 119));
         // left alone it hardens from its edges in: the share of its lava with air beside it falls as
         // it cools, and in the end it is all stone

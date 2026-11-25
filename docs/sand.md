@@ -1560,3 +1560,21 @@ site, long test runs had been going through the day, and other work was compilin
 changed. If lag is reported again, measure the machine first (`uptime`, `free -h`), then the page with the
 card as above, and only then the engine.
 
+## Water pressed into the air (24 November 2026)
+
+The owner found that water jumped sideways, hung, piled, and would not settle, and that Sand grew laggy
+quickly. Filmed (`cargo run --release --example film -- water`), water pouring off a shelf fell as long flat
+dashes up to forty cells wide. The levelling pass (`levels` in `world.rs`) moved the top of a pool to the
+nearest open place along its row without asking whether anything was under that place, so a pool on a shelf
+pressed rows of water out into the air past the shelf's edge, and each row fell together. Now a place over a
+drop is taken only from a cell held up by something: the edge of a pool still pours over the edge of what
+holds it, as a stream down its side, and a cell already out in the air is not part of the pool. Lava poured in
+one place stands a few cells higher where its stream lands (39 and 44 cells, from 35 and 36), still a flat
+pool over the floor. The fingerprint was taken again.
+
+On lag, measured natively (`examples/lag.rs`, the page's world of 2,400 by 1,200 with the largest brush of
+water held for a minute): a step stays near 2 ms with 757,000 cells of water, and the water is flat to a row
+and asleep five seconds after the brush is let go. The engine's own speed test puts a forest fire on a world a
+fifth that size at 8.5 ms a step (29 ms at its slowest), so fire, heat and reactions are what cost, and are
+next. The machine was at a load of about 28 with 24 GB in swap while this was measured, as on 18 November.
+
