@@ -707,6 +707,23 @@ impl World {
                     return;
                 }
             }
+            // A drop whose way down was only opened this step, by the one under it going, with open air
+            // beside it and under that, goes down past the side, at its speed: so a column or a clump of
+            // water comes apart as it comes down, and does not creep down one cell a step behind its
+            // foot (until 24 Nov 2026 a column standing on a pool sank into it a cell a step).
+            if p.kind == Kind::Liquid && speed != 0 && material(below) == EMPTY && clock_of(below) == self.clock {
+                let open = |side: isize| {
+                    let beside = at.wrapping_add_signed(side);
+                    material(self.cells[beside]) == EMPTY && material(self.cells[beside + s]) == EMPTY
+                };
+                let (left, right) = (open(-1), open(1));
+                if left || right {
+                    let roll = chance(self.seed ^ 0x5b11, self.steps, at);
+                    let side: isize = if left && right { if roll & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
+                    self.swap(at, at.wrapping_add_signed(side) + s, speed, (x, y), (x + side as i32, y + 1));
+                    return;
+                }
+            }
             self.drop(at, x, y, below, speed, p);
             return;
         }
@@ -725,6 +742,22 @@ impl World {
                 // everything over it would drop a cell into its place and nothing else of a column
                 // would move that step: a spike of water one cell wide stood and sank a cell a step.
                 if speed == 0 && self.levelling && self.levels(at, (x, y), roll, p) {
+                    return;
+                }
+                // Where levelling found nowhere to put it, a face of a pool with open air beside it and
+                // under that spills down and out, as the top of a pool runs off, so that water does not
+                // stand with upright sides over the air or drain off a shelf a cell at a time (until 24 Nov
+                // 2026 it did, and stood as a wedge out over a slope). Not between two corners, as nothing
+                // squeezes there.
+                let open = |side: isize| {
+                    let beside = at.wrapping_add_signed(side);
+                    self.sinks_into(p.density, self.cells[beside]) && self.sinks_into(p.density, self.cells[beside + s]) && material(self.cells[beside]) != VOID
+                };
+                let (left, right) = (open(-1), open(1));
+                if left || right {
+                    let side: isize = if left && right { if (roll >> 3) & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
+                    let to = at.wrapping_add_signed(side) + s;
+                    self.swap(at, to, 1, (x, y), (x + side as i32, y + 1));
                     return;
                 }
             } else {
@@ -1099,14 +1132,16 @@ impl World {
                 if material(there) == own {
                     None
                 } else if self.sinks_into(p.density, there) {
-                    // Open over a drop, it is taken only from the cell before it held up by something: the
-                    // edge of a pool pours over the edge of what holds it, but a cell already out in the air
-                    // is not part of the pool to press through. (Until 24 Nov 2026 it was, and a pool on a
-                    // shelf pushed rows of water out into the air, which fell as long flat dashes; the owner
-                    // saw water jump sideways and hang.)
+                    // Open over a drop, it is taken only from a cell before it that rests on what holds, not
+                    // on air nor on more liquid: the foot of a pool pours over the edge of what holds it, but
+                    // no row of a pool is pressed out over the air. (Until 24 Nov 2026 every row was: a pool on
+                    // a shelf pushed rows of water out into the air, which fell as long flat dashes, and water
+                    // on a slope stood out over it as a wedge whose rows each held up the one above, growing
+                    // a cell a step; the owner saw water jump sideways, hang, and come down slowly.)
                     let before = to.wrapping_add_signed(-side);
-                    let over_drop = self.sinks_into(p.density, self.cells[to + s]);
-                    if over_drop && self.sinks_into(p.density, self.cells[before + s]) { Some(None) } else { Some(Some((k, to))) }
+                    let under = self.cells[before + s];
+                    let holds = !self.sinks_into(p.density, under) && props(under).kind != Kind::Liquid;
+                    if self.sinks_into(p.density, self.cells[to + s]) && !holds { Some(None) } else { Some(Some((k, to))) }
                 } else {
                     Some(None)
                 }

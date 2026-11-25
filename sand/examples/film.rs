@@ -182,6 +182,7 @@ fn main() {
     }
     let (every, count): (usize, usize) = match scene {
         "lake" => (60, 12),
+        "slope" => (20, 12),
         "fire" => (40, 12),
         "weather" => (40, 12),
         _ => (15, 12),
@@ -249,6 +250,22 @@ fn main() {
                 }
                 if (300..360).contains(&step) {
                     held(&mut world, MUD, 30, 250, 8);
+                }
+                world.step();
+                if step % every == every - 1 {
+                    frames.push(frame(&world));
+                }
+            }
+        }
+        "slope" => {
+            // the owner's picture of 24 Nov 2026: a tall heap of sand, and water poured onto its slope
+            for _ in 0..900 {
+                held(&mut world, SAND, 150, 40, 24);
+                world.step();
+            }
+            for step in 0..every * count {
+                if step < 120 {
+                    held(&mut world, WATER, 230, 60, 10);
                 }
                 world.step();
                 if step % every == every - 1 {

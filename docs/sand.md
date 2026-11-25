@@ -1572,6 +1572,23 @@ holds it, as a stream down its side, and a cell already out in the air is not pa
 one place stands a few cells higher where its stream lands (39 and 44 cells, from 35 and 36), still a flat
 pool over the floor. The fingerprint was taken again.
 
+The same day the owner sent a picture of water on a sand slope standing out over the air as a wedge, and
+said it was still slow. Filmed (`film -- slope`), each row of the pool pushed one cell past its end every
+step, over the air under the face, where it held up the falling cell of the row above: a 45° overhang that
+grew a cell a step, held up by nothing. Three changes:
+
+- A place over a drop is taken by levelling only from a cell that rests on what holds, not on air or more
+  liquid: the foot of a pool pours over an edge, no row above it is pressed out.
+- Where levelling finds nowhere to put a cell, a face of a pool with open air beside it and under that
+  spills down and out, as the top of a pool runs off. A slab no longer stands with upright sides on a shelf
+  or drains a cell at a time.
+- A drop whose way down was only opened this step, by the one under it going, with open air beside it and
+  under that, goes down past the side at its speed. A column or a clump comes apart as it falls instead of
+  creeping down a cell a step behind its foot.
+
+A column one cell wide standing on a pool now sinks into it in about 17 steps (the test allows 20, a third of a
+second; it allowed 15 when the pool pressed water into the air at every height).
+
 On lag, measured natively (`examples/lag.rs`, the page's world of 2,400 by 1,200 with the largest brush of
 water held for a minute): a step stays near 2 ms with 757,000 cells of water, and the water is flat to a row
 and asleep five seconds after the brush is let go. The engine's own speed test puts a forest fire on a world a
