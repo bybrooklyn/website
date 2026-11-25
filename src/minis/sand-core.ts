@@ -24,6 +24,21 @@ export const KEPT = 20;
 const STOPPED = 200;
 /** The most steps taken for one frame: a world that falls further behind than this lets the time go. */
 const MOST_STEPS = 4;
+/**
+ * How long stepping may take in one frame, in milliseconds, after its first step. A world whose steps
+ * are dear (a forest on fire, at about 10 ms a step) then runs a little slower instead of catching up:
+ * catching up, three or four steps in a frame made that frame later, and the next later still, so the
+ * picture and the brush slowed to a crawl within seconds (the owner found it laggy very quickly, on 24
+ * November 2026).
+ */
+export const STEP_BUDGET = 9;
+
+/** Whether one more step fits in the frame's budget, after `taken` steps that have so far taken `spent` milliseconds. */
+export function stepFits(taken: number, spent: number): boolean {
+    if (taken === 0) return true;
+    // the next step is taken to cost what the steps so far cost each
+    return spent + spent / taken <= STEP_BUDGET;
+}
 
 /** What a brush held still does before each step: lays a material, lays pride sand's stripes, or stills the wind under it. */
 export interface Hold {
@@ -313,7 +328,7 @@ export function core(send: (message: FromCore, transfer?: Transferable[]) => voi
                     taken = 1;
                 } else if (!message.paused) {
                     owed += Math.min(message.dt, MOST_STEPS / STEPS_PER_SECOND);
-                    while (owed >= 1 / STEPS_PER_SECOND - 1e-6 && taken < MOST_STEPS) {
+                    while (owed >= 1 / STEPS_PER_SECOND - 1e-6 && taken < MOST_STEPS && stepFits(taken, performance.now() - began)) {
                         owed -= 1 / STEPS_PER_SECOND;
                         taken++;
                         pour(of);
@@ -323,8 +338,8 @@ export function core(send: (message: FromCore, transfer?: Transferable[]) => voi
                         }
                         of.step(1);
                     }
-                    // further behind than it may catch up in a frame: the time is let go
-                    if (owed > 1 / STEPS_PER_SECOND) owed = 0;
+                    // further behind than it may catch up in a frame, or than the frame's budget lets it: the time is let go
+                    if (owed > 1 / STEPS_PER_SECOND - 1e-6) owed = 0;
                 }
                 draw(of);
                 let winds: Int8Array | undefined;
