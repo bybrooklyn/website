@@ -10,7 +10,6 @@ import { unpackDictionary } from "./dictionary";
 import { MARKDOWN } from "./markdown";
 import { PROSE, readability } from "./prose";
 import { createSpeller } from "./spelling";
-import { WRITING } from "./writing";
 
 const root = new URL("../../../../", import.meta.url).pathname;
 const words = await unpackDictionary(await Bun.file(`${root}public/quire/words-en.dat`).arrayBuffer());
@@ -105,7 +104,7 @@ test("the reading score and average sentence length", () => {
 });
 
 test("on the site's own posts and pages, no rule that starts switched on cries wolf", async () => {
-    const rules = [...MARKDOWN, ...WRITING, ...PROSE].filter((rule) => rule.on);
+    const rules = [...MARKDOWN, ...PROSE].filter((rule) => rule.on);
     const counts: Record<string, number> = {};
     for (const file of await Array.fromAsync(new Glob("src/content/**/*.{md,mdx}").scan({ cwd: root }))) {
         const doc = read(await Bun.file(`${root}${file}`).text(), { mdx: file.endsWith(".mdx") });
@@ -114,4 +113,11 @@ test("on the site's own posts and pages, no rule that starts switched on cries w
     // what is left was looked at by hand: long sentences she wrote, semicolons in the résumé's lists and "*arr" (her about page is hers, and left alone)
     // (ten, not five: her own writing grows, and a handful of long sentences across the whole site is not a rule crying wolf)
     for (const [rule, count] of Object.entries(counts)) expect([rule, count]).toEqual([rule, Math.min(count, 10)]);
+});
+
+test("hedges and filler", () => {
+    const fires = (markdown: string) => check(read(markdown), { settings: { ...DEFAULTS, kinds: { ...DEFAULTS.kinds, prose: true } } }, PROSE).filter((one) => one.rule === "prose-filler");
+    expect(fires("It basically works.\n").length).toBe(1);
+    expect(fires("It works, sorted by kind of die.\n").length).toBe(0);
+    expect(fires("We did it in order to win.\n")[0]?.fixes[0]?.label).toBe('Use "to"');
 });

@@ -167,14 +167,7 @@ const TRIGGERS: [string, string, boolean][] = [
     ["list-marker", "- one\n- two\n\n* three\n* four", false],
     ["stray-mark", "A *stray mark here.", true],
     ["stray-mark", "Code `open here.", true],
-    ["writing-dash", "It worked — mostly.", true],
-    ["writing-dash", "From 1990-2000. -- aside.", true],
-    ["writing-dash", "It worked -- mostly.", true],
-    ["writing-dash", "Is it? — yes.", true],
-    ["writing-emoji", "Done 🎉 now.", true],
-    ["writing-emoji", "Hello 👍🏽 there.", true],
-    ["writing-semicolon", "The site was slow for years and nobody knew; the fonts were eleven megabytes in all.", true],
-    ["writing-filler", "We did it in order to win.", true],
+    ["prose-filler", "We did it in order to win.", true],
     ["prose-repeat", "It was the the best.", true],
     ["prose-stock", "Due to the fact that it rained, we stayed.", true],
     ["prose-two-spellings", "We organise it. They organize it. We organise more.", true],
@@ -192,7 +185,7 @@ test("every rule with a fix has text here that makes it fire", () => {
     }
     // the rules that offer no fix at all, so have nothing to hold to it
     const fixless = RULES.map((rule) => rule.id).filter((id) => !withFixes.has(id));
-    expect(fixless.sort()).toEqual(["footnote-missing", "footnote-unused", "heading-duplicate", "image-alt", "link-missing", "link-no-text", "prose-adverbs", "prose-long-paragraph", "prose-long-sentence", "prose-opener", "prose-passive", "table-ragged", "writing-keep-out", "writing-not-but", "writing-not-just"]);
+    expect(fixless.sort()).toEqual(["footnote-missing", "footnote-unused", "heading-duplicate", "image-alt", "link-missing", "link-no-text", "prose-adverbs", "prose-long-paragraph", "prose-long-sentence", "prose-opener", "prose-passive", "table-ragged"]);
 });
 
 test("every fix, applied where it was offered and in twenty other settings, changes only what it covers, clears its finding and brings no new one", () => {
@@ -226,9 +219,7 @@ test("every fix, applied where it was offered and in twenty other settings, chan
                         const { offset: from } = finding.range.start;
                         const { offset: to } = finding.range.end;
                         same(where, "before it", now.slice(0, from).join(""), was.slice(0, from).join(""));
-                        // a full stop in place of a mark gives the next word its capital, as it says
-                        const tail = id === "writing-dash" || id === "writing-semicolon" ? 1 : 0;
-                        same(where, "after it", now.slice(now.length - (was.length - to - tail)).join(""), was.slice(to + tail).join(""));
+                        same(where, "after it", now.slice(now.length - (was.length - to)).join(""), was.slice(to).join(""));
                     }
                     if (id === "bare-url") {
                         const address = (units.get(path.join())?.read.text ?? "").slice(finding.range.start.offset, finding.range.end.offset);
@@ -258,7 +249,8 @@ test("every fix, applied where it was offered and in twenty other settings, chan
         if (!fired) wrong.push(`${id} never fired on ${JSON.stringify(sample)}`);
     }
     expect(wrong).toEqual([]);
-    expect(applied).toBeGreaterThan(400);
+    // 399 since the writing rules were taken out of mdQuire on 24 November 2026
+    expect(applied).toBeGreaterThan(350);
 });
 
 test("a rule that throws reports nothing for itself, says so, and the others still run", () => {

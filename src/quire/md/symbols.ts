@@ -2,7 +2,7 @@
 // one character as the second is typed: `->` an arrow, `!=` not equal, and so on. A sign typed
 // straight after that makes a longer run puts the two signs back, so `!==`, `<=>`, `<->` and `->>`
 // end as typed, and `-->` and `==>` are never changed. What is saved is the character itself. A dash
-// is never made: the site's writing rules (check/writing.ts) do not use a dash as punctuation. `==`
+// is never made: the site's writing rules (check/tells.ts) do not use a dash as punctuation. `==`
 // and `===` are not changed at all; the surface only draws them joined. keys.ts applies this, never
 // inside code, a link's address, an HTML tag or a web address, and one Backspace straight after puts
 // the characters back.

@@ -8,7 +8,15 @@
 import type { Document } from "../document";
 import { perUnit, replaceWith, type Finding, type Hit, type Rule, type Speller, type Unit } from "./engine";
 import { readingEase, syllables } from "./text";
-import { spoken } from "./writing";
+import { isHers } from "./tells";
+
+/** The unit's text with quiet letters (code, addresses) blanked, so that patterns never match inside them. */
+export function spoken(unit: Unit): string {
+    const { text, quiet } = unit.read;
+    let out = "";
+    for (let index = 0; index < text.length; index++) out += quiet[index] ? " " : text[index];
+    return out;
+}
 
 /** A finding at one place in a unit, for document rules. */
 const at = (rule: Rule, unit: Unit, from: number, to: number, message: string, fixes: Finding["fixes"] = []): Finding => ({ rule: rule.id, kind: rule.kind, severity: rule.severity, range: { start: { path: unit.path, offset: from }, end: { path: unit.path, offset: to } }, message, fixes });
@@ -381,7 +389,32 @@ const capital: Rule = {
 };
 
 /** The prose rules. */
-export const PROSE: Rule[] = [repeated, longSentence, longParagraph, passive, stock, weakOpener, adverbs, twoWays, marks, capital];
+// ---- hedges and filler ----
+
+/** Hedges and filler: words that soften a sentence without saying anything. */
+const FILLER = /\b(basically|essentially|literally|honestly|needless to say|it goes without saying|at the end of the day|in order to)\b/gi;
+
+const filler: Rule = {
+    id: "prose-filler",
+    kind: "prose",
+    severity: "advice",
+    label: "Hedges and filler",
+    why: "Hedging and throat-clearing soften a sentence and say nothing; cut to the fact.",
+    on: true,
+    unit(unit, context) {
+        // her own pages are left alone, as the site's linter leaves them
+        if (unit.code || isHers(context.document)) return [];
+        return [...spoken(unit).matchAll(FILLER)].map((match) => ({
+            from: match.index,
+            to: match.index + match[0].length,
+            message: `"${match[0]}" says nothing here.`,
+            fixes: /^in order to$/i.test(match[0]) ? [replaceWith('Use "to"', match[0][0] === "I" ? "To" : "to")] : [],
+        }));
+    },
+};
+
+/** The prose rules, in the order the settings list them. */
+export const PROSE: Rule[] = [repeated, longSentence, longParagraph, passive, stock, weakOpener, adverbs, twoWays, marks, capital, filler];
 
 /** How easy the document is to read: its Flesch reading ease and its average sentence length, from the units of a check. */
 export function readability(units: Unit[]): { ease: number; sentence: number; words: number } {

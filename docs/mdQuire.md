@@ -17,7 +17,7 @@ site's first editor. It is hidden for now: its project page (`src/content/projec
   session (saving, conflicts, version history), dialogs, menus and strips. Nothing in `src/quire/` imports
   from outside it (`STYLE.md`, `scripts/lint.ts`); the one exception is ONNX Runtime, imported only from
   `src/quire/md/dictation/`.
-- `src/quire/md/check/`: checking (spelling, prose, the site's writing rules, Markdown tidiness, links).
+- `src/quire/md/check/`: checking (spelling, prose, Markdown tidiness, links). The site's writing rules (a dash used as punctuation, emoji, the keep-out words, the "not just" framings, semicolons) were taken out of mdQuire on 24 November 2026, as the owner chose; the site's linter keeps them (`tells.ts`).
 - `src/quire/md/dictation/`: dictation, with the speech recognizer in `dictation/parakeet/` and notes on the
   models in `dictation/MODELS.md` and `dictation/parakeet/RUNTIME.md`.
 - `src/pages/mdquire.astro` and `src/scripts/mdquire.ts`: the public page, whose shelf it shares with imgQuire's

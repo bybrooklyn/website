@@ -7,7 +7,6 @@ import { LINKS } from "./links";
 import { MARKDOWN } from "./markdown";
 import { PROSE } from "./prose";
 import { SPELLING } from "./spelling";
-import { WRITING } from "./writing";
 
 /** Every rule, in the order the settings list them. */
-export const RULES: Rule[] = [...SPELLING, ...MARKDOWN, ...LINKS, ...WRITING, ...PROSE];
+export const RULES: Rule[] = [...SPELLING, ...MARKDOWN, ...LINKS, ...PROSE];
