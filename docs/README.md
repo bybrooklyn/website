@@ -14,6 +14,7 @@ open, how to run and test it, and its known weak spots.
 - [audit-16-november.md](audit-16-november.md): the audit of 16 November 2026: how much code there is and what it is for, what testers found in the tools by using them, what was fixed, and what was decided for the design.
 - [audit-17-november.md](audit-17-november.md): the audit of 17 November 2026: what testers found and fixed in imgQuire, Marbles and Blocks after their rebuilding, what of mdQuire's chosen list was still to build, and where the tools and minis do not match, as choices.
 - [audit-19-november.md](audit-19-november.md): the audit of 19 November 2026, for bugs and stability: every built page read and opened, also with storage, WebGL and WebAssembly taken away; three faults fixed; what is left to choose.
+- [audit-24-november.md](audit-24-november.md): the audit of 24 November 2026: the six choices of the 19th acted on as the owner chose, the interests page, the Walker and the generalist hidden, the tools updated, and styles inside each page measured against shared files on a slow phone connection.
 - [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.
 - [imgQuire.md](imgQuire.md): an image editor beside mdQuire, the hidden page `/imgquire/`; built.
 - [quire-core.md](quire-core.md): the shared core every Quire is built on, in `src/quire/core/`: the interface a kind of document gives it, where things are, and what is still tied to Markdown.
