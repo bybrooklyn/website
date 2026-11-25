@@ -24,7 +24,7 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 - Twenty-two places where the tools and minis do not match, each with the ways it could go, and the choices the testers left in imgQuire, Marbles and Blocks: [audit-17-november](docs/audit-17-november.md).
 - The words added that day to Sand's column and its controls line, to be read and approved or reworded.
-- Going live: the live site was built from the commit of 17 November, 19:58; `main` is ahead of it.
+- Going live: the live site was deployed on 24 November 2026, 20:55, from commit 183cbad (mdQuire's grammar), which was `main` then.
 - The interests page is hidden from every build since 24 November; it and Novean's project page are drafts until the owner has read their words; the owner found the interests page wrong on 18 November and it is to be worked on again with her ([interests](docs/interests.md#still-open)).
 - The audit of the pages: items 1 (the editors' top line) and 5 for Spectrum are decided and not done; items 9 to 14 are not decided ([audit](docs/audit-pages-17-november.md#what-the-owner-decided-and-what-is-done)).
 
