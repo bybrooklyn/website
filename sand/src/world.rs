@@ -707,11 +707,13 @@ impl World {
                     return;
                 }
             }
-            // A drop whose way down was only opened this step, by the one under it going, with open air
-            // beside it and under that, goes down past the side, at its speed: so a column or a clump of
-            // water comes apart as it comes down, and does not creep down one cell a step behind its
-            // foot (until 24 Nov 2026 a column standing on a pool sank into it a cell a step).
-            if p.kind == Kind::Liquid && speed != 0 && material(below) == EMPTY && clock_of(below) == self.clock {
+            // A drop whose way down was only opened this step, by the one under it going, while under
+            // that the way is shut (a queue, not a drop falling freely ahead of it), with open air beside
+            // it and under that, goes down past the side, at its speed: so a column of water standing on
+            // a pool comes apart into it, and does not creep down one cell a step behind its foot (until
+            // 24 Nov 2026 it crept). Rain, whose drops fall freely, is left alone: taking every drop that
+            // just had its way opened made falling water three times as dear.
+            if p.kind == Kind::Liquid && speed != 0 && material(below) == EMPTY && clock_of(below) == self.clock && material(self.cells[at + 2 * s]) != EMPTY {
                 let open = |side: isize| {
                     let beside = at.wrapping_add_signed(side);
                     material(self.cells[beside]) == EMPTY && material(self.cells[beside + s]) == EMPTY

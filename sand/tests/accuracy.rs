@@ -336,10 +336,10 @@ fn water_let_go_finds_its_level_and_sleeps() {
 #[test]
 fn a_column_of_water_one_cell_wide_does_not_stand_on_a_pool() {
     // Water falls ten cells a step, so a thin stream lands faster than its foot alone could carry
-    // away. A column 60 high stood on a pool is gone into it in a third of a second. (A quarter until
-    // 24 Nov 2026, when the pool's levelling stopped pressing water out into the air beside it, which
-    // had carried the column off at every height at once; it comes apart into drops now, in about 17
-    // steps.)
+    // away. A column 60 high stood on a pool is gone into it in half a second. (A quarter until 24 Nov
+    // 2026, when the pool's levelling stopped pressing water out into the air beside it, which had
+    // carried the column off at every height at once; it comes apart into drops now, in about 30 steps.
+    // A rule that took it in 17 made falling water three times as dear, and was not kept.)
     let mut world = World::new(160, 120, 6);
     for y in 100..120 {
         world.paint(WATER, 0, y, 159, y, 0, 100, false);
@@ -351,7 +351,7 @@ fn a_column_of_water_one_cell_wide_does_not_stand_on_a_pool() {
         world.paint(WATER, 80, y, 80, y, 0, 100, false);
     }
     let poured = world.count(WATER);
-    for _ in 0..20 {
+    for _ in 0..30 {
         world.step();
     }
     let highest = (0..120).find(|&y| (0..160).any(|x| world.at(x, y) == WATER)).unwrap();
