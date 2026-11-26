@@ -169,6 +169,8 @@ pub const CLOUD: u8 = 26;
 pub const BOLT: u8 = 27;
 /// The light lightning leaves along its way, gone in a few steps.
 pub const FLASH: u8 = 28;
+/// What acid gives off as it eats: a pale gas that bubbles up through the acid, rises and fades.
+pub const FUMES: u8 = 29;
 
 /// The shade a material with `glow` 3 is given picks its color: a stripe's number times 4, with
 /// the lowest two bits a slight shade of its own, so stripes of 64 colors can be poured.
@@ -216,6 +218,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "cloud", kind: Kind::Gas, density: 6, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, drift: 1, level: 0, conduct: 2, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [128, 128, 166, 225], vary: [22, 22, 24], paint: true },
     Material { name: "lightning", kind: Kind::Bolt, density: 255, slide: 0, roll: 0, spread: 0, fall: 24, pace: 0, drift: 0, level: 0, conduct: 0, made: 250, latent: 0, warms: -30, toward: 0, airy: true, glow: 1, color: [252, 252, 174, 255], vary: [0, 0, 0], paint: true },
     Material { name: "flash", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 0, made: 255, latent: 0, warms: -50, toward: 0, airy: true, glow: 1, color: [252, 252, 174, 255], vary: [0, 0, 0], paint: false },
+    Material { name: "fumes", kind: Kind::Gas, density: 2, slide: 0, roll: 0, spread: 3, fall: 2, pace: 0, drift: 0, level: 0, conduct: 10, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 4, color: [160, 200, 130, 210], vary: [0, 0, 0], paint: false },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -357,12 +360,19 @@ pub const REACTIONS: &[Reaction] = &[
     // a flame still hot spreads into the air beside it, so flames from one place swell into a body of
     // fire and are drawn out into tongues, rather than rising as a thread of single sparks
     line(FIRE, EMPTY, 180, 255, SAME, FIRE, 160, Heat::Kept, 150),
-    // acid eats stone, wood and dirt, a cell for a cell, and goes up in fumes
-    line(ACID, STONE, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
-    line(ACID, ROCK, 0, 255, SMOKE, EMPTY, 24, Heat::Kept, 0),
-    line(ACID, WOOD, 0, 255, SMOKE, EMPTY, 32, Heat::Kept, 0),
-    line(ACID, DIRT, 0, 255, SMOKE, EMPTY, 40, Heat::Kept, 0),
-    line(ACID, WET_DIRT, 0, 255, SMOKE, EMPTY, 40, Heat::Kept, 0),
+    // acid eats stone, wood and dirt, which goes up in fumes that bubble up through it; each cell of
+    // acid eats three or four before it is spent and goes up in fumes itself, so a pool of it bites a pit
+    // where it lies and fizzes as it does
+    line(ACID, STONE, 0, 255, SAME, FUMES, 32, Heat::Kept, 0),
+    line(ACID, STONE, 0, 255, FUMES, EMPTY, 12, Heat::Kept, 0),
+    line(ACID, ROCK, 0, 255, SAME, FUMES, 32, Heat::Kept, 0),
+    line(ACID, ROCK, 0, 255, FUMES, EMPTY, 12, Heat::Kept, 0),
+    line(ACID, WOOD, 0, 255, SAME, FUMES, 40, Heat::Kept, 0),
+    line(ACID, WOOD, 0, 255, FUMES, EMPTY, 14, Heat::Kept, 0),
+    line(ACID, DIRT, 0, 255, SAME, FUMES, 48, Heat::Kept, 0),
+    line(ACID, DIRT, 0, 255, FUMES, EMPTY, 16, Heat::Kept, 0),
+    line(ACID, WET_DIRT, 0, 255, SAME, FUMES, 48, Heat::Kept, 0),
+    line(ACID, WET_DIRT, 0, 255, FUMES, EMPTY, 16, Heat::Kept, 0),
     // wet dirt that is hot dries, its water going up as steam into the air beside it
     line(WET_DIRT, EMPTY, 78, 255, DIRT, STEAM, 256, Heat::Carried, 0),
     // lava pressed against wet dirt hardens, boiling the water out of the dirt; that steam escapes
@@ -412,6 +422,8 @@ pub const REACTIONS: &[Reaction] = &[
     line(BOLT, SNOW, 0, 255, SAME, WATER, 768, Heat::Kept, 40),
     // the light it leaves is gone as it fades
     line(FLASH, ALONE, 0, 60, EMPTY, SAME, ALWAYS, Heat::Kept, 0),
+    // acid's fumes fade away as smoke does
+    once_faded(line(FUMES, ALONE, 0, 255, EMPTY, SAME, ALWAYS, Heat::Kept, 0)),
 ];
 
 /// The reactions of `a` beside `b` (with `b` a material), in the order they are tried.
@@ -674,6 +686,7 @@ mod tests {
             (CLOUD, "cloud"),
             (BOLT, "lightning"),
             (FLASH, "flash"),
+            (FUMES, "fumes"),
         ];
         for (number, name) in named {
             assert_eq!(MATERIALS[number as usize].name, name);
@@ -718,8 +731,9 @@ mod tests {
         assert_eq!(one(WOOD, EMPTY), Some((EMBER, SAME)), "wood burns where air reaches it");
         assert_eq!(one(WOOD, ASH), Some((EMBER, SAME)), "ash lets air through");
         assert_eq!(one(WOOD, WATER), None, "water keeps air away");
-        for eaten in [STONE, WOOD, DIRT] {
-            assert_eq!(one(ACID, eaten), Some((SMOKE, EMPTY)), "acid eats {eaten} and is used up");
+        for eaten in [STONE, ROCK, WOOD, DIRT, WET_DIRT] {
+            let lines: Vec<_> = reactions(ACID, eaten).map(|line| (line.a_becomes, line.b_becomes)).collect();
+            assert_eq!(lines, [(SAME, FUMES), (FUMES, EMPTY)], "acid eats {eaten} into fumes, and is used up");
         }
         assert_eq!(one(ACID, SAND), None);
     }

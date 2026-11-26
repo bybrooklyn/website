@@ -358,8 +358,8 @@ fn steam_poured_with_the_brush_rises_to_a_lid_gathers_under_it_and_rains_later()
 
 #[test]
 fn acid_poured_on_stone_eats_a_pit_and_is_used_up() {
-    let mut world = World::new(160, 100, 9);
-    fill_rows(&mut world, STONE, 0, 159, 60, 99);
+    let mut world = World::new(160, 140, 9);
+    fill_rows(&mut world, STONE, 0, 159, 60, 139);
     let stone = world.count(STONE);
     let mut acid = 0;
     for _ in 0..40 {
@@ -376,11 +376,12 @@ fn acid_poured_on_stone_eats_a_pit_and_is_used_up() {
         }
     }
     let eaten = stone - world.count(STONE);
-    let deepest = (0..160).map(|x| (60..100).take_while(|&y| world.at(x, y) != STONE).count()).max().unwrap();
+    let deepest = (0..160).map(|x| (60..140).take_while(|&y| world.at(x, y) != STONE).count()).max().unwrap();
     println!("acid {acid}: ate {eaten} stone, gone after {gone_at:?} steps, the pit {deepest} deep");
-    assert_eq!(world.count(ACID), 0, "used up\n{}", picture(&world, 40, 50, 120, 99));
-    assert_eq!(eaten, acid, "a cell of stone for a cell of acid");
-    assert!(deepest >= 4, "a pit\n{}", picture(&world, 40, 50, 120, 99));
+    assert_eq!(world.count(ACID), 0, "used up\n{}", picture(&world, 30, 50, 130, 139));
+    assert!(eaten > acid * 3 && eaten < acid * 6, "each cell of acid eats about four of stone: {eaten} for {acid}");
+    assert!(deepest >= 8, "a pit\n{}", picture(&world, 30, 50, 130, 139));
+    assert_eq!(world.count(sand::materials::FUMES), 0, "and its fumes fade away");
 }
 
 /// Pours a material onto a flat floor from one point until a pile stands, and gives the pile's
@@ -673,7 +674,10 @@ fn a_world_that_has_burnt_out_and_cooled_goes_to_sleep() {
     }
     println!("asleep after {asleep_at:?} steps; wood {} lava {} stone {}", world.count(WOOD), world.count(LAVA), world.count(STONE));
     assert!(asleep_at.is_some());
-    // and stays so: nothing changes over many more steps
+    // and stays so: nothing changes over many more steps. The step's clock goes round every sixteen
+    // steps and is then wiped from the cells that moved since it last went round, so the clocks left
+    // in the last cells to move are wiped once after the world sleeps; that is waited for first
+    run(&mut world, 16);
     let still = world.fingerprint();
     run(&mut world, 200);
     assert_eq!(world.fingerprint(), still);
