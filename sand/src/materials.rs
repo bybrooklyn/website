@@ -192,7 +192,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 3, pace: 0, drift: 0, level: 0, conduct: 2, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [250, 120, 40, 255], vary: [30, 255, 110], paint: true },
     Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 10, fall: 10, pace: 0, drift: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [152, 227, 107, 230], vary: [31, 33, 33], paint: true },
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [75, 44, 33, 255], vary: [27, 25, 25], paint: false },
-    Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [221, 82, 48, 255], vary: [70, 80, 30], paint: false },
+    Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [130, 42, 24, 255], vary: [220, 120, 50], paint: false },
     Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, drift: 64, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [152, 146, 133, 255], vary: [30, 31, 30], paint: false },
     Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [227, 198, 147, 255], vary: [40, 40, 40], paint: true },
     Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, drift: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [241, 105, 53, 245], vary: [60, 90, 30], paint: false },
@@ -301,11 +301,11 @@ pub const REACTIONS: &[Reaction] = &[
     line(WOOD, OPEN, 90, 255, EMBER, SAME, 384, Heat::Kept, 0),
     // lava lights what burns where it touches it
     line(WOOD, LAVA, 0, 255, EMBER, SAME, 64, Heat::Kept, 0),
-    // a flame licking wood lights it now and then, however cool the wood still is
-    line(WOOD, FIRE, 0, 255, EMBER, SAME, 192, Heat::Kept, 0),
-    // and burning wood chars the wood it touches, slowly, so a thick beam burns through and not only
-    // from its skin
-    line(WOOD, EMBER, 0, 255, EMBER, SAME, 12, Heat::Kept, 0),
+    // a flame licking wood lights it now and then, however cool the wood still is, but seldom: flames
+    // climb a post over a few seconds, and do not light all of it in one
+    line(WOOD, FIRE, 0, 255, EMBER, SAME, 12, Heat::Kept, 0),
+    // and burning wood chars the wood it touches, slowly
+    line(WOOD, EMBER, 0, 255, EMBER, SAME, 3, Heat::Kept, 0),
     // the light of lightning sets it alight
     line(WOOD, FLASH, 0, 255, EMBER, SAME, 512, Heat::Kept, 0),
     // oil hot enough, with air beside it, catches fire; so does oil a flame or lava touches, now and
@@ -349,12 +349,13 @@ pub const REACTIONS: &[Reaction] = &[
     // lava pressed against wet dirt hardens, boiling the water out of the dirt; that steam escapes
     // through the ground, taking its heat with it
     line(WET_DIRT, LAVA, 0, 255, DIRT, STONE, 128, Heat::Lost(90), 0),
-    // burning wood gives off flames into the air beside it, burns away to smoke and now and then
-    // to ash, and is put out by water
+    // burning wood is put out by water, gives off flames into the air beside it, and burns away to
+    // smoke and now and then to ash only where air reaches it: a post burns for some seconds from its
+    // skin inward, and wood charred inside waits for the air
     line(EMBER, WATER, 0, 255, WOOD, STEAM, 512, Heat::Shared, 0),
-    line(EMBER, ALONE, 0, 255, SMOKE, SAME, 10, Heat::Kept, 0),
-    line(EMBER, ALONE, 0, 255, ASH, SAME, 5, Heat::Kept, 0),
-    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 320, Heat::Kept, 230),
+    line(EMBER, EMPTY, 0, 255, SAME, FIRE, 56, Heat::Kept, 230),
+    line(EMBER, OPEN, 0, 255, SMOKE, SAME, 3, Heat::Kept, 0),
+    line(EMBER, OPEN, 0, 255, ASH, SAME, 2, Heat::Kept, 0),
     // burning oil gives off flames into the air above and beside it for a few seconds, its heat
     // and creeping into the oil beside it, and burns away to nothing or now and then to smoke
     line(BURNING_OIL, EMPTY, 0, 255, SAME, FIRE, 320, Heat::Kept, 230),

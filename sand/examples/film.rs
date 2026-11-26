@@ -479,7 +479,14 @@ fn effects(world: &mut World, name: &str, path: &str) {
         took += began.elapsed();
         if step % every == every - 1 {
             frames.push(frame(world));
-            let counts: Vec<String> = watch.iter().map(|(n, m)| format!("{n} {}", world.count(*m))).collect();
+            let mut counts: Vec<String> = watch.iter().map(|(n, m)| format!("{n} {}", world.count(*m))).collect();
+            if name == "candle" {
+                // the post lit at its foot: how much of it stands, and how high it is alight
+                let cells = || (196..=204).flat_map(|x| (300..=410).map(move |y| (x, y)));
+                let standing = cells().filter(|&(x, y)| matches!(world.at(x, y), WOOD | EMBER)).count();
+                let alight = cells().filter(|&(x, y)| world.at(x, y) == EMBER).map(|(_, y)| y).min().map_or(-1, |y| 410 - y);
+                counts.push(format!("the post {standing} standing, alight {alight} up"));
+            }
             println!("step {:4}: {}", step + 1, counts.join(", "));
         }
     }
