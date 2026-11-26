@@ -8,11 +8,12 @@
 // step that takes long, and the sending of cells to the graphics card, hold up nothing else on the
 // page. The small world in a list runs the same core on the page's own thread.
 //
-// Under it, a row of the materials, each a little square of itself as the engine colors it; pride
-// sand opens to the flags (flags.ts), poured in stripes or laid as a whole flag. Then the brush's
-// size, pause, step, clear (undone once), and a link to the world as it is (worlds.ts), or a file
-// when it is too large for one. The world steps sixty times a second while anything in it moves or
-// a pointer is pouring, and rests otherwise, as Mote does when out of sight.
+// Beside it, a column: the materials, each a little square of itself as the engine colors it with its
+// name under it, grouped by how each moves; pride sand opens to the flags (flags.ts), poured in stripes
+// or laid as a whole flag. Then the brush, and four groups that fold away behind their words: the
+// world (pause, step, clear, undo, sound), the view, the forces, and a link to the world as it is
+// (worlds.ts), or a file when it is too large for one. The world steps sixty times a second while
+// anything in it moves or a pointer is pouring, and rests otherwise, as Mote does when out of sight.
 
 import { cellUnder, keptCell, seenCell, type Place } from "../mote/cells";
 import { sounds } from "../mote/sound";
@@ -39,6 +40,16 @@ const GROWS = 260;
 const SHAPES = ["free", "line", "box", "fill"] as const;
 /** The most cells a fill takes, past which a space is not closed. */
 const FILL_MOST = 200_000;
+/** The headings the materials are grouped under in the column, by how each moves. */
+const KIND_GROUPS: [string, Material["kind"][]][] = [
+    ["powders", ["powder"]],
+    ["liquids", ["liquid"]],
+    ["solids", ["solid"]],
+    ["gases", ["gas"]],
+    ["fire and energy", ["fire", "bolt"]],
+];
+/** The column's groups that fold away behind their words, in the order their words stand on their line. */
+const FOLDS = ["world", "view", "forces", "share"] as const;
 /** Which way things fall, for each quarter the world has been turned; and how many steps a shake lasts and how far it throws a grain. */
 const FALLS = ["down", "left", "up", "right"] as const;
 const SHAKE = { steps: 20, by: 3 };
@@ -341,19 +352,42 @@ export default function sand(m: Mote): Scene {
                 button.classList.toggle("faint", !can);
             }
         };
-        const picks = el("div", { class: "sand-swatches" });
-        picks.setAttribute("role", "group");
-        picks.setAttribute("aria-label", "materials");
-        for (const material of [...row, undefined]) {
+        /** A material's square, its name under it, and beside it the letter that picks it. */
+        const swatch = (material: Material | undefined) => {
             const name = material?.name ?? "erase";
             const key = KEYS[name];
             const canvas = el("canvas", { class: material ? "sand-grains" : "sand-grains sand-air" });
-            const button = el("button", { type: "button", class: "sand-swatch", title: key ? `${name} (${key.toUpperCase()})` : name, onclick: () => choose(material) }, canvas);
+            const button = el("button", { type: "button", class: "sand-swatch", title: key ? `${name} (${key.toUpperCase()})` : name, onclick: () => choose(material) }, canvas, el("span", { class: "sand-name", textContent: name }));
+            if (key) button.append(el("span", { class: "sand-key", textContent: key }));
             button.setAttribute("aria-label", name);
             if (key) button.setAttribute("aria-keyshortcuts", key.toUpperCase());
             swatches.push({ button, material, canvas });
-            picks.append(button);
+            return button;
+        };
+        // the materials under small headings by how they move, each kind in the engine's order (`inRow`); kinds
+        // short enough share a line, and pride sand's flags open under the powders
+        const picks = el("div", { class: "sand-materials" });
+        picks.setAttribute("role", "group");
+        picks.setAttribute("aria-label", "materials");
+        const erasing = el("div", { class: "sand-kind sand-erasing" }, el("span", { class: "sand-label", textContent: "\u00a0" }), el("div", { class: "sand-swatches" }, swatch(undefined)));
+        for (const [heading, kinds] of KIND_GROUPS) {
+            const these = row.filter((material) => kinds.includes(material.kind));
+            if (these.length === 0) continue;
+            const squares = el("div", { class: "sand-swatches" }, ...these.map(swatch));
+            squares.style.setProperty("--count", String(these.length));
+            const kind = el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: heading }), squares);
+            kind.setAttribute("role", "group");
+            kind.setAttribute("aria-label", heading);
+            picks.append(kind);
+            if (these.some((material) => material.striped)) picks.append(flags);
+            // erasing is no kind: it stands on its own, with no heading, in the room the four solids leave on their line
+            if (kinds.includes("solid")) picks.append(erasing);
         }
+        // what the table has of a kind not named above is still offered, after the rest
+        const others = row.filter((material) => !KIND_GROUPS.some(([, kinds]) => kinds.includes(material.kind)));
+        if (others.length > 0) picks.append(el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: "others" }), el("div", { class: "sand-swatches" }, ...others.map(swatch))));
+        if (!flags.parentElement) picks.append(flags);
+        if (!erasing.parentElement) picks.append(erasing);
         // the flags, each a little picture of itself, and whether the brush pours stripes or lays a whole flag
         const flagRow = el("div", { class: "sand-flag-row" });
         FLAGS.forEach((one, index) => {
@@ -535,10 +569,45 @@ export default function sand(m: Mote): Scene {
             void fromFile(event.dataTransfer?.files[0]);
         });
 
-        // the brush's size is a line of the materials it pours, so that the whole column is in a laptop's first screen
-        // what is used most comes first: where the column is longer than the stage is high it scrolls, and
-        // shows by a fade at its foot that more lies below
-        box.append(group("materials"), picks, flags, ...line("brush", size), shapes, group("world"), el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), el("div", { class: "sand-controls sand-across" }, sound!.button), group("view"), el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow, group("forces"), el("div", { class: "sand-controls sand-across" }, falls, shake), el("div", { class: "sand-controls sand-across" }, wind, calmed), group("share"), share, opener, chooser);
+        // world, view, forces and share fold away behind their words, all on one line, so that the column fits
+        // beside the stage at a laptop's size; each opens under the line, growing from the word pressed, and
+        // which are open is kept for the next visit
+        const inside: Record<(typeof FOLDS)[number], Node[]> = {
+            world: [el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), el("div", { class: "sand-controls sand-across" }, sound!.button)],
+            view: [el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow],
+            forces: [el("div", { class: "sand-controls sand-across" }, falls, shake), el("div", { class: "sand-controls sand-across" }, wind, calmed)],
+            share: [share, opener],
+        };
+        const opened = new Set(m.recall<string[]>("sand-folds", []).filter((name) => (FOLDS as readonly string[]).includes(name)));
+        const words = el("div", { class: "sand-folds" });
+        const blocks = FOLDS.map((name) => {
+            const block = el("div", { class: "sand-opening walker-opening fold", id: `sand-${name}` }, el("div", { class: "walker-opening-inside" }, ...inside[name]));
+            const word = el("button", { type: "button", class: "sand-fold", textContent: name });
+            word.setAttribute("aria-controls", block.id);
+            const shut = (open: boolean) => {
+                block.classList.toggle("open", open);
+                block.inert = !open;
+                word.classList.toggle("open", open);
+                word.setAttribute("aria-expanded", String(open));
+            };
+            word.onclick = () => {
+                const open = !opened.has(name);
+                // it grows from under the word pressed
+                const [from, to] = [word.getBoundingClientRect(), block.getBoundingClientRect()];
+                block.style.transformOrigin = `${from.left + from.width / 2 - to.left}px 0`;
+                if (open) opened.add(name);
+                else opened.delete(name);
+                shut(open);
+                m.keep("sand-folds", [...opened]);
+            };
+            block.addEventListener("transitionend", () => below());
+            shut(opened.has(name));
+            words.append(word);
+            return block;
+        });
+        // what is used most comes first: where the column is still longer than the stage is high, as when
+        // several groups are open, it scrolls, and shows by a fade at its foot that more lies below
+        box.append(group("materials"), picks, ...line("brush", size), shapes, words, ...blocks, chooser);
         const below = () => box.classList.toggle("more-below", box.scrollTop + box.clientHeight < box.scrollHeight - 2);
         box.addEventListener("scroll", below, { passive: true });
         new ResizeObserver(below).observe(box);
