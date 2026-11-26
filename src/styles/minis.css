@@ -117,9 +117,10 @@
     height: calc(100svh - 2 * var(--frame));
 }
 
-/* The column's lines a little closer than the Walker's, so that all of it is in a laptop's first screen. */
+/* The column's lines a little closer than the Walker's, as Marbles' are, so that all of it is in a laptop's first screen. */
 .mini-stage[data-mini="sand"] > .mote-panel.sand-side {
     row-gap: 0.4rem;
+    line-height: 1.3;
     /* what does not fit beside the stage is reached by scrolling the column, never by a longer page */
     max-height: calc(clamp(16rem, calc(100svh - 24.75rem), 40rem) + 2 * var(--frame));
     overflow-y: auto;
@@ -189,48 +190,62 @@
     }
 }
 
-/* Each material is a small square of itself, as the engine colors it: rows of seven, close set beside
-   the stage, where a mouse presses them, and in a target a fingertip can press on a phone. */
-.sand-swatches {
+/* the column's one heading, as close set as its lines */
+.mote-panel.sand-side > .sand-group {
+    line-height: 1.3;
+}
+
+/* The materials, each a small square of itself as the engine colors it and no words: its name and
+   the letter that picks it are said when it is pointed at. Each kind (powders, liquids, solids,
+   gases, fire and energy) is a run of its own, and runs short enough to share a line share it. The
+   squares' targets reach a little past the column's edge, so the pictures line up with the words. */
+.sand-materials {
+    --tile: 2.4rem;
     grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, 2.75rem);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    margin: -0.15rem 0 -0.15rem calc((1.75rem - var(--tile)) / 2);
 }
 
-@media (min-width: 46.01rem) {
-    .sand-swatches {
-        grid-template-columns: repeat(7, 2.125rem);
-    }
-
-    .mote-panel .sand-swatches .sand-swatch {
-        height: 2rem;
-    }
-
-    .mote .mote-panel .sand-swatches canvas.sand-grains {
-        outline-offset: 0.0625rem;
-    }
-}
-
-/* The six flags in one row, a phone's width. */
-.sand-flag-row {
+.sand-kind {
     display: grid;
-    grid-template-columns: repeat(3, 3rem);
 }
 
 .sand-swatches {
-    margin: -0.4rem 0 -0.2rem -0.5rem;
+    display: grid;
+    grid-template-columns: repeat(var(--count, 1), var(--tile));
+}
+
+/* on a phone, under the stage, a target a fingertip can press */
+@media (max-width: 46rem) {
+    .sand-materials {
+        --tile: 3.25rem;
+    }
+
+    .mote-panel .sand-materials .sand-swatch {
+        padding-block: 0.4rem;
+    }
 }
 
 .mote-panel .sand-swatch {
+    position: relative;
     display: grid;
-    place-items: center;
+    justify-items: center;
+    align-content: start;
     width: 100%;
-    height: 2.75rem;
+    padding: 0.3rem 0;
     text-decoration: none;
 }
 
 .mote-panel .sand-swatch + .sand-swatch {
     margin-inline-start: 0;
+}
+
+/* The six flags in one row across the column. */
+.sand-flag-row {
+    display: grid;
+    grid-template-columns: repeat(6, 2.4rem);
 }
 
 /* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
@@ -245,16 +260,16 @@
         translate 0.15s var(--ease),
         outline-color 0.15s ease;
     outline: 0.125rem solid transparent;
-    outline-offset: 0.1875rem;
+    outline-offset: 0.125rem;
 }
 
 .mote .mote-panel canvas.sand-flag {
-    width: 2.25rem;
-    height: 1.5rem;
+    width: 1.95rem;
+    height: 1.3rem;
     border-radius: 0.125rem;
 }
 
-/* Erasing leaves air: an empty square with a rule round it. */
+/* Erasing leaves air: an empty square with a rule round it. It stands on its own beside the solids. */
 .mote .mote-panel canvas.sand-air {
     box-sizing: border-box;
     border: 0.0625rem dashed var(--muted);
@@ -269,39 +284,124 @@
     translate: 0 -0.125rem;
 }
 
-/* The flags open under the row when pride sand is chosen, with whether to pour stripes or lay a whole flag. */
+/* The flags open under the powders when pride sand is chosen, with whether to pour stripes or lay a whole flag. */
 .sand-flags {
     --grow: 0.35s;
     --fade: 0.25s;
-    grid-column: 1 / -1;
-    margin-block: -0.65rem 0;
-}
-
-.sand-flags.open {
-    margin-block: 0;
+    flex: 0 0 100%;
 }
 
 .sand-flag-inside {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.3rem 1.5rem;
-    margin-left: -0.5rem;
+    gap: 0 1.5rem;
 }
 
 .mote-panel .sand-flag-row .sand-swatch {
-    width: 3rem;
+    width: 2.4rem;
+    height: 1.85rem;
+    align-content: center;
+    padding: 0;
+}
+
+/* on a phone, the flags in targets a fingertip can press, three a line */
+@media (max-width: 46rem) {
+    .sand-flag-row {
+        grid-template-columns: repeat(3, 3.75rem);
+    }
+
+    .mote-panel .sand-flag-row .sand-swatch {
+        width: 3.75rem;
+        height: 2.75rem;
+    }
 }
 
 /* (the flags' targets reach past the panel's edge, as the swatches' do; the words keep to it) */
 .sand-ways {
     display: flex;
     gap: 1.1rem;
+    font-size: 0.85rem;
     padding-left: 0.5rem;
 }
 
 .mote-panel input[type="range"].sand-size {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+}
+
+/* World, view, forces and share: their words on one line under a rule, as a group's heading is, each
+   with the generalist's small chevron, turned when it is open. */
+.sand-folds {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.9rem;
+    padding-top: 0.4rem;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.mote-panel .sand-fold {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--ink);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-decoration-color: transparent;
+}
+
+.mote-panel .sand-fold + .sand-fold {
+    margin-inline-start: 0;
+}
+
+.mote-panel .sand-fold:hover:not(:disabled) {
+    text-decoration-color: var(--muted);
+}
+
+.mote-panel .sand-fold::after {
+    content: "";
+    width: 0.32rem;
+    height: 0.32rem;
+    border-right: 0.09rem solid currentColor;
+    border-bottom: 0.09rem solid currentColor;
+    transform: rotate(45deg) translateY(-0.1rem);
+    transition: transform 0.3s var(--ease);
+}
+
+.mote-panel .sand-fold.open::after {
+    transform: rotate(225deg) translateY(-0.1rem);
+}
+
+/* What a word opens grows under the line from the word pressed (its origin set where it is pressed),
+   and a fold shut takes no room in the column, not even the gap before it. */
+.mote-panel .sand-opening {
+    --grow: 0.35s;
+    --fade: 0.25s;
+    margin-block: -0.4rem 0;
+    scale: 0.92;
+    transition:
+        grid-template-rows var(--grow) var(--ease),
+        opacity var(--fade) ease,
+        scale var(--grow) var(--ease),
+        margin var(--grow) var(--ease);
+}
+
+.mote-panel .sand-opening.open {
+    margin-block: 0;
+    scale: 1;
+}
+
+.mote-panel .sand-opening > .walker-opening-inside {
+    gap: 0.4rem 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mote-panel .sand-opening,
+    .mote-panel .sand-fold::after {
+        transition: none;
+    }
 }
 
 .sand-chooser {
