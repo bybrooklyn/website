@@ -98,13 +98,22 @@ const REACH = 96;
  * field blurred with the light, and the field is colored by how strong it is at each place: deep red at
  * its fringe, through orange and gold, to near white at its heart. `gathered` and `gain` are how much a
  * flame counts for where it is gathered and where it is drawn; `from` and `full` the strengths between
- * which the body comes in; `reach` how many cells above itself a flame still shows, and how strongly, so
- * that the body is drawn out upward into tongues; `sharp` how strongly a flame's own cell is still drawn
+ * which the body comes in; `sharp` how strongly a flame's own cell is still drawn
  * (a fleck in the body); and `over` how much of the body shows over a grain, so that burning wood is seen
  * through its flames. Before 17 Nov 2026 each flame was a cell of its own color with a haze round it, and
  * a fire was a spray of orange dots.
  */
-export const FLAME = { gathered: 2, gain: 2.6, from: 0.06, full: 0.26, reach: [[2, 0.85], [5, 0.6]] as const, sharp: 0.3, over: 0.4 };
+export const FLAME = { gathered: 2, gain: 2.6, from: 0.06, full: 0.26, sharp: 0.3, over: 0.4 };
+
+/**
+ * How the body of a fire is spread, in texels of the half-sized picture (two cells each): `across`, the
+ * weights from the middle out to each side, narrow, so that flames side by side are tongues and not one
+ * lump; `up`, the weights of the flames from where a point is down to some cells below it, so each flame
+ * is drawn out above itself, fading, and nothing shows below the lowest. Each adds up to 1. Until
+ * 26 Nov 2026 the body was blurred with the light, about five cells every way, and a fire was drawn as a
+ * glowing rounded lump.
+ */
+export const TONGUE = { across: [0.5, 0.25], up: [0.22, 0.2, 0.17, 0.14, 0.11, 0.09, 0.07] };
 
 /**
  * How strongly a soft cell is drawn itself, from 0 to 1; the rest of it is the haze spread around it. How
@@ -246,6 +255,11 @@ uniform vec2 step;
 uniform vec2 target;
 uniform float offsets[${taps}];
 uniform float weights[${taps}];
+const float TONGUE_ACROSS[${TONGUE.across.length}] = float[](${TONGUE.across.map((w) => w.toFixed(3)).join(", ")});
+const float TONGUE_UP[${TONGUE.up.length}] = float[](${TONGUE.up.map((w) => w.toFixed(3)).join(", ")});
+// 1 where the fire's body (the light's fourth number) is drawn out as tongues: narrowly across, and
+// down only from below, so each flame shows above itself and not round itself
+uniform int tongues;
 layout(location = 0) out vec4 lightOut;
 layout(location = 1) out vec4 softOut;
 void main() {
@@ -259,6 +273,16 @@ void main() {
         vec2 off = way * offsets[k];
         l += (texture(light, uv + off) + texture(light, uv - off)) * weights[k];
         s += (texture(soft, uv + off) + texture(soft, uv - off)) * weights[k];
+    }
+    if (tongues == 1) {
+        float body = 0.0;
+        if (step.x > 0.0) {
+            for (int k = -${TONGUE.across.length - 1}; k <= ${TONGUE.across.length - 1}; k++) body += texture(light, uv + way * float(k)).a * TONGUE_ACROSS[abs(k)];
+        } else {
+            // the pictures count rows up from the bottom: what lies below is at a smaller row
+            for (int k = 0; k < ${TONGUE.up.length}; k++) body += texture(light, uv - way * float(k)).a * TONGUE_UP[k];
+        }
+        l.a = body;
     }
     lightOut = l;
     softOut = s;
@@ -359,10 +383,9 @@ void main() {
     if (haze.a > 0.001) haze *= (1.0 - exp(-${HAZE.thick.toFixed(1)} * haze.a)) / haze.a;
     vec4 out4 = sharp + haze * (1.0 - sharp.a);
     if (glow > 0.0) {
-        // The body of a fire: how strong the gathered flames are here, and a little below here (toward
-        // the ground as the cells are kept), since a flame reaches upward; colored by that strength.
-        vec2 cell = 1.0 / grid;
-        float body = max(texture(light, uv).a, max(${FLAME.reach[0][1].toFixed(2)} * texture(light, uv - vec2(0.0, ${FLAME.reach[0][0].toFixed(1)}) * cell).a, ${FLAME.reach[1][1].toFixed(2)} * texture(light, uv - vec2(0.0, ${FLAME.reach[1][0].toFixed(1)}) * cell).a));
+        // The body of a fire: how strong the gathered flames are here and below here (toward the ground
+        // as the cells are kept), drawn out upward as tongues (\`TONGUE\`); colored by that strength.
+        float body = texture(light, uv).a;
         float f = clamp(body * ${FLAME.gain.toFixed(2)}, 0.0, 1.0);
         if (f > 0.02) {
             vec3 fire = f < 0.3 ? mix(vec3(0.50, 0.05, 0.02), vec3(1.0, 0.36, 0.05), f / 0.3) : f < 0.65 ? mix(vec3(1.0, 0.36, 0.05), vec3(1.0, 0.80, 0.22), (f - 0.3) / 0.35) : mix(vec3(1.0, 0.80, 0.22), vec3(1.0, 0.97, 0.82), (f - 0.65) / 0.35);
@@ -554,7 +577,7 @@ export function cells(canvas: HTMLCanvasElement | OffscreenCanvas): Cells | unde
                 g.uniform1fv(blur.at("offsets"), offsets);
                 g.uniform1fv(blur.at("weights"), weights);
                 const [less, lower] = small();
-                for (const [source, target, way, size, smaller] of [[pairs[0], pairs[1], [1, 0], [wide, high], 2], [pairs[1], pairs[0], [0, 1], [wide, high], 2], [pairs[0], fars[1], [1, 0], [less, lower], 2 * HALO.smaller], [fars[1], fars[0], [0, 1], [less, lower], 2 * HALO.smaller]] as const) {
+                for (const [source, target, way, size, smaller, tongues] of [[pairs[0], pairs[1], [1, 0], [wide, high], 2, 1], [pairs[1], pairs[0], [0, 1], [wide, high], 2, 1], [pairs[0], fars[1], [1, 0], [less, lower], 2 * HALO.smaller, 0], [fars[1], fars[0], [0, 1], [less, lower], 2 * HALO.smaller, 0]] as const) {
                     g.viewport(0, 0, size[0], size[1]);
                     cut(smaller, size[0], size[1]);
                     g.bindFramebuffer(g.FRAMEBUFFER, target.frame);
@@ -562,6 +585,7 @@ export function cells(canvas: HTMLCanvasElement | OffscreenCanvas): Cells | unde
                     bind(3, source.soft);
                     g.uniform2f(blur.at("step"), way[0], way[1]);
                     g.uniform2f(blur.at("target"), size[0], size[1]);
+                    g.uniform1i(blur.at("tongues"), tongues);
                     g.drawArrays(g.TRIANGLES, 0, 3);
                 }
                 g.bindFramebuffer(g.FRAMEBUFFER, null);
