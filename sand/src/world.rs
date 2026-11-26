@@ -744,25 +744,11 @@ impl World {
                     return;
                 }
             }
-            // A drop whose way down was only opened this step, by the one under it going, while under
-            // that the way is shut (a queue, not a drop falling freely ahead of it), with open air beside
-            // it and under that, goes down past the side, at its speed: so a column of water standing on
-            // a pool comes apart into it, and does not creep down one cell a step behind its foot (until
-            // 24 Nov 2026 it crept). Rain, whose drops fall freely, is left alone: taking every drop that
-            // just had its way opened made falling water three times as dear.
-            if p.kind == Kind::Liquid && speed != 0 && material(below) == EMPTY && clock_of(below) == self.clock && material(self.cell_at(at + 2 * s)) != EMPTY {
-                let open = |side: isize| {
-                    let beside = at.wrapping_add_signed(side);
-                    material(self.cell_at(beside)) == EMPTY && material(self.cell_at(beside + s)) == EMPTY
-                };
-                let (left, right) = (open(-1), open(1));
-                if left || right {
-                    let roll = chance(self.seed ^ 0x5b11, self.steps, at);
-                    let side: isize = if left && right { if roll & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
-                    self.swap(at, at.wrapping_add_signed(side) + s, speed, (x, y), (x + side as i32, y + 1));
-                    return;
-                }
-            }
+            // Straight down, at its speed. (From 24 to 26 Nov 2026 a drop in a queue whose way had just
+            // opened went down past the side instead, so a column standing on a pool would come apart;
+            // it moved the whole edge of a falling body a cell aside at once, as a sheet, and drew
+            // diagonal hatching through falling water. A column is now carried off by the pool's own
+            // levelling, which pours it from every height.)
             self.drop(at, x, y, below, speed, p);
             return;
         }
@@ -783,22 +769,10 @@ impl World {
                 if speed == 0 && self.levelling && self.levels(at, (x, y), roll, p) {
                     return;
                 }
-                // Where levelling found nowhere to put it, a face of a pool with open air beside it and
-                // under that spills down and out, as the top of a pool runs off, so that water does not
-                // stand with upright sides over the air or drain off a shelf a cell at a time (until 24 Nov
-                // 2026 it did, and stood as a wedge out over a slope). Not between two corners, as nothing
-                // squeezes there.
-                let open = |side: isize| {
-                    let beside = at.wrapping_add_signed(side);
-                    self.sinks_into(p.density, self.cell_at(beside)) && self.sinks_into(p.density, self.cell_at(beside + s)) && material(self.cell_at(beside)) != VOID
-                };
-                let (left, right) = (open(-1), open(1));
-                if left || right {
-                    let side: isize = if left && right { if (roll >> 3) & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
-                    let to = at.wrapping_add_signed(side) + s;
-                    self.swap(at, to, 1, (x, y), (x + side as i32, y + 1));
-                    return;
-                }
+                // (Until 26 Nov 2026, where levelling found nowhere to put it, a face with open air beside
+                // it and under that spilled a cell down and out. It took every cell of the face in one
+                // pass, so the face moved as a rigid sheet and landed in the air; levelling now pours a
+                // face itself.)
             } else {
                 // At the surface: to a side where that takes it lower, down the slope beside it or
                 // along the level to the next drop, as far as it spreads in a step. A level surface
