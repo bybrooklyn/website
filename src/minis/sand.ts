@@ -364,6 +364,12 @@ export default function sand(m: Mote): Scene {
             swatches.push({ button, material, canvas });
             return button;
         };
+        /** A kind's squares, as many a line as it has, up to the five a line of the column holds. */
+        const squares = (these: Material[]) => {
+            const set = el("div", { class: "sand-swatches" }, ...these.map(swatch));
+            set.style.setProperty("--count", String(Math.min(5, these.length)));
+            return set;
+        };
         // the materials under small headings by how they move, each kind in the engine's order (`inRow`); kinds
         // short enough share a line, and pride sand's flags open under the powders
         const picks = el("div", { class: "sand-materials" });
@@ -373,9 +379,7 @@ export default function sand(m: Mote): Scene {
         for (const [heading, kinds] of KIND_GROUPS) {
             const these = row.filter((material) => kinds.includes(material.kind));
             if (these.length === 0) continue;
-            const squares = el("div", { class: "sand-swatches" }, ...these.map(swatch));
-            squares.style.setProperty("--count", String(these.length));
-            const kind = el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: heading }), squares);
+            const kind = el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: heading }), squares(these));
             kind.setAttribute("role", "group");
             kind.setAttribute("aria-label", heading);
             picks.append(kind);
@@ -385,7 +389,7 @@ export default function sand(m: Mote): Scene {
         }
         // what the table has of a kind not named above is still offered, after the rest
         const others = row.filter((material) => !KIND_GROUPS.some(([, kinds]) => kinds.includes(material.kind)));
-        if (others.length > 0) picks.append(el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: "others" }), el("div", { class: "sand-swatches" }, ...others.map(swatch))));
+        if (others.length > 0) picks.append(el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: "others" }), squares(others)));
         if (!flags.parentElement) picks.append(flags);
         if (!erasing.parentElement) picks.append(erasing);
         // the flags, each a little picture of itself, and whether the brush pours stripes or lays a whole flag
@@ -592,9 +596,8 @@ export default function sand(m: Mote): Scene {
             };
             word.onclick = () => {
                 const open = !opened.has(name);
-                // it grows from under the word pressed
-                const [from, to] = [word.getBoundingClientRect(), block.getBoundingClientRect()];
-                block.style.transformOrigin = `${from.left + from.width / 2 - to.left}px 0`;
+                // it grows from under the word pressed (measured as laid out, not as it is scaled now; both within the column)
+                block.style.transformOrigin = `${word.offsetLeft + word.offsetWidth / 2 - block.offsetLeft}px 0`;
                 if (open) opened.add(name);
                 else opened.delete(name);
                 shut(open);

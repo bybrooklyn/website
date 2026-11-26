@@ -345,6 +345,18 @@
     padding: 0;
 }
 
+/* on a phone, the flags in targets a fingertip can press, three a line */
+@media (max-width: 46rem) {
+    .sand-flag-row {
+        grid-template-columns: repeat(3, 3.75rem);
+    }
+
+    .mote-panel .sand-flag-row .sand-swatch {
+        width: 3.75rem;
+        height: 2.75rem;
+    }
+}
+
 /* (the flags' targets reach past the panel's edge, as the swatches' do; the words keep to it) */
 .sand-ways {
     display: flex;
@@ -365,8 +377,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.2rem 0.9rem;
-    margin-top: 0.2rem;
-    padding-top: 0.5rem;
+    padding-top: 0.4rem;
     border-top: 0.0625rem solid var(--rule);
 }
 

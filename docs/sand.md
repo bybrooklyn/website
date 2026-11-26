@@ -1539,8 +1539,9 @@ well over the ground, steam well over stone.
   lightning), each kind in the engine's order (`inRow`) and found by its `kind`, so a new material joins
   its group by itself (a kind not named goes under "others"). Five squares fit a line of the column, and
   a kind short enough shares a line: solids with erase, which stands on its own with no label, and gases
-  with fire and energy. Pride sand's flags open under the powders, all six on one line, with "pour" and
-  "whole flag" under them. Before, the materials were twenty bare squares with their names only in a
+  with fire and energy. Pride sand's flags open under the powders, all six on one line beside the stage
+  (smaller pictures than before, 1.95 by 1.3rem, so that they take one line), with "pour" and "whole
+  flag" under them. Before, the materials were twenty bare squares with their names only in a
   tooltip.
 - **The brush**: its size, then free, line, box and fill, always in sight.
 - **World, view, forces and share fold away**: their four words stand on one line under a rule, each
@@ -1550,12 +1551,14 @@ well over the ground, steam well over stone.
   growing from the word pressed (a fold, scaled up from 92% about that word), and shuts the same way. A
   shut group is `inert`; each word says whether it is open (`aria-expanded`). Which are open is kept for
   the next visit (`m.keep("sand-folds")`). Every control keeps its key, title and `aria-pressed`.
-- At 1288 by 828 the column is 448 pixels high, the stage's height: with every group shut, with pride
-  sand's flags open, or with any one group open, nothing in it scrolls. With two groups open, or a group
-  and the flags, it scrolls and shows a fade at its foot, by about 50 pixels; at 1440 by 900 (a column
-  of 506) by 7 or 8. Under 46rem the column
-  goes under the stage, each square in a 3.75rem target, with more room between the kinds; at 390 by 800
-  the page does not scroll sideways, and a finger pours with the page still (`touch-action: none`).
+- At 1288 by 828 the column is 448 pixels high, the stage's height: with every group shut (about 80
+  pixels to spare), with pride sand's flags open (about 30), or with any one group open (about 6 for
+  share, the tallest, up to 25 for world), nothing in it scrolls. With two groups open, or a group and
+  the flags, it scrolls by about 40 pixels and shows a fade at its foot. At 1440 by 900 (a column of
+  506) two groups, or a group and the flags, fit as well. Under 46rem the column goes under the stage,
+  each square and flag in a 3.75rem target, the flags three a line, with more room between the kinds; at
+  390 by 800 the page does not scroll sideways, and a finger pours with the page still (`touch-action:
+  none`).
 
 ## Lag reported on 18 November, and what was measured
 
