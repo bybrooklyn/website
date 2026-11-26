@@ -262,6 +262,22 @@ void main() {
 /** Blurs both pictures one way, across or down, by the weights of `blurred`, into pictures of size `target`. */
 const BLUR = (taps: number) => `#version 300 es
 precision highp float;
+precision highp usampler2D;
+${COLOR}
+uniform ivec2 size;
+// Whether the two by two cells of a texel of the half-sized pictures, counted up from the bottom, hold
+// one that a flame's tongue does not show through: a cell drawn that neither gives light nor is soft.
+bool blocks(ivec2 low) {
+    for (int k = 0; k < 4; k++) {
+        ivec2 up = low * 2 + ivec2(k & 1, k >> 1);
+        if (up.x < 0 || up.y < 0 || up.x >= size.x || up.y >= size.y) continue;
+        uvec4 cell = texelFetch(cells, ivec2(up.x, size.y - 1 - up.y), 0);
+        uint mode;
+        vec4 color = colorOf(cell, mode);
+        if (color.a > 0.5 && (mode & 6u) == 0u) return true;
+    }
+    return false;
+}
 uniform sampler2D light;
 uniform sampler2D soft;
 uniform vec2 step;
@@ -292,8 +308,13 @@ void main() {
         if (step.x > 0.0) {
             for (int k = -${TONGUE.across.length - 1}; k <= ${TONGUE.across.length - 1}; k++) body += texture(light, uv + way * float(k)).a * TONGUE_ACROSS[abs(k)];
         } else {
-            // the pictures count rows up from the bottom: what lies below is at a smaller row
-            for (int k = 0; k < ${TONGUE.up.length}; k++) body += texture(light, uv - way * float(k)).a * TONGUE_UP[k];
+            // the pictures count rows up from the bottom: what lies below is at a smaller row; a tongue
+            // stops at a shelf, a wall or a grain, and is not drawn through or over it
+            ivec2 here = ivec2(gl_FragCoord.xy);
+            for (int k = 0; k < ${TONGUE.up.length}; k++) {
+                if (blocks(here - ivec2(0, k))) break;
+                body += texture(light, uv - way * float(k)).a * TONGUE_UP[k];
+            }
         }
         l.a = body;
     }
@@ -596,6 +617,9 @@ export function cells(canvas: HTMLCanvasElement | OffscreenCanvas): Cells | unde
                 g.uniform2i(gather.at("size"), kept().columns, kept().rows);
                 g.drawArrays(g.TRIANGLES, 0, 3);
                 g.useProgram(blur.made);
+                g.uniform1i(blur.at("cells"), 0);
+                g.uniform1i(blur.at("colors"), 1);
+                g.uniform2i(blur.at("size"), kept().columns, kept().rows);
                 g.uniform1i(blur.at("light"), 2);
                 g.uniform1i(blur.at("soft"), 3);
                 g.uniform1fv(blur.at("offsets"), offsets);
