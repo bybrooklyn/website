@@ -68,8 +68,14 @@ export function cellUnder(x: number, y: number, at: Place, ratio: number): [colu
 
 /** How a kind of cell is drawn, the fourth byte of its entry in the palette's second row: its second byte picks its color from the third row. */
 export const STRIPED = 1;
-/** It gives light, as bright as its third byte says. */
+/** It gives light, as bright as its third byte says; unless it is soft as well, the lowest three bits of its second byte are a grain, each a step darker (`GRAIN`). */
 export const LIGHT = 2;
+
+/** How much darker the darkest grain of a cell that gives light is drawn: lava is a glowing grain that is seen to flow, not a flat slab. */
+export const GRAIN = 0.28;
+
+/** How much less of the near light is added over a cell that gives light itself. */
+export const SELF_LIT = 0.6;
 /** It is drawn faint and spread softly into the air around it. */
 export const SOFT = 4;
 
@@ -320,11 +326,19 @@ ivec2 kept(ivec2 seen) {
     if (turn == 3) return ivec2(size.y - 1 - seen.y, seen.x);
     return seen;
 }
+// How many of the cells drawn into this pixel give light themselves (and are not soft), counted by \`shade\`.
+float giving = 0.0;
 // A cell as it is drawn itself, its color times its opacity: \`depth\` is how many cells above a deep one are looked at.
 vec4 shade(ivec2 at, int depth) {
     uint mode;
     uvec4 raw = texelFetch(cells, at, 0);
     vec4 cell = colorOf(raw, mode);
+    // a cell that gives light and is not soft (lava, embers) has a grain, darker by its second byte's
+    // lowest three bits, which it carries as it flows
+    if ((mode & 6u) == 2u) {
+        cell.rgb *= 1.0 - ${GRAIN.toFixed(2)} * float(raw.g & 7u) / 7.0;
+        giving += 1.0;
+    }
     if ((mode & 8u) != 0u) {
         // a deep cell: lighter at the surface, darker the more of it lies above
         int over = 0;
@@ -379,6 +393,7 @@ void main() {
             }
         }
         sharp = sum / max(count, 1.0);
+        giving /= max(count, 1.0);
     }
     // the same point among the cells as they are kept, which the pictures of light and haze follow,
     // counted up from the bottom as they are
@@ -401,7 +416,9 @@ void main() {
         }
     }
     // the light falls on the grains near fire and lava, and glows more strongly in the air round them
-    vec3 lit = texture(light, uv).rgb * glow * (1.0 + ${GLOW_AIR.toFixed(2)} * (1.0 - sharp.a));
+    // (on a cell that gives the light itself, less of it, so lava shows its own color and grain and is
+    // not washed out to one flat glare)
+    vec3 lit = texture(light, uv).rgb * glow * (1.0 + ${GLOW_AIR.toFixed(2)} * (1.0 - sharp.a)) * (1.0 - ${SELF_LIT.toFixed(2)} * giving);
     // and, far wider and fainter, on everything round a fire
     lit += texture(far, uv).rgb * glow * ${HALO.strength.toFixed(2)};
     out4.rgb = min(out4.rgb + lit, 1.0);

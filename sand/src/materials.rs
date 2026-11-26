@@ -88,7 +88,8 @@ pub struct Material {
     /// one of these beside it.
     pub airy: bool,
     /// How its shade is chosen: 0 by chance when it is made; 1 by its temperature, so a flame and
-    /// lava are brighter the hotter they are; 2 by its temperature with a flicker each step; 3 by
+    /// lava are brighter the hotter they are, its lowest three bits kept from when it was made as a
+    /// grain the page draws darker, so lava is seen to flow; 2 by its temperature with a flicker each step; 3 by
     /// the brush, as a stripe of a flag, which it keeps wherever it goes (`STRIPE`); 4 it fades:
     /// made near full, it loses `FADE` or a little more each step, and is drawn as faint as its
     /// shade is low (`DRAW_FADE`), so smoke thins softly rather than going out grain by grain.

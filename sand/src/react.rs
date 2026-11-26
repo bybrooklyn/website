@@ -59,9 +59,11 @@ impl World {
         let mut roll = || *rolled.get_or_insert_with(|| chance(seed, steps, at));
         let mut shade = (cell >> 8) & 0xff;
         if p.glow != 0 {
-            // a flame or lava is brighter the hotter it is; burning wood flickers as well; smoke fades
+            // a flame or lava is brighter the hotter it is, keeping the lowest three bits of its shade as
+            // a grain of its own (drawn darker by them), which it carries as it flows; burning wood
+            // flickers as well; smoke fades
             shade = match p.glow {
-                1 => t as u32,
+                1 => (t as u32 & 0xf8) | (shade & 7),
                 4 => shade.saturating_sub(FADE + (roll() >> 30)),
                 _ => (t as u32 >> 1) + (roll() >> 25),
             }
