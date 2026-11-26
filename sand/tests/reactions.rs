@@ -760,6 +760,38 @@ fn snow_drifts_down_slowly_lies_in_a_heap_and_melts_where_it_is_warmed_or_salted
 }
 
 #[test]
+fn snow_lies_in_the_open_for_good_and_melts_on_a_fire_and_beside_lava() {
+    // a press of snow on a stone shelf, as on the page: a minute later every grain is still snow
+    let mut world = World::new(120, 80, 8);
+    world.paint(STONE, 30, 60, 90, 60, 2, 100, false);
+    world.paint(SNOW, 60, 50, 60, 50, 8, 45, false);
+    let snow = world.count(SNOW);
+    run(&mut world, 3600);
+    println!("a press of {snow} snow: {} after a minute", world.count(SNOW));
+    assert_eq!(world.count(SNOW), snow, "it lies as snow\n{}", picture(&world, 30, 30, 90, 62));
+    // snow falling on a burning post and on lava melts where it lands, and makes steam
+    let mut world = World::new(160, 100, 9);
+    world.paint(STONE, 0, 96, 159, 99, 2, 100, false);
+    world.paint(WOOD, 40, 94, 40, 70, 2, 100, false);
+    world.paint(FIRE, 40, 69, 40, 69, 2, 100, false);
+    run(&mut world, 60);
+    fill_rows(&mut world, LAVA, 100, 150, 90, 94);
+    let mut fell = 0;
+    for _ in 0..200 {
+        let before = world.count(SNOW);
+        world.paint(SNOW, 40, 10, 40, 10, 3, 10, false);
+        world.paint(SNOW, 125, 10, 125, 10, 3, 10, false);
+        fell += world.count(SNOW) - before;
+        world.step();
+    }
+    run(&mut world, 300);
+    let left = world.count(SNOW);
+    println!("snow on a fire and on lava: {fell} fell, {left} left, {} water, steam made {}", world.count(WATER), world.heard(0));
+    assert!(left * 3 < fell, "most of it melts\n{}", picture(&world, 0, 40, 159, 99));
+    assert!(world.heard(0) > 20, "with a hiss");
+}
+
+#[test]
 fn salt_dissolves_in_water_into_brine_which_sinks_under_water_and_leaves_its_salt_when_it_boils() {
     let mut world = World::new(120, 80, 7);
     basin(&mut world, 10, 110, 30, 75);

@@ -208,7 +208,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [227, 198, 147, 255], vary: [40, 40, 40], paint: true },
     Material { name: "burning oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, drift: 0, level: 1, conduct: 16, made: 185, latent: 0, warms: 16, toward: 185, airy: false, glow: 2, color: [241, 105, 53, 245], vary: [60, 90, 30], paint: false },
     Material { name: "rock", kind: Kind::Powder, density: 190, slide: 1, roll: 0, spread: 0, fall: 12, pace: 0, drift: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [69, 78, 91, 255], vary: [31, 32, 33], paint: false },
-    Material { name: "snow", kind: Kind::Powder, density: 30, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, drift: 96, level: 0, conduct: 2, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [246, 250, 255, 255], vary: [14, 10, 6], paint: true },
+    Material { name: "snow", kind: Kind::Powder, density: 30, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, drift: 96, level: 0, conduct: 8, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [246, 250, 255, 255], vary: [14, 10, 6], paint: true },
     Material { name: "salt", kind: Kind::Powder, density: 140, slide: 1, roll: 0, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [240, 196, 216, 255], vary: [22, 26, 22], paint: true },
     Material { name: "brine", kind: Kind::Liquid, density: 106, slide: 0, roll: 0, spread: 12, fall: 10, pace: 0, drift: 0, level: 1, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [72, 170, 150, 235], vary: [22, 24, 24], paint: false },
     Material { name: "mud", kind: Kind::Liquid, density: 130, slide: 0, roll: 0, spread: 2, fall: 5, pace: 48, drift: 0, level: 6, conduct: 14, made: ROOM, latent: 16, warms: 0, toward: 0, airy: false, glow: 0, color: [116, 108, 56, 255], vary: [26, 24, 20], paint: true },
@@ -381,8 +381,16 @@ pub const REACTIONS: &[Reaction] = &[
     line(BURNING_OIL, OIL, 0, 255, SAME, BURNING_OIL, 24, Heat::Kept, 185),
     line(BURNING_OIL, ALONE, 0, 255, SMOKE, SAME, 2, Heat::Kept, 0),
     line(BURNING_OIL, ALONE, 0, 255, EMPTY, SAME, 6, Heat::Kept, 0),
-    // snow that warms melts, and salt melts it sooner
-    line(SNOW, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
+    // snow melts where it is warmed past room temperature, so a fall of it lies in the open for good
+    // (room is warmer than ice melts at, and snow lying in it had always been melting away); it melts
+    // at once where lava, a flame, burning wood or oil, or steam touches it, the two sharing their heat,
+    // so the water is hot and often boils, and salt melts it into brine
+    line(SNOW, ALONE, 44, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
+    line(SNOW, LAVA, 0, 255, WATER, SAME, 384, Heat::Shared, 0),
+    line(SNOW, FIRE, 0, 255, WATER, SAME, 384, Heat::Shared, 0),
+    line(SNOW, EMBER, 0, 255, WATER, SAME, 256, Heat::Shared, 0),
+    line(SNOW, BURNING_OIL, 0, 255, WATER, SAME, 256, Heat::Shared, 0),
+    line(SNOW, STEAM, 0, 255, WATER, SAME, 128, Heat::Shared, 0),
     line(SNOW, SALT, 0, 255, BRINE, EMPTY, 96, Heat::Shared, 0),
     // salt dissolves in the water it touches: the water is brine, and the salt is gone into it
     line(SALT, WATER, 0, 255, EMPTY, BRINE, 96, Heat::Kept, 0),
