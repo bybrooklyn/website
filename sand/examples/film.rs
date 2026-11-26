@@ -3,7 +3,7 @@
 //!
 //! `cargo run --release --example film -- water out.ppm` writes a plain PPM picture. The scenes are
 //! the ones the page was played with: a brush held still over a shelf and a bowl (`water`, `sand`,
-//! `lava`, `oil`), and two hills with a lake between, a wooden house set alight and lava poured into
+//! `lava`, `oil`), a liquid dragged onto a stone ramp (`ramp-water`, `ramp-lava`, `ramp-acid`), and two hills with a lake between, a wooden house set alight and lava poured into
 //! the lake (`lake`), a wooden house and a pool of oil set alight (`fire`), and snow, salt, mud, a cloud and lightning (`weather`). Each cell is drawn in its material's color, moved by its shade, as the page
 //! draws it but without light.
 
@@ -178,6 +178,31 @@ fn main() {
         }
         write(&path, &frames, wide as usize, high as usize);
         println!("{scene}: {} frames at steps {shots:?}, in {path}", frames.len());
+        return;
+    }
+    if let Some(of) = scene.strip_prefix("ramp-") {
+        // what was done on the page on 26 Nov 2026: a stone ramp drawn down to the right, and a brush of
+        // radius 10 of a liquid dragged across above its upper end, which lays a solid stroke of it
+        let of = match of {
+            "lava" => LAVA,
+            "acid" => sand::materials::ACID,
+            _ => WATER,
+        };
+        world.paint(STONE, 60, 200, 300, 280, 5, 100, false);
+        let mut brush = Brush::new(of, 10);
+        let shots = [1, 3, 5, 8, 12, 16, 20, 25, 30, 40, 55, 80];
+        for step in 1..=80 {
+            if step <= 6 {
+                let at = |k: i32| (80 + k * 20, 140 + k * 3);
+                brush.dragged(&mut world, at(step - 1), at(step));
+            }
+            world.step();
+            if shots.contains(&(step as usize)) {
+                frames.push(frame(&world));
+            }
+        }
+        write(&path, &frames, wide as usize, high as usize);
+        println!("{scene}: frames at steps {shots:?}, in {path}");
         return;
     }
     let (every, count): (usize, usize) = match scene {
