@@ -1672,3 +1672,96 @@ it at the nearest open place along a row up to 64 cells away. Left free, it pres
 fenced, it leaves bodies standing. Patching one brings back the other. What would end both is a
 rework of how a body of liquid moves: no cell put down where nothing holds it, and a face that falls as
 fast as a drop does. That is put to the owner before anything is changed.
+
+## Liquids reworked, 26 November 2026
+
+The owner chose the rework: no cell set down where nothing holds it, a face of liquid that falls as fast
+as a drop rather than shifting or standing, water that runs down a ramp as a stream, pools that still level
+quickly, and no dashes, wedges, overhangs or hatching. It is all in `levels` in `world.rs`; `level.rs`, the
+pass that joins vessels, is unchanged.
+
+**Where a levelled cell goes.** Levelling still finds the nearest open place along a cell's row and takes
+the top of the column over it, but the cell no longer goes into that place as it stands. It goes where a
+drop let go there would come to rest: down through the air to what holds it, then on along a slope away
+from the body to the next drop, within the liquid's `fall` cells down and `spread` along. A cell that has
+only been let go and is still falling holds nothing up. With nothing to hold it that near, the cell is let
+go a row under the place, falling. Nothing is ever set down at rest in the air. A falling cell ends the body
+for the look along a row, which passes it only as far as the pour below may reach, so no row is pressed out
+cell after cell.
+
+**A face pours as fast as it is deep.** What is let go into the air leaves at the speed water leaves a hole
+that deep in a face, the root of twice the depth, a little faster or slower by chance. A row may let cells
+go out past the falling ones it let go before, as far as twice that root. Where one it let go is still in
+its place, the next goes in under it. So a face pours as a sheet, thin from its top and wide from lower
+down. At one cell a row a step into the column beside it, a face could shed no more than that column carries,
+about ten cells a step. The falling sheet from the upper rows filled every place beside the lower ones, so
+only the slow top poured, and the face stood over the end of a ramp as a wedge.
+
+**Near for a pour, far for a level place.** A place a cell would pour from, down or into the air, is taken
+only by a cell within 16 cells of it (`NEAR`); a place level with the row and held is taken from as far as
+64 (`PRESS`). So what a face sheds comes from the columns beside it, the face slumps into a rounded body,
+and a pool still levels from far off. With every place taken from as far as 64, the body behind a face
+made up what it shed at once and the surface stayed flat, so the face stood upright however fast it poured.
+
+**Two rules taken out.** The spill, where a face over the air stepped a cell down and out, took every cell
+of the face in one bottom-up pass, so the face moved as a slab and landed where it stood in the air. The
+drop in a queue sent down past the side shifted the edge of a falling body a cell aside at once and drew
+diagonal hatching through falling water. Levelling now pours a face itself, and carries off a column
+standing on a pool.
+
+**Measured** with the ramp film, which now counts the liquid still on the ramp each step (`film -- ramp-water`,
+also `ramp-lava`, `ramp-acid`, `ramp-oil`, `ramp-mud`, `ramp-brine`):
+
+| On the ramp | Half gone, before | Nine tenths, before | Half gone, after | Nine tenths, after |
+|---|---|---|---|---|
+| water, brine | step 139 | 217 | 62 | 101 |
+| acid | 138 | 213 | 60 | 96 |
+| oil | 147 | 232 | 64 | 103 |
+| lava | 201 | not in 240 | 86 | 129 |
+| mud | 225 | not in 240 | 120 | 184 |
+
+Water now slumps as it lands, runs down the ramp as a sheet, curves over the lower end and pours off as a
+stream about twelve cells wide. The upper half of the ramp is empty by about step 55. What takes the rest of
+the time is the pour off the lower end, where the water gathers about 30 cells deep.
+
+- The longest level run of liquid over air in any film is 12 cells, in the flood's falling stroke, and none
+  stood in the air from one step to the next (the film now counts both).
+- Water off the shelf in `water` falls as broken streams three cells wide. Before, it fell as hatched sheets
+  with triangles in them; lava's streams were the same.
+- In `flood` the rising pool no longer stands in terraces, and the dam it leaves as the stroke ends is a
+  slope by step 100, where it stood as a cliff.
+- Water let go along a floor is level to a cell in 40 steps, where it was 18; the test allows 120. The column
+  on a pool and every other accuracy test pass as they were.
+- **Speed** (natively, baseline and new run back to back at a load near 20): a step of each of the speed
+  test's worlds is the same within noise but for the dam let go, at 2.3 ms against 0.9 on average, since it
+  is busy for longer; its slowest step is 7.0 ms against 8.3. A forest fire over the page's world, 3.7 ms at
+  p20 against 4.2. The page's world with the largest brush of water held for a minute averages 1.8 to 2.6 ms a
+  step (1.7 to 1.9 before, rising to 2.7 at the end), the slowest 7.2 (8.2 before), with 757,000 cells of
+  water against 658,000, since water now leaves the brush faster. The flood film, the heaviest pour, takes
+  1.11 ms a step against 0.94. It is flat to a row and asleep five seconds after the brush is let go, as before.
+- The engine is 118.1 KiB with SIMD and 119.6 without (the modules in the tree when this began were 120.4
+  and 122.0). The fingerprint was taken again.
+- Lava hardens and acid is spent as they go, and the ramp count takes that as gone: by step 80, 3% of the
+  lava and 9% of the acid were.
+
+**Tried and not kept:**
+
+- Every place taken from no farther than 8 or 16 cells. Water on the ramp slumped as it does now, but water
+  let go along a floor took 152 steps to level, since a gentle slope over a wide pool needs a long reach.
+- The far reach kept only for cells within two of the top. That is not what evens a gentle slope: a floor
+  took 168 steps.
+- A cell set down this step counted as not holding, so that one step could not stack a whole column. Water
+  then stood on the ramp as a heap at about the angle of sand, and crept.
+
+**Still not right:**
+
+- The stream off the end of the ramp falls in dense clumps with flat edges and gaps between them, not as a
+  sheet that thins evenly.
+- The flood's stroke falls with vertical streaks through it, and a notch opens where it meets the pool. The
+  streaks come from how a stroke is laid, at speeds of three to five by chance.
+- A cell let go from deep in a face appears a few cells out from it at once: there is no sideways speed to
+  carry it there.
+- The pour off a lower end is still the slowest part: a 3,100-cell stroke takes about 100 steps to leave the
+  ramp, not well under a second.
+- In `lake` the water now finds one level over the right-hand hill within the scene's 450 settling steps.
+  The house's foot is under water and the fire set there goes out, where before the house burned.

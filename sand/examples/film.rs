@@ -3,7 +3,7 @@
 //!
 //! `cargo run --release --example film -- water out.ppm` writes a plain PPM picture. The scenes are
 //! the ones the page was played with: a brush held still over a shelf and a bowl (`water`, `sand`,
-//! `lava`, `oil`), a liquid dragged onto a stone ramp (`ramp-water`, `ramp-lava`, `ramp-acid`), and two hills with a lake between, a wooden house set alight and lava poured into
+//! `lava`, `oil`), a liquid dragged onto a stone ramp (`ramp-water`, `ramp-lava`, `ramp-acid`, `ramp-oil`, `ramp-mud`, `ramp-brine`), and two hills with a lake between, a wooden house set alight and lava poured into
 //! the lake (`lake`), a wooden house and a pool of oil set alight (`fire`), and snow, salt, mud, a cloud and lightning (`weather`). Each cell is drawn in its material's color, moved by its shade, as the page
 //! draws it but without light.
 
@@ -93,7 +93,7 @@ fn main() {
     let path = args.get(2).cloned().unwrap_or_else(|| "film.ppm".into());
     let (wide, high) = (520, 420);
     let mut world = World::new(wide, high, 7);
-    let mut frames: Vec<Vec<u8>> = vec![];
+    let mut film = Film::new();
     // The scenes the owner sent word of on 17 Nov 2026, filmed at the steps given: `start-<what>-<radius>`
     // a brush pressed and held still (what a pour looks like as it begins), `dig` a hole taken out of the
     // middle of a big pile of sand, `flood` the biggest brush of water dragged across over heaps of sand.
@@ -123,9 +123,7 @@ fn main() {
                 for step in 1..=last {
                     brush.held(&mut world, 260, 80);
                     world.step();
-                    if shots.contains(&step) {
-                        frames.push(frame(&world));
-                    }
+                    film.after(&world, shots.contains(&step));
                 }
             }
             "dig" => {
@@ -142,9 +140,7 @@ fn main() {
                     } else {
                         world.step();
                     }
-                    if shots.contains(&step) {
-                        frames.push(frame(&world));
-                    }
+                    film.after(&world, shots.contains(&step));
                 }
             }
             _ => {
@@ -168,16 +164,15 @@ fn main() {
                     let began = std::time::Instant::now();
                     world.step();
                     took += began.elapsed();
-                    if shots.contains(&step) {
-                        frames.push(frame(&world));
+                    if film.after(&world, shots.contains(&step)) {
                         println!("step {step}: {} cells have found their level so far, {} chunks awake", world.levelled, world.awake());
                     }
                 }
                 println!("flood: {:.2} ms a step on average over {last} steps", took.as_secs_f64() * 1000.0 / last as f64);
             }
         }
-        write(&path, &frames, wide as usize, high as usize);
-        println!("{scene}: {} frames at steps {shots:?}, in {path}", frames.len());
+        film.write(&path, wide as usize, high as usize);
+        println!("{scene}: {} frames at steps {shots:?}, in {path}", film.frames.len());
         return;
     }
     if let Some(of) = scene.strip_prefix("ramp-") {
@@ -186,22 +181,61 @@ fn main() {
         let of = match of {
             "lava" => LAVA,
             "acid" => sand::materials::ACID,
+            "oil" => OIL,
+            "mud" => MUD,
+            "brine" => sand::materials::BRINE,
             _ => WATER,
         };
         world.paint(STONE, 60, 200, 300, 280, 5, 100, false);
         let mut brush = Brush::new(of, 10);
         let shots = [1, 3, 5, 8, 12, 16, 20, 25, 30, 40, 55, 80];
-        for step in 1..=80 {
+        // how much of the liquid is still on the ramp: over it and within 60 cells of it
+        let on_ramp = |world: &World| {
+            let mut n = 0;
+            for x in 50..=310 {
+                let ramp = 200 + (x - 60) / 3;
+                for y in (ramp - 60).max(0)..ramp + 8 {
+                    if world.at(x, y) == of {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        // the deepest the liquid lies over the ramp, and the step it first reaches the ramp's lower end
+        let deepest = |world: &World| {
+            (60..=300)
+                .map(|x| {
+                    let ramp = 200 + (x - 60) / 3 - 5;
+                    (0..ramp).rev().take_while(|&y| world.at(x, y) == of).count()
+                })
+                .max()
+                .unwrap_or(0)
+        };
+        let (mut most, mut half, mut tenth, mut reached) = (0, None, None, None);
+        for step in 1..=240 {
             if step <= 6 {
                 let at = |k: i32| (80 + k * 20, 140 + k * 3);
                 brush.dragged(&mut world, at(step - 1), at(step));
             }
             world.step();
-            if shots.contains(&(step as usize)) {
-                frames.push(frame(&world));
+            let n = on_ramp(&world);
+            most = most.max(n);
+            if step > 10 && half.is_none() && n * 2 < most {
+                half = Some(step);
+            }
+            if step > 10 && tenth.is_none() && n * 10 < most {
+                tenth = Some(step);
+            }
+            if reached.is_none() && (285..=300).any(|x| (200 + (x - 60) / 3 - 12..200 + (x - 60) / 3 - 4).any(|y| world.at(x, y) == of)) {
+                reached = Some(step);
+            }
+            if film.after(&world, shots.contains(&(step as usize))) {
+                println!("step {step}: {n} cells on the ramp, at most {} deep, {} in the world", deepest(&world), world.count(of));
             }
         }
-        write(&path, &frames, wide as usize, high as usize);
+        println!("{scene}: at most {most} cells on the ramp; reached its lower end at step {reached:?}; half gone by step {half:?}, nine tenths by step {tenth:?}");
+        film.write(&path, wide as usize, high as usize);
         println!("{scene}: frames at steps {shots:?}, in {path}");
         return;
     }
@@ -232,8 +266,7 @@ fn main() {
                     world.paint(FIRE, 60, 388, 70, 388, 3, 45, false);
                 }
                 world.step();
-                if step % every == every - 1 {
-                    frames.push(frame(&world));
+                if film.after(&world, step % every == every - 1) {
                     println!("step {step}: heard {} hisses and {} flames so far", world.heard(0), world.heard(1));
                 }
             }
@@ -277,9 +310,7 @@ fn main() {
                     held(&mut world, MUD, 30, 250, 8);
                 }
                 world.step();
-                if step % every == every - 1 {
-                    frames.push(frame(&world));
-                }
+                film.after(&world, step % every == every - 1);
             }
         }
         "slope" => {
@@ -293,9 +324,7 @@ fn main() {
                     held(&mut world, WATER, 230, 60, 10);
                 }
                 world.step();
-                if step % every == every - 1 {
-                    frames.push(frame(&world));
-                }
+                film.after(&world, step % every == every - 1);
             }
         }
         "lake" => {
@@ -321,8 +350,7 @@ fn main() {
                     held(&mut world, LAVA, 250, 100, 14);
                 }
                 world.step();
-                if step % every == every - 1 {
-                    frames.push(frame(&world));
+                if film.after(&world, step % every == every - 1) {
                     println!("step {step}: heard {} hisses and {} flames so far", world.heard(0), world.heard(1));
                 }
             }
@@ -342,14 +370,109 @@ fn main() {
                     held(&mut world, of, 245, 28, 14);
                 }
                 world.step();
-                if step % every == every - 1 {
-                    frames.push(frame(&world));
-                }
+                film.after(&world, step % every == every - 1);
             }
         }
     }
-    write(&path, &frames, wide as usize, high as usize);
-    println!("{scene}: {} frames, one every {every} steps, in {path}", frames.len());
+    film.write(&path, wide as usize, high as usize);
+    println!("{scene}: {} frames, one every {every} steps, in {path}", film.frames.len());
+}
+
+/// The frames of a scene, and what was seen at every step it was filmed for: the longest level run of
+/// liquid with air under it (a dash pressed out into the air), and the cells of liquid with air under
+/// them that did not move from one step to the next (liquid standing in the air).
+///
+/// `FRAMES=a-b` in the environment takes a frame at every filmed step from a to b instead of the scene's
+/// own; `CROP=x,y,w,h,scale` writes only that part of each frame, each cell `scale` pixels square.
+struct Film {
+    frames: Vec<Vec<u8>>,
+    step: usize,
+    range: Option<(usize, usize)>,
+    before: Vec<u32>,
+    longest: (usize, usize),
+    stood: usize,
+    stood_most: (usize, usize),
+}
+
+impl Film {
+    fn new() -> Self {
+        let range = std::env::var("FRAMES").ok().and_then(|r| {
+            let (a, b) = r.split_once('-')?;
+            Some((a.parse().ok()?, b.parse().ok()?))
+        });
+        Film { frames: vec![], step: 0, range, before: vec![], longest: (0, 0), stood: 0, stood_most: (0, 0) }
+    }
+
+    /// After a filmed step: watches the world, and takes a frame where the scene would (`shot`) or the
+    /// environment asks. Gives whether a frame was taken.
+    fn after(&mut self, world: &World, shot: bool) -> bool {
+        self.step += 1;
+        let liquid = |c: u32| MATERIALS.get(material(c) as usize).is_some_and(|m| m.kind == sand::materials::Kind::Liquid);
+        let mut stood = 0;
+        for y in 0..world.height - 1 {
+            let mut run = 0;
+            for x in 0..world.width {
+                let (c, under) = (world.get(x, y), world.get(x, y + 1));
+                let aired = liquid(c) && material(under) == 0;
+                run = if aired { run + 1 } else { 0 };
+                if run > self.longest.0 {
+                    self.longest = (run, self.step);
+                }
+                let at = (y * world.width + x) as usize;
+                if aired && self.before.get(at) == Some(&c) && self.before.get(at + world.width as usize).is_some_and(|&u| material(u) == 0) {
+                    stood += 1;
+                }
+            }
+        }
+        self.stood += stood;
+        if stood > self.stood_most.0 {
+            self.stood_most = (stood, self.step);
+        }
+        self.before.clear();
+        for y in 0..world.height {
+            for x in 0..world.width {
+                self.before.push(world.get(x, y));
+            }
+        }
+        let take = match self.range {
+            Some((a, b)) => (a..=b).contains(&self.step),
+            None => shot,
+        };
+        if take {
+            self.frames.push(frame(world));
+        }
+        take
+    }
+
+    /// Writes the frames side by side, four across, as one plain PPM picture, and says what was seen.
+    fn write(&self, path: &str, w: usize, h: usize) {
+        println!(
+            "watched {} steps: longest level run of liquid over air {} cells (step {}); liquid over air that did not move, {} cell-steps in all, most {} in one step (step {})",
+            self.step, self.longest.0, self.longest.1, self.stood, self.stood_most.0, self.stood_most.1
+        );
+        let crop: Option<Vec<usize>> = std::env::var("CROP").ok().map(|c| c.split(',').filter_map(|n| n.parse().ok()).collect());
+        match crop {
+            Some(c) if c.len() == 5 => {
+                let (x0, y0, cw, ch, k) = (c[0], c[1], c[2], c[3], c[4]);
+                let frames: Vec<Vec<u8>> = self
+                    .frames
+                    .iter()
+                    .map(|f| {
+                        let mut out = Vec::with_capacity(cw * k * ch * k * 3);
+                        for y in 0..ch * k {
+                            for x in 0..cw * k {
+                                let (sx, sy) = ((x0 + x / k).min(w - 1), (y0 + y / k).min(h - 1));
+                                out.extend_from_slice(&f[(sy * w + sx) * 3..(sy * w + sx) * 3 + 3]);
+                            }
+                        }
+                        out
+                    })
+                    .collect();
+                write(path, &frames, cw * k, ch * k);
+            }
+            _ => write(path, &self.frames, w, h),
+        }
+    }
 }
 
 /// Writes frames side by side, four across, as one plain PPM picture.

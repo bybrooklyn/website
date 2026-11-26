@@ -59,6 +59,15 @@ const SPLASH_FROM: u32 = 5;
 /// brush stood as a hill under it, as steep as it had to be to carry the pour away.
 const PRESS: usize = 64;
 const HEAD: usize = 128;
+/// The most cells past the first open place a liquid finding its level may let a cell go, where one let go
+/// before it is still falling under each (`levels`).
+const POURS_MOST: usize = 16;
+/// How far along its row a liquid finding its level reaches for a place it would pour from, down or over
+/// an edge, where `PRESS` is how far it reaches for a place level with it: what pours from a face is
+/// taken from near it, so the face slumps, while a pool still levels from far off.
+const NEAR: usize = 16;
+/// Marks a cell found its level by being let go into the air, before its speed is known.
+const POURED: u32 = u32::MAX;
 /// The most cells a grain slides down a slope in one step, however fast it came: a grain that
 /// lands on a heap is slowed by it, so a heap rests at its material's own angle whatever height it
 /// was poured from.
@@ -735,25 +744,11 @@ impl World {
                     return;
                 }
             }
-            // A drop whose way down was only opened this step, by the one under it going, while under
-            // that the way is shut (a queue, not a drop falling freely ahead of it), with open air beside
-            // it and under that, goes down past the side, at its speed: so a column of water standing on
-            // a pool comes apart into it, and does not creep down one cell a step behind its foot (until
-            // 24 Nov 2026 it crept). Rain, whose drops fall freely, is left alone: taking every drop that
-            // just had its way opened made falling water three times as dear.
-            if p.kind == Kind::Liquid && speed != 0 && material(below) == EMPTY && clock_of(below) == self.clock && material(self.cell_at(at + 2 * s)) != EMPTY {
-                let open = |side: isize| {
-                    let beside = at.wrapping_add_signed(side);
-                    material(self.cell_at(beside)) == EMPTY && material(self.cell_at(beside + s)) == EMPTY
-                };
-                let (left, right) = (open(-1), open(1));
-                if left || right {
-                    let roll = chance(self.seed ^ 0x5b11, self.steps, at);
-                    let side: isize = if left && right { if roll & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
-                    self.swap(at, at.wrapping_add_signed(side) + s, speed, (x, y), (x + side as i32, y + 1));
-                    return;
-                }
-            }
+            // Straight down, at its speed. (From 24 to 26 Nov 2026 a drop in a queue whose way had just
+            // opened went down past the side instead, so a column standing on a pool would come apart;
+            // it moved the whole edge of a falling body a cell aside at once, as a sheet, and drew
+            // diagonal hatching through falling water. A column is now carried off by the pool's own
+            // levelling, which pours it from every height.)
             self.drop(at, x, y, below, speed, p);
             return;
         }
@@ -774,22 +769,10 @@ impl World {
                 if speed == 0 && self.levelling && self.levels(at, (x, y), roll, p) {
                     return;
                 }
-                // Where levelling found nowhere to put it, a face of a pool with open air beside it and
-                // under that spills down and out, as the top of a pool runs off, so that water does not
-                // stand with upright sides over the air or drain off a shelf a cell at a time (until 24 Nov
-                // 2026 it did, and stood as a wedge out over a slope). Not between two corners, as nothing
-                // squeezes there.
-                let open = |side: isize| {
-                    let beside = at.wrapping_add_signed(side);
-                    self.sinks_into(p.density, self.cell_at(beside)) && self.sinks_into(p.density, self.cell_at(beside + s)) && material(self.cell_at(beside)) != VOID
-                };
-                let (left, right) = (open(-1), open(1));
-                if left || right {
-                    let side: isize = if left && right { if (roll >> 3) & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
-                    let to = at.wrapping_add_signed(side) + s;
-                    self.swap(at, to, 1, (x, y), (x + side as i32, y + 1));
-                    return;
-                }
+                // (Until 26 Nov 2026, where levelling found nowhere to put it, a face with open air beside
+                // it and under that spilled a cell down and out. It took every cell of the face in one
+                // pass, so the face moved as a rigid sheet and landed in the air; levelling now pours a
+                // face itself.)
             } else {
                 // At the surface: to a side where that takes it lower, down the slope beside it or
                 // along the level to the next drop, as far as it spreads in a step. A level surface
@@ -1128,15 +1111,32 @@ impl World {
     }
 
     /// A liquid finding its level. A cell that can neither fall nor run, with its own kind lying on
-    /// it, looks along its row, through its own kind, for an open place within `PRESS` cells; where
-    /// there is one, the cell at the top of what lies on it goes there. So a heap of water sinks from
-    /// its top and widens at every height at once, as fast as it is deep, and is flat in a fraction
-    /// of a second; a bubble of air in a pool is filled from the pool's top. The place is always
-    /// lower than the top it is taken from, so this comes to an end. Gives whether a cell was moved.
+    /// it, looks along its row, through its own kind at rest, for an open place within `PRESS` cells;
+    /// where there is one, the cell at the top of what lies on it goes where a drop let go at that
+    /// place would be: set down at rest on whatever holds within `fall` cells under the place, or,
+    /// with nothing that near, let go into the air a cell under the row, falling at a speed of its
+    /// own. So a heap of water sinks from its top and widens at every height at once, as fast as it
+    /// is deep, and is flat in a fraction of a second; a face of water over a slope or a drop slumps
+    /// and pours as fast as it is high; a bubble of air in a pool is filled from the pool's top. What
+    /// goes is always lower than the top it is taken from, so this comes to an end. Gives whether a
+    /// cell was moved.
     #[inline(never)]
     fn levels(&mut self, at: usize, (x, y): (i32, i32), roll: u32, p: Props) -> bool {
         let s = self.stride;
         let own = material(self.cell_at(at));
+        // how deep in the body this cell is, counted only where it is wanted
+        let deep = core::cell::Cell::new(0);
+        let depth = || {
+            if deep.get() == 0 {
+                let (mut above, mut high) = (at - s, 1);
+                while high < HEAD && material(self.cell_at(above - s)) == own {
+                    above -= s;
+                    high += 1;
+                }
+                deep.set(high);
+            }
+            deep.get()
+        };
         // First a few looks, at 1, 2, 4 cells and so on: deep in a body they all find its own kind,
         // and that is all it costs there. Where one does not, every cell as far as that one is
         // looked at in turn, so nothing is ever reached through a wall.
@@ -1155,34 +1155,123 @@ impl World {
                 }
                 look *= 2;
             }
-            (1..=far as isize).map(|k| (k, at.wrapping_add_signed(side * k))).find_map(|(k, to)| {
+            // Past the first open place, where what was let go there is still in the way under it, as
+            // far again as water from a hole this deep in a face would shoot out: twice the root of twice
+            // the depth. So a face pours as a sheet, thin from its top and wider from lower down (at three
+            // times, a level run of up to nine cells over the air was let go at once). One cell a
+            // row a step, into the one column beside it, could not carry away what a face pours: a column
+            // carries at most `fall` cells a step, and the face stood over the end of a ramp as a wedge.
+            let mut first = None;
+            let last = if far == 0 { 0 } else { (far + POURS_MOST).min(room) };
+            (1..=last as isize).map(|k| (k, at.wrapping_add_signed(side * k))).find_map(|(k, to)| {
+                if first.is_some_and(|f| k > f + 2 * root2(depth()) as isize) {
+                    return Some(None);
+                }
                 let there = self.cell_at(to);
+                if material(there) == own {
+                    // One that is moving is not part of the body but falling from it: the body ends
+                    // there, and it is passed over as the air it falls through, but only as far as an
+                    // open place would be. (Until 26 Nov 2026 the look went on through what had been let
+                    // go, and a row was pressed out into the air cell after cell in one step.)
+                    if moving(there) {
+                        first = first.or(Some(k));
+                        // What was let go here is falling: one let go after it goes in under it, where it
+                        // has fallen from, as soon as there is room. Waiting for it to leave the row, a
+                        // face poured only every other step, as the row was worked toward it or away.
+                        if k <= NEAR as isize {
+                            let mut down = 1;
+                            while down <= p.fall as usize && material(self.cell_at(to + down * s)) == own && moving(self.cell_at(to + down * s)) {
+                                down += 1;
+                            }
+                            if down <= p.fall as usize && material(self.cell_at(to + down * s)) == EMPTY && material(self.cell_at(to + (down + 1) * s)) == EMPTY {
+                                return Some(Some((k, k, to + down * s, down as i32, POURED)));
+                            }
+                        }
+                    }
+                    return None;
+                }
                 // open to it: air, a gas, a flame, or a lighter liquid or ash, which then comes up to
                 // the top in its place, so brine spreads out under water and ash floats
-                if material(there) == own {
-                    None
-                } else if self.sinks_into(p.density, there) {
-                    // Open over a drop, it is taken only from a cell before it that rests on what holds, not
-                    // on air nor on more liquid: the foot of a pool pours over the edge of what holds it, but
-                    // no row of a pool is pressed out over the air. (Until 24 Nov 2026 every row was: a pool on
-                    // a shelf pushed rows of water out into the air, which fell as long flat dashes, and water
-                    // on a slope stood out over it as a wedge whose rows each held up the one above, growing
-                    // a cell a step; the owner saw water jump sideways, hang, and come down slowly.)
-                    let before = to.wrapping_add_signed(-side);
-                    let under = self.cell_at(before + s);
-                    let holds = !self.sinks_into(p.density, under) && props(under).kind != Kind::Liquid;
-                    if self.sinks_into(p.density, self.cell_at(to + s)) && !holds { Some(None) } else { Some(Some((k, to))) }
-                } else {
-                    Some(None)
+                if !self.sinks_into(p.density, there) {
+                    return Some(None);
                 }
+                first = first.or(Some(k));
+                if material(there) != EMPTY {
+                    let falls = if self.sinks_into(p.density, self.cell_at(to + s)) { 1 } else { 0 };
+                    return Some(Some((k, k, to, 0, falls)));
+                }
+                // Where a drop let go here would come to rest: on down through the air to what holds it,
+                // and on along a slope away from the body to the next drop, within `fall` cells down and
+                // `spread` along; at rest there. With nothing to hold it that near, a cell down, falling.
+                // Never in the air level with the row it left, at rest: until 24 Nov 2026 a pool on a shelf
+                // pressed its rows out into the air, where they fell as long flat dashes, and from then until
+                // 26 Nov a place over any drop was refused but at the foot of a body, so water stood on a
+                // ramp as a wedge with an upright face over the air, which crept.
+                let holds = |c: u32| !self.sinks_into(p.density, c) && !(moving(c) && matches!(props(c).kind, Kind::Powder | Kind::Liquid));
+                let (mut here, mut along, mut down) = (to, 0, 0);
+                loop {
+                    let start = here;
+                    while down < p.fall as usize && material(self.cell_at(here + s)) == EMPTY {
+                        here += s;
+                        down += 1;
+                    }
+                    let under = self.cell_at(here + s);
+                    if !holds(under) {
+                        // what is let go into the air is taken from near the place (`NEAR`)
+                        return if here != start && k > NEAR as isize {
+                            Some(None)
+                        } else if here != start {
+                            Some(Some((k, k + along, start + s, (down - (here - start) / s + 1) as i32, POURED)))
+                        } else if self.sinks_into(p.density, under) {
+                            // a lighter liquid under it: it is let go there, and sinks through
+                            Some(Some((k, k + along, here, down as i32, 1)))
+                        } else if here == to {
+                            // Over one let go from here that is still falling: not stacked on it, but
+                            // let go beside it, a few cells out at most. One cell a row a step could not
+                            // carry away what a face pours: it stood over the end of a ramp as a wedge.
+                            None
+                        } else {
+                            Some(None)
+                        };
+                    }
+                    if down >= p.fall as usize {
+                        break;
+                    }
+                    let mut next = None;
+                    let mut on = here;
+                    for more in 1..=(p.spread as isize - along).max(0) {
+                        on = on.wrapping_add_signed(side);
+                        if material(self.cell_at(on)) != EMPTY {
+                            break;
+                        }
+                        let below = self.cell_at(on + s);
+                        if material(below) == EMPTY {
+                            next = Some((on, more));
+                            break;
+                        }
+                        if !holds(below) {
+                            break;
+                        }
+                    }
+                    match next {
+                        Some((on, more)) => {
+                            here = on;
+                            along += more;
+                        }
+                        None => break,
+                    }
+                }
+                // and so is what goes down or along from it; a place level with the row and held is
+                // taken from as far as `PRESS`
+                if here != to && k > NEAR as isize { Some(None) } else { Some(Some((k, k + along, here, down as i32, 0))) }
             })?
         };
         let (left, right) = (place(-1), place(1));
-        let (far, to, side) = match (left, right) {
-            (Some(l), Some(r)) if l.0 != r.0 => if l.0 < r.0 { (l.0, l.1, -1) } else { (r.0, r.1, 1) },
-            (Some(l), Some(r)) => if (roll >> 2) & 1 == 0 { (l.0, l.1, -1) } else { (r.0, r.1, 1) },
-            (Some(l), None) => (l.0, l.1, -1),
-            (None, Some(r)) => (r.0, r.1, 1),
+        let ((_, far, to, down, falls), side) = match (left, right) {
+            (Some(l), Some(r)) if l.0 != r.0 => if l.0 < r.0 { (l, -1) } else { (r, 1) },
+            (Some(l), Some(r)) => if (roll >> 2) & 1 == 0 { (l, -1) } else { (r, 1) },
+            (Some(l), None) => (l, -1),
+            (None, Some(r)) => (r, 1),
             (None, None) => return false,
         };
         if !self.paced(roll, x, y, p) {
@@ -1198,8 +1287,16 @@ impl World {
             self.stay(x, y);
             return true;
         }
-        let falls = if self.sinks_into(p.density, self.cell_at(to + s)) { 1 } else { 0 };
-        self.swap(top, to, falls, (x, y - high as i32), (x + side * far as i32, y));
+        // Let go into the air, it leaves as fast as water from a hole that deep in a face would, the
+        // root of twice the depth, and a little faster or slower by chance, so that what a face pours
+        // falls away as a stream that comes apart into drops: at a cell or two a step, what one face let
+        // go stood beside it as a wall falling too slowly to carry it away.
+        let falls = if falls == POURED {
+            (root2(high) as u32 + (roll >> 12) % 3).saturating_sub(1).clamp(1, p.fall as u32 - 1)
+        } else {
+            falls
+        };
+        self.swap(top, to, falls, (x, y - high as i32), (x + side * far as i32, y + down));
         self.levelled += 1;
         true
     }
@@ -1784,6 +1881,17 @@ fn wandering(seed: u64, stroke: u64, edge: usize, column: i32) -> i64 {
 /// shade of its own from `roll`.
 fn stripe_shade(first: u32, stripe: u32, roll: u32) -> u32 {
     ((first + stripe) * STRIPE as u32) | ((roll >> 8) & (STRIPE as u32 - 1))
+}
+
+/// The whole root of twice a depth: how fast, in cells a step, water leaves a hole that deep in a face,
+/// and how far it shoots out.
+#[inline]
+fn root2(depth: usize) -> usize {
+    let mut r = 1;
+    while (r + 1) * (r + 1) <= 2 * depth {
+        r += 1;
+    }
+    r
 }
 
 /// Whether the four cells from `at` are all empty, so they can be passed over at once. Only the
