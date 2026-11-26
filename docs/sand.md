@@ -1665,8 +1665,9 @@ the top of the column over it, but the cell no longer goes into that place as it
 drop let go there would come to rest: down through the air to what holds it, then on along a slope away
 from the body to the next drop, within the liquid's `fall` cells down and `spread` along. A cell that has
 only been let go and is still falling holds nothing up. With nothing to hold it that near, the cell is let
-go a row under the place, falling. Nothing is ever set down at rest in the air, and the look along a row
-stops at a falling cell instead of going on through it, so no row is pressed out cell after cell.
+go a row under the place, falling. Nothing is ever set down at rest in the air. A falling cell ends the body
+for the look along a row, which passes it only as far as the pour below may reach, so no row is pressed out
+cell after cell.
 
 **A face pours as fast as it is deep.** What is let go into the air leaves at the speed water leaves a hole
 that deep in a face, the root of twice the depth, a little faster or slower by chance. A row may let cells
@@ -1715,10 +1716,13 @@ the time is the pour off the lower end, where the water gathers about 30 cells d
   test's worlds is the same within noise but for the dam let go, at 2.3 ms against 0.9 on average, since it
   is busy for longer; its slowest step is 7.0 ms against 8.3. A forest fire over the page's world, 3.7 ms at
   p20 against 4.2. The page's world with the largest brush of water held for a minute averages 1.8 to 2.6 ms a
-  step, the slowest 7.2 (8.2 before), with 757,000 cells of water against 658,000, since water now leaves
-  the brush faster. It is flat to a row and asleep five seconds after the brush is let go, as before.
-- The engine is 118.1 KiB with SIMD and 119.6 without (120.4 and 122.0 before). The fingerprint was taken
-  again.
+  step (1.7 to 1.9 before, rising to 2.7 at the end), the slowest 7.2 (8.2 before), with 757,000 cells of
+  water against 658,000, since water now leaves the brush faster. The flood film, the heaviest pour, takes
+  1.11 ms a step against 0.94. It is flat to a row and asleep five seconds after the brush is let go, as before.
+- The engine is 118.1 KiB with SIMD and 119.6 without (the modules in the tree when this began were 120.4
+  and 122.0). The fingerprint was taken again.
+- Lava hardens and acid is spent as they go, and the ramp count takes that as gone: by step 80, 3% of the
+  lava and 9% of the acid were.
 
 **Tried and not kept:**
 

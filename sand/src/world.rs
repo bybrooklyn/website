@@ -1156,8 +1156,9 @@ impl World {
                 look *= 2;
             }
             // Past the first open place, where what was let go there is still in the way under it, as
-            // far again as water from a hole this deep in a face would shoot out: the root of twice the
-            // depth. So a face pours as a sheet, thin from its top and wider from lower down. One cell a
+            // far again as water from a hole this deep in a face would shoot out: twice the root of twice
+            // the depth. So a face pours as a sheet, thin from its top and wider from lower down (at three
+            // times, a level run of up to nine cells over the air was let go at once). One cell a
             // row a step, into the one column beside it, could not carry away what a face pours: a column
             // carries at most `fall` cells a step, and the face stood over the end of a ramp as a wedge.
             let mut first = None;
