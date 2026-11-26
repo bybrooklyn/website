@@ -1778,17 +1778,25 @@ striped stream) were left to that work.
   burning post or heap of wood was drawn as one rounded glow with a flame either side. The body is now
   spread narrowly across (a cell or two each side) and only upward from the flames below a point,
   fading over fourteen cells (`TONGUE` in `cells.ts`), so flames side by side are tongues with ragged
-  tops that flicker as the flames move, and nothing shows below the lowest flame. The light and halo are
-  blurred as before.
+  tops that flicker as the flames move, and nothing shows below the lowest flame. A tongue stops at the
+  first cell above it that is drawn and neither gives light nor is soft, so fire under a stone shelf
+  spreads along its underside and is not drawn through or over it. The light and halo are blurred as
+  before.
 - **Wood went up at once.** A post lit at its foot was alight from top to bottom in under two seconds and
   gone in five: a flame lit the wood it touched 192 times in 1024 a step, and burning wood burnt away
   whether air reached it or not. A flame now lights wood 12 times in 1024, burning wood chars the wood
-  beside it 3 times in 1024 (it was 12), burns away to smoke (3 in 1024) only where air reaches it, and
-  smoulders to ash (1 in 1024) with air or without, so wood buried under lava or sand does not burn for
-  ever. Flames climb a post 110 cells tall over about three seconds and it stands burning for some ten,
-  thinning from its skin inward. Burning wood gives off flames 56 times in 1024 a step (it was 320), as it
-  burns far longer and each flame is drawn as a tongue, and is drawn as dark char flickering to orange
-  rather than one glowing orange (130, 42, 24, moving by 220, 120, 50).
+  beside it 3 times in 1024 (it was 12), burns away (6 in 1024 to smoke, 2 to ash) only where air
+  reaches it, and smoulders to ash (1 in 1024) with air or without, so wood buried under lava or sand
+  does not burn for ever. Flames climb a post 110 cells tall over about three seconds and it stands
+  burning for some six, thinning from its skin inward. A beam thirteen cells thick lit from below has
+  lost its wood after 706 steps and its last ember after 1,173. Burning away at 3 was tried first: a
+  post stood for ten seconds, but that beam lasted forty, as the owner had found too long on
+  17 November, and a forest burned twice as long as before. Burning wood gives off flames 56 times in
+  1024 a step (it was 320), as it burns longer and each flame is drawn as a tongue, so a fire crackles
+  less often than it did (the page's crackle follows flames made). It is drawn as dark char flickering
+  to orange rather than one glowing orange (130, 42, 24, moving by 220, 120, 50). Wood is a solid, so a
+  post that burns through at its foot first leaves its upper part standing in the air, as before; a
+  candle three wide burns down in two or three drops, not cell by cell.
 - **Smoke was a spray of dots.** It went out grain by grain by chance (24 in 1024 a step). It now fades:
   made thick, it loses three to six of its shade each step and is gone once it has none left, about fifty
   steps (`glow` 4, and a line marked `faded`). Mote draws such a cell (`FADE`, 32) as opaque as its
@@ -1823,13 +1831,12 @@ three times.
 
 Measured on the loaded machine (load about 15 to 22), old and new binaries run by turns:
 
-- `examples/fire.rs` (600 steps of the page's whole world alight): 8.6 to 11.5 ms a step before, 6.1 to
-  7.2 after, as the fire spreads more slowly in that window.
-- The speed example's forest lit all along, in windows of 150 steps: at its busiest 24.7 to 26.0 ms a step
-  before and 24.9 to 27.4 after, the same within the noise, but it burns about twice as long (busy for
-  some 900 steps where it was 450), so the example's mean over its first 1,200 steps goes from 8 to 9.6 ms
-  to about 15. Burning away to smoke faster (the line of burning wood beside air, at 3) is the knob if
-  that is too long.
+- `examples/fire.rs` (600 steps of the page's whole world alight): 7.2 to 9.6 ms a step before, 5.4 to
+  6.6 after, as the fire spreads more slowly in that window.
+- The speed example's forest lit all along: its busiest 150 steps 20 to 27 ms a step before and 18 to 20
+  after; its slowest single step 25 to 35 ms before and 20 to 21 after; but it burns longer, so its mean
+  over the first 1,200 steps goes from 7.9 to 9.7 ms to 10.2 to 10.9.
 - The page with a forest of 61 trees alight across a world of 748 by 423, stepped and drawn on the page's
-  own thread (`?thread=page`): 86 to 100 frames a second.
-- The engine is 120.9 KiB (122.5 without SIMD), of 128.
+  own thread (`?thread=page`): the browser called for 86 to 100 frames a second (its frame callbacks
+  counted; no figure was taken before, nor of steps a second).
+- After the liquids rework was merged in, the engine is 118.6 KiB (120.2 without SIMD), of 128.
