@@ -68,4 +68,4 @@ One world per module instance.
 | `set_edges(open)` | 1 lets what moves past an edge be gone; 0, as it starts, walls it in. |
 | `count(material)`, `fingerprint(part)`, `steps()` | How many cells of a material; half of an FNV-1a hash of every cell (0 low, 1 high); steps taken. |
 | `material_count()`, `name(m)`, `name_length(m)`, `paintable(m)`, `kind(m)` | The table: names as UTF-8 in memory, whether the brush offers it, and its kind (0 empty, 1 solid, 2 powder, 3 liquid, 4 gas, 5 void, 6 fire). |
-| `palette()` | 2048 bytes of colors: 256 RGBA, then 256 shade ranges, each with how the material is drawn in its fourth byte (1 its shade picks a stripe's color, 2 it gives light, 4 it is drawn softly). |
+| `palette()` | 2048 bytes of colors: 256 RGBA, then 256 shade ranges, each with how the material is drawn in its fourth byte (1 its shade picks a stripe's color, 2 it gives light, 4 it is drawn softly, 8 with depth, 16 as spray, 32 as faint as its shade is low). |

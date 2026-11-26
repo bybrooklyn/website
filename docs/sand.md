@@ -1652,3 +1652,71 @@ it at the nearest open place along a row up to 64 cells away. Left free, it pres
 fenced, it leaves bodies standing. Patching one brings back the other. What would end both is a
 rework of how a body of liquid moves: no cell put down where nothing holds it, and a face that falls as
 fast as a drop does. That is put to the owner before anything is changed.
+
+## Fire, smoke, snow, acid and lava reworked, 26 November 2026
+
+The owner found fire, snow, acid and lava broken, in both how they look and what they do. Looked at on
+the page and filmed natively (`film -- fx-candle`, `fx-forest`, `fx-acid`, `fx-dab`, `fx-snow`,
+`fx-lava`, scenes added for this, each printing the counts that matter at every frame), this is what was
+wrong and what was changed, a commit each. The liquid-movement faults of the same day (the wedge, the
+striped stream) were left to that work.
+
+- **A fire was a glowing lump.** Its body was blurred with the light, about five cells every way, so a
+  burning post or heap of wood was drawn as one rounded glow with a flame either side. The body is now
+  spread narrowly across (a cell or two each side) and only upward from the flames below a point,
+  fading over fourteen cells (`TONGUE` in `cells.ts`), so flames side by side are tongues with ragged
+  tops that flicker as the flames move, and nothing shows below the lowest flame. The light and halo are
+  blurred as before.
+- **Wood went up at once.** A post lit at its foot was alight from top to bottom in under two seconds and
+  gone in five: a flame lit the wood it touched 192 times in 1024 a step, and burning wood burnt away
+  whether air reached it or not. A flame now lights wood 12 times in 1024, burning wood chars the wood
+  beside it 3 times in 1024 (it was 12), burns away to smoke (3 in 1024) only where air reaches it, and
+  smoulders to ash (1 in 1024) with air or without, so wood buried under lava or sand does not burn for
+  ever. Flames climb a post 110 cells tall over about three seconds and it stands burning for some ten,
+  thinning from its skin inward. Burning wood gives off flames 56 times in 1024 a step (it was 320), as it
+  burns far longer and each flame is drawn as a tongue, and is drawn as dark char flickering to orange
+  rather than one glowing orange (130, 42, 24, moving by 220, 120, 50).
+- **Smoke was a spray of dots.** It went out grain by grain by chance (24 in 1024 a step). It now fades:
+  made thick, it loses three to six of its shade each step and is gone once it has none left, about fifty
+  steps (`glow` 4, and a line marked `faded`). Mote draws such a cell (`FADE`, 32) as opaque as its
+  shade, its own grain fainter in the haze (`FADE_SHARP`), so smoke rises as a haze that thins away.
+- **Snow melted in the open and lay on fire.** Room temperature (40) is warmer than snow melted at (28),
+  so a press of it on a shelf was always melting away (185 grains lost 35 in four seconds), while snow
+  passed so little heat (2) that a heap stood on lava and on a burning post. Snow now melts where it is
+  warmed past room temperature (44), passes heat at 8, and melts where lava, a flame, burning wood or
+  oil, or steam touches it, the two sharing their heat, so it hisses into hot water and steam. A press
+  of snow is all still snow a minute later; of 1,354 grains snowed onto a burning post and a pool of lava,
+  345 are left. Snow on a wide pool crusts its top with rock and floats on the meltwater, as heat here is
+  one cell's worth for one cell, whatever the material.
+- **Acid ate a layer no one could see.** Each cell ate one cell of stone, wood or dirt by a small chance
+  and went up as smoke with it, so a pour spread into a thin skin and lowered an even layer. Now what it
+  eats goes up as fumes (material 29, not offered: a pale green gas that bubbles up through the acid and
+  fades as smoke does), and the acid goes on eating, three or four cells before it is spent itself, so a
+  pour bites ragged pits into a shelf, a block of wood and a heap of dirt, and holes through a shelf,
+  within seconds. The test's pour of 682 cells eats 2,554 of stone, a pit 38 deep, and is gone after 842
+  steps.
+- **Lava was a flat glare.** Its shade was its temperature alone and its own light was added over it
+  again until it was near white, so a pool could not be seen to move. A cell that gives light now keeps
+  the lowest three bits of its shade from when it was made; Mote draws a cell that gives light (and is
+  not soft) darker by them, up to 28% (`GRAIN`), and adds two fifths of the near light over it
+  (`SELF_LIT`), so lava shows orange and gold grains carried as it creeps, and burning wood specks of
+  char. What lava does was right: it lights what burns, sinks in water making rock and steam, and crusts.
+  A post standing in a pool does not catch, as the pool's top crusts to rock within a second or so.
+
+The test that a burnt-out world stays asleep now waits sixteen steps first: the step's clock goes round
+every sixteen and is then wiped from the cells that moved since, so the clocks left in the last cells to
+move are wiped once after the world sleeps. It had passed only by chance. The fingerprint was taken again
+three times.
+
+Measured on the loaded machine (load about 15 to 22), old and new binaries run by turns:
+
+- `examples/fire.rs` (600 steps of the page's whole world alight): 8.6 to 11.5 ms a step before, 6.1 to
+  7.2 after, as the fire spreads more slowly in that window.
+- The speed example's forest lit all along, in windows of 150 steps: at its busiest 24.7 to 26.0 ms a step
+  before and 24.9 to 27.4 after, the same within the noise, but it burns about twice as long (busy for
+  some 900 steps where it was 450), so the example's mean over its first 1,200 steps goes from 8 to 9.6 ms
+  to about 15. Burning away to smoke faster (the line of burning wood beside air, at 3) is the knob if
+  that is too long.
+- The page with a forest of 61 trees alight across a world of 748 by 423, stepped and drawn on the page's
+  own thread (`?thread=page`): 86 to 100 frames a second.
+- The engine is 120.9 KiB (122.5 without SIMD), of 128.
