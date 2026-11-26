@@ -37,6 +37,8 @@ const colors = new Uint8Array(2048);
 colors.set([255, 0, 0, 255], 4);          // 1 is red
 colors.set([0, 0, 255, 255], 8);          // 2 is blue
 colors.set([0, 200, 0, 0], 1024 + 8);     // and blue's shade moves green
+colors.set([0, 255, 0, 255], 12);         // 3 is green and fades: its shade is how opaque it is
+colors.set([0, 0, 0, 32], 1024 + 12);
 grid.palette(colors);
 const at = fitted(20, 11, 4, 3);
 grid.place(at);
@@ -45,6 +47,8 @@ const set = (column, row, material, shade) => bytes.set([material, shade, 0, 0],
 set(0, 0, 1, 128);
 set(3, 2, 2, 0);
 set(2, 1, 2, 255);
+set(0, 1, 3, 255);
+set(1, 1, 3, 64);
 const g = canvas.getContext("webgl2");
 const read = () => {
     const pixels = new Uint8Array(20 * 11 * 4);
@@ -61,7 +65,7 @@ const second = read();
 window.result = {
     at,
     red: first(4, 1), redEdge: first(6, 3), beside: first(7, 2), outside: first(1, 1),
-    darkBlue: first(15, 9), lightBlue: first(12, 5),
+    darkBlue: first(15, 9), lightBlue: first(12, 5), thick: first(5, 5), thin: first(8, 5),
     notSent: second(7, 1), sent: second(7, 9),
 };
 `;
@@ -87,6 +91,10 @@ test.skipIf(!chromium())("cells are drawn whole, in their colors and shades, and
         expect(result.darkBlue).toEqual([0, 0, 255, 255]);
         expect(result.lightBlue![1]!).toBeGreaterThan(95);
         expect(result.lightBlue![1]!).toBeLessThan(105);
+        // a cell that fades is its color as it is, as opaque as its shade: a quarter as opaque at 64
+        expect(result.thick).toEqual([0, 255, 0, 255]);
+        expect(result.thin![1]!).toBeGreaterThan(60);
+        expect(result.thin![1]!).toBeLessThan(68);
         // a change in a row that was not sent is not seen; one in a row that was, is
         expect(result.notSent).toEqual([0, 0, 0, 0]);
         expect(result.sent).toEqual([255, 0, 0, 255]);

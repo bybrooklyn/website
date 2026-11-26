@@ -508,7 +508,7 @@ fn write(path: &str, frames: &[Vec<u8>], w: usize, h: usize) {
 /// over a flame), `fx-forest`, `fx-acid` (acid poured on stone, wood and dirt), `fx-snow` (snow in the
 /// open, by a fire and by lava) and `fx-lava` (lava poured into water and onto wood).
 fn effects(world: &mut World, name: &str, path: &str) {
-    use sand::materials::{ACID, ASH, EMBER, ROCK, SMOKE, STEAM};
+    use sand::materials::{ACID, ASH, EMBER, FUMES, ROCK, SMOKE, STEAM};
     let mut frames = vec![];
     let floor = |world: &mut World| world.paint(STONE, 0, 415, 519, 415, 4, 100, false);
     let (every, watch): (usize, Vec<(&str, u8)>) = match name {
@@ -544,7 +544,7 @@ fn effects(world: &mut World, name: &str, path: &str) {
             for y in 380..412 {
                 world.paint(DIRT, 360, y, 480, y, 0, 100, false);
             }
-            (30, vec![("stone", STONE), ("wood", WOOD), ("dirt", DIRT), ("acid", ACID), ("smoke", SMOKE)])
+            (30, vec![("stone", STONE), ("wood", WOOD), ("dirt", DIRT), ("acid", ACID), ("fumes", FUMES)])
         }
         "dab" => {
             // what was done on the page: one press of the brush on a stone shelf, of snow alone, of snow
@@ -558,7 +558,7 @@ fn effects(world: &mut World, name: &str, path: &str) {
             brush.held(world, 240, 280);
             world.paint(ACID, 285, 285, 285, 285, 6, 100, false);
             world.paint(ACID, 430, 285, 430, 285, 8, 100, false);
-            (20, vec![("snow", SNOW), ("water", WATER), ("acid", ACID), ("stone", STONE), ("smoke", SMOKE)])
+            (20, vec![("snow", SNOW), ("water", WATER), ("acid", ACID), ("stone", STONE), ("fumes", FUMES)])
         }
         "snow" => {
             floor(world);
