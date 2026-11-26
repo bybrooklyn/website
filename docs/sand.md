@@ -1623,3 +1623,32 @@ next. The machine was at a load of about 28 with 24 GB in swap while this was me
   sends only those (`send` with `left` and `right`). The heat pass marks a cell that gives light by its heat
   and only changed temperature (`redrawn`), which the whole-width strips had covered by chance.
 
+
+## Liquids still broken, 26 November 2026
+
+The owner found Sand in need of work: liquids broken, fire, snow, acid and lava and their effects bad, and
+the column due a remake. Played on the page, a stroke of water or lava dragged onto a stone ramp landed as a
+wedge with a flat top and an upright face on the downhill side, and its falling stream was striped with
+diagonal sheets. Sending the whole grid to the card every frame changed nothing, so it is the rules, not the
+drawing. Filmed natively (`film -- ramp-water`, `ramp-lava`) it is the same: about 3,100 cells, at rest
+within 20 steps, still 98% on the ramp at step 80 and gone only by step 160.
+
+What happens, cell by cell: the upright face moves one cell down and across as a rigid sheet (the spill
+rule and the rule that sends a drop past the side both take every cell of the face in the same bottom-up
+pass); the sheet's cells are stacked, so the next step they all land where they stand, in the air; then
+the face moves again. Only the foot of the face drains, by levelling, so the wedge creeps.
+
+Two things were tried and not kept:
+
+- A drop still moving as it lands under its own kind runs on down the slope (`runs`), as a drop at the
+  surface does. The water left the ramp three times faster (a third left at step 80), but the top of the
+  body stayed flat while the foot ran away, so the face leaned out over the air.
+- With that, letting levelling take a place over a drop again (the rule added on 24 November). The
+  water left the ramp by step 40, but as the flat dashes pressed out into the air that the 24 November
+  rule had been put in against.
+
+So the wedge and the dashes are two sides of one design: levelling lifts the top cell of a column and puts
+it at the nearest open place along a row up to 64 cells away. Left free, it presses rows out into the air;
+fenced, it leaves bodies standing. Patching one brings back the other. What would end both is a
+rework of how a body of liquid moves: no cell put down where nothing holds it, and a face that falls as
+fast as a drop does. That is put to the owner before anything is changed.
