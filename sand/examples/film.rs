@@ -205,6 +205,10 @@ fn main() {
         println!("{scene}: frames at steps {shots:?}, in {path}");
         return;
     }
+    if let Some(name) = scene.strip_prefix("fx-") {
+        effects(&mut world, name, &path);
+        return;
+    }
     let (every, count): (usize, usize) = match scene {
         "lake" => (60, 12),
         "slope" => (20, 12),
@@ -367,4 +371,118 @@ fn write(path: &str, frames: &[Vec<u8>], w: usize, h: usize) {
     let mut out = format!("P6\n{} {}\n255\n", across * w, down * h).into_bytes();
     out.extend_from_slice(&sheet);
     std::fs::write(path, out).expect("the picture could not be written");
+}
+
+/// The scenes the effects were judged by on 26 Nov 2026, each filmed in twelve frames with the counts
+/// of what matters printed at each: `fx-candle` (a post lit at its top, another at its foot, a beam
+/// over a flame), `fx-forest`, `fx-acid` (acid poured on stone, wood and dirt), `fx-snow` (snow in the
+/// open, by a fire and by lava) and `fx-lava` (lava poured into water and onto wood).
+fn effects(world: &mut World, name: &str, path: &str) {
+    use sand::materials::{ACID, ASH, EMBER, ROCK, SMOKE, STEAM};
+    let mut frames = vec![];
+    let floor = |world: &mut World| world.paint(STONE, 0, 415, 519, 415, 4, 100, false);
+    let (every, watch): (usize, Vec<(&str, u8)>) = match name {
+        "candle" => {
+            floor(world);
+            world.paint(WOOD, 80, 410, 80, 330, 2, 100, false);
+            world.paint(WOOD, 200, 410, 200, 300, 2, 100, false);
+            world.paint(WOOD, 300, 330, 470, 330, 3, 100, false);
+            world.paint(WOOD, 300, 410, 300, 334, 1, 100, false);
+            world.paint(WOOD, 470, 410, 470, 334, 1, 100, false);
+            world.paint(FIRE, 80, 329, 80, 329, 2, 100, false);
+            world.paint(FIRE, 192, 408, 208, 408, 3, 100, false);
+            world.paint(FIRE, 370, 408, 400, 408, 4, 100, false);
+            (30, vec![("wood", WOOD), ("ember", EMBER), ("fire", FIRE), ("smoke", SMOKE), ("ash", ASH)])
+        }
+        "forest" => {
+            world.paint(DIRT, 0, 412, 519, 419, 3, 100, false);
+            let mut x = 20;
+            while x < 500 {
+                world.paint(WOOD, x, 405, x, 350, 1, 100, false);
+                world.paint(WOOD, x, 340, x, 340, 9, 100, false);
+                x += 24;
+            }
+            world.paint(FIRE, 10, 400, 10, 400, 4, 100, false);
+            (60, vec![("wood", WOOD), ("ember", EMBER), ("fire", FIRE), ("smoke", SMOKE), ("ash", ASH)])
+        }
+        "acid" => {
+            floor(world);
+            world.paint(STONE, 40, 300, 160, 300, 3, 100, false);
+            for y in 360..412 {
+                world.paint(WOOD, 220, y, 300, y, 0, 100, false);
+            }
+            for y in 380..412 {
+                world.paint(DIRT, 360, y, 480, y, 0, 100, false);
+            }
+            (30, vec![("stone", STONE), ("wood", WOOD), ("dirt", DIRT), ("acid", ACID), ("smoke", SMOKE)])
+        }
+        "dab" => {
+            // what was done on the page: one press of the brush on a stone shelf, of snow alone, of snow
+            // with acid beside it, and of acid alone
+            for x in [40, 210, 380] {
+                world.paint(STONE, x, 300, x + 100, 300, 3, 100, false);
+            }
+            let mut brush = Brush::new(SNOW, 8);
+            brush.held(world, 90, 280);
+            let mut brush = Brush::new(SNOW, 8);
+            brush.held(world, 240, 280);
+            world.paint(ACID, 285, 285, 285, 285, 6, 100, false);
+            world.paint(ACID, 430, 285, 430, 285, 8, 100, false);
+            (20, vec![("snow", SNOW), ("water", WATER), ("acid", ACID), ("stone", STONE), ("smoke", SMOKE)])
+        }
+        "snow" => {
+            floor(world);
+            world.paint(STONE, 330, 405, 330, 380, 3, 100, false);
+            world.paint(STONE, 500, 405, 500, 380, 3, 100, false);
+            for y in 395..412 {
+                world.paint(LAVA, 336, y, 494, y, 0, 100, false);
+            }
+            world.paint(WOOD, 250, 410, 250, 360, 2, 100, false);
+            world.paint(FIRE, 250, 359, 250, 359, 2, 100, false);
+            (60, vec![("snow", SNOW), ("water", WATER), ("steam", STEAM), ("ice", ICE)])
+        }
+        _ => {
+            floor(world);
+            world.paint(STONE, 40, 405, 40, 360, 3, 100, false);
+            world.paint(STONE, 240, 405, 240, 360, 3, 100, false);
+            for y in 370..412 {
+                world.paint(WATER, 46, y, 234, y, 0, 100, false);
+            }
+            for y in 380..412 {
+                world.paint(WOOD, 330, y, 470, y, 0, 100, false);
+            }
+            (40, vec![("lava", LAVA), ("stone", STONE), ("rock", ROCK), ("steam", STEAM), ("water", WATER), ("wood", WOOD), ("ember", EMBER)])
+        }
+    };
+    let mut snow = Brush::new(SNOW, 10);
+    let mut took = std::time::Duration::ZERO;
+    for step in 0..every * 12 {
+        match name {
+            "acid" if step < 90 => {
+                held(world, ACID, 100, 200, 8);
+                held(world, ACID, 260, 250, 8);
+                held(world, ACID, 420, 250, 8);
+            }
+            "snow" if step < 200 => {
+                for x in [60, 250, 415] {
+                    snow.held(world, x, 60);
+                }
+            }
+            "lava" if step < 120 => {
+                held(world, LAVA, 140, 200, 8);
+                held(world, LAVA, 400, 200, 8);
+            }
+            _ => {}
+        }
+        let began = std::time::Instant::now();
+        world.step();
+        took += began.elapsed();
+        if step % every == every - 1 {
+            frames.push(frame(world));
+            let counts: Vec<String> = watch.iter().map(|(n, m)| format!("{n} {}", world.count(*m))).collect();
+            println!("step {:4}: {}", step + 1, counts.join(", "));
+        }
+    }
+    println!("{:.3} ms a step", took.as_secs_f64() * 1000.0 / (every * 12) as f64);
+    write(path, &frames, world.width as usize, world.height as usize);
 }
