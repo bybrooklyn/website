@@ -352,13 +352,12 @@ export default function sand(m: Mote): Scene {
                 button.classList.toggle("faint", !can);
             }
         };
-        /** A material's square, its name under it, and beside it the letter that picks it. */
+        /** A material's square, with no words: its name and the letter that picks it are said when it is pointed at. */
         const swatch = (material: Material | undefined) => {
             const name = material?.name ?? "erase";
             const key = KEYS[name];
             const canvas = el("canvas", { class: material ? "sand-grains" : "sand-grains sand-air" });
-            const button = el("button", { type: "button", class: "sand-swatch", title: key ? `${name} (${key.toUpperCase()})` : name, onclick: () => choose(material) }, canvas, el("span", { class: "sand-name", textContent: name }));
-            if (key) button.append(el("span", { class: "sand-key", textContent: key }));
+            const button = el("button", { type: "button", class: "sand-swatch", title: key ? `${name} (${key.toUpperCase()})` : name, onclick: () => choose(material) }, canvas);
             button.setAttribute("aria-label", name);
             if (key) button.setAttribute("aria-keyshortcuts", key.toUpperCase());
             swatches.push({ button, material, canvas });
@@ -370,16 +369,16 @@ export default function sand(m: Mote): Scene {
             set.style.setProperty("--count", String(Math.min(5, these.length)));
             return set;
         };
-        // the materials under small headings by how they move, each kind in the engine's order (`inRow`); kinds
+        // the materials in runs by how they move, with no headings (the owner wanted the pictures alone), each kind in the engine's order (`inRow`); kinds
         // short enough share a line, and pride sand's flags open under the powders
         const picks = el("div", { class: "sand-materials" });
         picks.setAttribute("role", "group");
         picks.setAttribute("aria-label", "materials");
-        const erasing = el("div", { class: "sand-kind sand-erasing" }, el("span", { class: "sand-label", textContent: "\u00a0" }), el("div", { class: "sand-swatches" }, swatch(undefined)));
+        const erasing = el("div", { class: "sand-kind sand-erasing" }, el("div", { class: "sand-swatches" }, swatch(undefined)));
         for (const [heading, kinds] of KIND_GROUPS) {
             const these = row.filter((material) => kinds.includes(material.kind));
             if (these.length === 0) continue;
-            const kind = el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: heading }), squares(these));
+            const kind = el("div", { class: "sand-kind" }, squares(these));
             kind.setAttribute("role", "group");
             kind.setAttribute("aria-label", heading);
             picks.append(kind);
@@ -389,7 +388,7 @@ export default function sand(m: Mote): Scene {
         }
         // what the table has of a kind not named above is still offered, after the rest
         const others = row.filter((material) => !KIND_GROUPS.some(([, kinds]) => kinds.includes(material.kind)));
-        if (others.length > 0) picks.append(el("div", { class: "sand-kind" }, el("span", { class: "sand-label", textContent: "others" }), squares(others)));
+        if (others.length > 0) picks.append(el("div", { class: "sand-kind" }, squares(others)));
         if (!flags.parentElement) picks.append(flags);
         if (!erasing.parentElement) picks.append(erasing);
         // the flags, each a little picture of itself, and whether the brush pours stripes or lays a whole flag

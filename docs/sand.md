@@ -1533,16 +1533,14 @@ well over the ground, steam well over stone.
   rules, its lines a little closer (line height 1.3, as Marbles' column has). The mini is wider than the
   text, as the generalist is, up to 66rem.
 - **The materials** (since 26 November 2026): under the heading "materials", each material is its swatch
-  (the square of seven by seven grains, 1.75rem) with its name under it and, small beside the square's
-  top, the letter that picks it; pointing at one says its name and key, as before. They are grouped by
-  how each moves, under small labels: powders, liquids, solids, gases, and fire and energy (fire and
-  lightning), each kind in the engine's order (`inRow`) and found by its `kind`, so a new material joins
-  its group by itself (a kind not named goes under "others"). Five squares fit a line of the column, and
-  a kind short enough shares a line: solids with erase, which stands on its own with no label, and gases
-  with fire and energy. Pride sand's flags open under the powders, all six on one line beside the stage
-  (smaller pictures than before, 1.95 by 1.3rem, so that they take one line), with "pour" and "whole
-  flag" under them. Before, the materials were twenty bare squares with their names only in a
-  tooltip.
+  (the square of seven by seven grains, 1.75rem) and no words; pointing at one says its name and key, as
+  before. The owner first chose a name under each square and small labels for each kind, then had all
+  the words taken out the same day, keeping the pictures. They are in runs by how each moves (powders,
+  liquids, solids, gases, fire and energy), each kind in the engine's order (`inRow`) and found by its
+  `kind`, so a new material joins its run by itself. Five squares fit a line, and a kind short enough
+  shares a line: solids with erase, gases with fire and lightning. Pride sand's flags open under the
+  powders, all six on one line beside the stage (1.95 by 1.3rem), with "pour" and "whole flag" under
+  them.
 - **The brush**: its size, then free, line, box and fill, always in sight.
 - **World, view, forces and share fold away**: their four words stand on one line under a rule, each
   with the generalist's small chevron. A word opens its group under the line (world: pause, step,
