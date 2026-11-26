@@ -65,7 +65,7 @@ const POURS_MOST: usize = 16;
 /// How far along its row a liquid finding its level reaches for a place it would pour from, down or over
 /// an edge, where `PRESS` is how far it reaches for a place level with it: what pours from a face is
 /// taken from near it, so the face slumps, while a pool still levels from far off.
-const NEAR: usize = 8;
+const NEAR: usize = 16;
 /// Marks a cell found its level by being let go into the air, before its speed is known.
 const POURED: u32 = u32::MAX;
 /// The most cells a grain slides down a slope in one step, however fast it came: a grain that
@@ -1163,7 +1163,7 @@ impl World {
             let mut first = None;
             let last = if far == 0 { 0 } else { (far + POURS_MOST).min(room) };
             (1..=last as isize).map(|k| (k, at.wrapping_add_signed(side * k))).find_map(|(k, to)| {
-                if first.is_some_and(|f| k > f + root2(depth()) as isize) {
+                if first.is_some_and(|f| k > f + 2 * root2(depth()) as isize) {
                     return Some(None);
                 }
                 let there = self.cell_at(to);
@@ -1174,6 +1174,18 @@ impl World {
                     // go, and a row was pressed out into the air cell after cell in one step.)
                     if moving(there) {
                         first = first.or(Some(k));
+                        // What was let go here is falling: one let go after it goes in under it, where it
+                        // has fallen from, as soon as there is room. Waiting for it to leave the row, a
+                        // face poured only every other step, as the row was worked toward it or away.
+                        if k <= NEAR as isize {
+                            let mut down = 1;
+                            while down <= p.fall as usize && material(self.cell_at(to + down * s)) == own && moving(self.cell_at(to + down * s)) {
+                                down += 1;
+                            }
+                            if down <= p.fall as usize && material(self.cell_at(to + down * s)) == EMPTY && material(self.cell_at(to + (down + 1) * s)) == EMPTY {
+                                return Some(Some((k, k, to + down * s, down as i32, POURED)));
+                            }
+                        }
                     }
                     return None;
                 }

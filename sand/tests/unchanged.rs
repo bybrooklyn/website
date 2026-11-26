@@ -30,5 +30,5 @@ fn a_busy_world_comes_out_as_it_did_when_the_fingerprint_was_taken() {
     let made = busy();
     let counts: Vec<u32> = (0..19u32).map(|m| count(m)).collect();
     println!("fingerprint {:#010x} {:#010x}, counts {counts:?}", made.0, made.1);
-    assert_eq!(made, (0x475e_5e41, 0x0d50_ae21));
+    assert_eq!(made, (0x7657_f07e, 0x6517_0add));
 }
