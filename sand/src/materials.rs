@@ -380,11 +380,13 @@ pub const REACTIONS: &[Reaction] = &[
     // through the ground, taking its heat with it
     line(WET_DIRT, LAVA, 0, 255, DIRT, STONE, 128, Heat::Lost(90), 0),
     // burning wood is put out by water, gives off flames into the air beside it, and burns away to
-    // smoke where air reaches it, so a post burns for some seconds from its skin inward; with air or
-    // without it smoulders away to ash slowly, so wood buried under lava or sand does not burn for ever
+    // smoke and some ash where air reaches it, so a post burns for some seconds from its skin inward;
+    // with air or without it smoulders away to ash slowly, so wood buried under lava or sand does not
+    // burn for ever
     line(EMBER, WATER, 0, 255, WOOD, STEAM, 512, Heat::Shared, 0),
     line(EMBER, EMPTY, 0, 255, SAME, FIRE, 56, Heat::Kept, 230),
-    line(EMBER, OPEN, 0, 255, SMOKE, SAME, 3, Heat::Kept, 0),
+    line(EMBER, OPEN, 0, 255, SMOKE, SAME, 6, Heat::Kept, 0),
+    line(EMBER, OPEN, 0, 255, ASH, SAME, 2, Heat::Kept, 0),
     line(EMBER, ALONE, 0, 255, ASH, SAME, 1, Heat::Kept, 0),
     // burning oil gives off flames into the air above and beside it for a few seconds, its heat
     // and creeping into the oil beside it, and burns away to nothing or now and then to smoke
