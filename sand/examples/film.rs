@@ -191,16 +191,40 @@ fn main() {
         world.paint(STONE, 60, 200, 300, 280, 5, 100, false);
         let mut brush = Brush::new(of, 10);
         let shots = [1, 3, 5, 8, 12, 16, 20, 25, 30, 40, 55, 80];
-        for step in 1..=80 {
+        // how much of the liquid is still on the ramp: over it and within 60 cells of it
+        let on_ramp = |world: &World| {
+            let mut n = 0;
+            for x in 50..=310 {
+                let ramp = 200 + (x - 60) / 3;
+                for y in (ramp - 60).max(0)..ramp + 8 {
+                    if world.at(x, y) == of {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        let (mut most, mut half, mut tenth) = (0, None, None);
+        for step in 1..=240 {
             if step <= 6 {
                 let at = |k: i32| (80 + k * 20, 140 + k * 3);
                 brush.dragged(&mut world, at(step - 1), at(step));
             }
             world.step();
+            let n = on_ramp(&world);
+            most = most.max(n);
+            if step > 10 && half.is_none() && n * 2 < most {
+                half = Some(step);
+            }
+            if step > 10 && tenth.is_none() && n * 10 < most {
+                tenth = Some(step);
+            }
             if shots.contains(&(step as usize)) {
                 frames.push(frame(&world));
+                println!("step {step}: {n} cells on the ramp");
             }
         }
+        println!("{scene}: at most {most} cells on the ramp; half gone by step {half:?}, nine tenths by step {tenth:?}");
         write(&path, &frames, wide as usize, high as usize);
         println!("{scene}: frames at steps {shots:?}, in {path}");
         return;
