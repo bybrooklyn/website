@@ -1128,11 +1128,15 @@ impl World {
     }
 
     /// A liquid finding its level. A cell that can neither fall nor run, with its own kind lying on
-    /// it, looks along its row, through its own kind, for an open place within `PRESS` cells; where
-    /// there is one, the cell at the top of what lies on it goes there. So a heap of water sinks from
-    /// its top and widens at every height at once, as fast as it is deep, and is flat in a fraction
-    /// of a second; a bubble of air in a pool is filled from the pool's top. The place is always
-    /// lower than the top it is taken from, so this comes to an end. Gives whether a cell was moved.
+    /// it, looks along its row, through its own kind at rest, for an open place within `PRESS` cells;
+    /// where there is one, the cell at the top of what lies on it goes where a drop let go at that
+    /// place would be: set down at rest on whatever holds within `fall` cells under the place, or,
+    /// with nothing that near, let go into the air a cell under the row, falling at a speed of its
+    /// own. So a heap of water sinks from its top and widens at every height at once, as fast as it
+    /// is deep, and is flat in a fraction of a second; a face of water over a slope or a drop slumps
+    /// and pours as fast as it is high; a bubble of air in a pool is filled from the pool's top. What
+    /// goes is always lower than the top it is taken from, so this comes to an end. Gives whether a
+    /// cell was moved.
     #[inline(never)]
     fn levels(&mut self, at: usize, (x, y): (i32, i32), roll: u32, p: Props) -> bool {
         let s = self.stride;
@@ -1157,32 +1161,52 @@ impl World {
             }
             (1..=far as isize).map(|k| (k, at.wrapping_add_signed(side * k))).find_map(|(k, to)| {
                 let there = self.cell_at(to);
+                if material(there) == own {
+                    // Not through one that is moving, or has moved this step and not come to rest: it
+                    // is not part of the body but falling from it. (Until 26 Nov 2026 the look went on
+                    // through it, and a row was pressed out into the air cell after cell in one step.)
+                    return if moving(there) { Some(None) } else { None };
+                }
                 // open to it: air, a gas, a flame, or a lighter liquid or ash, which then comes up to
                 // the top in its place, so brine spreads out under water and ash floats
-                if material(there) == own {
-                    None
-                } else if self.sinks_into(p.density, there) {
-                    // Open over a drop, it is taken only from a cell before it that rests on what holds, not
-                    // on air nor on more liquid: the foot of a pool pours over the edge of what holds it, but
-                    // no row of a pool is pressed out over the air. (Until 24 Nov 2026 every row was: a pool on
-                    // a shelf pushed rows of water out into the air, which fell as long flat dashes, and water
-                    // on a slope stood out over it as a wedge whose rows each held up the one above, growing
-                    // a cell a step; the owner saw water jump sideways, hang, and come down slowly.)
-                    let before = to.wrapping_add_signed(-side);
-                    let under = self.cell_at(before + s);
-                    let holds = !self.sinks_into(p.density, under) && props(under).kind != Kind::Liquid;
-                    if self.sinks_into(p.density, self.cell_at(to + s)) && !holds { Some(None) } else { Some(Some((k, to))) }
+                if !self.sinks_into(p.density, there) {
+                    return Some(None);
+                }
+                if material(there) != EMPTY {
+                    let falls = if self.sinks_into(p.density, self.cell_at(to + s)) { 1 } else { 0 };
+                    return Some(Some((k, to, 0, falls)));
+                }
+                // Where a drop let go here would be: on down through the air to what holds it, if that
+                // is within `fall` cells, and at rest there; else a cell down, falling. Never in the air
+                // level with the row it left, at rest: until 24 Nov 2026 a pool on a shelf pressed its
+                // rows out into the air, where they fell as long flat dashes, and from then until 26 Nov
+                // a place over any drop was refused but at the foot of a body, so water stood on a ramp
+                // as a wedge with an upright face over the air, which crept.
+                let mut down = 0;
+                while down < p.fall as usize && material(self.cell_at(to + (down + 1) * s)) == EMPTY {
+                    down += 1;
+                }
+                let under = self.cell_at(to + (down + 1) * s);
+                let holds = !self.sinks_into(p.density, under) && !(moving(under) && matches!(props(under).kind, Kind::Powder | Kind::Liquid));
+                if holds {
+                    Some(Some((k, to + down * s, down as i32, 0)))
+                } else if down > 0 {
+                    Some(Some((k, to + s, 1, 1 + (roll >> 12) % 3)))
+                } else if self.sinks_into(p.density, under) {
+                    // a lighter liquid under it: it is let go there, and sinks through
+                    Some(Some((k, to, 0, 1)))
                 } else {
+                    // over something falling, not stacked on it
                     Some(None)
                 }
             })?
         };
         let (left, right) = (place(-1), place(1));
-        let (far, to, side) = match (left, right) {
-            (Some(l), Some(r)) if l.0 != r.0 => if l.0 < r.0 { (l.0, l.1, -1) } else { (r.0, r.1, 1) },
-            (Some(l), Some(r)) => if (roll >> 2) & 1 == 0 { (l.0, l.1, -1) } else { (r.0, r.1, 1) },
-            (Some(l), None) => (l.0, l.1, -1),
-            (None, Some(r)) => (r.0, r.1, 1),
+        let ((far, to, down, falls), side) = match (left, right) {
+            (Some(l), Some(r)) if l.0 != r.0 => if l.0 < r.0 { (l, -1) } else { (r, 1) },
+            (Some(l), Some(r)) => if (roll >> 2) & 1 == 0 { (l, -1) } else { (r, 1) },
+            (Some(l), None) => (l, -1),
+            (None, Some(r)) => (r, 1),
             (None, None) => return false,
         };
         if !self.paced(roll, x, y, p) {
@@ -1198,8 +1222,7 @@ impl World {
             self.stay(x, y);
             return true;
         }
-        let falls = if self.sinks_into(p.density, self.cell_at(to + s)) { 1 } else { 0 };
-        self.swap(top, to, falls, (x, y - high as i32), (x + side * far as i32, y));
+        self.swap(top, to, falls, (x, y - high as i32), (x + side * far as i32, y + down));
         self.levelled += 1;
         true
     }
