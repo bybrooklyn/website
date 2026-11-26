@@ -1455,7 +1455,7 @@ impl World {
                         }
                         stripe_shade(first, stripe.clamp(0, count as i32 - 1) as u32, roll)
                     }
-                    None => (roll >> 8) & 0xff,
+                    None => crate::materials::made_shade(of, roll >> 8),
                 };
                 // What falls leaves the brush already falling, each grain at a speed of its own, so a
                 // pour comes down as a ragged stream and not as a block that keeps the brush's shape.
@@ -1717,7 +1717,7 @@ impl World {
                     let roll = chance(self.seed ^ 0x10ad, self.strokes, at);
                     let shade = match MATERIALS[m as usize].glow {
                         3 => (cell >> 8 & 0xfc) | (roll & 3),
-                        _ => (roll >> 8) & 0xff,
+                        _ => crate::materials::made_shade(m, roll >> 8),
                     };
                     m as u32 | shade << 8 | (MATERIALS[m as usize].made as u32) << 16
                 } else {

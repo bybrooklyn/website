@@ -15,7 +15,7 @@
 // cells themselves stay sharp; blurred once more at an eighth of the grid's size, it is added again as
 // a wide, faint halo, the light a fire throws on what is round it. A cell can be soft (smoke, steam, a
 // flame): it is drawn faint and spread a little into the air around it by the same blur, so that cells
-// of it near each other read as one body. A cell can be deep (water: lighter at its surface, darker
+// of it near each other read as one body, and can fade, as opaque as its second byte says. A cell can be deep (water: lighter at its surface, darker
 // below), and can be spray: paler the faster it is falling, by the speed in its fourth byte's high half, where it has
 // air beside it.
 
@@ -77,6 +77,8 @@ export const SOFT = 4;
 export const DEEP = 8;
 /** It is drawn paler the faster it is falling, where it is loose (not its own kind on every side): the high half of its fourth byte is its speed. */
 export const SPRAY = 16;
+/** Its second byte is how thick it is, not how light: it is drawn as opaque as that (smoke that thins as it rises). */
+export const FADE = 32;
 
 /** The speed at which spray is as pale as it gets, and how far toward white that is. */
 const FOAM = { speed: 9, pale: 0.55 };
@@ -122,6 +124,8 @@ export const TONGUE = { across: [0.5, 0.25], up: [0.22, 0.2, 0.17, 0.14, 0.11, 0
  * as grey grains, while a thick cloud is no more solid than it was.
  */
 export const SOFT_SHARP = 0.3;
+/** How strongly a soft cell that fades (smoke) is drawn itself: less, so that smoke is a haze and not grains. */
+export const FADE_SHARP = 0.15;
 const HAZE = { gathered: 0.4, thick: 4.5 };
 
 /**
@@ -157,7 +161,7 @@ export interface Cells {
      * The colors: 2048 or 3072 bytes, two or three rows of 256. The first row is a color for each
      * value of a cell's first byte, red, green, blue and opacity, for a cell of middle shade; the
      * second is how far the second byte, from 0 to 255, moves red, green and blue, from darker to
-     * lighter, and how it is drawn (`STRIPED`, `LIGHT`, `SOFT`, `DEEP`, `SPRAY`, added together). The third row is
+     * lighter, and how it is drawn (`STRIPED`, `LIGHT`, `SOFT`, `DEEP`, `SPRAY`, `FADE`, added together). The third row is
      * the colors a striped cell picks from: its second byte over 4 is which, and its lowest two bits
      * a step of lightness, toward black or white by up to the second row's red.
      */
@@ -205,6 +209,9 @@ vec4 colorOf(uvec4 cell, out uint mode) {
         vec3 stripe = texelFetch(colors, ivec2(int(cell.g >> 2), 2), 0).rgb;
         float by = (float(cell.g & 3u) / 1.5 - 1.0) * vary.r;
         rgb = by < 0.0 ? stripe * (1.0 + by) : stripe + (1.0 - stripe) * by;
+    } else if ((mode & 32u) != 0u) {
+        // its shade is how thick it is: its color as it is, as opaque as it is thick
+        return vec4(base.rgb, base.a * float(cell.g) / 255.0);
     } else {
         rgb = base.rgb + (float(cell.g) / 255.0 - 0.5) * vary.rgb;
     }
@@ -342,7 +349,7 @@ vec4 shade(ivec2 at, int depth) {
     vec4 sharp = vec4(cell.rgb * cell.a, cell.a);
     // a soft cell is fainter itself, the rest of it in the haze around it; strong enough that a wisp of
     // steam reads as light and not as a grey grain
-    if ((mode & 4u) != 0u) sharp *= (mode & 2u) != 0u ? ${FLAME.sharp.toFixed(2)} : ${SOFT_SHARP.toFixed(2)};
+    if ((mode & 4u) != 0u) sharp *= (mode & 2u) != 0u ? ${FLAME.sharp.toFixed(2)} : (mode & 32u) != 0u ? ${FADE_SHARP.toFixed(2)} : ${SOFT_SHARP.toFixed(2)};
     return sharp;
 }
 void main() {

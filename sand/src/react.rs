@@ -10,7 +10,7 @@
 //! Every change is counted in `World::fired` by its line, so a test can hold the count of each
 //! material to what the lines that happened say it should be.
 
-use crate::materials::{AFLOAT, ALONE, ALWAYS, EMPTY, FIRE, Heat, Kind, LATENT, LINES, OPEN, Props, REACTIONS, SAME, SOLID_GROUND, STEAM, TABLE};
+use crate::materials::{AFLOAT, ALONE, ALWAYS, EMPTY, FADE, FIRE, Heat, Kind, LATENT, LINES, OPEN, Props, REACTIONS, SAME, SOLID_GROUND, STEAM, TABLE};
 use crate::world::{World, chance, material, temperature, with_state, with_temperature};
 
 /// A number of 0 to 1023 for line `line` from a cell's roll, so each line has a chance of its own.
@@ -57,10 +57,16 @@ impl World {
         let mut rolled = None;
         let (seed, steps) = (self.seed ^ 0x7ab1e, self.steps);
         let mut roll = || *rolled.get_or_insert_with(|| chance(seed, steps, at));
+        let mut shade = (cell >> 8) & 0xff;
         if p.glow != 0 {
-            // a flame or lava is brighter the hotter it is; burning wood flickers as well
-            let shade = if p.glow == 1 { t as u32 } else { (t as u32 >> 1) + (roll() >> 25) };
-            let now = (cell & 0xffff_00ff) | shade.min(255) << 8;
+            // a flame or lava is brighter the hotter it is; burning wood flickers as well; smoke fades
+            shade = match p.glow {
+                1 => t as u32,
+                4 => shade.saturating_sub(FADE + (roll() >> 30)),
+                _ => (t as u32 >> 1) + (roll() >> 25),
+            }
+            .min(255);
+            let now = (cell & 0xffff_00ff) | shade << 8;
             if now != cell {
                 self.cells[at] = now;
                 self.touch(x, y, x, y);
@@ -70,7 +76,7 @@ impl World {
         let s = self.stride as isize;
         let sides = [-1, 1, -s, s];
         for (k, line) in REACTIONS.iter().enumerate().take(end as usize).skip(start as usize) {
-            if t < line.above || t > line.below || (line.resting && !self.resting(at, cell, p, line.ground)) {
+            if t < line.above || t > line.below || (line.faded && shade != 0) || (line.resting && !self.resting(at, cell, p, line.ground)) {
                 continue;
             }
             let lucky = line.chance >= ALWAYS || roll_for(roll(), k) < line.chance as u32;
@@ -162,7 +168,7 @@ impl World {
         }
         let clock = self.clock;
         let made = |old: u32, to: u8, t: i32, shade: u32| {
-            let cell = if to == material(old) { old } else { to as u32 | (shade & 0xff) << 8 };
+            let cell = if to == material(old) { old } else { to as u32 | crate::materials::made_shade(to, shade) << 8 };
             with_temperature(with_state(cell, clock, 0), t.clamp(0, 255) as u8)
         };
         self.cells[at] = made(a, a_to, ta, fresh >> 8);

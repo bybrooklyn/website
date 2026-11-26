@@ -41,7 +41,7 @@ test("both builds are small and need nothing from the page to load", async () =>
 
 test("the busy world comes out to the byte as it does natively, with SIMD and without", async () => {
     // the number sand/tests/unchanged.rs holds the native build to
-    const native: [number, number] = [0x82c6e32e, 0xa317c14f];
+    const native: [number, number] = [0x217ddef6, 0x1d066d06];
     expect(busy(await load(simd))).toEqual(native);
     expect(busy(await load(scalar))).toEqual(native);
 });

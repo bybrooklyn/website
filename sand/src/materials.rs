@@ -89,7 +89,9 @@ pub struct Material {
     pub airy: bool,
     /// How its shade is chosen: 0 by chance when it is made; 1 by its temperature, so a flame and
     /// lava are brighter the hotter they are; 2 by its temperature with a flicker each step; 3 by
-    /// the brush, as a stripe of a flag, which it keeps wherever it goes (`STRIPE`).
+    /// the brush, as a stripe of a flag, which it keeps wherever it goes (`STRIPE`); 4 it fades:
+    /// made near full, it loses `FADE` or a little more each step, and is drawn as faint as its
+    /// shade is low (`DRAW_FADE`), so smoke thins softly rather than going out grain by grain.
     pub glow: u8,
     /// Its color, red, green, blue and opacity, for a shade halfway along.
     pub color: [u8; 4],
@@ -174,6 +176,15 @@ pub const STRIPE: u8 = 4;
 /// The most stripe colors there are.
 pub const STRIPES: u8 = 64;
 
+/// The least a material that fades (`glow` 4) loses of its shade in a step; by chance up to three more.
+pub const FADE: u32 = 3;
+
+/// The shade a cell of material `m` is made with, from a number by chance: by chance, or for one that
+/// fades nearly full, so that it fades from as thick as it can be.
+pub const fn made_shade(m: u8, roll: u32) -> u32 {
+    if (m as usize) < MATERIALS.len() && MATERIALS[m as usize].glow == 4 { 255 - (roll & 31) } else { roll & 0xff }
+}
+
 /// Every material, by its number.
 pub const MATERIALS: &[Material] = &[
     Material { name: "empty", kind: Kind::Empty, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: -1, toward: ROOM, airy: true, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
@@ -188,7 +199,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 10, fall: 9, pace: 0, drift: 0, level: 1, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [102, 44, 107, 240], vary: [23, 23, 23], paint: true },
     Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 3, fall: 6, pace: 96, drift: 0, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [137, 50, 25, 255], vary: [246, 207, 31], paint: true },
     Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, drift: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [146, 223, 242, 245], vary: [20, 20, 20], paint: true },
-    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 2, pace: 0, drift: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [177, 164, 194, 235], vary: [37, 37, 39], paint: true },
+    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 2, pace: 0, drift: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 4, color: [177, 164, 194, 235], vary: [37, 37, 39], paint: true },
     Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 3, pace: 0, drift: 0, level: 0, conduct: 2, made: 230, latent: 0, warms: -2, toward: 0, airy: true, glow: 1, color: [250, 120, 40, 255], vary: [30, 255, 110], paint: true },
     Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 10, fall: 10, pace: 0, drift: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [152, 227, 107, 230], vary: [31, 33, 33], paint: true },
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 10, pace: 0, drift: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [75, 44, 33, 255], vary: [27, 25, 25], paint: false },
@@ -257,6 +268,9 @@ pub struct Reaction {
     pub hot: u8,
     /// Whether the cell must be at rest, not falling: lava hardens where it lands, not in the air.
     pub resting: bool,
+    /// Whether it happens only to a cell that fades (`glow` 4) once it has faded away: smoke thins
+    /// to nothing.
+    pub faded: bool,
     /// For a line of a cell at rest, what must hold it up: `ANY_GROUND`, `SOLID_GROUND` (a solid) or
     /// `AFLOAT` (loose ground: a powder, or a liquid at least as heavy as it). Lava hardening on solid
     /// ground makes stone; on loose ground, such as molten lava or the rock it has already made, loose
@@ -278,7 +292,12 @@ pub const ALWAYS: u16 = 1024;
 /// A line of `REACTIONS`, written short.
 #[allow(clippy::too_many_arguments)]
 const fn line(a: u8, b: u8, above: u8, below: u8, a_becomes: u8, b_becomes: u8, chance: u16, heat: Heat, hot: u8) -> Reaction {
-    Reaction { a, b, above, below, a_becomes, b_becomes, chance, heat, hot, resting: false, ground: ANY_GROUND }
+    Reaction { a, b, above, below, a_becomes, b_becomes, chance, heat, hot, resting: false, faded: false, ground: ANY_GROUND }
+}
+
+/// A line of `REACTIONS` for a cell that has faded away.
+const fn once_faded(line: Reaction) -> Reaction {
+    Reaction { faded: true, ..line }
 }
 
 /// A line of `REACTIONS` for a cell at rest only, held up by `ground`.
@@ -329,8 +348,8 @@ pub const REACTIONS: &[Reaction] = &[
     line(ICE, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
     // salt melts the ice it touches, into brine, and is used up
     line(ICE, SALT, 0, 255, BRINE, EMPTY, 48, Heat::Shared, 0),
-    // smoke thins to nothing
-    line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 24, Heat::Kept, 0),
+    // smoke thins to nothing: it fades a little each step, and is gone once it has faded away
+    once_faded(line(SMOKE, ALONE, 0, 255, EMPTY, SAME, ALWAYS, Heat::Kept, 0)),
     // a flame that has cooled dies, some of it to smoke; water puts it out with a hiss of steam
     line(FIRE, ALONE, 0, 60, EMPTY, SAME, ALWAYS, Heat::Kept, 0),
     line(FIRE, ALONE, 0, 90, SMOKE, SAME, 40, Heat::Kept, 0),
@@ -574,10 +593,12 @@ pub const DRAW_SOFT: u8 = 4;
 pub const DRAW_DEEP: u8 = 8;
 /// It is drawn paler the faster it is falling, as spray is (water).
 pub const DRAW_SPRAY: u8 = 16;
+/// Its shade is how thick it is, not how light: it is drawn fainter as its shade falls (smoke).
+pub const DRAW_FADE: u8 = 32;
 
 /// The colors the page draws with: 256 materials of red, green, blue and opacity, then 256 of how
 /// far the shade moves red, green and blue and how the material is drawn (`DRAW_STRIPED`,
-/// `DRAW_LIGHT`, `DRAW_SOFT`, `DRAW_DEEP`, `DRAW_SPRAY`, added together), as two rows of a picture.
+/// `DRAW_LIGHT`, `DRAW_SOFT`, `DRAW_DEEP`, `DRAW_SPRAY`, `DRAW_FADE`, added together), as two rows of a picture.
 pub static PALETTE: [u8; 2048] = palette();
 
 const fn palette() -> [u8; 2048] {
@@ -598,6 +619,7 @@ const fn palette() -> [u8; 2048] {
             // a flame gives light and is soft as well, so that flames near each other are one body of fire
             (1 | 2, Kind::Fire) => DRAW_LIGHT | DRAW_SOFT,
             (1 | 2, _) => DRAW_LIGHT,
+            (4, _) => DRAW_SOFT | DRAW_FADE,
             (_, Kind::Gas) => DRAW_SOFT,
             // water, the one clear liquid deep enough to show it, and the one that foams
             _ if at == WATER as usize => DRAW_DEEP | DRAW_SPRAY,
@@ -785,7 +807,8 @@ mod tests {
         assert_eq!(PALETTE[1024 + PRIDE as usize * 4 + 3], DRAW_STRIPED);
         assert_eq!(PALETTE[1024 + FIRE as usize * 4 + 3], DRAW_LIGHT | DRAW_SOFT);
         assert_eq!(PALETTE[1024 + EMBER as usize * 4 + 3], DRAW_LIGHT);
-        assert_eq!(PALETTE[1024 + SMOKE as usize * 4 + 3], DRAW_SOFT);
+        assert_eq!(PALETTE[1024 + SMOKE as usize * 4 + 3], DRAW_SOFT | DRAW_FADE);
+        assert_eq!(PALETTE[1024 + STEAM as usize * 4 + 3], DRAW_SOFT);
         assert_eq!(PALETTE[1024 + SAND as usize * 4 + 3], 0);
         assert_eq!(PALETTE[1024 + WATER as usize * 4 + 3], DRAW_DEEP | DRAW_SPRAY);
     }

@@ -25,6 +25,13 @@ fn frame(world: &World) -> Vec<u8> {
                 continue;
             }
             let by = ((cell >> 8) & 255) as f32 / 255.0 - 0.5;
+            if PALETTE[1024 + m * 4 + 3] & sand::materials::DRAW_FADE != 0 {
+                // as faint as it has faded
+                for k in 0..3 {
+                    out.push((GROUND[k] as f32 + (by + 0.5) * (PALETTE[m * 4 + k] as f32 - GROUND[k] as f32)) as u8);
+                }
+                continue;
+            }
             for k in 0..3 {
                 out.push((PALETTE[m * 4 + k] as f32 + by * PALETTE[1024 + m * 4 + k] as f32).clamp(0.0, 255.0) as u8);
             }
