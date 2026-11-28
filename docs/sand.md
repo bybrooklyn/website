@@ -1901,3 +1901,41 @@ eight cells above wood rises away and lights nothing.
 - The grains' look: pictures of each look in one scene, to choose from, before building.
 - The column stays beside the world, each material's square a small live window of it moving, with its
   name.
+
+## sand:box's liquids, tried behind a switch (27 November 2026)
+
+`flows` in `world.rs` moves liquids as sand:box's do, with no levelling pass; it is on when the world's
+`flow` is set, which it is not yet, so the page and the fingerprint are as they were. With it on the pass
+for joined vessels (`level.rs`) carries gases only. Filmed with `SAND_FLOW=1 cargo run --release --example
+film -- <scene>`.
+
+- **A cell under its own kind with a gap beside it** does not go itself: the top of the body behind it
+  (`summit`: up its column, then back along the surface and up again, up to 128 cells) goes into the gap,
+  and up to six more into the open places past it, each from the summit in turn. It looks past what it has
+  shed that is still falling beside it, and a gap a drop fell through this step is open to it, or the
+  curtain a face sheds holds the face up. One gap in four is passed by chance, so a face sheds raggedly.
+  A thick liquid sheds one, and only under `level` cells of itself.
+- **A surface cell** runs toward the nearest place within 64 cells where what is under it steps down, set
+  down on what holds it a cell or two lower and on along, up to `spread` cells; the place is filled from the
+  far end of the run of surface it is the edge of, up to six a step, so a sheet carries as much as it is
+  long. With nowhere lower in reach it rests. A move wakes the rows round it as far as it looks, or an edge
+  that once found nothing lower sleeps for good.
+- **The side** a cell last went is kept in bit 0 of its shade (by chance for a liquid whose shade is its
+  heat) and tried first.
+
+**Measured against the levelling pass:**
+
+- Water on a stone ramp: no longer a jelly creeping. The body slides down as a flat-topped sheet and the
+  stream reaches the ramp's foot by step 23 (21 before). It drains more slowly: half gone by step 103 and
+  nine tenths by 161, against 62 and 101. The last of it gathers at the lower end with an upright face over
+  the edge before it pours off.
+- A column of 500 cells on a floor: flat to a cell and every chunk asleep by step 100 (the test allows 120,
+  but its own scene fails with the rule on).
+- The flood: worse. The pool stands with an upright face on the right until about step 230, where the
+  levelling pass had it spread by step 100.
+- Tests that fail with it on: joined vessels (given up by choice), water let go finding its level in time,
+  mud's low mound, lava's pool and its glass, and the fingerprint.
+
+**Tried and not kept:** the cell itself stepping into the gap (a column sank a cell a step); only the top of
+its own column (the face moved out as a slab); one cell a gap (a 44-row face shed about 15 cells a step);
+the gap refused where a drop passed this step (beside a pouring face nearly every gap is one).

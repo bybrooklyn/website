@@ -137,7 +137,9 @@ impl World {
                 chunk.due.add(now.x0, now.y0, now.x1, now.y1);
             }
         }
-        let liquids = self.steps.is_multiple_of(EVERY);
+        // with liquids moving by `flows`, only gases are carried here, and what is owed is let go each step
+        let liquids = !self.flow && self.steps.is_multiple_of(EVERY);
+        let settle = liquids || self.flow;
         if !liquids && !self.steps.is_multiple_of(EVERY_GAS) {
             return;
         }
@@ -145,7 +147,7 @@ impl World {
         self.levels.count = 0;
         for id in 0..self.chunks.len() {
             // what is owed stays owed until the liquids have had their turn
-            let rect = if liquids { core::mem::replace(&mut self.chunks[id].due, crate::world::Rect::EMPTY) } else { self.chunks[id].due };
+            let rect = if settle { core::mem::replace(&mut self.chunks[id].due, crate::world::Rect::EMPTY) } else { self.chunks[id].due };
             if rect.is_empty() {
                 continue;
             }

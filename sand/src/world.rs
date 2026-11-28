@@ -66,6 +66,12 @@ const POURS_MOST: usize = 16;
 /// an edge, where `PRESS` is how far it reaches for a place level with it: what pours from a face is
 /// taken from near it, so the face slumps, while a pool still levels from far off.
 const NEAR: usize = 16;
+/// How far along its surface a liquid looks for somewhere lower to run to (`flows`).
+const LOOK: usize = 64;
+/// How far back over the top of a body the cell that fills a gap beside it is looked for (`flows`).
+const WALK: usize = 128;
+/// How many cells along a liquid put into a gap goes on in the same step (`flows`).
+const BOOST: i32 = 6;
 /// Marks a cell found its level by being let go into the air, before its speed is known.
 const POURED: u32 = u32::MAX;
 /// The most cells a grain slides down a slope in one step, however fast it came: a grain that
@@ -262,6 +268,9 @@ pub struct World {
     /// Whether a liquid under its own kind finds its level (`levels`). On, but for a test that holds a
     /// sleeping world equal to one fully awake: that reaches farther than a change wakes.
     pub levelling: bool,
+    /// Whether liquids move as sand:box's do (`flows`): no levelling, a gap beside a body filled from
+    /// its top, a surface cell going along toward somewhere lower. Off, the older `levels`.
+    pub flow: bool,
     /// The wind, for each block of `GUST` by `GUST` cells, row after row: how hard it blows to the
     /// right and how hard downward, each from -`BLOWN` to `BLOWN`. Nothing where none was painted.
     pub winds: Vec<[i8; 2]>,
@@ -299,6 +308,7 @@ impl World {
             fired: vec![0; REACTIONS.len()],
             levelled: 0,
             levelling: true,
+            flow: false,
             winds: vec![[0; 2]; (((width + GUST - 1) / GUST) * ((height + GUST - 1) / GUST)) as usize],
             gusts: (width + GUST - 1) / GUST,
         };
@@ -760,7 +770,12 @@ impl World {
             return;
         }
         let roll = chance(self.seed, self.steps, at);
-        if p.kind == Kind::Liquid {
+        if p.kind == Kind::Liquid && self.flow {
+            // one still moving lands first (below), and flows from the next step
+            if speed == 0 && self.flows(at, (x, y), cell, roll, p) {
+                return;
+            }
+        } else if p.kind == Kind::Liquid {
             if material(self.cell_at(at - s)) == material(cell) {
                 // Under its own kind it does not go itself: the top of what lies on it goes, to the
                 // open place nearest along this row (`levels`), once it has landed. Were it to go,
@@ -1108,6 +1123,252 @@ impl World {
             next = 0;
         }
         self.swap(at, to, next, (x, y), (x, y + fallen as i32));
+    }
+
+    /// How a liquid that cannot fall straight moves, as sand:box's liquids do: no levelling pass.
+    ///
+    /// - Down to a side, the side it last went first (bit 0 of its shade; by chance for one whose
+    ///   shade is its heat).
+    /// - Beside an open place with its own kind on it, it does not go itself: the top of the column
+    ///   over it goes into the gap, so a face sheds from its top and a body sinks from its surface,
+    ///   as fast as it is deep. A thick liquid (`level` more than 1) does so only under that many
+    ///   cells of itself, so it stops some cells deep.
+    /// - At the surface, it goes along toward the nearest place within `LOOK` cells where it would be
+    ///   lower, up to `spread` cells a step; with none, it rests, so a pool is level to a cell and
+    ///   goes to sleep.
+    ///
+    /// Never into a place left this step: a row would follow its own end out in one pass. Gives
+    /// whether the cell moved or is to be reached again.
+    #[inline(never)]
+    fn flows(&mut self, at: usize, (x, y): (i32, i32), cell: u32, roll: u32, p: Props) -> bool {
+        let s = self.stride;
+        let own = material(cell);
+        let first: isize = if p.glow != 0 { if roll & 1 == 0 { -1 } else { 1 } } else if (cell >> 8) & 1 == 0 { -1 } else { 1 };
+        let thick = p.level > 1;
+        let pressed = material(self.cell_at(at - s)) == own;
+        for side in [first, -first] {
+            // down to a side: past a corner only where the cell beside is open too
+            let beside = at.wrapping_add_signed(side);
+            if !pressed && self.opens(beside, p) && self.sinks_into(p.density, self.cell_at(beside + s)) {
+                if !self.paced(roll, x, y, p) {
+                    return true;
+                }
+                self.swap(at, beside + s, 1, (x, y), (x + side as i32, y + 1));
+                self.sided(beside + s, side);
+                return true;
+            }
+        }
+        for side in [first, -first] {
+            let mut beside = at.wrapping_add_signed(side);
+            // A face is fed from its summit, so a gap a drop fell through this step is open to it too,
+            // and it looks past what it has shed that is still falling beside it, as far as it shoots
+            // (`BOOST`), to the first open place: beside a pouring face nearly every gap is one, and the
+            // curtain falling past it would hold it up.
+            let gap = if pressed {
+                let mut past = 0;
+                while past < BOOST && material(self.cell_at(beside)) == own && moving(self.cell_at(beside)) {
+                    beside = beside.wrapping_add_signed(side);
+                    past += 1;
+                }
+                let there = self.cell_at(beside);
+                self.sinks_into(p.density, there) && !(matches!(props(there).kind, Kind::Gas | Kind::Powder) && props(self.cell_at(beside - s)).kind == Kind::Liquid)
+            } else {
+                self.opens(beside, p)
+            };
+            if !gap {
+                continue;
+            }
+            if pressed {
+                // how many cells of its own kind stand on it, itself counted, up to `HEAD`: worked out
+                // only beside a gap, so a cell deep in a lake costs a look to each side
+                let (mut top, mut high) = (at, 1);
+                while high < HEAD && material(self.cell_at(top - s)) == own {
+                    top -= s;
+                    high += 1;
+                }
+                if thick && high < p.level as usize {
+                    continue;
+                }
+                // not every gap at once: a face sheds raggedly, not as a slab
+                if (roll >> (4 + side.unsigned_abs())) & 3 == 0 || !self.paced(roll, x, y, p) {
+                    self.stay(x, y);
+                    return true;
+                }
+                // A face pours as fast as it is deep: the root of twice the depth over it, in cells a
+                // step (one for a thick liquid). Each comes from the top of the body behind (`summit`)
+                // and goes to the next open place along from the gap, as sand:box's moving liquid has
+                // more turns in a frame; past a place over a drop, where it falls, none goes, so nothing
+                // is laid out over the air.
+                let many = if thick { 1 } else { BOOST as usize };
+                let mut to = beside;
+                for k in 0..many {
+                    if k > 0 {
+                        // past the gap, a place a falling drop went through this step is open too
+                        to = to.wrapping_add_signed(side);
+                        if !self.sinks_into(p.density, self.cell_at(to)) || material(self.cell_at(to)) != EMPTY {
+                            break;
+                        }
+                    }
+                    let Some((top, tx, ty)) = self.summit(at, x, y, -side, own) else { break };
+                    // what is still coming down onto it is left to, and it is reached again
+                    if speed_of(self.cell_at(top)) != 0 {
+                        self.stay(x, y);
+                        break;
+                    }
+                    // over the air, each leaves at a speed of its own and now and then a place is
+                    // passed over, so what a face shoots out falls as spray, not as a flat dash
+                    let over = self.sinks_into(p.density, self.cell_at(to + s));
+                    let r = chance(self.seed ^ 0xf10e, self.steps, to);
+                    if over && k > 0 && r & 3 == 0 {
+                        continue;
+                    }
+                    let falls = if over { (root2(high) as u32 + (r >> 8) % 3).saturating_sub(1).clamp(1, p.fall as u32 - 1) } else { 0 };
+                    let along = (to as isize - at as isize) as i32;
+                    self.swap(top, to, falls, (tx, ty), (x + along, y));
+                    self.sided(to, side);
+                    self.stirred_along(tx, ty, x + along, y);
+                    self.levelled += 1;
+                }
+                self.levelled += 1;
+                return true;
+            }
+            if thick {
+                continue;
+            }
+            // Along the surface toward somewhere lower, and on down a slope: the next place within
+            // `LOOK` where the ground or the liquid under it steps down, set down on what holds it there
+            // if that is a cell or two lower, and on along from there, as far as `spread` cells in all;
+            // over a deeper drop it is let go into the air, falling. As in sand:box, the cell that goes
+            // there is the far end of the run of surface this cell is the edge of (`summit`), and up to
+            // `BOOST` go in a step, so a sheet carries as much as it is long; alone, the cell goes itself.
+            // With nowhere lower in reach it rests, so a pool is level to a cell and sleeps.
+            let mut moved = false;
+            for _ in 0..BOOST {
+                let Some((pos, dx, dy, falls)) = self.runs_to(at, side, p) else { break };
+                if !moved && !self.paced(roll, x, y, p) {
+                    return true;
+                }
+                match self.summit(at, x, y, -side, own) {
+                    Some((top, tx, ty)) if speed_of(self.cell_at(top)) == 0 => {
+                        self.swap(top, pos, falls, (tx, ty), (x + dx, y + dy));
+                        self.sided(pos, side);
+                        self.stirred_along(tx, ty, x + dx, y + dy);
+                        moved = true;
+                    }
+                    _ => {
+                        self.swap(at, pos, falls, (x, y), (x + dx, y + dy));
+                        self.sided(pos, side);
+                        self.stirred_along(x, y, x + dx, y + dy);
+                        return true;
+                    }
+                }
+            }
+            if moved {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Where a surface cell at `at` runs to on `side` (`flows`): the place, how far along and down it
+    /// is, and whether it is let go there falling. None with nowhere lower in reach.
+    #[inline(always)]
+    fn runs_to(&self, at: usize, side: isize, p: Props) -> Option<(usize, i32, i32, u32)> {
+        let s = self.stride;
+        let mut pos = at;
+        let (mut dx, mut dy, mut left, mut falls) = (0i32, 0i32, p.spread as usize, 0);
+        while left > 0 {
+            let mut k = 1;
+            let found = loop {
+                let to = pos.wrapping_add_signed(side * k as isize);
+                if !(if k == 1 && pos == at { self.opens(to, p) } else { self.sinks_into(p.density, self.cell_at(to)) }) || material(self.cell_at(to)) == VOID {
+                    break None;
+                }
+                if self.sinks_into(p.density, self.cell_at(to + s)) {
+                    break Some(k);
+                }
+                k += 1;
+                if k > LOOK {
+                    break None;
+                }
+            };
+            let Some(k) = found else { break };
+            let go = k.min(left);
+            pos = pos.wrapping_add_signed(side * go as isize);
+            dx += side as i32 * go as i32;
+            left -= go;
+            if go < k {
+                break;
+            }
+            let mut down = 0;
+            while down < 2 && self.sinks_into(p.density, self.cell_at(pos + s)) && material(self.cell_at(pos + s)) == EMPTY {
+                pos += s;
+                down += 1;
+            }
+            dy += down;
+            if self.sinks_into(p.density, self.cell_at(pos + s)) {
+                falls = 1;
+                break;
+            }
+            left = left.saturating_sub(1);
+        }
+        if pos == at { None } else { Some((pos, dx, dy, falls)) }
+    }
+
+    /// The top of the body of `own` over the cell at `at`: up its column, then on back (`back`) along
+    /// the surface and up again wherever it rises, as far as `WALK` cells, through cells at rest. So a
+    /// heap sinks from its highest part. None when nothing of its kind lies over it.
+    #[inline(always)]
+    fn summit(&self, at: usize, x: i32, y: i32, back: isize, own: u8) -> Option<(usize, i32, i32)> {
+        let s = self.stride;
+        let rests = |c: u32| material(c) == own && speed_of(c) == 0;
+        let (mut top, mut tx, mut ty) = (at, x, y);
+        for _ in 0..WALK {
+            let up = top - s;
+            let behind = top.wrapping_add_signed(back);
+            if rests(self.cell_at(up)) {
+                top = up;
+                ty -= 1;
+            } else if rests(self.cell_at(behind)) && material(self.cell_at(behind - s)) != own {
+                top = behind;
+                tx += back as i32;
+            } else if rests(self.cell_at(behind - s)) {
+                top = behind - s;
+                tx += back as i32;
+                ty -= 1;
+            } else {
+                break;
+            }
+        }
+        if top == at { None } else { Some((top, tx, ty)) }
+    }
+
+    /// Whether a liquid may go into `to` beside it (`flows`): air, a gas, a flame or a lighter liquid, not
+    /// left this step; and not a bubble or a grain of ash under liquid, which rises through it by itself.
+    #[inline(always)]
+    fn opens(&self, to: usize, p: Props) -> bool {
+        let there = self.cell_at(to);
+        self.sinks_into(p.density, there)
+            && !(material(there) == EMPTY && clock_of(there) == self.clock)
+            && !(matches!(props(there).kind, Kind::Gas | Kind::Powder) && props(self.cell_at(to - self.stride)).kind == Kind::Liquid)
+    }
+
+    /// Wakes, next step, the rows round a liquid that has moved as far along as a surface is looked
+    /// along (`LOOK`): farther than a change wakes, so an edge that looked and found nothing lower is
+    /// asked again when somewhere lower opens up within its look.
+    #[inline(always)]
+    fn stirred_along(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
+        let reach = LOOK as i32;
+        self.wake(x0.min(x1) - reach, y0.min(y1) - 1, x0.max(x1) + reach, y0.max(y1) + 1);
+    }
+
+    /// Keeps in a liquid cell the side it last went (bit 0 of its shade), unless its shade is its heat.
+    #[inline(always)]
+    fn sided(&mut self, at: usize, side: isize) {
+        let cell = self.cell_at(at);
+        if props(cell).glow == 0 {
+            self.cells[at] = (cell & !0x100) | if side > 0 { 0x100 } else { 0 };
+        }
     }
 
     /// A liquid finding its level. A cell that can neither fall nor run, with its own kind lying on
@@ -1695,6 +1956,7 @@ impl World {
         }
         next.levelled = self.levelled;
         next.levelling = self.levelling;
+        next.flow = self.flow;
         next.steps = self.steps;
         next.strokes = self.strokes + 1;
         next.sleeping = self.sleeping;

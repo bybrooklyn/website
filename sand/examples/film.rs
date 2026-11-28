@@ -100,6 +100,7 @@ fn main() {
     let path = args.get(2).cloned().unwrap_or_else(|| "film.ppm".into());
     let (wide, high) = (520, 420);
     let mut world = World::new(wide, high, 7);
+    world.flow = std::env::var("SAND_FLOW").is_ok();
     let mut film = Film::new();
     // The scenes the owner sent word of on 17 Nov 2026, filmed at the steps given: `start-<what>-<radius>`
     // a brush pressed and held still (what a pour looks like as it begins), `dig` a hole taken out of the
