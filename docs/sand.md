@@ -1954,3 +1954,13 @@ With `?flow=1` and without, water is still lacking:
 - **Gravity:** things fall too slowly, falls look stiff, and grains meet in mid-air and fall wrong (that last
   to be talked through with the owner before it is changed).
 - **Fire** looks no different after the 26 November rework, and **lava** looks like a shapeless blob.
+
+Chosen the same evening:
+
+- A falling grain that catches up with a slower one below it slips past it to a side where there is room,
+  so a pour loosens as it falls, rather than waiting behind it as a stiff rod.
+- Things fall a bit faster: speed gained half again as fast, a top speed of about 12 cells a step.
+- Fire: tall bright tongues, glow and light on what is near with shadows, embers and sparks, smoke; sharp,
+  not a blob.
+- Lava: a dark crust with glowing cracks, bright flow with darker streaks carried along, and strong orange
+  light on what is near.
