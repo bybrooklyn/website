@@ -1964,3 +1964,20 @@ Chosen the same evening:
   not a blob.
 - Lava: a dark crust with glowing cracks, bright flow with darker streaks carried along, and strong orange
   light on what is near.
+
+## Falling and the pour, 27 November 2026, evening
+
+- **Faster:** what falls gathers speed half again as fast, one cell a step and two by turns (by the step
+  alone, so what falls together stays together), and tops out two higher: sand, water, dirt, acid, brine,
+  salt and pride sand at 12, oil at 11, rock at 14. Pride sand still gathers one a step.
+- **Looser:** a falling grain faster than the one under it slips down past it to a side where there is
+  room, keeping its speed, where it had waited behind it and fallen as a stiff rod. Not pride sand.
+- **The stream:** a liquid leaves the brush at its top speed, all of it, so its stream falls whole. At
+  speeds of 3 to 5 by chance it fell as streaks; at one slow speed gathering pace, the lower part drew away
+  from the upper and the stream broke into round blobs. Its outermost cell or two are laid by chance, so
+  its edges waver. Filmed at 2× (`film -- start-water-8`): a solid stream with ragged sides.
+- **The landing:** with sand:box's liquids (`?flow=1`) the stream spreads flat where it lands; with the
+  levelling pass it still builds a pillar where it lands, as the pass does not carry it off fast enough.
+- A flag of pride sand now lands hard enough at 12 cells a step that its heap's top four grains may be a
+  stripe or two out of order; the test allows that.
+- The fingerprint was taken again.

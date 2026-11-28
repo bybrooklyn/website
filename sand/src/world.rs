@@ -766,6 +766,21 @@ impl World {
         // It has not landed: a grain that took the one ahead for ground stopped in the air, and a
         // pour backed up into a slow column of grains each starting again from rest.
         if speed != 0 && speed_of(below) != 0 && matches!(props(below).kind, Kind::Powder | Kind::Liquid) {
+            // Faster than the one under it, it slips past to a side where there is room, keeping its
+            // speed, so a pour loosens and fans out as it falls; waiting behind it, a stream fell as stiff
+            // rods (the owner, 27 Nov 2026).
+            // (Not pride sand, whose flag falls whole, its stripes in order.)
+            if speed > speed_of(below) && p.glow != 3 {
+                let r = chance(self.seed ^ 0x511b, self.steps, at);
+                let first: isize = if r & 1 == 0 { -1 } else { 1 };
+                for side in [first, -first] {
+                    let beside = at.wrapping_add_signed(side);
+                    if material(self.cell_at(beside)) == EMPTY && material(self.cell_at(beside + s)) == EMPTY {
+                        self.swap(at, beside + s, speed, (x, y), (x + side as i32, y + 1));
+                        return;
+                    }
+                }
+            }
             self.stay(x, y);
             return;
         }
@@ -1112,7 +1127,11 @@ impl World {
             to += s;
             fallen += 1;
         }
-        let mut next = (speed + 1).min(p.fall as u32 - 1).min(SPEED_MOST);
+        // speed gained half again as fast as one a step: two every other step, the same for all that
+        // falls, so what falls together stays together
+        // (pride sand gathers one a step, as before, so its flag lands whole, its stripes in order)
+        let gain = if p.glow == 3 { 1 } else { 1 + (self.steps as u32 & 1) };
+        let mut next = (speed + gain).min(p.fall as u32 - 1).min(SPEED_MOST);
         // A liquid that comes down onto something has landed there and then, at rest, so that what
         // it lands on can pass it on at once (`levels`): under a steady pour the top of a pool is
         // always a cell that has just arrived. One in four that land fast keep their speed for a
@@ -1805,6 +1824,11 @@ impl World {
                 if roll % 100 >= fill {
                     continue;
                 }
+                // a liquid's outermost cell or two are laid only by chance, so a stream's edges waver
+                // as it falls rather than standing straight as a bar
+                if striped.is_none() && radius > 1 && MATERIALS[of as usize].kind == Kind::Liquid && ox * ox + oy * oy > (reach - 1.5) * (reach - 1.5) && (roll >> 12) & 1 == 0 {
+                    continue;
+                }
                 let shade = match striped {
                     Some((first, count)) => {
                         // which stripe by where it lies across the line, its edge moved a little by
@@ -1826,7 +1850,12 @@ impl World {
                 // A stripe's grains all leave at one speed, so the ribbon falls whole.
                 let speed = match MATERIALS[of as usize].kind {
                     Kind::Powder | Kind::Liquid if striped.is_some() => 3,
-                    Kind::Powder | Kind::Liquid => 3 + (roll >> 20) % 3,
+                    // A liquid leaves at its top speed, all of it, so its stream falls whole: at one speed
+                    // gathering pace, the lower part drew away from the upper and the stream broke into
+                    // blobs; at speeds of its own by chance it fell as streaks (the owner, 27 Nov 2026). A
+                    // powder leaves at a speed of its own, so a pour of it is ragged.
+                    Kind::Liquid => (MATERIALS[of as usize].fall as u32).saturating_sub(1).min(SPEED_MOST),
+                    Kind::Powder => 3 + (roll >> 20) % 3,
                     _ => 0,
                 };
                 self.cells[at] = of as u32 | shade << 8 | (MATERIALS[of as usize].made as u32) << 16 | speed << 28;
@@ -2219,10 +2248,11 @@ mod tests {
             fallen.push(now - at);
             at = now;
         }
-        // it leaves the brush at four to six cells a step, gathers a cell a step, and tops out at ten
+        // it leaves the brush at four to six cells a step, gathers one or two a step by turns (half again
+        // as fast as one, since 27 Nov 2026), and tops out at twelve
         assert!((4..=6).contains(&fallen[0]), "{fallen:?}");
-        assert!(fallen.windows(2).all(|pair| pair[1] == (pair[0] + 1).min(10)), "{fallen:?}");
-        assert_eq!(fallen[10], 10);
+        assert!(fallen.windows(2).all(|pair| pair[1] == pair[0] + 1 || pair[1] == pair[0] + 2 || pair[1] == 12), "{fallen:?}");
+        assert_eq!(fallen[10], 12);
     }
 
     #[test]
@@ -2517,9 +2547,11 @@ mod tests {
             }
         }
         assert!(each.iter().all(|&n| (120..200).contains(&n)), "{each:?}");
-        // and lie mostly in their order: the middle column of the heap, from the top down, never goes back more than a stripe
+        // and lie mostly in their order: the middle column of the heap, from the top down, never goes back
+        // more than a stripe below its top few grains, which a flag falling at twelve cells a step (since
+        // 27 Nov 2026) lands on hard enough to mix
         let column: Vec<u32> = (0..100).filter(|&y| world.at(60, y) == PRIDE).map(|y| stripe(&world, 60, y)).collect();
-        assert!(column.windows(2).all(|pair| pair[1] + 1 >= pair[0]), "{column:?}");
+        assert!(column[4..].windows(2).all(|pair| pair[1] + 1 >= pair[0]), "{column:?}");
     }
 
     #[test]
