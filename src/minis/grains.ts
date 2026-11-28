@@ -107,7 +107,8 @@ export function inRow(offered: Material[]): Material[] {
 /**
  * The key that picks each material, a letter of its name, and E for erasing. Where the first letter
  * is taken another of its name is used: oil is I, wood O, ice C, steam M, smoke K, mud U, snow N and
- * lightning H. Every letter of salt and of cloud is another's, so salt is X and cloud Y.
+ * lightning H. Every letter of salt, of cloud and of glass is another's, so salt is X, cloud Y and glass B
+ * (a bottle); G is slow motion.
  */
 export const KEYS: Record<string, string> = {
     sand: "s",
@@ -126,18 +127,18 @@ export const KEYS: Record<string, string> = {
     snow: "n",
     salt: "x",
     mud: "u",
-    glass: "g",
+    glass: "b",
     cloud: "y",
     lightning: "h",
     erase: "e",
 };
 
 /** What a key pressed inside the mini asks for. */
-export type KeyAction = { pick: string } | "larger" | "smaller" | "pause" | "nearer" | "farther" | "all";
+export type KeyAction = { pick: string } | "larger" | "smaller" | "pause" | "slow" | "nearer" | "farther" | "all";
 
 /**
  * What a key pressed anywhere inside the mini does: a material's letter picks it, the brackets size the
- * brush, Space pauses, plus and minus bring the view nearer and farther, and Home shows the whole world.
+ * brush, Space pauses, G turns slow motion on and off, plus and minus bring the view nearer and farther, and Home shows the whole world.
  * `on` is where the keyboard is: the canvas, whose Space Mote already turns into
  * pausing; a button, whose Space would otherwise press it again; a slider; or a box of text, where a
  * letter is typed and nothing else happens.
@@ -148,6 +149,7 @@ export function keyAction(key: string, on: "canvas" | "button" | "slider" | "tex
     if (lower === "[") return "smaller";
     if (lower === "]") return "larger";
     if (key === " ") return on === "canvas" ? undefined : "pause";
+    if (lower === "g") return "slow";
     if (key === "+" || key === "=") return "nearer";
     if (key === "-") return "farther";
     // on the slider Home is the slider's own: its least
@@ -155,6 +157,9 @@ export function keyAction(key: string, on: "canvas" | "button" | "slider" | "tex
     if (Object.values(KEYS).includes(lower)) return { pick: lower };
     return undefined;
 }
+
+/** How much of the time that passes the world is given while slow motion is on. */
+export const SLOW = 0.25;
 
 /** How wide a cell is, in CSS pixels, before it is rounded to whole device pixels. */
 export const CELL = 1;

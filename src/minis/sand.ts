@@ -20,7 +20,7 @@ import { sounds } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { FLAGS, place as stripesOf } from "./flags";
-import { brushCells, CELL, fillOf, flagSize, inRow, keptView, keyAction, KEYS, nextStop, STEPS_PER_SECOND, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Frame, type Material, type View } from "./grains";
+import { brushCells, CELL, SLOW, fillOf, flagSize, inRow, keptView, keyAction, KEYS, nextStop, STEPS_PER_SECOND, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Frame, type Material, type View } from "./grains";
 import { core, type FromCore, type Stats, type ToCore } from "./sand-core";
 import { LINK_MOST, MOST_TEXT, pack, unpack, type Opened } from "./worlds";
 
@@ -108,6 +108,8 @@ export default function sand(m: Mote): Scene {
     let whole = false;
     let radius = SIZES.first;
     let paused = false;
+    /** Slow motion: the world is given a quarter of the time that passes (G). */
+    let slow = false;
     /** The cell under the pointer while it is held down, and whether a flag has been laid in this press. */
     let held: [number, number] | undefined;
     let laid = false;
@@ -292,6 +294,7 @@ export default function sand(m: Mote): Scene {
     };
 
     let setPaused = (on: boolean) => void (paused = on);
+    let setSlow = (on: boolean) => void (slow = on);
 
     const panel = () => {
         const box = m.panel();
@@ -490,6 +493,15 @@ export default function sand(m: Mote): Scene {
             pause.textContent = paused ? "go on" : "pause";
             m.wake();
         };
+        const slowed = el("button", { type: "button", class: "quiet", textContent: "slow: off", title: "slow motion (G)", onclick: () => setSlow(!slow) });
+        slowed.dataset.widest = "slow: off";
+        slowed.setAttribute("aria-pressed", "false");
+        setSlow = (on: boolean) => {
+            slow = on;
+            slowed.textContent = slow ? "slow: on" : "slow: off";
+            slowed.setAttribute("aria-pressed", String(slow));
+            m.wake();
+        };
         const once = el("button", {
             type: "button",
             class: "quiet",
@@ -576,7 +588,7 @@ export default function sand(m: Mote): Scene {
         // beside the stage at a laptop's size; each opens under the line, growing from the word pressed, and
         // which are open is kept for the next visit
         const inside: Record<(typeof FOLDS)[number], Node[]> = {
-            world: [el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), el("div", { class: "sand-controls sand-across" }, sound!.button)],
+            world: [el("div", { class: "sand-controls sand-across" }, pause, once, empty, undone, redone), el("div", { class: "sand-controls sand-across" }, slowed, sound!.button)],
             view: [el("div", { class: "sand-controls sand-across" }, nearer, farther, all), grow],
             forces: [el("div", { class: "sand-controls sand-across" }, falls, shake), el("div", { class: "sand-controls sand-across" }, wind, calmed)],
             share: [share, opener],
@@ -673,6 +685,7 @@ export default function sand(m: Mote): Scene {
         if (!action) return;
         if (action === "larger" || action === "smaller") resize(action === "larger" ? 1 : -1);
         else if (action === "pause") setPaused(!paused);
+        else if (action === "slow") setSlow(!slow);
         else if (action === "nearer" || action === "farther") zoomBy(action === "nearer" ? 1 : -1);
         else if (action === "all") seeAll();
         else if (!pick(action.pick)) return;
@@ -944,7 +957,7 @@ export default function sand(m: Mote): Scene {
             if (held) thunder();
             // The core steps the world and draws it. One frame is asked for at a time, with the time gone
             // by since the last: while its answer is on its way, nothing more is asked.
-            pending = paused ? 0 : pending + dt;
+            pending = paused ? 0 : pending + (slow ? dt * SLOW : dt);
             if (waiting || !(dirty || single || !paused)) return;
             waiting = true;
             dirty = false;

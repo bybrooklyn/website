@@ -196,6 +196,10 @@ test("a key works wherever the keyboard is in the mini: on the canvas, a swatch 
     expect(keyAction(" ", "canvas")).toBeUndefined();
     // a letter that is no material's, and anything typed into a box of text, does nothing
     expect(keyAction("q", "button")).toBeUndefined();
+    expect(keyAction("g", "canvas")).toBe("slow");
+    expect(keyAction("G", "button")).toBe("slow");
+    expect(keyAction("g", "text")).toBeUndefined();
+    expect(keyAction("b", "canvas")).toEqual({ pick: "b" });
     expect(keyAction("f", "text")).toBeUndefined();
 });
 
@@ -206,8 +210,8 @@ test("the row of materials puts like things together and every material has its 
     const keys = [...row.map((m) => KEYS[m.name]), KEYS.erase];
     expect(keys.every((key) => key && key.length === 1)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
-    // each a letter of its name, but for salt and cloud, whose every letter is another's
-    for (const m of row) if (m.name !== "salt" && m.name !== "cloud") expect(m.name).toContain(KEYS[m.name]!);
+    // each a letter of its name, but for salt, cloud and glass, whose every letter is another's
+    for (const m of row) if (!["salt", "cloud", "glass"].includes(m.name)) expect(m.name).toContain(KEYS[m.name]!);
     for (const name of ["salt", "cloud"]) expect([...name].every((letter) => keys.includes(letter))).toBe(true);
     // pride sand is the striped one; fire, lava and lightning give light
     expect(row.filter((m) => m.striped).map((m) => m.name)).toEqual(["pride sand"]);

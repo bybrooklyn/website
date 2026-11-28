@@ -1840,3 +1840,10 @@ Measured on the loaded machine (load about 15 to 22), old and new binaries run b
   own thread (`?thread=page`): the browser called for 86 to 100 frames a second (its frame callbacks
   counted; no figure was taken before, nor of steps a second).
 - After the liquids rework was merged in, the engine is 118.6 KiB (120.2 without SIMD), of 128.
+
+## Slow motion (27 November 2026)
+
+G turns slow motion on and off, and a "slow" word beside the sound does the same: while it is on the page
+hands the world a quarter of the time that passes (`SLOW` in `grains.ts`), so everything, the brush's pour
+with it, runs at a quarter of its speed. Glass, whose key G was, is now B (a bottle), every letter of its
+name being another material's.
