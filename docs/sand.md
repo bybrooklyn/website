@@ -1847,3 +1847,57 @@ G turns slow motion on and off, and a "slow" word beside the sound does the same
 hands the world a quarter of the time that passes (`SLOW` in `grains.ts`), so everything, the brush's pour
 with it, runs at a quarter of its speed. Glass, whose key G was, is now B (a bottle), every letter of its
 name being another material's.
+
+## Learned from sand:box and People Playground, and what was chosen (27 November 2026)
+
+Both games are on the owner's machine. Their code was read for rules and numbers only; nothing of theirs
+is in the repo. sand:box (smellymoo) is native C++ with its symbols, read with Ghidra; People Playground is
+Unity, its C# read with ilspycmd.
+
+**sand:box's liquids have no levelling pass.** Each frame one sweep over awake cells, top-down or
+bottom-up by a coin flip, then up to five more passes over moving cells for thin liquids only (water, acid,
+oil), so a thin liquid makes about six sideways moves a frame and a thick one (lava, mud) one, trying only
+half its turns: that is all its viscosity. A falling cell counts the empty cells under it, up to four, and
+moves with the whole unbroken column above it at once; there is no speed kept per cell. A sliding cell
+tries the down-diagonal on the side it remembers, then straight across, and keeps that side until blocked.
+A gap is filled from the surface: the far end of a run of liquid moves into it, so a whole run shifts by
+one. A heavier grain sinking into a liquid sends the liquid it displaces up through the body to the top
+rather than swapping. Density is one byte. Powders slide at 45° along a run the same way; a cell sleeps
+when its eight neighbours are all of one density.
+
+**sand:box's brush** stamps every tick while held, a square, filling each empty or lighter cell by a
+chance by class (liquids and gases half, powders a fifth, creatures a tenth, seeds under one in a
+hundred), with no speed.
+
+**sand:box's fire** is a material and a temperature. A cell catches only with air (empty or flame) among
+its eight neighbours, unless heat lit it. A burning cell puts flames into the air above, beside and below
+it, lights the first burnable neighbour it finds (upward first), and ends 12 times in 256 a run. A flame is
+a gas in four stages, yellow, orange, red and dark red, the last two see-through, each a few runs long.
+**Its look** is flat bright colours, a variant picked per cell, and a bevel in the shader: the top edge of
+a surface lighter by 0.3, the left by 0.15, a one-pixel shadow under it, all times `lighting` (0.7); hot
+cells go along a black-body ramp, cold ones toward blue; the background is dithered.
+
+**People Playground's fire** is driven by heat. Each material has a catching point, a chance to catch
+(wood 0.4) and a burn rate. A burning thing heats toward three times its catching point, and that heat
+passes to its neighbours until they catch; heat chars a thing a little before it catches; flames swell and
+fade over about ten seconds and shrink as the fuel goes; charring darkens by the burnt share squared; water
+wets a thing, puts it out and drops it to its catching point. Its fire tool, held, lights all it covers
+whatever it is and warms it; flicked, it blasts a cone of fire.
+
+**Measured here the same day:** fire painted onto a block of wood lights its skin only, which burns off
+while the fire shrinks (a 100 by 56 block keeps three quarters of its wood after ten seconds); fire painted
+eight cells above wood rises away and lights nothing.
+
+**Chosen by the owner:**
+
+- Slow motion on G (done, above).
+- Liquids: the levelling pass replaced by sand:box's way, with no pass for joined vessels (water in a
+  U-bend need not find one level).
+- Fire easier to use: fire painted onto anything that burns sets it alight, as People Playground's tool
+  does; fire spreads through what burns by heat.
+- New things that burn: gunpowder, coal and gas.
+- Sand leaves the minis for a page of its own, the world the size of the window, the floor kept.
+- Light: fire and lava cast shadows, and piles and pools are shaded darker inside.
+- The grains' look: pictures of each look in one scene, to choose from, before building.
+- The column stays beside the world, each material's square a small live window of it moving, with its
+  name.
