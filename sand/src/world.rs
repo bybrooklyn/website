@@ -1153,7 +1153,7 @@ impl World {
                 if !self.paced(roll, x, y, p) {
                     return true;
                 }
-                self.swap(at, beside + s, 1, (x, y), (x + side as i32, y + 1));
+                self.moved(at, beside + s, 1, (x, y), (x + side as i32, y + 1));
                 self.sided(beside + s, side);
                 return true;
             }
@@ -1224,7 +1224,7 @@ impl World {
                     }
                     let falls = if over { (root2(high) as u32 + (r >> 8) % 3).saturating_sub(1).clamp(1, p.fall as u32 - 1) } else { 0 };
                     let along = (to as isize - at as isize) as i32;
-                    self.swap(top, to, falls, (tx, ty), (x + along, y));
+                    self.moved(top, to, falls, (tx, ty), (x + along, y));
                     self.sided(to, side);
                     self.stirred_along(tx, ty, x + along, y);
                     self.levelled += 1;
@@ -1250,13 +1250,13 @@ impl World {
                 }
                 match self.summit(at, x, y, -side, own) {
                     Some((top, tx, ty)) if speed_of(self.cell_at(top)) == 0 => {
-                        self.swap(top, pos, falls, (tx, ty), (x + dx, y + dy));
+                        self.moved(top, pos, falls, (tx, ty), (x + dx, y + dy));
                         self.sided(pos, side);
                         self.stirred_along(tx, ty, x + dx, y + dy);
                         moved = true;
                     }
                     _ => {
-                        self.swap(at, pos, falls, (x, y), (x + dx, y + dy));
+                        self.moved(at, pos, falls, (x, y), (x + dx, y + dy));
                         self.sided(pos, side);
                         self.stirred_along(x, y, x + dx, y + dy);
                         return true;
@@ -1272,7 +1272,7 @@ impl World {
 
     /// Where a surface cell at `at` runs to on `side` (`flows`): the place, how far along and down it
     /// is, and whether it is let go there falling. None with nowhere lower in reach.
-    #[inline(always)]
+    #[inline(never)]
     fn runs_to(&self, at: usize, side: isize, p: Props) -> Option<(usize, i32, i32, u32)> {
         let s = self.stride;
         let mut pos = at;
@@ -1318,7 +1318,7 @@ impl World {
     /// The top of the body of `own` over the cell at `at`: up its column, then on back (`back`) along
     /// the surface and up again wherever it rises, as far as `WALK` cells, through cells at rest. So a
     /// heap sinks from its highest part. None when nothing of its kind lies over it.
-    #[inline(always)]
+    #[inline(never)]
     fn summit(&self, at: usize, x: i32, y: i32, back: isize, own: u8) -> Option<(usize, i32, i32)> {
         let s = self.stride;
         let rests = |c: u32| material(c) == own && speed_of(c) == 0;
@@ -1351,6 +1351,12 @@ impl World {
         self.sinks_into(p.density, there)
             && !(material(there) == EMPTY && clock_of(there) == self.clock)
             && !(matches!(props(there).kind, Kind::Gas | Kind::Powder) && props(self.cell_at(to - self.stride)).kind == Kind::Liquid)
+    }
+
+    /// `swap`, kept out of line for `flows`, which moves cells from several places.
+    #[inline(never)]
+    fn moved(&mut self, from: usize, to: usize, speed: u32, here: (i32, i32), there: (i32, i32)) {
+        self.swap(from, to, speed, here, there);
     }
 
     /// Wakes, next step, the rows round a liquid that has moved as far along as a surface is looked

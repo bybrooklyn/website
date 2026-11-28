@@ -811,7 +811,9 @@ export default function sand(m: Mote): Scene {
         });
     // The page's own world steps and is drawn in a worker, on the canvas handed over to it, where a browser
     // can do that; the small one in a list, and any world where it cannot, on this thread.
-    // (With `?thread=page` in the address it runs here too, to measure what the worker is worth.)
+    // (With `?thread=page` in the address it runs here too, to measure what the worker is worth. With
+    // `?flow=1`, liquids move as sand:box's do, to try against the levelling pass.)
+    const flow = m.link.get("flow") === "1";
     if (!m.preview && m.link.get("thread") !== "page" && typeof Worker === "function" && "transferControlToOffscreen" in under) {
         worker = new Worker(new URL("./sand-worker.ts", import.meta.url), { type: "module" });
         worker.onmessage = (event: MessageEvent<FromCore>) => told(event.data);
@@ -819,11 +821,11 @@ export default function sand(m: Mote): Scene {
         const made = worker;
         post = (message, transfer) => made.postMessage(message, transfer ?? []);
         const handed = under.transferControlToOffscreen();
-        post({ t: "start", canvas: handed }, [handed]);
+        post({ t: "start", canvas: handed, flow }, [handed]);
     } else {
         const handle = core((message) => queueMicrotask(() => told(message)));
         post = (message) => handle(message);
-        post({ t: "start", canvas: under });
+        post({ t: "start", canvas: under, flow });
     }
     // a link to a world pasted into this same page's address opens that world
     const followed = () => {

@@ -1939,3 +1939,8 @@ film -- <scene>`.
 **Tried and not kept:** the cell itself stepping into the gap (a column sank a cell a step); only the top of
 its own column (the face moved out as a slab); one cell a gap (a 44-row face shed about 15 cells a step);
 the gap refused where a drop passed this step (beside a pouring face nearly every gap is one).
+
+**On the page, to try (27 November 2026):** `?flow=1` in the Sand page's address switches it on for that
+visit (`set_flow` in the engine, passed by the core when it makes a world). The engine holds both ways while
+they are tried, so the build without SIMD is let grow to 130 KiB (`scripts/wasm.ts`, and the size test);
+125.7 KiB with SIMD, 128.6 without. Back to 128 once one way is taken out.

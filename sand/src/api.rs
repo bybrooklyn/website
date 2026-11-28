@@ -266,6 +266,15 @@ pub extern "C" fn set_sleeping(on: u32) {
     }
 }
 
+/// Whether liquids move as sand:box's do (1) or find their level by the levelling pass (0, as it starts):
+/// the page sets it from `?flow=1` in its address, to try the one against the other.
+#[unsafe(no_mangle)]
+pub extern "C" fn set_flow(on: u32) {
+    if let Some(world) = world() {
+        world.flow = on != 0;
+    }
+}
+
 /// Whether a liquid under its own kind finds its level (1, as it starts) or not (0). It reaches farther
 /// than a change wakes, so a test that holds a sleeping world equal to a waking one turns it off.
 #[unsafe(no_mangle)]

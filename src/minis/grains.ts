@@ -24,6 +24,7 @@ export interface Engine {
     gust(): number;
     heard(kind: number): number;
     set_levelling(on: number): void;
+    set_flow(on: number): void;
     rewritten(fresh: number): void;
     clear(): void;
     cells(): number;

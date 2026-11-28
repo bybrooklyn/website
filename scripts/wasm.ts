@@ -49,7 +49,9 @@ await build("generalist-scalar.wasm", GENERALIST, SCALAR, "target/generalist-sca
 const sand = at("sand");
 const sandBuilt = (target: string) => `${sand}/${target}/wasm32-unknown-unknown/release/sand.wasm`;
 await build("sand.wasm", [], SIMD, "target", 128 * KIB, sand, sandBuilt("target"));
-await build("sand-scalar.wasm", [], SCALAR, "target/scalar", 128 * KIB, sand, sandBuilt("target/scalar"));
+// 130 while the engine holds both ways of moving liquids, the levelling pass and sand:box's (`?flow=1`),
+// to try one against the other; back to 128 once one of them is taken out
+await build("sand-scalar.wasm", [], SCALAR, "target/scalar", 130 * KIB, sand, sandBuilt("target/scalar"));
 
 await mkdir(at("public/wasm"), { recursive: true });
 await Bun.write(at("public/wasm/walker.wasm"), Bun.file(built("target")));

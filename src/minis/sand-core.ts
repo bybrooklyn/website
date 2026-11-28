@@ -62,7 +62,7 @@ export interface Hold {
 
 /** What the page tells the core. */
 export type ToCore =
-    | { t: "start"; canvas: HTMLCanvasElement | OffscreenCanvas }
+    | { t: "start"; canvas: HTMLCanvasElement | OffscreenCanvas; flow?: boolean }
     | { t: "make"; columns: number; rows: number; seed: number }
     | { t: "open"; opened: Opened }
     | { t: "size"; width: number; height: number }
@@ -152,8 +152,11 @@ export function core(send: (message: FromCore, transfer?: Transferable[]) => voi
         future.length = 0;
     };
     /** A new world of this size, and what goes with it. */
+    /** Whether liquids move as sand:box's do (`?flow=1`). */
+    let flow = false;
     const begin = (made: Engine, columns: number, rows: number, seed: number): boolean => {
         if (!made.create(columns, rows, seed >>> 0, 0)) return false;
+        made.set_flow(flow ? 1 : 0);
         look(made);
         palette = new Uint8Array(3072);
         palette.set(new Uint8Array(made.memory.buffer, made.palette(), 2048));
@@ -214,6 +217,7 @@ export function core(send: (message: FromCore, transfer?: Transferable[]) => voi
     const handle = (message: ToCore): void => {
         if (message.t === "start") {
             canvas = message.canvas;
+            flow = message.flow ?? false;
             try {
                 grid = cells(canvas);
             } catch {

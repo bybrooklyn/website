@@ -31,8 +31,9 @@ function busy(engine: Engine): [number, number] {
 }
 
 test("both builds are small and need nothing from the page to load", async () => {
-    for (const each of [simd, scalar]) {
-        expect(Bun.file(each).size).toBeLessThan(128 * 1024);
+    // the build without SIMD may be up to 130 KiB while the engine holds both ways of moving liquids (`scripts/wasm.ts`)
+    for (const [each, most] of [[simd, 128], [scalar, 130]] as const) {
+        expect(Bun.file(each).size).toBeLessThan(most * 1024);
         const module = await WebAssembly.compile(await Bun.file(each).arrayBuffer());
         expect(WebAssembly.Module.imports(module)).toEqual([]);
     }
