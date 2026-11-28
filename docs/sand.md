@@ -1986,3 +1986,16 @@ Chosen the same evening:
 then let go for 2): with the levelling pass the stream falls solid and spreads flat where it lands, and is
 level two seconds after; with `?flow=1` the stream builds a pillar where it lands and leaves a mound after.
 The native films at 520 by 420 had shown the opposite, so the page is the judge of the two, not the films.
+
+## Oil over water, 28 November
+
+Oil held over a pool built a long slope across the whole of it, flat only a second or more after the
+brush let go. Two things kept the levelling pass from it: it ran one step in eight, and it would not
+take a surface cell that had moved that step, and every cell near the landing is pushed along every
+step. It now runs every step (about 0.2 ms a step more in the flood film), and a liquid cell pushed
+along this step, with no fall speed, may still be levelled; a falling one may not, nor any gas (the
+steam test broke when gases were let in too). On the page the pool is now flat to the far wall while
+the pour goes on, with a small heap only where the stream lands. Letting it move 1024 cells a step
+rather than 256 made no difference. Still to do from the same play: oil's look (depth, sheen, a
+meeting line with water that is not a ruler), oil rising through water in blobs, and slow motion as
+true slow physics rather than a whole step every fourth frame.

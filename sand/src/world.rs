@@ -193,7 +193,7 @@ pub(crate) fn clock_of(cell: u32) -> u32 {
 }
 
 #[inline(always)]
-fn speed_of(cell: u32) -> u32 {
+pub(crate) fn speed_of(cell: u32) -> u32 {
     cell >> 28
 }
 

@@ -17,7 +17,7 @@
 //! world run with sleeping off, where every body is looked at, comes out the same to the byte.
 
 use crate::materials::{Kind, TABLE};
-use crate::world::{World, clock_of, material, with_state};
+use crate::world::{World, clock_of, material, speed_of, with_state};
 use alloc::vec::Vec;
 
 /// How many cells a body of liquid moves in one pass.
@@ -25,11 +25,10 @@ const PER_BODY: usize = 256;
 /// How many a body of gas moves in one. Nearly every cell of a cloud of steam has air beside it, so
 /// each is weighed for a place among these, and the weighing grows with how many are kept.
 const PER_GAS: usize = 64;
-/// The pass runs one step in this many, over everything that has changed since it last ran. Walking a
-/// whole lake or a whole cloud every step that a drop fell into it was most of a busy step; and a
-/// liquid in the open finds its level cell by cell now (`levels` in `world.rs`), so this is left with
-/// what that cannot do: two vessels joined under a wall, and a gas gathering under a lid.
-const EVERY: u64 = 8;
+/// The pass runs one step in this many, over everything that has changed since it last ran. It
+/// runs every step: at one in eight, oil held over a pool stood as a long slope until seconds after
+/// the brush let go, and it costs about a fifth of a millisecond a step in the flood film.
+const EVERY: u64 = 1;
 /// A gas is looked at every step, as it always was: it has no rule of its own that gathers it under a
 /// lid, as a liquid has one that levels it in the open, and it is this pass that carries a body of
 /// steam upward as fast as it rises (at one step in two, half as much steam left the brush and a
@@ -170,7 +169,8 @@ impl World {
                 let (here, there) = (self.cell_at(from), self.cell_at(to));
                 let (fx, fy) = self.place(from);
                 let kind = TABLE[material(here) as usize].kind;
-                let still = matches!(kind, Kind::Liquid | Kind::Gas) && clock_of(here) != self.clock;
+                // a cell pushed along this step may still be levelled; one falling may not
+                let still = matches!(kind, Kind::Liquid | Kind::Gas) && (clock_of(here) != self.clock || (kind == Kind::Liquid && speed_of(here) == 0));
                 let empty = material(there) == crate::materials::EMPTY;
                 if still && open(kind, there) && (empty || clock_of(there) != self.clock) {
                     self.cells[to] = with_state(here, self.clock, 0);
@@ -280,7 +280,7 @@ impl World {
             for at in a..=b {
                 levels.marks[at] = id;
                 let past = out(at);
-                if open(kind, cells[past]) && clock_of(cells[at]) != clock {
+                if open(kind, cells[past]) && (clock_of(cells[at]) != clock || (!gas && speed_of(cells[at]) == 0)) {
                     // a surface cell, and an open place past it
                     keep(&mut levels.tops, &mut levels.tops_count, most, ((bottom - height(row)) << 32) | tie(at), at as u32);
                     if levels.marks[past] != PLACE | id {
