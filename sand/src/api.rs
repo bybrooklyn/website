@@ -266,6 +266,20 @@ pub extern "C" fn set_sleeping(on: u32) {
     }
 }
 
+/// Slow motion: each step taken in this many parts (4), or whole (1), from the next whole step on.
+#[unsafe(no_mangle)]
+pub extern "C" fn set_slow(parts: u32) {
+    if let Some(world) = world() {
+        world.parts_next = parts.clamp(1, 8);
+    }
+}
+
+/// The part of a slowed step taken next: 0 when the next step begins a whole one.
+#[unsafe(no_mangle)]
+pub extern "C" fn part() -> u32 {
+    world().map_or(0, |world| world.part)
+}
+
 /// Whether liquids move as sand:box's do (1) or find their level by the levelling pass (0, as it starts):
 /// the page sets it from `?flow=1` in its address, to try the one against the other.
 #[unsafe(no_mangle)]

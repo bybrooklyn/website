@@ -15,7 +15,7 @@
 
 import { cells, type Cells, type Place } from "../mote/cells";
 import { colorRow } from "./flags";
-import { engineAddress, materials, start, STEPS_PER_SECOND, type Engine, type Material } from "./grains";
+import { engineAddress, materials, SLOW, start, STEPS_PER_SECOND, type Engine, type Material } from "./grains";
 import { decode, encode, tokensOf, writeTokens, type Opened } from "./worlds";
 
 /** How many strokes back the world is kept, to be undone. */
@@ -80,7 +80,7 @@ export type ToCore =
     | { t: "clear" }
     | { t: "flood"; id: number; of: number; x: number; y: number; most: number }
     | { t: "tokens"; id: number }
-    | { t: "frame"; dt: number; paused: boolean; once?: boolean }
+    | { t: "frame"; dt: number; paused: boolean; once?: boolean; slow?: boolean }
     | { t: "end" };
 
 /** What the world is doing, sent with every frame. */
@@ -332,18 +332,24 @@ export function core(send: (message: FromCore, transfer?: Transferable[]) => voi
             case "frame": {
                 const began = performance.now();
                 let taken = 0;
+                of.set_slow(message.slow ? SLOW : 1);
                 if (message.once) {
-                    of.step(1);
+                    // a whole step, all its parts
+                    do of.step(1);
+                    while (of.part() !== 0);
                     taken = 1;
                 } else if (!message.paused) {
                     owed += Math.min(message.dt, MOST_STEPS / STEPS_PER_SECOND);
                     while (owed >= 1 / STEPS_PER_SECOND - 1e-6 && taken < MOST_STEPS && stepFits(taken, performance.now() - began)) {
                         owed -= 1 / STEPS_PER_SECOND;
                         taken++;
-                        pour(of);
-                        if (shaking > 0) {
-                            of.shake(shakes);
-                            shaking--;
+                        // the brush and a shake once a whole step, slowed or not
+                        if (of.part() === 0) {
+                            pour(of);
+                            if (shaking > 0) {
+                                of.shake(shakes);
+                                shaking--;
+                            }
                         }
                         of.step(1);
                     }

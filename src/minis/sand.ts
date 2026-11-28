@@ -20,7 +20,7 @@ import { sounds } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { FLAGS, place as stripesOf } from "./flags";
-import { brushCells, CELL, SLOW, fillOf, flagSize, inRow, keptView, keyAction, KEYS, nextStop, STEPS_PER_SECOND, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Frame, type Material, type View } from "./grains";
+import { brushCells, CELL, fillOf, flagSize, inRow, keptView, keyAction, KEYS, nextStop, STEPS_PER_SECOND, swatchColor, viewWith, worldAt, worldSize, zoomStops, type Frame, type Material, type View } from "./grains";
 import { core, type FromCore, type Stats, type ToCore } from "./sand-core";
 import { LINK_MOST, MOST_TEXT, pack, unpack, type Opened } from "./worlds";
 
@@ -959,11 +959,11 @@ export default function sand(m: Mote): Scene {
             if (held) thunder();
             // The core steps the world and draws it. One frame is asked for at a time, with the time gone
             // by since the last: while its answer is on its way, nothing more is asked.
-            pending = paused ? 0 : pending + (slow ? dt * SLOW : dt);
+            pending = paused ? 0 : pending + dt;
             if (waiting || !(dirty || single || !paused)) return;
             waiting = true;
             dirty = false;
-            post({ t: "frame", dt: pending, paused, once: single });
+            post({ t: "frame", dt: pending, paused, once: single, slow });
             pending = 0;
             single = false;
         },

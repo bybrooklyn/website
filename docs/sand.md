@@ -1999,3 +1999,17 @@ the pour goes on, with a small heap only where the stream lands. Letting it move
 rather than 256 made no difference. Still to do from the same play: oil's look (depth, sheen, a
 meeting line with water that is not a ruler), oil rising through water in blobs, and slow motion as
 true slow physics rather than a whole step every fourth frame.
+
+## Slow motion as slow physics, 28 November
+
+Slow motion took a whole step every fourth frame, so what fell jumped up to 12 cells and then held
+for three frames, which the owner saw as lag. A step can now be taken in parts (`parts`, 4 when
+slowed; `set_slow` from the page, which takes effect from the next whole step). In each part what is
+falling through air moves its share of the way, the same share for all that falls so a stream stays
+whole, and keeps its speed; everything else, reactions, sliding, spreading, speed gathered, the
+levelling pass and heat, happens in the last part alone. The rectangles of what is awake are carried
+from part to part, so nothing waiting for the last part falls asleep. The page steps at full rate
+when slowed, and the worker pours the brush and shakes only when a whole step begins, so a held brush
+pours the same per step of the world. With slow off nothing changes (the fingerprint is the same). On
+the page a falling grain moves in every frame. Also from the owner this morning, to do: fire drawn
+quickly should look better, and a poured flag has a small perfect part and looks jittery.

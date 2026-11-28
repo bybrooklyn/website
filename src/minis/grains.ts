@@ -25,6 +25,8 @@ export interface Engine {
     heard(kind: number): number;
     set_levelling(on: number): void;
     set_flow(on: number): void;
+    set_slow(parts: number): void;
+    part(): number;
     rewritten(fresh: number): void;
     clear(): void;
     cells(): number;
@@ -160,7 +162,8 @@ export function keyAction(key: string, on: "canvas" | "button" | "slider" | "tex
 }
 
 /** How much of the time that passes the world is given while slow motion is on. */
-export const SLOW = 0.25;
+/** In slow motion each step is taken in this many parts, one a frame, what falls moving its share of the way in each. */
+export const SLOW = 4;
 
 /** How wide a cell is, in CSS pixels, before it is rounded to whole device pixels. */
 export const CELL = 1;

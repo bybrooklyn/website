@@ -271,6 +271,13 @@ pub struct World {
     /// Whether liquids move as sand:box's do (`flows`): no levelling, a gap beside a body filled from
     /// its top, a surface cell going along toward somewhere lower. Off, the older `levels`.
     pub flow: bool,
+    /// Slow motion: how many parts each step is taken in (1, or 4 when slowed). In each part what is
+    /// falling falls its share of the way; all else is done in the last part alone.
+    pub parts: u32,
+    /// The part of the step taken next, from 0.
+    pub part: u32,
+    /// What `parts` becomes when the next whole step begins.
+    pub parts_next: u32,
     /// The wind, for each block of `GUST` by `GUST` cells, row after row: how hard it blows to the
     /// right and how hard downward, each from -`BLOWN` to `BLOWN`. Nothing where none was painted.
     pub winds: Vec<[i8; 2]>,
@@ -309,6 +316,9 @@ impl World {
             levelled: 0,
             levelling: true,
             flow: false,
+            parts: 1,
+            part: 0,
+            parts_next: 1,
             winds: vec![[0; 2]; (((width + GUST - 1) / GUST) * ((height + GUST - 1) / GUST)) as usize],
             gusts: (width + GUST - 1) / GUST,
         };
@@ -524,7 +534,11 @@ impl World {
 
     /// Moves the world on by one step.
     pub fn step(&mut self) {
-        self.steps += 1;
+        let whole = self.part == 0;
+        if whole {
+            self.parts = self.parts_next;
+            self.steps += 1;
+        }
         self.clock += 1;
         if self.clock > CLOCK_MOST {
             // Every cell's clock back to 0, so an old one cannot be taken for this step's. Only a
@@ -544,11 +558,23 @@ impl World {
             }
             self.clock = 1;
         }
+        let whole_step = whole;
         for (at, chunk) in self.chunks.iter_mut().enumerate() {
             let (cx, cy) = (at as i32 % self.across, at as i32 / self.across);
             let whole = Rect { x0: cx * CHUNK, y0: cy * CHUNK, x1: (cx * CHUNK + CHUNK - 1).min(self.width - 1), y1: (cy * CHUNK + CHUNK - 1).min(self.height - 1) };
-            chunk.now = if self.sleeping { chunk.next } else { whole };
-            chunk.warm_now = if self.sleeping { chunk.warm_next } else { whole };
+            if !whole_step {
+                // a later part of a slowed step: what was to be looked at still is, and what moved too
+                let (n, w) = (chunk.next, chunk.warm_next);
+                if !n.is_empty() {
+                    chunk.now.add(n.x0, n.y0, n.x1, n.y1);
+                }
+                if !w.is_empty() {
+                    chunk.warm_now.add(w.x0, w.y0, w.x1, w.y1);
+                }
+            } else {
+                chunk.now = if self.sleeping { chunk.next } else { whole };
+                chunk.warm_now = if self.sleeping { chunk.warm_next } else { whole };
+            }
             chunk.next = Rect::EMPTY;
             chunk.warm_next = Rect::EMPTY;
         }
@@ -585,8 +611,14 @@ impl World {
                 }
             }
         }
-        self.level();
-        self.heat();
+        let last = self.part + 1 >= self.parts;
+        if last {
+            self.level();
+            self.heat();
+            self.part = 0;
+        } else {
+            self.part += 1;
+        }
         for chunk in self.chunks.iter_mut() {
             chunk.stirred |= !chunk.now.is_empty();
         }
@@ -633,6 +665,14 @@ impl World {
         let cell = self.cell_at(at);
         let p = props(cell);
         if p.kind == Kind::Empty || clock_of(cell) == self.clock {
+            return;
+        }
+        if self.part + 1 < self.parts {
+            // not the last part of a slowed step: only what is falling through air moves, its share
+            let below = self.cell_at(at + self.stride);
+            if matches!(p.kind, Kind::Powder | Kind::Liquid) && speed_of(cell) != 0 && material(below) == EMPTY {
+                self.drop(at, x, y, below, speed_of(cell), p);
+            }
             return;
         }
         let t = temperature(cell);
@@ -1121,7 +1161,16 @@ impl World {
             self.swap(at, at + s, 0, (x, y), (x, y + 1));
             return;
         }
-        let reach = (speed + 1).min(p.fall as u32);
+        let mut reach = (speed + 1).min(p.fall as u32);
+        let early = self.part + 1 < self.parts;
+        if self.parts > 1 {
+            // slowed: this part's share of the way, the same for all that falls, so it stays together
+            let (n, k) = (self.parts, self.part);
+            reach = reach * (k + 1) / n - reach * k / n;
+            if reach == 0 {
+                return;
+            }
+        }
         let (mut to, mut fallen) = (at + s, 1);
         while fallen < reach && material(self.cell_at(to + s)) == EMPTY {
             to += s;
@@ -1131,7 +1180,7 @@ impl World {
         // falls, so what falls together stays together
         // (pride sand gathers one a step, as before, so its flag lands whole, its stripes in order)
         let gain = if p.glow == 3 { 1 } else { 1 + (self.steps as u32 & 1) };
-        let mut next = (speed + gain).min(p.fall as u32 - 1).min(SPEED_MOST);
+        let mut next = if early { speed } else { (speed + gain).min(p.fall as u32 - 1).min(SPEED_MOST) };
         // A liquid that comes down onto something has landed there and then, at rest, so that what
         // it lands on can pass it on at once (`levels`): under a steady pour the top of a pool is
         // always a cell that has just arrived. One in four that land fast keep their speed for a
@@ -1992,6 +2041,9 @@ impl World {
         next.levelled = self.levelled;
         next.levelling = self.levelling;
         next.flow = self.flow;
+        next.parts = self.parts;
+        next.part = self.part;
+        next.parts_next = self.parts_next;
         next.steps = self.steps;
         next.strokes = self.strokes + 1;
         next.sleeping = self.sleeping;
