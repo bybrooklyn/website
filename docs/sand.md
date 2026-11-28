@@ -1944,3 +1944,13 @@ the gap refused where a drop passed this step (beside a pouring face nearly ever
 visit (`set_flow` in the engine, passed by the core when it makes a world). The engine holds both ways while
 they are tried, so the build without SIMD is let grow to 130 KiB (`scripts/wasm.ts`, and the size test);
 125.7 KiB with SIMD, 128.6 without. Back to 128 once one way is taken out.
+
+## The owner's play of 27 November 2026, evening
+
+With `?flow=1` and without, water is still lacking:
+
+- **Pouring:** the stream out of the brush looks wrong, and where it lands it piles up before it spreads.
+- **Settling:** still water is dead, with nothing moving on it, and never quite flat.
+- **Gravity:** things fall too slowly, falls look stiff, and grains meet in mid-air and fall wrong (that last
+  to be talked through with the owner before it is changed).
+- **Fire** looks no different after the 26 November rework, and **lava** looks like a shapeless blob.
