@@ -1981,3 +1981,8 @@ Chosen the same evening:
 - A flag of pride sand now lands hard enough at 12 cells a step that its heap's top four grains may be a
   stripe or two out of order; the test allows that.
 - The fingerprint was taken again.
+
+**Seen on the page** (headless Chromium at 1288 by 828, water held at the top of the stage for 2.6 seconds,
+then let go for 2): with the levelling pass the stream falls solid and spreads flat where it lands, and is
+level two seconds after; with `?flow=1` the stream builds a pillar where it lands and leaves a mound after.
+The native films at 520 by 420 had shown the opposite, so the page is the judge of the two, not the films.
